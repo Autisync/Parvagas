@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Hero from "./components/Mainpage/hero";
-import Section2 from "./components/Mainpage/section2";
+import Section2 from "./components/Mainpage/Section2";
 import { Metadata } from "next";
 import Processo from './components/Mainpage/processo';
 import Dicas from './components/Mainpage/dicas'

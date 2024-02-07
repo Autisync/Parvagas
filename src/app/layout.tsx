@@ -16,21 +16,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt">
-      {/* <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+      <head>
+        <link rel="icon" href="/icon2.ico" sizes="any" />
         <link
           rel="icon"
-          href="/icon.svg"
+          href="/icon2.svg"
           type="image/svg"
           sizes="<generated>"
         />
-        <link
+        {/* <link
           rel="apple-touch-icon"
-          href="/apple-icon.png"
+          href="/icon2.png"
           type="image/png"
           sizes="57x57"
-        />
-      </head> */}
+        /> */}
+      </head>
       <body className={inter.className}>
         <Header />
         {children}
