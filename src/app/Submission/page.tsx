@@ -1,14 +1,13 @@
+// "use client";
+// import { useState } from "react";
 import Image from "next/image";
-import Hero from "./components/Mainpage/hero";
-import Section2 from "./components/Mainpage/section2";
+import CVForm from "../components/Apply/CVForm";
 import { Metadata } from "next";
-import Processo from './components/Mainpage/processo';
-import Dicas from './components/Mainpage/dicas'
 
 export const metadata: Metadata = {
   openGraph: {
-    title: "ParVaga | Início",
-    description:"ParVagas é um site de recrutamento em Angola que recolhe CV's para Partilhar com Empresas procurando Talentos Profissionais.",
+    title: "ParVaga | CV",
+    description:"emos uma base de dados para ajudar transformar o seu futuro profissional hoje!",
     url: "https://parVagas.co.ao",
     siteName: "parVagas",
     images: [
@@ -29,13 +28,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Home() {
+export default function Form() {
+  // const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   return (
-    <div>
-      <Hero/>
-      <Section2/>
-      {/* <Processo/> */}
-      <Dicas/>
+    <div className="">
+      <CVForm />
     </div>
   );
 }

@@ -1,14 +1,11 @@
 import Image from "next/image";
-import Hero from "./components/Mainpage/hero";
-import Section2 from "./components/Mainpage/section2";
+import HeroEmpresa from "../components/Empresa/hero";
 import { Metadata } from "next";
-import Processo from './components/Mainpage/processo';
-import Dicas from './components/Mainpage/dicas'
 
 export const metadata: Metadata = {
   openGraph: {
-    title: "ParVaga | Início",
-    description:"ParVagas é um site de recrutamento em Angola que recolhe CV's para Partilhar com Empresas procurando Talentos Profissionais.",
+    title: "ParVaga | Empresas",
+    description:"Uma plataforma útil para quem procura talento Profissional para seus Projetos em Angola.",
     url: "https://parVagas.co.ao",
     siteName: "parVagas",
     images: [
@@ -29,13 +26,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Home() {
+export default function Empresa() {
   return (
     <div>
-      <Hero/>
-      <Section2/>
-      {/* <Processo/> */}
-      <Dicas/>
+      <HeroEmpresa/>
     </div>
   );
 }
