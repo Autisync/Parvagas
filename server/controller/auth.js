@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { Jwt } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import User from "../models/user";
 
 // REGISTER USER
@@ -40,7 +40,7 @@ export const register = async (req, res) => {
       if (!isMatch) return res.status(400).json({ msg: "Invalid credentials. " });
   
       const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-      delete user.password;
+      delete user.password; // delete the password so it does not get sent back to the frontend
       res.status(200).json({ token, user });
     } catch (err) {
       res.status(500).json({ error: err.message });
