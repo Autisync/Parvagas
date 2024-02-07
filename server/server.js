@@ -38,12 +38,12 @@ const upload = multer({ storage });
 
 /* ROUTES WITH FILES */
 // app.post("/auth/register", upload.single("picture"), register);
-// app.post("/posts", verifyToken, upload.single("picture"), createPost);
+// app.post("/applications", verifyToken, upload.single("picture"), createPost);
 
 /* ROUTES */
 // app.use("/auth", authRoutes);
 // app.use("/users", userRoutes);
-// app.use("/posts", postRoutes);
+// app.use("/applications", postRoutes);
 
 /* MONGOOSE SETUP */
 const PORT = process.env.PORT || 6001;
@@ -60,3 +60,35 @@ mongoose
     // Post.insertMany(posts);
   })
   .catch((error) => console.log(`${error} did not connect`));
+
+  // Data models
+  /*
+
+  // User
+  firstName (string)
+  lastName (string)
+  email (string)
+  password (string)
+
+
+  // Application
+  id (string)
+  jobId (string)
+  fullName (string)
+  dateOfBirth (date)
+  email (string)
+  cellphoneContact (string)
+  gender (string)
+  qualification (string)
+  profession (string)
+  expirienceInOilGas (boolean)
+  yearsOfExperience (integer)
+  residencialAddress (string)
+  city (string)
+  currentEmployer (string)
+  nacionality (string)
+  personalStatement (string)
+  curriculumVitae (paths)
+  otherDocuments (paths)
+  progress (string)
+  */
