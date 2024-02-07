@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 
 export default function Example() {
@@ -24,12 +25,12 @@ export default function Example() {
               experiência.
             </p>
             <div className="mt-10 flex items-center justify-center gap-x-6">
-              <a
-                href="#"
+              <Link
+                href="/Submission/"
                 className="text-sm font-semibold leading-6 text-gray-900 hover:text-red-500 hover:scale-105 duration-500 ease-in-out transform"
               >
                 Envia o seu CV Hoje! <span aria-hidden="true">→</span>
-              </a>
+              </Link>
             </div>
           </div>
         </div>
