@@ -32,10 +32,10 @@ export default function RootLayout({
         /> */}
       </head>
       <body className={inter.className}>
-        <Header />
+        {/* <Header /> */}
         {children}
         <CTA />
-        <Footer />
+        {/* <Footer /> */}
         <Analytics />
       </body>
     </html>

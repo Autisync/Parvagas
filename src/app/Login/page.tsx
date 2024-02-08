@@ -2,6 +2,8 @@
 import Image from "next/image";
 import Logo from "/public/icon2.png";
 import { Metadata } from "next";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -30,6 +32,7 @@ export const metadata: Metadata = {
 export default function LogIn() {
   return (
     <div>
+      <Header />
       <div className="flex min-h-full flex-col justify-center px-6 py-24 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-sm">
           <Image
@@ -115,6 +118,8 @@ export default function LogIn() {
           </p> */}
         </div>
       </div>
+      <Footer />
+
     </div>
   );
 }

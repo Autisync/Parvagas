@@ -1,11 +1,14 @@
 import Image from "next/image";
 import HeroEmpresa from "../components/Empresa/hero";
 import { Metadata } from "next";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   openGraph: {
     title: "ParVaga | Empresas",
-    description:"Uma plataforma útil para quem procura talento Profissional para seus Projetos em Angola.",
+    description:
+      "Uma plataforma útil para quem procura talento Profissional para seus Projetos em Angola.",
     url: "https://parVagas.co.ao",
     siteName: "parVagas",
     images: [
@@ -29,7 +32,9 @@ export const metadata: Metadata = {
 export default function Empresa() {
   return (
     <div>
-      <HeroEmpresa/>
+      <Header />
+      <HeroEmpresa />
+      <Footer />
     </div>
   );
 }

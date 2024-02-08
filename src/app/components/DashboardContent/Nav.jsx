@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import React from "react";
 import {
   IconButton,
@@ -32,19 +32,20 @@ import {
   Bars3Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
- 
+import Image from "next/image";
+
 export default function SidebarWithBurgerMenu() {
   const [open, setOpen] = React.useState(0);
   const [openAlert, setOpenAlert] = React.useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
- 
+
   const handleOpen = (value) => {
     setOpen(open === value ? 0 : value);
   };
- 
+
   const openDrawer = () => setIsDrawerOpen(true);
   const closeDrawer = () => setIsDrawerOpen(false);
- 
+
   return (
     <>
       <IconButton variant="text" size="lg" onClick={openDrawer}>
@@ -61,7 +62,9 @@ export default function SidebarWithBurgerMenu() {
           className="h-[calc(100vh-2rem)] w-full p-4"
         >
           <div className="mb-2 flex items-center gap-4 p-4">
-            <img
+            <Image
+              width={500}
+              height={500}
               src="https://docs.material-tailwind.com/img/logo-ct-dark.png"
               alt="brand"
               className="h-8 w-8"
