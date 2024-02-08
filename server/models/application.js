@@ -29,7 +29,7 @@ const applicationSchema = new mongoose.Schema(
         personalStatement: { type: String },
         curriculumVitae: { type: String }, // Assuming the CV is stored as a file path
         otherDocuments: { type: Array, default: [] }, // Assuming other documents are stored as file paths
-        progress: { type: String, enum: ['rejected', 'selected']},
+        progress: { type: String, enum: ['submitted','rejected', 'selected']},
     },
     { timestamps: true });
 
