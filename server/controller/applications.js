@@ -54,7 +54,7 @@ export const createApplication = async (req, res) => {
   }
 };
 
-export const updatestatus = async (req, res) => {
+export const updateApplicationStatus = async (req, res) => {
   try {
     const { applicationId, status } = req.body; // Retrieve application ID and status from req body
 
@@ -78,3 +78,32 @@ export const updatestatus = async (req, res) => {
   }
 };
 
+export const getApplications = async (req, res) => {
+    try {
+      // Retrieve all applications from the database
+      const applications = await Application.find();
+  
+      res.json({ applications });
+    } catch (error) {
+      console.error('Error retrieving applications:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  };
+
+  export const getApplication = async (req, res) => {
+    try {
+      const { applicationId } = req.params; // Retrieve application ID from request parameters
+  
+      // Find the application by ID in the database
+      const application = await Application.findById(applicationId);
+  
+      if (!application) {
+        return res.status(404).json({ error: 'Application not found' });
+      }
+  
+      res.json({ application });
+    } catch (error) {
+      console.error('Error retrieving application:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  };

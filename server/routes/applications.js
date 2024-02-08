@@ -1,15 +1,18 @@
 import express from "express";
-import { getApplications, getApplication, approveApplication, rejectApplication } from "../controllers/posts.js";
+import { getApplications, getApplication, createApplication, updateApplicationStatus } from "../controller/applications.js";
 import { verifyToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
 /* READ */
-router.get("/", getApplications);
+router.get("/",  verifyToken, getApplications);
 router.get("/:id", verifyToken, getApplication);
 
+/* CREATE */
+router.post('/submit', verifyToken, createApplication);
+
 /* UPDATE */
-router.patch("/:id/approve", verifyToken, approveApplication);
-router.patch("/:id/reject", verifyToken, rejectApplication);
+router.patch("/:id/status", verifyToken, updateApplicationStatus);
+
 
 export default router;
