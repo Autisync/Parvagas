@@ -69,7 +69,7 @@ export default function LogIn() {
                     type="email"
                     autoComplete="email"
                     required
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-cyan-600 shadow-sm ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-balck sm:text-sm sm:leading-6"
+                    className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-gray-800 shadow-sm ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-balck sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -101,7 +101,7 @@ export default function LogIn() {
                     type="password"
                     autoComplete="current-password"
                     required
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-black sm:text-sm sm:leading-6"
+                    className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-gray-800 shadow-sm ring-1 ring-inset ring-red-500 focus:ring-2 focus:ring-inset focus:ring-black sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
