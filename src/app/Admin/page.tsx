@@ -1,6 +1,31 @@
 // import { BugAntIcon, ChatBubbleLeftRightIcon, ComputerDesktopIcon } from '@heroicons/react/24/outline'
 import Image from "next/image";
 import Logo from "/public/icon2.png";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  openGraph: {
+    title: "ParVaga | Login",
+    description:"Portal Dashboard Administrador",
+    url: "https://parVagas.co.ao",
+    siteName: "parVagas",
+    images: [
+      {
+        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
+        width: 300,
+        height: 300,
+      },
+      {
+        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
+        width: 300,
+        height: 300,
+        alt: "Homepage",
+      },
+    ],
+    locale: "pt",
+    type: "website",
+  },
+};
 
 export default function LogIn() {
   return (

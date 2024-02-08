@@ -7,7 +7,7 @@ import { Metadata } from "next";
 export const metadata: Metadata = {
   openGraph: {
     title: "ParVaga | CV",
-    description:"emos uma base de dados para ajudar transformar o seu futuro profissional hoje!",
+    description:"Temos uma base de dados para ajudar transformar o seu futuro profissional hoje!",
     url: "https://parVagas.co.ao",
     siteName: "parVagas",
     images: [
