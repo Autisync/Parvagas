@@ -63,7 +63,7 @@ export default function Dicas() {
           <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
             Dicas para Colaboradores
           </h2>
-          <p className="mt-2 text-lg leading-8 text-gray-600">
+          <p className="mt-2 text-lg leading-7 text-gray-700">
             Estamos sempre ao teu lado, torcendo pelo teu sucesso. Oferecemos
             dicas para ajudar na tua jornada de independência financeira, desde
             estratégias de investimento até sugestões de economia de custos.
@@ -75,7 +75,7 @@ export default function Dicas() {
           {posts.map((post) => (
             <article
               key={post.id}
-              className="flex max-w-xl flex-col items-start justify-between hover:bg-slate-50 p-2 rounded-lg hover:shadow-md ease-in-out transform duration-500"
+              className="flex max-w-xl flex-col items-start justify-between hover:bg-gray-50 p-2 rounded-xl hover:shadow-md ease-in-out transform duration-500"
             >
               <div className="flex items-center gap-x-4 text-xs">
                 <time dateTime={post.datetime} className="text-gray-500">
@@ -89,7 +89,7 @@ export default function Dicas() {
                 </a>
               </div>
               <div className="group relative">
-                <h3 className="mt-3 text-lg font-semibold leading-6 text-gray-900 group-hover:text-gray-600">
+                <h3 className="mt-3 text-lg font-semibold leading-6 text-gray-800 group-hover:text-gray-900">
                   <a href={post.href}>
                     <span className="absolute inset-0" />
                     {post.title}

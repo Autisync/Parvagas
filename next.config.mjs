@@ -15,5 +15,9 @@ export const images = {
             protocol: 'https',
             hostname: 'images.unsplash.com'
         },
+        {
+            protocol: 'https',
+            hostname: 'images.material-tailwind.com'
+        }
     ],
 };

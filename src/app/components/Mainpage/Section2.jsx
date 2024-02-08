@@ -11,12 +11,12 @@ export default function Section2() {
             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
               O Nosso Processo
             </h2>
-            <p className="mt-6 text-xl leading-8 text-gray-600">
+            <p className="mt-6 text-xl leading-7 text-gray-800">
               Apresentamos o teu CV a empresas parceiros com uma ampla gama de
               oportunidades de emprego em diversos setores, como finanças,
               saúde, tecnologia, engenharia, recursos humanos, entre outros.
             </p>
-            <p className="mt-6 text-base leading-7 text-gray-600">
+            <p className="mt-6 text-base font-normal leading-7 text-gray-700">
               Nao hesiste e envie o teu CV preenchendo o nosso formulario que
               foi criado por profissionais com mais de 20 anos no ramo de
               recrutamento para obter toda informação para ajudar-nos a
@@ -26,12 +26,13 @@ export default function Section2() {
             <div className="mt-10 flex">
               <Link
                 href="/Submission/"
-                className="ml-2 text-sm font-semibold leading-6 text-gray-50  bg-slate-950 px-3 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-slate-900 duration-500 ease-in-out transform"
+                className="ml-2 text-sm font-semibold leading-6 text-gray-50  bg-gray-900/95 px-4 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-gray-900 duration-500 ease-in-out transform"
               >
                 Preencha o Futuro <span aria-hidden="true">&rarr;</span>
               </Link>
             </div>
           </div>
+          {/* Images */}
           <div className="flex flex-wrap items-start justify-end gap-6 sm:gap-8 lg:contents">
             <div className="w-0 flex-auto lg:ml-auto lg:w-auto lg:flex-none lg:self-end">
               <Image

@@ -3,7 +3,9 @@ import Hero from "./components/Mainpage/hero";
 import Section2 from "./components/Mainpage/Section2";
 import { Metadata } from "next";
 import Processo from './components/Mainpage/processo';
-import Dicas from './components/Mainpage/dicas'
+import Dicas from './components/Mainpage/dicas';
+import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -32,10 +34,12 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <div>
+      <Header />
       <Hero/>
       <Section2/>
       {/* <Processo/> */}
       <Dicas/>
+      <Footer />
     </div>
   );
 }
