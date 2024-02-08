@@ -27,7 +27,7 @@ export default function Header() {
               <Link
                 key={item.name}
                 href={item.href}
-                className="text-sm font-semibold leading-6 text-gray-900 hover:bg-slate-900 py-1 px-3 hover:text-gray-50 hover:rounded-2xl duration-700 ease-in-out transform rounded-md"
+                className="text-sm font-semibold leading-6 text-gray-900 hover:bg-gray-900 py-1 px-3 hover:text-gray-50 hover:rounded-2xl duration-700 ease-in-out transform rounded-md"
               >
                 {item.name}
               </Link>
@@ -63,7 +63,7 @@ export default function Header() {
           </Link> */}
           <Link
             href="/Submission/"
-            className="ml-2 text-sm font-semibold leading-6 text-gray-50  bg-slate-950 px-3 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-slate-900 duration-500 ease-in-out transform"
+            className="ml-2 text-sm font-semibold leading-6 text-gray-50  bg-gray-900/95 px-3 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-gray-900 duration-500 ease-in-out transform"
           >
             Submeter CV <span aria-hidden="true">&rarr;</span>
           </Link>

@@ -15,10 +15,10 @@ export default function Example() {
             </h1>
             <h1 className="text-5xl font-bold tracking-tight text-red-500 sm:text-7xl">
               Recrutamento{" "}
-              <span className="text-slate-950">para Empresas em</span>
+              <span className="text-gray-900">para Empresas em</span>
               <span className="text-red-500"> Angola</span>
             </h1>
-            <p className="mt-6 text-lg leading-6 text-gray-600 font-light">
+            <p className="mt-6 text-lg leading-6 text-gray-700 font-light">
               Para se candidatar a um emprego através do Angovagas, os
               candidatos podem pesquisar as oportunidades de emprego disponíveis
               e se candidatar às vagas que correspondam às suas habilidades e

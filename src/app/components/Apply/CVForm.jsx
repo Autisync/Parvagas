@@ -38,7 +38,8 @@ export default function CVForm() {
               Informação Pessoal
             </h2>
             <p className="mt-1 text-sm leading-6 text-gray-400">
-            Use um endereço permanente onde você possa receber correspondências.
+              Use um endereço permanente onde você possa receber
+              correspondências.
             </p>
 
             <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
@@ -56,7 +57,7 @@ export default function CVForm() {
                     name="first-name"
                     id="first-name"
                     autoComplete="given-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -74,7 +75,7 @@ export default function CVForm() {
                     name="last-name"
                     id="last-name"
                     autoComplete="family-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -92,7 +93,7 @@ export default function CVForm() {
                     name="email"
                     type="email"
                     autoComplete="email"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -110,7 +111,7 @@ export default function CVForm() {
                     name="tel"
                     type="text"
                     autoComplete="tel"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -126,7 +127,7 @@ export default function CVForm() {
                   <select
                     id="sexo"
                     name="sexo"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Masculino</option>
                     <option>Feminino</option>
@@ -148,7 +149,7 @@ export default function CVForm() {
                     id="country"
                     name="country"
                     autoComplete="country-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Ensino Medio</option>
                     <option>Bachelarado</option>
@@ -172,7 +173,7 @@ export default function CVForm() {
                     name="profession"
                     id="profession"
                     autoComplete="address-level2"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -189,7 +190,7 @@ export default function CVForm() {
                   <select
                     id="experience"
                     name="experience"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Sim</option>
                     <option>Não</option>
@@ -209,7 +210,7 @@ export default function CVForm() {
                     type="number"
                     name="overall_experience"
                     id="overall_experience"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -228,7 +229,7 @@ export default function CVForm() {
                     name="street-address"
                     id="street-address"
                     autoComplete="street-address"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -247,7 +248,7 @@ export default function CVForm() {
                     name="city"
                     id="city"
                     autoComplete="address-level2"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -265,7 +266,7 @@ export default function CVForm() {
                     name="region"
                     id="region"
                     autoComplete="address-level1"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -282,7 +283,7 @@ export default function CVForm() {
                     type="text"
                     name="nacionalidade"
                     id="nacionalidade"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -302,7 +303,7 @@ export default function CVForm() {
                     id="about"
                     name="about"
                     rows={3}
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                     defaultValue={""}
                   />
                 </div>
@@ -394,7 +395,7 @@ export default function CVForm() {
                 id="push-email"
                 name="push-notifications"
                 type="checkbox"
-                className="pl-2 h-4 w-4 border-white/10 bg-white/5 text-blue-600 focus:ring-blue-600 focus:ring-offset-gray-900"
+                className="pl-2 h-4 w-4 border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
               />{" "}
               Concordo e garanto à ParVagas a segurança e o processamento das
               informações que forneci e considero que são verdadeiras.
@@ -412,7 +413,7 @@ export default function CVForm() {
                         id="comments"
                         name="comments"
                         type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-blue-600 focus:ring-blue-600 focus:ring-offset-gray-900"
+                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
                       />
                     </div>
                     <div className="text-sm leading-6">
@@ -433,7 +434,7 @@ export default function CVForm() {
                         id="candidates"
                         name="candidates"
                         type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-blue-600 focus:ring-blue-600 focus:ring-offset-gray-900"
+                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
                       />
                     </div>
                     <div className="text-sm leading-6">
@@ -454,7 +455,7 @@ export default function CVForm() {
                         id="offers"
                         name="offers"
                         type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-blue-600 focus:ring-blue-600 focus:ring-offset-gray-900"
+                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
                       />
                     </div>
                     <div className="text-sm leading-6">

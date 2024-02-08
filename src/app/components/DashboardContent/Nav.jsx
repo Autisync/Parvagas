@@ -18,7 +18,7 @@ import {
 } from "@material-tailwind/react";
 import {
   PresentationChartBarIcon,
-  ShoppingBagIcon,
+  IdentificationIcon,
   UserCircleIcon,
   Cog6ToothIcon,
   InboxIcon,
@@ -33,6 +33,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import Logo from "/public/icon2.png";
 
 export default function SidebarWithBurgerMenu() {
   const [open, setOpen] = React.useState(0);
@@ -65,7 +66,7 @@ export default function SidebarWithBurgerMenu() {
             <Image
               width={500}
               height={500}
-              src="https://docs.material-tailwind.com/img/logo-ct-dark.png"
+              src={Logo}
               alt="brand"
               className="h-8 w-8"
             />
@@ -76,7 +77,7 @@ export default function SidebarWithBurgerMenu() {
           <div className="p-2">
             <Input
               icon={<MagnifyingGlassIcon className="h-5 w-5" />}
-              label="Search"
+              label="Pesquisar"
             />
           </div>
           <List>
@@ -122,7 +123,7 @@ export default function SidebarWithBurgerMenu() {
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
-                    Projects
+                    Candidatos
                   </ListItem>
                 </List>
               </AccordionBody>
@@ -144,10 +145,10 @@ export default function SidebarWithBurgerMenu() {
                   className="border-b-0 p-3"
                 >
                   <ListItemPrefix>
-                    <ShoppingBagIcon className="h-5 w-5" />
+                    <IdentificationIcon className="h-5 w-5" />
                   </ListItemPrefix>
                   <Typography color="blue-gray" className="mr-auto font-normal">
-                    E-Commerce
+                    Base de Dados
                   </Typography>
                 </AccordionHeader>
               </ListItem>
@@ -157,13 +158,13 @@ export default function SidebarWithBurgerMenu() {
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
-                    Orders
+                    Candidatos
                   </ListItem>
                   <ListItem>
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
-                    Products
+                    Empregos
                   </ListItem>
                 </List>
               </AccordionBody>
@@ -203,39 +204,6 @@ export default function SidebarWithBurgerMenu() {
               Log Out
             </ListItem>
           </List>
-          <Alert
-            open={openAlert}
-            className="mt-auto"
-            onClose={() => setOpenAlert(false)}
-          >
-            <CubeTransparentIcon className="mb-4 h-12 w-12" />
-            <Typography variant="h6" className="mb-1">
-              Upgrade to PRO
-            </Typography>
-            <Typography variant="small" className="font-normal opacity-80">
-              Upgrade to Material Tailwind PRO and get even more components,
-              plugins, advanced features and premium.
-            </Typography>
-            <div className="mt-4 flex gap-3">
-              <Typography
-                as="a"
-                href="#"
-                variant="small"
-                className="font-medium opacity-80"
-                onClick={() => setOpenAlert(false)}
-              >
-                Dismiss
-              </Typography>
-              <Typography
-                as="a"
-                href="#"
-                variant="small"
-                className="font-medium"
-              >
-                Upgrade Now
-              </Typography>
-            </div>
-          </Alert>
         </Card>
       </Drawer>
     </>

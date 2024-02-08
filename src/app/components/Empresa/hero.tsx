@@ -13,10 +13,10 @@ export default function EmpresaHero() {
               Ajudando Empresas
             </h1>
             <h1 className="text-5xl font-bold tracking-tight text-red-500 sm:text-7xl">
-              Maior <span className="text-slate-950">Base de Dados de </span>
+              Maior <span className="text-gray-900">Base de Dados de </span>
               <span className="text-red-500"> Talentos em Angola</span>
             </h1>
-            <p className="mt-6 text-lg leading-6 text-gray-600 font-light">
+            <p className="mt-6 text-lg leading-6 text-gray-700 font-light">
               Uma plataforma útil para quem procura talento Profissional para
               seus Projetos em Angola. Oferecemos acesso a uma ampla gama de
               Profissionais em diferentes setores e locais.
