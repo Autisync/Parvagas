@@ -12,8 +12,8 @@ import { register } from "./controllers/auth.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 
-// import postRoutes from "./routes/posts.js";
-// import { createPost } from "./controllers/posts.js";
+import applicationRoutes from "./routes/applications.js";
+import { applyToJob } from "./controllers/applyToJob.js";
 // import { verifyToken } from "./middleware/auth.js";
 // import User from "./models/User.js";
 // import Post from "./models/Post.js";
@@ -47,7 +47,7 @@ const upload = multer({ storage });
 
 /* ROUTES WITH FILES */
 app.post("/auth/register", register);
-// app.post("/applications", verifyToken, upload.single("docs"), createPost);
+app.post("/applications", upload.single("docs"), applyToJob);
 
 /* ROUTES */
 app.use("/auth", authRoutes);
