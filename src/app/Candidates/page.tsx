@@ -4,8 +4,8 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   openGraph: {
-    title: "ParVaga | Dasboard",
-    description: "Plataforma útil para agerir talento Profissional submetido.",
+    title: "ParVaga | Candidatos",
+    description: "List de Candidatos",
     url: "https://parVagas.co.ao",
     siteName: "parVagas",
     images: [
@@ -33,150 +33,11 @@ export default function Dashboard() {
       <div className="flex overflow-hidden bg-gray-50 w-full">
         <div
           id="main-content"
-          className="h-full w-full bg-gray-50 relative overflow-y-auto"
+          className="h-full w-full bg-gray-50 relative overflow-y-auto "
         >
           <main>
             <div className="pt-6 px-4">
-              <div className="w-full grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {/* Número Total de CV coletados */}
-                <div className="bg-white shadow rounded-lg p-4 sm:p-6 xl:p-8  2xl:col-span-2">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl sm:text-3xl leading-none font-bold text-gray-900">
-                        45,385
-                      </span>
-                      <h3 className="text-base font-normal text-gray-500 capitalize">
-                        Número Total de CV coletados
-                      </h3>
-                    </div>
-                    <div className="flex items-center justify-end flex-1 text-green-500 text-base font-bold">
-                      12.5%
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z"
-                          clip-rule="evenodd"
-                        ></path>
-                      </svg>
-                      <h3 className="text-xs font-normal text-gray-500 capitalize">
-                        / Mes Passado
-                      </h3>
-                    </div>
-                  </div>
-                  <div id="main-chart"></div>
-                </div>
-
-                {/* Recem Candidatos */}
-                <div className="bg-white shadow rounded-lg p-4 sm:p-6 xl:p-8 ">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">
-                        Recem Candidatos
-                      </h3>
-                      <span className="text-base font-normal text-gray-500">
-                        Lista de candidatos mais recente
-                      </span>
-                    </div>
-                    <div className="flex-shrink-0">
-                      <a
-                        href="#"
-                        className="text-sm font-medium text-gray-700 hover:shadow-xl hover:scale-105 hover:bg-gray-900 duration-500 ease-in-out transform p-2 hover:text-white hover:rounded-xl rounded-md"
-                      >
-                        Ver Todos
-                      </a>
-                    </div>
-                  </div>
-                  <div className="flex flex-col mt-8">
-                    <div className="overflow-x-auto rounded-lg">
-                      <div className="align-middle inline-block min-w-full">
-                        <div className="shadow overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th
-                                  scope="col"
-                                  className="p-4 text-left text-xs font-medium text-gray-500 capitalize tracking-wider"
-                                >
-                                  Nome - Profissão
-                                </th>
-                                <th
-                                  scope="col"
-                                  className="p-4 text-left text-xs font-medium text-gray-500 capitalize tracking-wider"
-                                >
-                                  Data
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white">
-                              <tr>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-900">
-                                  Victoria
-                                  <span className="font-semibold"> RH</span>
-                                </td>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-500">
-                                  Apr 18 ,2021
-                                </td>
-                              </tr>
-
-                              <tr className="bg-gray-50">
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-900 rounded-lg rounded-left">
-                                  Kim{" "}
-                                  <span className="font-semibold">
-                                    Informatica
-                                  </span>
-                                </td>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-500">
-                                  Apr 15 ,2021
-                                </td>
-                              </tr>
-
-                              <tr>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-900">
-                                  Madalena{" "}
-                                  <span className="font-semibold">
-                                    Metalurgica
-                                  </span>
-                                </td>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-500">
-                                  Apr 15 ,2021
-                                </td>
-                              </tr>
-
-                              <tr className="bg-gray-50">
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-900 rounded-lg rounded-left">
-                                  Pedro{" "}
-                                  <span className="font-semibold">Geologo</span>
-                                </td>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-500">
-                                  Apr 11 ,2021
-                                </td>
-                              </tr>
-
-                              <tr>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-900">
-                                  Mark{" "}
-                                  <span className="font-semibold">
-                                    Eng. de Minas
-                                  </span>
-                                </td>
-                                <td className="p-4 whitespace-nowrap text-sm font-normal text-gray-500">
-                                  Apr 6 ,2021
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+              {/* Stats */}
               <div className="mt-4 w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {/* Candidatos / Mes */}
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6 xl:p-8 ">
@@ -212,26 +73,11 @@ export default function Dashboard() {
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
                       <span className="text-2xl sm:text-3xl leading-none font-bold text-gray-900">
-                        5,355
+                        535
                       </span>
                       <h3 className="text-base font-normal text-gray-500">
-                        Visitors / Mes
+                        Candidatos com Experiença em Oil & Gas
                       </h3>
-                    </div>
-                    <div className="ml-5 w-0 flex items-center justify-end flex-1 text-green-500 text-base font-bold">
-                      32.9%
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z"
-                          clip-rule="evenodd"
-                        ></path>
-                      </svg>
                     </div>
                   </div>
                 </div>
@@ -248,63 +94,52 @@ export default function Dashboard() {
                       </h3>
                     </div>
                     <div className="ml-5 w-0 flex items-center justify-end flex-1 text-red-500 text-base font-bold">
-                      -2.7%
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z"
-                          clip-rule="evenodd"
-                        ></path>
-                      </svg>
+                      34
+                      <h3 className="text-xs font-normal text-gray-500 capitalize">
+                        - este Mes
+                      </h3>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 2xl:grid-cols-2 xl:gap-4 my-4">
-                {/* Taxa de aceitação da oferta */}
-                <div className="bg-white shadow rounded-lg mb-4 p-4 sm:p-6 h-full">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex-shrink-0">
-                      <span className="text-2xl sm:text-3xl leading-none font-bold text-gray-900">
-                        45%
-                      </span>
-                      <h3 className="text-base font-normal text-gray-500 capitalize">
-                        Taxa de aceitação da oferta
-                      </h3>
-                    </div>
-                    <div className="flex items-center justify-end flex-1 text-green-500 text-base font-bold">
-                      12.5%
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z"
-                          clip-rule="evenodd"
-                        ></path>
-                      </svg>
-                      <h3 className="text-xs font-normal text-gray-500 capitalize">
-                        / Mes Passado
-                      </h3>
-                    </div>
-                  </div>
-                  <div id="main-chart"></div>
-                </div>
-
-                {/* Talentos disponíveis / Profissão */}
+              <div className="grid grid-cols-1 2xl:grid-cols-1 xl:gap-4 my-4">
+                {/* Talentos disponíveis */}
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6 xl:p-8 ">
                   <h3 className="text-xl leading-none font-bold text-gray-900 mb-10">
-                    Talentos disponíveis / Profissão
+                    Talentos disponíveis
                   </h3>
+                  {/* Search */}
+                  <div className="flex float-end text-xl leading-none font-bold text-gray-900 mb-10">
+                    <form action="#" method="GET" className="">
+                      <label htmlFor="mobile-search" className="sr-only">
+                        Search
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <svg
+                            className="w-5 h-5 text-gray-500"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          name="email"
+                          id="topbar-search"
+                          className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-cyan-600 focus:border-cyan-600 block w-full px-10 p-2.5"
+                          placeholder="Pesquisar"
+                        />
+                      </div>
+                    </form>
+                  </div>
+                  {/* Search end */}
+
+                  {/* Candidates data */}
+                  {/* Not complete */}
                   <div className="block w-full overflow-x-auto">
                     <table className="items-center w-full bg-transparent border-collapse">
                       <thead>

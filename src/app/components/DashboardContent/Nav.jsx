@@ -34,6 +34,7 @@ import {
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import Logo from "/public/icon2.png";
+import Link from "next/link";
 
 export default function SidebarWithBurgerMenu() {
   const [open, setOpen] = React.useState(0);
@@ -49,7 +50,7 @@ export default function SidebarWithBurgerMenu() {
 
   return (
     <>
-      <IconButton variant="text" size="lg" onClick={openDrawer}>
+      <IconButton variant="text" size="lg" onClick={openDrawer} className="">
         {isDrawerOpen ? (
           <XMarkIcon className="h-8 w-8 stroke-2" />
         ) : (
@@ -101,30 +102,34 @@ export default function SidebarWithBurgerMenu() {
                     <PresentationChartBarIcon className="h-5 w-5" />
                   </ListItemPrefix>
                   <Typography color="blue-gray" className="mr-auto font-normal">
-                    Dashboard
+                    <Link href={"/Dashboard/"}>Dashboard</Link>
                   </Typography>
                 </AccordionHeader>
               </ListItem>
               <AccordionBody className="py-1">
                 <List className="p-0">
-                  <ListItem>
+                  <Link href={"/Dashboard/"}>
+                    <ListItem>
+                      <ListItemPrefix>
+                        <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                      </ListItemPrefix>
+                      Analytics
+                    </ListItem>
+                  </Link>
+                  <Link href={"/Dashboard/"}>
+                    <ListItem>
+                      <ListItemPrefix>
+                        <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                      </ListItemPrefix>
+                      Reporting
+                    </ListItem>
+                  </Link>
+                  {/* <ListItem>
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
-                    Analytics
-                  </ListItem>
-                  <ListItem>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    Reporting
-                  </ListItem>
-                  <ListItem>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    Candidatos
-                  </ListItem>
+                    <Link href={"/Candidates/"}>Candidatos</Link>
+                  </ListItem> */}
                 </List>
               </AccordionBody>
             </Accordion>
@@ -154,12 +159,14 @@ export default function SidebarWithBurgerMenu() {
               </ListItem>
               <AccordionBody className="py-1">
                 <List className="p-0">
-                  <ListItem>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    Candidatos
-                  </ListItem>
+                  <Link href={"/Candidates/"}>
+                    <ListItem>
+                      <ListItemPrefix>
+                        <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                      </ListItemPrefix>
+                      Candidatos
+                    </ListItem>
+                  </Link>
                   <ListItem>
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
