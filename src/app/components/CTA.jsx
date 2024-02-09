@@ -13,7 +13,7 @@ export default function TooltipCustomStyles() {
         className="border  bg-red-500 px-4 py-3 shadow-2xl shadow-black/10"
         content={
           <div className="w-80">
-            <Typography color="" className="font-normal text-white">
+            <Typography className="font-normal text-white">
               ParVagas Recrutamento
             </Typography>
             <Typography variant="small" className="text-gray-900 font-light">

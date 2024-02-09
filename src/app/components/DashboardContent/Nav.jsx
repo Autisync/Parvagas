@@ -177,7 +177,7 @@ export default function SidebarWithBurgerMenu() {
               </AccordionBody>
             </Accordion>
             <hr className="my-2 border-blue-gray-50" />
-            <ListItem>
+            {/* <ListItem>
               <ListItemPrefix>
                 <InboxIcon className="h-5 w-5" />
               </ListItemPrefix>
@@ -203,7 +203,7 @@ export default function SidebarWithBurgerMenu() {
                 <Cog6ToothIcon className="h-5 w-5" />
               </ListItemPrefix>
               Settings
-            </ListItem>
+            </ListItem> */}
             <ListItem>
               <ListItemPrefix>
                 <PowerIcon className="h-5 w-5" />
