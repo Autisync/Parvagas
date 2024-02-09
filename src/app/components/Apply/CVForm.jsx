@@ -129,6 +129,7 @@ export default function CVForm() {
                     name="sexo"
                     className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
+                    <option>Escolha</option>
                     <option>Masculino</option>
                     <option>Feminino</option>
                     <option>Binary</option>
@@ -151,7 +152,8 @@ export default function CVForm() {
                     autoComplete="country-name"
                     className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
-                    <option>Ensino Medio</option>
+                    <option>Escolha</option>
+                    <option>Ensino Médio</option>
                     <option>Bachelarado</option>
                     <option>Licenciatura</option>
                     <option>Mestrado</option>
@@ -192,6 +194,7 @@ export default function CVForm() {
                     name="experience"
                     className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
+                    <option>Escolha</option>
                     <option>Sim</option>
                     <option>Não</option>
                   </select>
@@ -221,7 +224,7 @@ export default function CVForm() {
                   htmlFor="street-address"
                   className="block text-sm font-medium leading-6 text-white"
                 >
-                  Residencia Angolano
+                  Endereço Físico
                 </label>
                 <div className="mt-2">
                   <input
