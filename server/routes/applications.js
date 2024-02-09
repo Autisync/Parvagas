@@ -1,5 +1,5 @@
 import express from "express";
-import { getApplications, getApplication, createApplication, updateApplicationStatus } from "../controller/applications.js";
+import { getApplications, getApplication, createApplication, updateApplicationStatus, deleteApplication} from "../controller/applications.js";
 import { verifyToken } from "../middleware/auth.js";
 import {upload} from '../middleware/uploads.js'
 
@@ -15,6 +15,9 @@ router.post("/applications/", upload.single("docs"), createApplication); // ROUT
 
 /* UPDATE */
 router.patch("/:id/status", verifyToken, updateApplicationStatus);
+
+/* DELETE */
+router.delete("/:id/delete", verifyToken, deleteApplication);
 
 
 export default router;

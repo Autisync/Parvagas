@@ -108,3 +108,23 @@ export const getApplication = async (req, res) => {
       res.status(500).json({ error: 'Internal Server Error' });
     }
   };
+
+//   DELETE A SINGLE APPILCATION
+
+export const deleteApplication = async (req, res) => {
+  try {
+    const { id } = req.params; // Retrieve application ID from request parameters
+
+    // Find and remove the application by ID from the database
+    const deletedApplication = await Application.findByIdAndRemove(id);
+
+    if (!deletedApplication) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    res.json({ message: 'Application deleted successfully', application: deletedApplication });
+  } catch (error) {
+    console.error('Error deleting application:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
