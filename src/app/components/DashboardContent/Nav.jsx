@@ -64,16 +64,18 @@ export default function SidebarWithBurgerMenu() {
           className="h-[calc(100vh-2rem)] w-full p-4"
         >
           <div className="mb-2 flex items-center gap-4 p-4">
-            <Image
-              width={500}
-              height={500}
-              src={Logo}
-              alt="brand"
-              className="h-8 w-8"
-            />
-            <Typography variant="h5" color="blue-gray">
-              Sidebar
-            </Typography>
+            <Link href={"/"}>
+              <Image
+                width={500}
+                height={500}
+                src={Logo}
+                alt="Logo"
+                className="h-8 w-8"
+              />
+              <Typography variant="h5" color="blue-gray">
+                ParVagas Recrutamento
+              </Typography>
+            </Link>
           </div>
           <div className="p-2">
             <Input
