@@ -183,7 +183,7 @@ export default function CVForm() {
                   htmlFor="experience"
                   className="block text-sm font-medium leading-6 text-white"
                 >
-                  Experiença Oil & Gas?
+                  Experiência Oil & Gas?
                 </label>
 
                 <div className="mt-2">
