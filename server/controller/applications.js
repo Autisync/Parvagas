@@ -78,6 +78,7 @@ export const updateApplicationStatus = async (req, res) => {
   }
 };
 
+// GET ALL APPLICATIONS
 export const getApplications = async (req, res) => {
     try {
       // Retrieve all applications from the database
@@ -90,7 +91,8 @@ export const getApplications = async (req, res) => {
     }
   };
 
-  export const getApplication = async (req, res) => {
+//   GET A SINGLE APPLICATION
+export const getApplication = async (req, res) => {
     try {
       const { applicationId } = req.params; // Retrieve application ID from request parameters
   
