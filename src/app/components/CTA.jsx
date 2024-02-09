@@ -10,20 +10,18 @@ export default function TooltipCustomStyles() {
     <div className="z-50 bottom-10 right-4 fixed">
       <Tooltip
         placement="bottom"
-        className="border border-blue-gray-50 bg-red-500 px-4 py-3 shadow-xl shadow-black/10"
+        className="border  bg-red-500 px-4 py-3 shadow-2xl shadow-black/10"
         content={
           <div className="w-80">
-            <Typography color="blue-gray" className="font-medium">
+            <Typography color="" className="font-normal text-white">
               ParVagas Recrutamento
             </Typography>
-            <Typography
-              variant="small"
-              color="blue-gray"
-              className="font-normal opacity-80"
-            >
+            <Typography variant="small" className="text-gray-900 font-light">
               Estamos sempre disponiveis para ouvir o seu feedback. Para
               partilhar envie e-mail para{" "}
-              <span className="text-gray-900">feedback@parvagas.co.ao </span>
+              <span className="text-white text-sm font-normal">
+                feedback@parvagas.co.ao{" "}
+              </span>
             </Typography>
           </div>
         }

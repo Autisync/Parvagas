@@ -480,7 +480,7 @@ export default function CVForm() {
         <div className="mt-6 flex items-center justify-end gap-x-6">
           <button
             type="submit"
-            className="rounded-md bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-lg hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 duration-500 ease-in-out transform"
+            className="rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-lg hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 duration-500 ease-in-out transform"
           >
             Submeter Curriculo
           </button>
