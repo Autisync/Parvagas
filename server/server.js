@@ -8,12 +8,11 @@ import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
-import { register } from "./controllers/auth.js";
+import { register } from "./controller/auth.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 
 import applicationRoutes from "./routes/applications.js";
-import { applyToJob } from "./controllers/applyToJob.js";
 // import { verifyToken } from "./middleware/auth.js";
 // import User from "./models/User.js";
 // import Post from "./models/Post.js";
@@ -34,25 +33,22 @@ app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors());
 app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
-/* FILE STORAGE */
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "public/uploads");
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname);
-  },
-});
-const upload = multer({ storage });
+// /* FILE STORAGE */
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "public/uploads");
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, file.originalname);
+//   },
+// });
+// const upload = multer({ storage });
 
-/* ROUTES WITH FILES */
-app.post("/auth/register", register);
-app.post("/applications", upload.single("docs"), applyToJob);
 
 /* ROUTES */
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
-// app.use("/applications", postRoutes);
+app.use("/applications", applicationRoutes);
 
 /* MONGOOSE SETUP */
 const PORT = process.env.PORT || 6001;
@@ -69,35 +65,3 @@ mongoose
     // Post.insertMany(posts);
   })
   .catch((error) => console.log(`${error} did not connect`));
-
-  // Data models
-  /*
-
-  // User
-  firstName (string)
-  lastName (string)
-  email (string)
-  password (string)
-
-
-  // Application
-  id (string)
-  jobId (string)
-  fullName (string)
-  dateOfBirth (date)
-  email (string)
-  cellphoneContact (string)
-  gender (string)
-  qualification (string)
-  profession (string)
-  expirienceInOilGas (boolean)
-  yearsOfExperience (integer)
-  residencialAddress (string)
-  city (string)
-  currentEmployer (string)
-  nacionality (string)
-  personalStatement (string)
-  curriculumVitae (paths)
-  otherDocuments (paths)
-  progress (string)
-  */

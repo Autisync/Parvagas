@@ -1,4 +1,4 @@
-import User from "../models/user";
+import User from "../models/user.js";
 import bcrypt from "bcrypt";
 
 
@@ -16,7 +16,9 @@ export const getUser = async (req, res) => {
 /* UPDATE PASSWORD */
 export const updatePassword = async (req, res) => {
   try {
-    const { id, password } = req.params;
+
+    const { id } = req.params;
+    const { password } = req.body;
     
     const user = await User.findById(id);
 
@@ -29,6 +31,6 @@ export const updatePassword = async (req, res) => {
     await User.findByIdAndUpdate(id, { password: passwordHash })
     res.status(200).json({ msg: "Password updated successfully " }); 
   } catch (err) { 
-    res.status(404).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };

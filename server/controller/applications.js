@@ -1,4 +1,4 @@
-import Application from '../models/application'; // Adjust the path based on your project structure
+import Application from '../models/application.js'; // Adjust the path based on your project structure
 
 export const createApplication = async (req, res) => {
   try {
@@ -20,7 +20,6 @@ export const createApplication = async (req, res) => {
       personalStatement,
       curriculumVitae,
       otherDocuments,
-      status,
     } = req.body; // Retreave application fields data from req body
 
     const newApplication = new Application({
@@ -41,7 +40,7 @@ export const createApplication = async (req, res) => {
       personalStatement,
       curriculumVitae,
       otherDocuments,
-      status,
+      status: "submitted",
     });// Store the req into a Application object
 
     // Save the application to the database
@@ -56,10 +55,10 @@ export const createApplication = async (req, res) => {
 
 export const updateApplicationStatus = async (req, res) => {
   try {
-    const { applicationId, status } = req.body; // Retrieve application ID and status from req body
+    const { id, status } = req.body; // Retrieve application ID and status from req body
 
     // Find the application by ID in the database
-    const existingApplication = await Application.findById(applicationId);
+    const existingApplication = await Application.findById(id);
 
     if (!existingApplication) {
       return res.status(404).json({ error: 'Application not found' });
@@ -94,10 +93,10 @@ export const getApplications = async (req, res) => {
 //   GET A SINGLE APPLICATION
 export const getApplication = async (req, res) => {
     try {
-      const { applicationId } = req.params; // Retrieve application ID from request parameters
+      const { id } = req.params; // Retrieve application ID from request parameters
   
       // Find the application by ID in the database
-      const application = await Application.findById(applicationId);
+      const application = await Application.findById(id);
   
       if (!application) {
         return res.status(404).json({ error: 'Application not found' });
