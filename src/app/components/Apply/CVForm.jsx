@@ -154,6 +154,9 @@ export default function CVForm() {
                   >
                     <option>Escolha</option>
                     <option>Ensino Médio</option>
+                    <option>Certificado</option>
+                    <option>Curso Técnico</option>
+                    <option>Grau de Associado</option>
                     <option>Bachelarado</option>
                     <option>Licenciatura</option>
                     <option>Mestrado</option>
