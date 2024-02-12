@@ -14,7 +14,8 @@ export default function CVForm() {
   };
   return (
     <div className="p-28 px-10 sm:px-32 bg-gray-900">
-      <form>
+      <form action="/applications/application" method="post" enctype="multipart/form-data">
+        {/* Form content */}
         <div className="space-y-12">
           <div className="border-b border-white/10 pb-12">
             <h2 className=" text-3xl font-semibold leading-7 text-white pb-2">
@@ -539,6 +540,7 @@ export default function CVForm() {
           </div>
         </div>
 
+        {/* Submit button */}
         <div className="mt-6 flex items-center justify-end gap-x-6">
           <button
             type="submit"
