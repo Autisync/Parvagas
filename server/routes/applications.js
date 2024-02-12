@@ -10,7 +10,8 @@ router.get("/",  verifyToken, getApplications);
 router.get("/:id", verifyToken, getApplication);
 
 /* CREATE */
-router.post("/applications/", upload.single("docs"), createApplication); // ROUTE WITH FILES
+const cvUpload = upload.fields([{ name: 'file-upload', maxCount: 1 }, { name: 'extrafile-upload', maxCount: 8 }])
+router.post("/application/", cvUpload, createApplication); // ROUTE WITH FILES
 
 
 /* UPDATE */

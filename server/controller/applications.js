@@ -1,4 +1,5 @@
 import Application from '../models/application.js'; // Adjust the path based on your project structure
+import {login, register} from "./auth.js";
 
 export const createApplication = async (req, res) => {
   try {
@@ -43,6 +44,9 @@ export const createApplication = async (req, res) => {
       status: "submitted",
     });// Store the req into a Application object
 
+    // Create an account
+    const isUserCreated = register(req,res);
+    if(!isUserCreated) return;
     // Save the application to the database
     const savedApplication = await newApplication.save();
     // Send status code that application has been created
