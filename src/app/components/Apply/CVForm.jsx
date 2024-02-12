@@ -350,6 +350,7 @@ export default function CVForm() {
               </div>
               {/* Upload extra files */}
               <div className="col-span-full">
+                {/* Label */}
                 <label
                   htmlFor="cover-photo"
                   className="block text-sm font-medium leading-6 text-white"
@@ -357,6 +358,7 @@ export default function CVForm() {
                   Outros Documentos (Certificados, carta de apresentação e etc.
                   - Junte em um unico ficheiro formato PDF)
                 </label>
+                {/* Input */}
                 <div className="mt-2 flex justify-center rounded-lg border border-dashed border-white/25 px-6 py-10">
                   <div className="text-center">
                     <DocumentArrowUpIcon
