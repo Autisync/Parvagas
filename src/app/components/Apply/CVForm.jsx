@@ -1,24 +1,17 @@
-/*
-  This example requires some changes to your config:
-  
-  ```
-  // tailwind.config.js
-  module.exports = {
-    // ...
-    plugins: [
-      // ...
-      require('@tailwindcss/forms'),
-    ],
-  }
-  ```
-*/
+"use client";
 import {
   DocumentArrowUpIcon,
   PhotoIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/solid";
+import { useState } from "react";
 
 export default function CVForm() {
+  const [email, setEmail] = useState("");
+
+  const handleEmailChange = (event) => {
+    setEmail(event.target.value);
+  };
   return (
     <div className="p-28 px-10 sm:px-32 bg-gray-900">
       <form>
@@ -34,7 +27,7 @@ export default function CVForm() {
           </div>
 
           <div className="border-b border-white/10 pb-12">
-            <h2 className="text-base font-semibold leading-7 text-white">
+            <h2 className="text-xl font-bold leading-7 text-red-500">
               Informação Pessoal
             </h2>
             <p className="mt-1 text-sm leading-6 text-gray-400">
@@ -57,7 +50,7 @@ export default function CVForm() {
                     name="first-name"
                     id="first-name"
                     autoComplete="given-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -75,7 +68,7 @@ export default function CVForm() {
                     name="last-name"
                     id="last-name"
                     autoComplete="family-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 px-1 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -89,11 +82,13 @@ export default function CVForm() {
                 </label>
                 <div className="mt-2">
                   <input
-                    id="email"
-                    name="email"
+                    id="email_one"
+                    name="email_one"
+                    value={email}
+                    onChange={handleEmailChange}
                     type="email"
                     autoComplete="email"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 px-2 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -111,7 +106,7 @@ export default function CVForm() {
                     name="tel"
                     type="text"
                     autoComplete="tel"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -127,7 +122,7 @@ export default function CVForm() {
                   <select
                     id="sexo"
                     name="sexo"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Escolha</option>
                     <option>Masculino</option>
@@ -150,7 +145,7 @@ export default function CVForm() {
                     id="country"
                     name="country"
                     autoComplete="country-name"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Escolha</option>
                     <option>Ensino Médio</option>
@@ -177,8 +172,8 @@ export default function CVForm() {
                     type="text"
                     name="profession"
                     id="profession"
-                    autoComplete="address-level2"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    autoComplete="profession"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -195,7 +190,7 @@ export default function CVForm() {
                   <select
                     id="experience"
                     name="experience"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
+                    className="block px-2 w-full rounded-md border-0 bg-white/5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
                     <option>Escolha</option>
                     <option>Sim</option>
@@ -216,7 +211,7 @@ export default function CVForm() {
                     type="number"
                     name="overall_experience"
                     id="overall_experience"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -235,7 +230,7 @@ export default function CVForm() {
                     name="street-address"
                     id="street-address"
                     autoComplete="street-address"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -254,7 +249,7 @@ export default function CVForm() {
                     name="city"
                     id="city"
                     autoComplete="address-level2"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -272,7 +267,7 @@ export default function CVForm() {
                     name="region"
                     id="region"
                     autoComplete="address-level1"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -289,7 +284,7 @@ export default function CVForm() {
                     type="text"
                     name="nacionalidade"
                     id="nacionalidade"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
@@ -309,7 +304,7 @@ export default function CVForm() {
                     id="about"
                     name="about"
                     rows={3}
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                    className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                     defaultValue={""}
                   />
                 </div>
@@ -388,9 +383,70 @@ export default function CVForm() {
                   </div>
                 </div>
               </div>
+
+              <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
+                Criação de Conta PARVAGAS
+              </h2>
+              {/* EMAIL for account creation */}
+              <div className="sm:col-span-2 sm:col-start-1">
+                <label
+                  htmlFor="city"
+                  className="block text-sm font-medium leading-6 text-white"
+                >
+                  Email/Username
+                </label>
+                <div className="mt-2">
+                  <input
+                    type="email_two"
+                    name="email_two"
+                    id="email"
+                    value={email} // Bind value to state
+                    onChange={() => {}} // Disable input
+                    disabled
+                    autoComplete="address-level2"
+                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
+              {/* Password for account creation  */}
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium leading-6 text-white"
+                >
+                  Palavra-Passe
+                </label>
+                <div className="mt-2">
+                  <input
+                    type="password"
+                    name="Password"
+                    id="password"
+                    autoComplete="password"
+                    className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
+              {/* Password for account creation  */}
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="password_valid"
+                  className="block text-sm font-medium leading-6 text-white"
+                >
+                  Confirme Palavra-Passe
+                </label>
+                <div className="mt-2">
+                  <input
+                    type="password"
+                    name="password_valid"
+                    id="password_valid"
+                    className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
+          {/* Terms adn conditions */}
           <div className="border-b border-white/10 pb-12">
             <h2 className="text-base font-semibold leading-7 text-white">
               Autorização legal
@@ -488,7 +544,7 @@ export default function CVForm() {
             type="submit"
             className="rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-lg hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 duration-500 ease-in-out transform"
           >
-            Submeter Curriculo
+            Submeter
           </button>
         </div>
       </form>

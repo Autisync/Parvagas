@@ -8,8 +8,8 @@ import Logo from "/public/icon2.png";
 
 const navigation = [
   { name: "Início", href: "/" },
-  // { name: "Sobre", href: "#" },
   { name: "Empresas", href: "/Empresa/" },
+  { name: "Portal", href: "/Login/" },
 ];
 
 export default function Header() {
@@ -56,10 +56,10 @@ export default function Header() {
         </a>
         <div className="flex flex-1 justify-end">
           {/* <Link
-            href="/Empresa/"
-            className="text-sm font-semibold leading-6 text-gray-50  bg-slate-950 px-3 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-slate-900 duration-500 ease-in-out transform"
+            href="/Login/"
+            className="text-sm font-semibold leading-6 text-gray-50  bg-gray-900/95 px-3 py-1.5 rounded-2xl shadow-md hover:shadow-xl hover:scale-105 hover:bg-gray-900 duration-500 ease-in-out transform"
           >
-            Empresas
+            Portal
           </Link> */}
           <Link
             href="/Submission/"

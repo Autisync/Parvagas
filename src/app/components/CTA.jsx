@@ -10,7 +10,7 @@ export default function TooltipCustomStyles() {
     <div className="z-50 bottom-10 right-4 fixed">
       <Tooltip
         placement="bottom"
-        className="border  bg-red-500 px-4 py-3 shadow-2xl shadow-black/10"
+        className="bg-red-500 px-4 py-3 shadow-xl shadow-black/20"
         content={
           <div className="w-80">
             <Typography className="font-normal text-white">
