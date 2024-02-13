@@ -18,7 +18,7 @@ const applicationSchema = new mongoose.Schema(
         },
         cellphoneContact: { type: String, required: true },
         gender: { type: String, required: true, enum: ['male', 'female']  },
-        qualification: { type: String, required: true },
+        qualification: { type: String, required: true,  enum: ['high school', 'certificate', 'technical course', 'associate', 'bachelor', 'honors', 'master', 'doctor']  },
         profession: { type: String, required: true },
         expirienceInOilGas: { type: Boolean, default: false },
         yearsOfExperience: { type: Number },
