@@ -14,7 +14,7 @@ export default function CVForm() {
   };
   return (
     <div className="p-28 px-10 sm:px-32 bg-gray-900">
-      <form action="/applications/application" method="post" enctype="multipart/form-data">
+      <form  action="/applications/application" method="post" enctype="multipart/form-data">
         {/* Form content */}
         <div className="space-y-12">
           <div className="border-b border-white/10 pb-12">
