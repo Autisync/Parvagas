@@ -7,14 +7,83 @@ import {
 import { useState } from "react";
 
 export default function CVForm() {
+  // Email copying code
   const [email, setEmail] = useState("");
-
   const handleEmailChange = (event) => {
     setEmail(event.target.value);
   };
+  // Email copying code end
+
+  const [formData, setFormData] = useState({
+    // Initialize form data state
+    fullName: "",
+    dateOfBirth: "",
+    email: "",
+    cellphoneContact: "",
+    gender: "",
+    qualification: "",
+    profession: "",
+    expirienceInOilGas: "",
+    yearsOfExperience: "",
+    residencialAddress: "",
+    city: "",
+    currentEmployer: "",
+    nationality: "",
+    personalStatement: "",
+    curriculumVitae: null,
+    otherDocuments: null,
+  });
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  const handleFileChange = (event) => {
+    const { name, files } = event.target;
+    setFormData({
+      ...formData,
+      [name]: files[0], // Assuming only one file is selected
+    });
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    const form = new FormData();
+    for (const key in formData) {
+      form.append(key, formData[key]);
+    }
+
+    try {
+      const response = await fetch("http://localhost:3001/applications/application", { // Updated URL
+      method: "POST",
+      body: form,
+  });
+      if (response.ok) {
+        // Handle successful form submission
+        console.log("Form submitted successfully");
+        alert("Form submitted successfully");
+      } else {
+        // Handle error response
+        console.error("Failed to submit form:", response.statusText);
+        alert("Failed to submit form:", response.statusText);
+      }
+    } catch (error) {
+      // Handle network error
+      console.error("Network error:", error.message);
+      alert("Network error:", error.message);
+    }
+  };
   return (
     <div className="p-28 px-10 sm:px-32 bg-gray-900">
-      <form action="/applications/application" method="post" enctype="multipart/form-data">
+      <form
+        enctype="multipart/form-data"
+        onSubmit={handleSubmit}
+      >
         {/* Form content */}
         <div className="space-y-12">
           <div className="border-b border-white/10 pb-12">
@@ -387,11 +456,11 @@ export default function CVForm() {
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
+              {/* <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
                 Criação de Conta PARVAGAS
-              </h2>
+              </h2> */}
               {/* EMAIL for account creation */}
-              <div className="sm:col-span-2 sm:col-start-1">
+              {/* <div className="sm:col-span-2 sm:col-start-1">
                 <label
                   htmlFor="city"
                   className="block text-sm font-medium leading-6 text-white"
@@ -410,9 +479,9 @@ export default function CVForm() {
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
               {/* Password for account creation  */}
-              <div className="sm:col-span-2">
+              {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password"
                   className="block text-sm font-medium leading-6 text-white"
@@ -428,9 +497,9 @@ export default function CVForm() {
                     className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
               {/* Password for account creation  */}
-              <div className="sm:col-span-2">
+              {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password_valid"
                   className="block text-sm font-medium leading-6 text-white"
@@ -445,7 +514,7 @@ export default function CVForm() {
                     className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
 
