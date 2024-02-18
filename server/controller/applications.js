@@ -26,14 +26,14 @@ export const createApplication = async (req, res) => {
     const newApplication = new Application({
       jobId,
       fullName,
-      dateOfBirth,
+      dateOfBirth: new Date(dateOfBirth),
       email,
       cellphoneContact,
-      gender,
+      gender: str && (str.toLowerCase() === 'true' ? true : false ) ,
       qualification,
       profession,
       expirienceInOilGas,
-      yearsOfExperience,
+      yearsOfExperience: parseInt(yearsOfExperience, 10),
       residencialAddress,
       city,
       currentEmployer,
@@ -77,7 +77,7 @@ export const updateApplicationStatus = async (req, res) => {
     res.json({ application: updatedApplication, message: 'Application status updated successfully' });
   } catch (error) {
     console.error('Error updating status:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Internal Server Error Parcidio' });
   }
 };
 

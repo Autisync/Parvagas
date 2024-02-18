@@ -7,14 +7,74 @@ import {
 import { useState } from "react";
 
 export default function CVForm() {
+  const initialFormData = {
+    'fullName': '',
+    'dateOfBirth': '',
+    'email': '',
+    'cellphoneContact': '',
+    'gender': '',
+    'qualification': '',
+    'profession': '',
+    'expirienceInOilGas': '',
+    'overall_experience': '',
+    'residencialAddress': '',
+    'city': '',
+    'currentEmployer': '',
+    'nationality': '',
+    'personalStatement': '',
+    'file-upload': '',       
+    'extrafile-upload': [],   
+  };
   const [email, setEmail] = useState("");
 
   const handleEmailChange = (event) => {
     setEmail(event.target.value);
   };
+
+  const [formData, setFormData] = useState(initialFormData);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log("formData: ",formData)
+    // Call a function to send the form data to the backend
+    // sendDataToBackend(formData);  
+  };
+
+  const sendDataToBackend = async (formData) => {
+   
+    try {
+      const response = await fetch('http://localhost:3001/applications/application', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+  
+      if (response.ok) {
+        // Handle success, e.g., show a success message or redirect
+        console.log('Data sent successfully');
+      } else {
+        // Handle error, e.g., show an error message
+        console.error('Failed to send data to the backend');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+  
   return (
     <div className="p-28 px-10 sm:px-32 bg-gray-900">
-      <form  action="/applications/application" method="post" enctype="multipart/form-data">
+      <form  onSubmit={handleSubmit} enctype="multipart/form-data">
         {/* Form content */}
         <div className="space-y-12">
           <div className="border-b border-white/10 pb-12">
@@ -40,7 +100,7 @@ export default function CVForm() {
               {/* Nome */}
               <div className="sm:col-span-3">
                 <label
-                  htmlFor="first-name"
+                  htmlFor="fullName"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Nome Completo
@@ -48,8 +108,10 @@ export default function CVForm() {
                 <div className="mt-2">
                   <input
                     type="text"
-                    name="first-name"
-                    id="first-name"
+                    name="fullName"
+                    id="fullName"
+                    value={formData["first-name"]}
+                    onChange={handleInputChange}
                     autoComplete="given-name"
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
@@ -58,7 +120,7 @@ export default function CVForm() {
               {/* Data de Nascimento */}
               <div className="sm:col-span-3">
                 <label
-                  htmlFor="last-name"
+                  htmlFor="dateOfBirth"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Data de Nascimento
@@ -66,8 +128,10 @@ export default function CVForm() {
                 <div className="mt-2">
                   <input
                     type="date"
-                    name="last-name"
-                    id="last-name"
+                    name="dateOfBirth"
+                    id="dateOfBirth"
+                    value={formData["dateOfBirth"]}
+                    onChange={handleInputChange}
                     autoComplete="family-name"
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 px-1 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
@@ -83,10 +147,10 @@ export default function CVForm() {
                 </label>
                 <div className="mt-2">
                   <input
-                    id="email_one"
-                    name="email_one"
-                    value={email}
-                    onChange={handleEmailChange}
+                    id="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
                     type="email"
                     autoComplete="email"
                     className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 px-2 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
@@ -96,67 +160,73 @@ export default function CVForm() {
               {/* Contacto Telefonico */}
               <div className="sm:col-span-3">
                 <label
-                  htmlFor="tel"
+                  htmlFor="cellphoneContact"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Contacto Telefonico
                 </label>
                 <div className="mt-2">
                   <input
-                    id="tel"
-                    name="tel"
+                    id="cellphoneContact"
+                    name="cellphoneContact"
                     type="text"
-                    autoComplete="tel"
+                    value={formData.cellphoneContact}
+                    onChange={handleInputChange}
+                    autoComplete="cellphoneContact"
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
-              {/* Sexo */}
+              {/* gender */}
               <div className="sm:col-span-3">
                 <label
-                  htmlFor="sexo"
+                  htmlFor="gender"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Sexo
                 </label>
                 <div className="mt-2">
                   <select
-                    id="sexo"
-                    name="sexo"
+                    id="gender"
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleInputChange}
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
-                    <option>Escolha</option>
-                    <option>Masculino</option>
-                    <option>Feminino</option>
-                    <option>Binary</option>
-                    <option>Prefiro nao Especificar</option>
+                    <option value="">Escolha</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Feminino">Feminino</option>
+                    <option value="Binario">Binario</option>
+                    <option value="Prefiro nao Especificar">Prefiro nao Especificar</option>
                   </select>
                 </div>
               </div>
               {/* Habilitação Académica */}
               <div className="sm:col-span-3">
                 <label
-                  htmlFor="country"
+                  htmlFor="qualification"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Habilitação Académica
                 </label>
                 <div className="mt-2">
                   <select
-                    id="country"
-                    name="country"
-                    autoComplete="country-name"
+                    id="qualification"
+                    name="qualification"
+                    autoComplete="qualification-name"
+                    value={formData.qualification}
+                    onChange={handleInputChange}
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
-                    <option>Escolha</option>
-                    <option>Ensino Médio</option>
-                    <option>Certificado</option>
-                    <option>Curso Técnico</option>
-                    <option>Grau de Associado</option>
-                    <option>Bachelarado</option>
-                    <option>Licenciatura</option>
-                    <option>Mestrado</option>
-                    <option>Doutourado</option>
+                    <option value="">Escolha</option>
+                    <option value="Ensino Médio">Ensino Médio</option>
+                    <option value="Certificado">Certificado</option>
+                    <option value="Curso Técnico">Curso Técnico</option>
+                    <option value="Grau de Associado">Grau de Associado</option>
+                    <option value="Bachelarado">Bachelarado</option>
+                    <option value="Licenciatura">Licenciatura</option>
+                    <option value="Mestrado">Mestrado</option>
+                    <option value="Doutourado">Doutourado</option>
                   </select>
                 </div>
               </div>
@@ -173,15 +243,17 @@ export default function CVForm() {
                     type="text"
                     name="profession"
                     id="profession"
+                    value={formData.profession}
+                    onChange={handleInputChange}
                     autoComplete="profession"
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
-              {/* Oil & Gas Experience */}
+              {/* Oil & Gas expiriencia */}
               <div className="sm:col-span-2">
                 <label
-                  htmlFor="experience"
+                  htmlFor="expirienceInOilGas"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Experiência Oil & Gas?
@@ -189,13 +261,16 @@ export default function CVForm() {
 
                 <div className="mt-2">
                   <select
-                    id="experience"
-                    name="experience"
+                    id="expirienceInOilGas"
+                    name="expirienceInOilGas"
+                    value={formData.expirienceInOilGas}
+                    
+                    onChange={handleInputChange}
                     className="block px-2 w-full rounded-md border-0 bg-white/5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
                   >
-                    <option>Escolha</option>
-                    <option>Sim</option>
-                    <option>Não</option>
+                    {/* <option>Escolha</option> */}
+                    <option value="true">Sim</option>
+                    <option value="false">Não</option>
                   </select>
                 </div>
               </div>
@@ -212,6 +287,8 @@ export default function CVForm() {
                     type="number"
                     name="overall_experience"
                     id="overall_experience"
+                    value={formData.overall_experience}
+                    onChange={handleInputChange}
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
@@ -220,7 +297,7 @@ export default function CVForm() {
               {/* Residencia Angolano */}
               <div className="col-span-full">
                 <label
-                  htmlFor="street-address"
+                  htmlFor="residencialAddress"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Endereço Físico
@@ -228,9 +305,11 @@ export default function CVForm() {
                 <div className="mt-2">
                   <input
                     type="text"
-                    name="street-address"
-                    id="street-address"
-                    autoComplete="street-address"
+                    name="residencialAddress"
+                    id="residencialAddress"
+                    value={formData["residencialAddress"]}
+                    onChange={handleInputChange}
+                    autoComplete="residencialAddress"
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
@@ -249,6 +328,8 @@ export default function CVForm() {
                     type="text"
                     name="city"
                     id="city"
+                    value={formData.city}
+                    onChange={handleInputChange}
                     autoComplete="address-level2"
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
@@ -257,7 +338,7 @@ export default function CVForm() {
               {/* Empregadora atual */}
               <div className="sm:col-span-2">
                 <label
-                  htmlFor="region"
+                  htmlFor="currentEmployer"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Empregadora atual
@@ -265,26 +346,30 @@ export default function CVForm() {
                 <div className="mt-2">
                   <input
                     type="text"
-                    name="region"
-                    id="region"
+                    name="currentEmployer"
+                    id="currentEmployer"
+                    value={formData.currentEmployer}
+                    onChange={handleInputChange}
                     autoComplete="address-level1"
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
               </div>
-              {/* Nacionalidade */}
+              {/* nationality */}
               <div className="sm:col-span-2">
                 <label
-                  htmlFor="nacionalidade"
+                  htmlFor="nationality"
                   className="block text-sm font-medium leading-6 text-white"
                 >
-                  Nacionalidade
+                  nationalidade
                 </label>
                 <div className="mt-2">
                   <input
                     type="text"
-                    name="nacionalidade"
-                    id="nacionalidade"
+                    name="nationality"
+                    id="nationality"
+                    value={formData.nationality}
+                    onChange={handleInputChange}
                     className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
@@ -295,16 +380,18 @@ export default function CVForm() {
               {/* Defende a tua Personalidade */}
               <div className="col-span-full">
                 <label
-                  htmlFor="about"
+                  htmlFor="personalStatement"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Defende a tua Personalidade
                 </label>
                 <div className="mt-2">
                   <textarea
-                    id="about"
-                    name="about"
+                    id="personalStatement"
+                    name="personalStatement"
                     rows={3}
+                    value={formData.personalStatement}
+                    onChange={handleInputChange}
                     className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                     defaultValue={""}
                   />
@@ -337,6 +424,8 @@ export default function CVForm() {
                           id="file-upload"
                           name="file-upload"
                           type="file"
+                          value={formData["file-upload"]}
+                          onChange={handleInputChange}
                           className="sr-only"
                         />
                       </label>
@@ -374,6 +463,8 @@ export default function CVForm() {
                         <input
                           id="extrafile-upload"
                           name="extrafile-upload"
+                          value={formData["extrafile-upload"]}
+                          onChange={handleInputChange}
                           type="file"
                           className="sr-only"
                         />
@@ -391,7 +482,7 @@ export default function CVForm() {
                 Criação de Conta PARVAGAS
               </h2>
               {/* EMAIL for account creation */}
-              <div className="sm:col-span-2 sm:col-start-1">
+              {/* <div className="sm:col-span-2 sm:col-start-1">
                 <label
                   htmlFor="city"
                   className="block text-sm font-medium leading-6 text-white"
@@ -410,9 +501,9 @@ export default function CVForm() {
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
               {/* Password for account creation  */}
-              <div className="sm:col-span-2">
+              {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password"
                   className="block text-sm font-medium leading-6 text-white"
@@ -428,9 +519,9 @@ export default function CVForm() {
                     className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
               {/* Password for account creation  */}
-              <div className="sm:col-span-2">
+              {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password_valid"
                   className="block text-sm font-medium leading-6 text-white"
@@ -445,7 +536,7 @@ export default function CVForm() {
                     className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
-              </div>
+              </div> */}
             </div>
           </div>
 
@@ -455,13 +546,13 @@ export default function CVForm() {
               Autorização legal
             </h2>
             <p className="mt-1 text-sm leading-6 text-gray-400">
-              <input
+              {/* <input
                 title="agree"
                 id="push-email"
                 name="push-notifications"
                 type="checkbox"
                 className="pl-2 h-4 w-4 border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
-              />{" "}
+              />{" "} */}
               Concordo e garanto à ParVagas a segurança e o processamento das
               informações que forneci e considero que são verdadeiras.
             </p>
