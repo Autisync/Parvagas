@@ -53,7 +53,7 @@ export const createApplication = async (req, res) => {
     res.status(201).json({ application: savedApplication, message: 'Application submitted successfully' });
   } catch (error) {
     console.error('Error creating application:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: '<Mmauro>' });
   }
 };
 

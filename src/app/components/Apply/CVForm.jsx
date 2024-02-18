@@ -26,7 +26,6 @@ export default function CVForm() {
     'extrafile-upload': [],   
   };
   const [email, setEmail] = useState("");
-
   const handleEmailChange = (event) => {
     setEmail(event.target.value);
   };
@@ -478,10 +477,11 @@ export default function CVForm() {
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
+              {/* <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
                 Criação de Conta PARVAGAS
-              </h2>
+              </h2> */}
               {/* EMAIL for account creation */}
+              {/* <div className="sm:col-span-2 sm:col-start-1">
               {/* <div className="sm:col-span-2 sm:col-start-1">
                 <label
                   htmlFor="city"
@@ -502,7 +502,9 @@ export default function CVForm() {
                   />
                 </div>
               </div> */}
+              </div> */}
               {/* Password for account creation  */}
+              {/* <div className="sm:col-span-2">
               {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password"
@@ -520,7 +522,9 @@ export default function CVForm() {
                   />
                 </div>
               </div> */}
+              </div> */}
               {/* Password for account creation  */}
+              {/* <div className="sm:col-span-2">
               {/* <div className="sm:col-span-2">
                 <label
                   htmlFor="password_valid"
@@ -536,6 +540,7 @@ export default function CVForm() {
                     className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
                 </div>
+              </div> */}
               </div> */}
             </div>
           </div>
