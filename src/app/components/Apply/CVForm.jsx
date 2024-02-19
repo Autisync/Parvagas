@@ -16,7 +16,7 @@ export default function CVForm() {
     'qualification': '',
     'profession': '',
     'expirienceInOilGas': '',
-    'overall_experience': '',
+    'yearsOfExperience': '',
     'residencialAddress': '',
     'city': '',
     'currentEmployer': '',
@@ -45,7 +45,7 @@ export default function CVForm() {
     e.preventDefault();
     console.log("formData: ",formData)
     // Call a function to send the form data to the backend
-    // sendDataToBackend(formData);  
+    sendDataToBackend(formData);  
   };
 
   const sendDataToBackend = async (formData) => {
@@ -276,7 +276,7 @@ export default function CVForm() {
               {/* Experiença Geral */}
               <div className="sm:col-span-2">
                 <label
-                  htmlFor="overall_experience"
+                  htmlFor="yearsOfExperience"
                   className="block text-sm font-medium leading-6 text-white"
                 >
                   Anos Experiença Profissional
@@ -284,9 +284,9 @@ export default function CVForm() {
                 <div className="mt-2">
                   <input
                     type="number"
-                    name="overall_experience"
-                    id="overall_experience"
-                    value={formData.overall_experience}
+                    name="yearsOfExperience"
+                    id="yearsOfExperience"
+                    value={formData.yearsOfExperience}
                     onChange={handleInputChange}
                     className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
                   />
@@ -502,7 +502,7 @@ export default function CVForm() {
                   />
                 </div>
               </div> */}
-              </div> */}
+              {/* </div>  */}
               {/* Password for account creation  */}
               {/* <div className="sm:col-span-2">
               {/* <div className="sm:col-span-2">
@@ -522,7 +522,7 @@ export default function CVForm() {
                   />
                 </div>
               </div> */}
-              </div> */}
+              {/* </div>  */}
               {/* Password for account creation  */}
               {/* <div className="sm:col-span-2">
               {/* <div className="sm:col-span-2">
@@ -541,7 +541,7 @@ export default function CVForm() {
                   />
                 </div>
               </div> */}
-              </div> */}
+              {/* </div>  */}
             </div>
           </div>
 
