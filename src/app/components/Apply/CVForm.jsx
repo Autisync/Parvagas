@@ -1,653 +1,304 @@
 "use client";
-import {
-  DocumentArrowUpIcon,
-  PhotoIcon,
-  UserCircleIcon,
-} from "@heroicons/react/24/solid";
+
+import { DocumentArrowUpIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
-export default function CVForm() {
-  const initialFormData = {
-    'fullName': '',
-    'dateOfBirth': '',
-    'email': '',
-    'cellphoneContact': '',
-    'gender': '',
-    'qualification': '',
-    'profession': '',
-    'expirienceInOilGas': '',
-    'yearsOfExperience': '',
-    'residencialAddress': '',
-    'city': '',
-    'currentEmployer': '',
-    'nationality': '',
-    'personalStatement': '',
-    'file-upload': '',       
-    'extrafile-upload': [],   
-  };
-  const [email, setEmail] = useState("");
-  const handleEmailChange = (event) => {
-    setEmail(event.target.value);
-  };
+const initialFormData = {
+  fullName: "",
+  dateOfBirth: "",
+  email: "",
+  cellphoneContact: "",
+  gender: "",
+  qualification: "",
+  profession: "",
+  expirienceInOilGas: "",
+  yearsOfExperience: "",
+  residencialAddress: "",
+  city: "",
+  currentEmployer: "",
+  nationality: "",
+  personalStatement: "",
+  "file-upload": "",
+  "extrafile-upload": "",
+};
 
+const fieldClass =
+  "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-red-300 focus:ring-4 focus:ring-red-100";
+
+const labelClass = "block text-sm font-semibold text-slate-800";
+
+function FormSection({ eyebrow, title, description, children }) {
+  return (
+    <section className="border-t border-slate-200 pt-8">
+      <div className="max-w-2xl">
+        {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">{eyebrow}</p>}
+        <h2 className="mt-2 text-xl font-bold text-slate-950">{title}</h2>
+        {description && <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}
+      </div>
+      <div className="mt-6 grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-6">{children}</div>
+    </section>
+  );
+}
+
+function UploadBox({ id, name, title, description, onChange }) {
+  return (
+    <div className="col-span-full">
+      <label htmlFor={id} className={labelClass}>
+        {title}
+      </label>
+      <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-red-300 hover:bg-red-50/40">
+        <DocumentArrowUpIcon className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-1 text-sm text-slate-600">
+          <label
+            htmlFor={id}
+            className="cursor-pointer rounded-lg bg-white px-3 py-2 font-semibold text-red-600 shadow-sm ring-1 ring-slate-200 transition hover:text-red-700"
+          >
+            Escolher ficheiro
+          </label>
+          <span>ou arraste e solte</span>
+          <input id={id} name={name} type="file" onChange={onChange} className="sr-only" />
+        </div>
+        <p className="mt-2 text-xs text-slate-500">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function CVForm() {
   const [formData, setFormData] = useState(initialFormData);
+  const [status, setStatus] = useState({ type: "", message: "" });
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    const { name, value, files } = e.target;
+    setFormData((current) => ({
+      ...current,
+      [name]: files?.[0]?.name ?? value,
+    }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("formData: ",formData)
-    // Call a function to send the form data to the backend
-    sendDataToBackend(formData);  
-  };
+    setStatus({ type: "", message: "" });
+    setSubmitting(true);
 
-  const sendDataToBackend = async (formData) => {
-   
     try {
-      const response = await fetch('http://localhost:3001/applications/application', {
-        method: 'POST',
+      const response = await fetch("http://localhost:3001/applications/application", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
-  
-      if (response.ok) {
-        // Handle success, e.g., show a success message or redirect
-        console.log('Data sent successfully');
-      } else {
-        // Handle error, e.g., show an error message
-        console.error('Failed to send data to the backend');
-      }
+
+      if (!response.ok) throw new Error("Falha ao submeter candidatura.");
+
+      setStatus({ type: "success", message: "CV submetido com sucesso. A equipa Parvagas irá analisar a informação." });
+      setFormData(initialFormData);
     } catch (error) {
-      console.error('Error:', error);
+      setStatus({
+        type: "error",
+        message: error instanceof Error ? error.message : "Não foi possível submeter o CV.",
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
-  
+
   return (
-    <div className="p-28 px-10 sm:px-32 bg-gray-900">
-      <form  onSubmit={handleSubmit} enctype="multipart/form-data">
-        {/* Form content */}
-        <div className="space-y-12">
-          <div className="border-b border-white/10 pb-12">
-            <h2 className=" text-3xl font-semibold leading-7 text-white pb-2">
-              Envie o seu CV Hoje!
-            </h2>
-            <p className="mt-1 text-base leading-6 text-gray-400">
-              Temos uma base de dados para ajudar transformar o seu futuro
-              profissional hoje!
+    <section className="bg-slate-50 px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid lg:grid-cols-[0.8fr,1.2fr]">
+          <aside className="bg-slate-950 p-8 text-white sm:p-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Submeter CV</p>
+            <h1 className="mt-4 text-4xl font-bold leading-tight">Partilhe o seu perfil profissional.</h1>
+            <p className="mt-4 text-sm leading-6 text-slate-300">
+              Complete os dados essenciais para que a equipa Parvagas possa considerar o seu perfil em oportunidades relevantes.
             </p>
-          </div>
+            <div className="mt-10 grid gap-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Dados pessoais e experiência profissional.</div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">CV e documentos em PDF ou DOCX.</div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Consentimento para processamento seguro.</div>
+            </div>
+          </aside>
 
-          <div className="border-b border-white/10 pb-12">
-            <h2 className="text-xl font-bold leading-7 text-red-500">
-              Informação Pessoal
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-gray-400">
-              Use um endereço permanente onde você possa receber
-              correspondências.
-            </p>
-
-            <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
-              {/* Nome */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="fullName"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Nome Completo
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="fullName"
-                    id="fullName"
-                    value={formData["first-name"]}
-                    onChange={handleInputChange}
-                    autoComplete="given-name"
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* Data de Nascimento */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="dateOfBirth"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Data de Nascimento
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="date"
-                    name="dateOfBirth"
-                    id="dateOfBirth"
-                    value={formData["dateOfBirth"]}
-                    onChange={handleInputChange}
-                    autoComplete="family-name"
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 px-1 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* Email */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Email address
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    type="email"
-                    autoComplete="email"
-                    className="block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 px-2 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* Contacto Telefonico */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="cellphoneContact"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Contacto Telefonico
-                </label>
-                <div className="mt-2">
-                  <input
-                    id="cellphoneContact"
-                    name="cellphoneContact"
-                    type="text"
-                    value={formData.cellphoneContact}
-                    onChange={handleInputChange}
-                    autoComplete="cellphoneContact"
-                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* gender */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="gender"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Sexo
-                </label>
-                <div className="mt-2">
-                  <select
-                    id="gender"
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleInputChange}
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
-                  >
-                    <option value="">Escolha</option>
-                    <option value="Masculino">Masculino</option>
-                    <option value="Feminino">Feminino</option>
-                    <option value="Binario">Binario</option>
-                    <option value="Prefiro nao Especificar">Prefiro nao Especificar</option>
-                  </select>
-                </div>
-              </div>
-              {/* Habilitação Académica */}
-              <div className="sm:col-span-3">
-                <label
-                  htmlFor="qualification"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Habilitação Académica
-                </label>
-                <div className="mt-2">
-                  <select
-                    id="qualification"
-                    name="qualification"
-                    autoComplete="qualification-name"
-                    value={formData.qualification}
-                    onChange={handleInputChange}
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
-                  >
-                    <option value="">Escolha</option>
-                    <option value="Ensino Médio">Ensino Médio</option>
-                    <option value="Certificado">Certificado</option>
-                    <option value="Curso Técnico">Curso Técnico</option>
-                    <option value="Grau de Associado">Grau de Associado</option>
-                    <option value="Bachelarado">Bachelarado</option>
-                    <option value="Licenciatura">Licenciatura</option>
-                    <option value="Mestrado">Mestrado</option>
-                    <option value="Doutourado">Doutourado</option>
-                  </select>
-                </div>
-              </div>
-              {/* Profissão */}
-              <div className="sm:col-span-2 sm:col-start-1">
-                <label
-                  htmlFor="profession"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Profissão
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="profession"
-                    id="profession"
-                    value={formData.profession}
-                    onChange={handleInputChange}
-                    autoComplete="profession"
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* Oil & Gas expiriencia */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="expirienceInOilGas"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Experiência Oil & Gas?
-                </label>
-
-                <div className="mt-2">
-                  <select
-                    id="expirienceInOilGas"
-                    name="expirienceInOilGas"
-                    value={formData.expirienceInOilGas}
-                    
-                    onChange={handleInputChange}
-                    className="block px-2 w-full rounded-md border-0 bg-white/5 py-2 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6 [&_*]:text-black"
-                  >
-                    {/* <option>Escolha</option> */}
-                    <option value="true">Sim</option>
-                    <option value="false">Não</option>
-                  </select>
-                </div>
-              </div>
-              {/* Experiença Geral */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="yearsOfExperience"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Anos Experiença Profissional
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="number"
-                    name="yearsOfExperience"
-                    id="yearsOfExperience"
-                    value={formData.yearsOfExperience}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              {/* Residencia Angolano */}
-              <div className="col-span-full">
-                <label
-                  htmlFor="residencialAddress"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Endereço Físico
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="residencialAddress"
-                    id="residencialAddress"
-                    value={formData["residencialAddress"]}
-                    onChange={handleInputChange}
-                    autoComplete="residencialAddress"
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-
-              {/* Cidade */}
-              <div className="sm:col-span-2 sm:col-start-1">
-                <label
-                  htmlFor="city"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Cidade
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="city"
-                    id="city"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    autoComplete="address-level2"
-                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* Empregadora atual */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="currentEmployer"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Empregadora atual
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="currentEmployer"
-                    id="currentEmployer"
-                    value={formData.currentEmployer}
-                    onChange={handleInputChange}
-                    autoComplete="address-level1"
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
-              {/* nationality */}
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="nationality"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  nationalidade
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    name="nationality"
-                    id="nationality"
-                    value={formData.nationality}
-                    onChange={handleInputChange}
-                    className="block w-full px-2 rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div>
+          <form onSubmit={handleSubmit} encType="multipart/form-data" className="space-y-8 p-6 sm:p-10">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Candidatura espontânea</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Envie o seu CV hoje</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Use informação atualizada e contactos válidos para facilitar o acompanhamento da candidatura.
+              </p>
             </div>
 
-            <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
-              {/* Defende a tua Personalidade */}
-              <div className="col-span-full">
-                <label
-                  htmlFor="personalStatement"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Defende a tua Personalidade
-                </label>
-                <div className="mt-2">
-                  <textarea
-                    id="personalStatement"
-                    name="personalStatement"
-                    rows={3}
-                    value={formData.personalStatement}
-                    onChange={handleInputChange}
-                    className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                    defaultValue={""}
-                  />
-                </div>
-                <p className="mt-3 text-sm leading-6 text-gray-400">
-                  Por que devemos considerar-te como um candidato potencial.
-                </p>
+            {status.message && (
+              <div
+                className={`rounded-xl border px-4 py-3 text-sm ${
+                  status.type === "success"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                {status.message}
               </div>
-              {/* Upload CV */}
-              <div className="col-span-full">
-                <label
-                  htmlFor="cover-photo"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Curriculum Vitae
-                </label>
-                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-white/25 px-6 py-10">
-                  <div className="text-center">
-                    <DocumentArrowUpIcon
-                      className="mx-auto h-12 w-12 text-gray-500"
-                      aria-hidden="true"
-                    />
-                    <div className="mt-4 flex text-sm leading-6 text-gray-400">
-                      <label
-                        htmlFor="file-upload"
-                        className="relative cursor-pointer rounded-md bg-gray-900 font-semibold text-white focus-within:outline-none focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-red-500"
-                      >
-                        <span className="p-2">Descarga de ficheiro</span>
-                        <input
-                          id="file-upload"
-                          name="file-upload"
-                          type="file"
-                          value={formData["file-upload"]}
-                          onChange={handleInputChange}
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="pl-1">ou arraste e solte</p>
-                    </div>
-                    <p className="text-xs leading-5 text-gray-400">
-                      PDF, docx up to 10MB
-                    </p>
-                  </div>
-                </div>
-              </div>
-              {/* Upload extra files */}
-              <div className="col-span-full">
-                {/* Label */}
-                <label
-                  htmlFor="cover-photo"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Outros Documentos (Certificados, carta de apresentação e etc.
-                  - Junte em um unico ficheiro formato PDF)
-                </label>
-                {/* Input */}
-                <div className="mt-2 flex justify-center rounded-lg border border-dashed border-white/25 px-6 py-10">
-                  <div className="text-center">
-                    <DocumentArrowUpIcon
-                      className="mx-auto h-12 w-12 text-gray-500"
-                      aria-hidden="true"
-                    />
-                    <div className="mt-4 flex text-sm leading-6 text-gray-400">
-                      <label
-                        htmlFor="extrafile-upload"
-                        className="relative cursor-pointer rounded-md bg-gray-900 font-semibold text-white focus-within:outline-none focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-2 focus-within:ring-offset-gray-900 hover:text-red-500"
-                      >
-                        <span className="p-2">Descarga de ficheiro</span>
-                        <input
-                          id="extrafile-upload"
-                          name="extrafile-upload"
-                          value={formData["extrafile-upload"]}
-                          onChange={handleInputChange}
-                          type="file"
-                          className="sr-only"
-                        />
-                      </label>
-                      <p className="pl-1">ou arraste e solte</p>
-                    </div>
-                    <p className="text-xs leading-5 text-gray-400">
-                      PDF, docx up to 10MB
-                    </p>
-                  </div>
-                </div>
+            )}
+
+            <FormSection
+              eyebrow="Informação pessoal"
+              title="Dados do candidato"
+              description="Use o nome completo e contactos permanentes para acompanhamento."
+            >
+              <div className="sm:col-span-3">
+                <label htmlFor="fullName" className={labelClass}>Nome completo</label>
+                <input id="fullName" name="fullName" type="text" value={formData.fullName} onChange={handleInputChange} autoComplete="name" className={fieldClass} required />
               </div>
 
-              {/* <h2 className="text-xl font-bold leading-7 text-red-500 w-full">
-                Criação de Conta PARVAGAS
-              </h2> */}
-              {/* EMAIL for account creation */}
-              {/* <div className="sm:col-span-2 sm:col-start-1">
-              {/* <div className="sm:col-span-2 sm:col-start-1">
-                <label
-                  htmlFor="city"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Email/Username
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="email_two"
-                    name="email_two"
-                    id="email"
-                    value={email} // Bind value to state
-                    onChange={() => {}} // Disable input
-                    disabled
-                    autoComplete="address-level2"
-                    className="block w-full rounded-md px-2 border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div> */}
-              {/* </div>  */}
-              {/* Password for account creation  */}
-              {/* <div className="sm:col-span-2">
-              {/* <div className="sm:col-span-2">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Palavra-Passe
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="password"
-                    name="Password"
-                    id="password"
-                    autoComplete="password"
-                    className="px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div> */}
-              {/* </div>  */}
-              {/* Password for account creation  */}
-              {/* <div className="sm:col-span-2">
-              {/* <div className="sm:col-span-2">
-                <label
-                  htmlFor="password_valid"
-                  className="block text-sm font-medium leading-6 text-white"
-                >
-                  Confirme Palavra-Passe
-                </label>
-                <div className="mt-2">
-                  <input
-                    type="password"
-                    name="password_valid"
-                    id="password_valid"
-                    className=" px-2 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/20 focus:ring-2 focus:ring-inset focus:ring-red-500 sm:text-sm sm:leading-6"
-                  />
-                </div>
-              </div> */}
-              {/* </div>  */}
+              <div className="sm:col-span-3">
+                <label htmlFor="dateOfBirth" className={labelClass}>Data de nascimento</label>
+                <input id="dateOfBirth" name="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleInputChange} className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="email" className={labelClass}>Email</label>
+                <input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} autoComplete="email" className={fieldClass} required />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="cellphoneContact" className={labelClass}>Contacto telefónico</label>
+                <input id="cellphoneContact" name="cellphoneContact" type="tel" value={formData.cellphoneContact} onChange={handleInputChange} autoComplete="tel" className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="gender" className={labelClass}>Sexo</label>
+                <select id="gender" name="gender" value={formData.gender} onChange={handleInputChange} className={fieldClass}>
+                  <option value="">Escolha</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Feminino">Feminino</option>
+                  <option value="Binario">Binário</option>
+                  <option value="Prefiro nao Especificar">Prefiro não especificar</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="nationality" className={labelClass}>Nacionalidade</label>
+                <input id="nationality" name="nationality" type="text" value={formData.nationality} onChange={handleInputChange} className={fieldClass} />
+              </div>
+            </FormSection>
+
+            <FormSection
+              eyebrow="Experiência"
+              title="Perfil profissional"
+              description="Ajude-nos a entender a sua área, senioridade e disponibilidade."
+            >
+              <div className="sm:col-span-3">
+                <label htmlFor="qualification" className={labelClass}>Habilitação académica</label>
+                <select id="qualification" name="qualification" value={formData.qualification} onChange={handleInputChange} className={fieldClass}>
+                  <option value="">Escolha</option>
+                  <option value="Ensino Médio">Ensino Médio</option>
+                  <option value="Certificado">Certificado</option>
+                  <option value="Curso Técnico">Curso Técnico</option>
+                  <option value="Grau de Associado">Grau de Associado</option>
+                  <option value="Bacharelado">Bacharelado</option>
+                  <option value="Licenciatura">Licenciatura</option>
+                  <option value="Mestrado">Mestrado</option>
+                  <option value="Doutorado">Doutorado</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="profession" className={labelClass}>Profissão</label>
+                <input id="profession" name="profession" type="text" value={formData.profession} onChange={handleInputChange} autoComplete="organization-title" className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="expirienceInOilGas" className={labelClass}>Experiência em Oil & Gas?</label>
+                <select id="expirienceInOilGas" name="expirienceInOilGas" value={formData.expirienceInOilGas} onChange={handleInputChange} className={fieldClass}>
+                  <option value="">Escolha</option>
+                  <option value="true">Sim</option>
+                  <option value="false">Não</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="yearsOfExperience" className={labelClass}>Anos de experiência</label>
+                <input id="yearsOfExperience" name="yearsOfExperience" type="number" min="0" value={formData.yearsOfExperience} onChange={handleInputChange} className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label htmlFor="currentEmployer" className={labelClass}>Empregador atual</label>
+                <input id="currentEmployer" name="currentEmployer" type="text" value={formData.currentEmployer} onChange={handleInputChange} className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="city" className={labelClass}>Cidade</label>
+                <input id="city" name="city" type="text" value={formData.city} onChange={handleInputChange} autoComplete="address-level2" className={fieldClass} />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label htmlFor="residencialAddress" className={labelClass}>Endereço físico</label>
+                <input id="residencialAddress" name="residencialAddress" type="text" value={formData.residencialAddress} onChange={handleInputChange} autoComplete="street-address" className={fieldClass} />
+              </div>
+
+              <div className="col-span-full">
+                <label htmlFor="personalStatement" className={labelClass}>Resumo profissional</label>
+                <textarea
+                  id="personalStatement"
+                  name="personalStatement"
+                  rows={4}
+                  value={formData.personalStatement}
+                  onChange={handleInputChange}
+                  className={fieldClass}
+                  placeholder="Explique brevemente por que devemos considerar o seu perfil."
+                />
+              </div>
+            </FormSection>
+
+            <FormSection eyebrow="Documentos" title="CV e anexos" description="Anexe o CV principal e, se necessário, documentos de apoio.">
+              <UploadBox
+                id="file-upload"
+                name="file-upload"
+                title="Curriculum Vitae"
+                description="PDF ou DOCX até 10MB."
+                onChange={handleInputChange}
+              />
+              <UploadBox
+                id="extrafile-upload"
+                name="extrafile-upload"
+                title="Outros documentos"
+                description="Certificados, carta de apresentação ou anexos relevantes."
+                onChange={handleInputChange}
+              />
+            </FormSection>
+
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <h2 className="text-base font-bold text-slate-950">Autorização legal</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Concordo e garanto à Parvagas a segurança e o processamento das informações fornecidas, declarando que são verdadeiras.
+              </p>
+            </section>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="reset"
+                onClick={() => {
+                  setFormData(initialFormData);
+                  setStatus({ type: "", message: "" });
+                }}
+                className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Limpar
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "A submeter..." : "Submeter CV"}
+              </button>
             </div>
-          </div>
-
-          {/* Terms adn conditions */}
-          <div className="border-b border-white/10 pb-12">
-            <h2 className="text-base font-semibold leading-7 text-white">
-              Autorização legal
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-gray-400">
-              {/* <input
-                title="agree"
-                id="push-email"
-                name="push-notifications"
-                type="checkbox"
-                className="pl-2 h-4 w-4 border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
-              />{" "} */}
-              Concordo e garanto à ParVagas a segurança e o processamento das
-              informações que forneci e considero que são verdadeiras.
-            </p>
-
-            {/* <div className="mt-10 space-y-10">
-              <fieldset>
-                <legend className="text-sm font-semibold leading-6 text-white">
-                  By Email
-                </legend>
-                <div className="mt-6 space-y-6">
-                  <div className="relative flex gap-x-3">
-                    <div className="flex h-6 items-center">
-                      <input
-                        id="comments"
-                        name="comments"
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
-                      />
-                    </div>
-                    <div className="text-sm leading-6">
-                      <label
-                        htmlFor="comments"
-                        className="font-medium text-white"
-                      >
-                        Comments
-                      </label>
-                      <p className="text-gray-400">
-                        Get notified when someones posts a comment on a posting.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="relative flex gap-x-3">
-                    <div className="flex h-6 items-center">
-                      <input
-                        id="candidates"
-                        name="candidates"
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
-                      />
-                    </div>
-                    <div className="text-sm leading-6">
-                      <label
-                        htmlFor="candidates"
-                        className="font-medium text-white"
-                      >
-                        Candidates
-                      </label>
-                      <p className="text-gray-400">
-                        Get notified when a candidate applies for a job.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="relative flex gap-x-3">
-                    <div className="flex h-6 items-center">
-                      <input
-                        id="offers"
-                        name="offers"
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-white/10 bg-white/5 text-red-600 focus:ring-red-600 focus:ring-offset-gray-900"
-                      />
-                    </div>
-                    <div className="text-sm leading-6">
-                      <label
-                        htmlFor="offers"
-                        className="font-medium text-white"
-                      >
-                        Offers
-                      </label>
-                      <p className="text-gray-400">
-                        Get notified when a candidate accepts or rejects an
-                        offer.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </fieldset>
-            </div> */}
-          </div>
+          </form>
         </div>
-
-        {/* Submit button */}
-        <div className="mt-6 flex items-center justify-end gap-x-6">
-          <button
-            type="submit"
-            className="rounded-xl bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-lg hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 duration-500 ease-in-out transform"
-          >
-            Submeter
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </section>
   );
 }

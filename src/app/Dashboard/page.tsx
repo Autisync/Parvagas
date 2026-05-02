@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Nav from "../components/DashboardContent/Nav";
 import { Metadata } from "next";
+import AdminOverviewBanner from "./AdminOverviewBanner";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -37,6 +38,7 @@ export default function Dashboard() {
         >
           <main>
             <div className="pt-6 px-4">
+              <AdminOverviewBanner />
               <div className="w-full grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
                 {/* Número Total de CV coletados */}
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6 xl:p-8  2xl:col-span-2">

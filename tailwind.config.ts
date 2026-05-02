@@ -19,7 +19,8 @@
 // };
 // export default config;
 const withMT = require("@material-tailwind/react/utils/withMT");
- 
+const colors = require("tailwindcss/colors");
+
 module.exports = withMT({
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -28,6 +29,11 @@ module.exports = withMT({
   ],
   theme: {
     extend: {
+      colors: {
+        slate: colors.slate,
+        emerald: colors.emerald,
+        sky: colors.sky,
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":

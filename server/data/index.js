@@ -1,14 +1,14 @@
-import mongoose from "mongoose";
+import { randomUUID } from "crypto";
 
 const userIds = [
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
-  new mongoose.Types.ObjectId(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
+  randomUUID(),
 ];
 
 export const users = [
@@ -96,8 +96,8 @@ export const users = [
 
 export const applicaitons = [
   {
-    _id: new mongoose.Types.ObjectId(),
-    jobId: new mongoose.Types.ObjectId(),
+    _id: randomUUID(),
+    jobId: randomUUID(),
     userId: userIds[1],
     fullName: "Mauro Domingos Da Sousa",
     dateOfBirth: 1369908044,

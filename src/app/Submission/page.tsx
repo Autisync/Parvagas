@@ -1,6 +1,3 @@
-// "use client";
-// import { useState } from "react";
-import Image from "next/image";
 import CVForm from "../components/Apply/CVForm";
 import { Metadata } from "next";
 import Header from "../components/Header";
@@ -32,9 +29,8 @@ export const metadata: Metadata = {
 };
 
 export default function Form() {
-  // const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   return (
-    <div className="">
+    <div className="min-h-screen bg-slate-50">
       <Header />
       <CVForm />
       <Footer />

@@ -126,12 +126,6 @@ export default function SidebarWithBurgerMenu() {
                       Reporting
                     </ListItem>
                   </Link>
-                  {/* <ListItem>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    <Link href={"/Candidates/"}>Candidatos</Link>
-                  </ListItem> */}
                 </List>
               </AccordionBody>
             </Accordion>
@@ -161,14 +155,6 @@ export default function SidebarWithBurgerMenu() {
               </ListItem>
               <AccordionBody className="py-1">
                 <List className="p-0">
-                  <Link href={"/Candidates/"}>
-                    <ListItem>
-                      <ListItemPrefix>
-                        <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                      </ListItemPrefix>
-                      Candidatos
-                    </ListItem>
-                  </Link>
                   <ListItem>
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />

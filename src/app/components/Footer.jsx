@@ -59,6 +59,12 @@ export default function Footer() {
             Copyright &copy;{new Date().getFullYear()} ParVagas - All rights
             reserved.
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
+            <Link href="/privacidade/" className="hover:text-red-500">Privacidade</Link>
+            <Link href="/termos/" className="hover:text-red-500">Termos</Link>
+            <Link href="/politica-retencao/" className="hover:text-red-500">Retenção</Link>
+            <Link href="/termos-empregador/" className="hover:text-red-500">Termos do Empregador</Link>
+          </div>
           <span className="text-xs">
             Design and Hosted by{" "}
             <Link
