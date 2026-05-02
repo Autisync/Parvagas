@@ -2,6 +2,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
+import { serverGetJson } from "@/lib/dataClient";
 
 type CareerPost = {
   _id: string;
@@ -15,17 +16,10 @@ type CareerPost = {
 };
 
 async function getPosts(): Promise<CareerPost[]> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-  try {
-    const res = await fetch(`${apiUrl}/public/career/posts?limit=20`, {
-      next: { revalidate: 600 },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.posts ?? data;
-  } catch {
-    return [];
-  }
+  const data = await serverGetJson<{ posts?: CareerPost[] }>("/public/career/posts?limit=20", {
+    revalidateSeconds: 600,
+  });
+  return data?.posts ?? [];
 }
 
 export default async function DicasCarreiraPage() {

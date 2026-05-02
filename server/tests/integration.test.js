@@ -714,6 +714,27 @@ if (!hasSupabase) {
     assert.ok(quickApply.body.candidateUserId);
   });
 
+  test("public: cv submission stores candidate profile and document", async () => {
+    await clearAllModelTables();
+
+    const submission = await request(app)
+      .post("/public/cv-submissions")
+      .field("fullName", "Candidato Espontaneo")
+      .field("email", uniqueEmail("spontaneo"))
+      .field("cellphoneContact", "+244923000111")
+      .field("city", "Luanda")
+      .field("profession", "Engenheiro")
+      .field("qualification", "Licenciatura")
+      .field("personalStatement", "Disponivel para novas oportunidades.")
+      .attach("cv", Buffer.from("dummy pdf"), {
+        filename: "cv.pdf",
+        contentType: "application/pdf",
+      });
+
+    assert.strictEqual(submission.status, 201);
+    assert.ok(submission.body.candidateUserId);
+  });
+
   test("public: ads and sitemap endpoints", async () => {
     await clearAllModelTables();
 

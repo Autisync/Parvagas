@@ -6,7 +6,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "/public/icon2.png";
 import Reset from "@/app/components/RestorePass";
-import { apiUrl, setToken, setUser } from "@/lib/api";
+import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 
@@ -118,7 +118,7 @@ function AdminLoginContent() {
 
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/auth/login"), {
+      const res = await apiFetchRaw("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
@@ -174,7 +174,7 @@ function AdminLoginContent() {
 
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/auth/first-login-reset"), {
+      const res = await apiFetchRaw("/auth/first-login-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: firstLoginResetToken, newPassword }),
@@ -221,7 +221,7 @@ function AdminLoginContent() {
 
     setLoading(true);
     try {
-      const res = await fetch(apiUrl("/auth/reset-password"), {
+      const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: passwordResetToken, newPassword }),

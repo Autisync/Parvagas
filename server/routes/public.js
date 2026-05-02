@@ -102,6 +102,130 @@ router.post("/ads/:id/click", async (req, res) => {
   return res.status(200).json({ clicks: ad.clicks, link: ad.link });
 });
 
+router.post("/cv-submissions", upload.fields([{ name: "cv", maxCount: 1 }, { name: "extraDocument", maxCount: 1 }]), async (req, res) => {
+  try {
+    const fullName = String(req.body.fullName || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const phone = String(req.body.cellphoneContact || "").trim();
+    const location = String(req.body.city || req.body.residencialAddress || "").trim();
+    const qualification = String(req.body.qualification || "").trim();
+    const profession = String(req.body.profession || "").trim();
+    const summary = String(req.body.personalStatement || "").trim();
+    const cv = req.files?.cv?.[0];
+    const extraDocument = req.files?.extraDocument?.[0];
+
+    if (!fullName || !email) {
+      return res.status(400).json({ error: "Nome completo e email são obrigatórios." });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Email inválido." });
+    }
+    if (!cv) {
+      return res.status(400).json({ error: "Anexe o CV em PDF ou DOCX." });
+    }
+    if (!isSupportedCvFile(cv)) {
+      return res.status(400).json({ error: "Formato inválido. Use PDF ou DOCX." });
+    }
+
+    let candidateUser = await User.findOne({ email });
+    if (candidateUser && String(candidateUser.role || "") !== "candidate") {
+      return res.status(409).json({ error: "Este email já está associado a outro tipo de conta." });
+    }
+
+    if (!candidateUser) {
+      const generatedPassword = `Cv!${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+      const salt = await bcrypt.genSalt();
+      const passwordHash = await bcrypt.hash(generatedPassword, salt);
+      candidateUser = await User.create({
+        fullName,
+        email,
+        password: passwordHash,
+        role: "candidate",
+        quickApplyPendingActivation: true,
+        registrationSource: "spontaneous_cv",
+      });
+    }
+
+    await CandidateProfile.findOneAndUpdate(
+      { userId: candidateUser._id },
+      {
+        userId: candidateUser._id,
+        fullName,
+        email,
+        phone,
+        location,
+        professionalTitle: profession,
+        summary,
+        preferredJobType: "",
+        salaryExpectation: "",
+        availability: "",
+        skills: qualification ? [qualification] : [],
+        experience: [],
+        education: [],
+      },
+      { new: true, upsert: true }
+    );
+
+    const storedCv = await storageService.uploadBuffer({
+      buffer: cv.buffer,
+      fileName: cv.originalname,
+      folder: "spontaneous-cv",
+    });
+
+    await CandidateDocument.create({
+      userId: candidateUser._id,
+      type: "cv",
+      fileName: cv.originalname,
+      mimeType: cv.mimetype,
+      storagePath: storedCv.storagePath,
+      sizeBytes: cv.size || 0,
+    });
+
+    if (extraDocument) {
+      const storedExtra = await storageService.uploadBuffer({
+        buffer: extraDocument.buffer,
+        fileName: extraDocument.originalname,
+        folder: "spontaneous-cv",
+      });
+
+      await CandidateDocument.create({
+        userId: candidateUser._id,
+        type: "application_cv",
+        fileName: extraDocument.originalname,
+        mimeType: extraDocument.mimetype,
+        storagePath: storedExtra.storagePath,
+        sizeBytes: extraDocument.size || 0,
+      });
+    }
+
+    await sendEmailNotification({
+      userId: String(candidateUser._id),
+      toEmail: email,
+      subject: "Recebemos o seu CV no Parvagas",
+      body: "O seu CV foi recebido com sucesso. Entraremos em contacto quando houver oportunidade compatível.",
+    }).catch(() => {});
+
+    await logAudit({
+      actorUserId: candidateUser._id,
+      actorRole: "candidate",
+      action: "candidate.spontaneousCv.submit",
+      resourceType: "CandidateDocument",
+      resourceId: String(candidateUser._id),
+      details: {
+        email,
+        hasExtraDocument: Boolean(extraDocument),
+      },
+    });
+
+    return res.status(201).json({
+      message: "CV submetido com sucesso.",
+      candidateUserId: candidateUser._id,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Não foi possível submeter o CV." });
+  }
+});
+
 router.post("/jobs/:id/quick-apply", upload.single("cv"), async (req, res) => {
   try {
     const { id } = req.params;

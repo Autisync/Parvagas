@@ -4,6 +4,7 @@ import { DocumentArrowUpIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import { apiFetchRaw } from "@/lib/api";
 
 const initialFormData = {
   fullName: "",
@@ -68,6 +69,8 @@ function UploadBox({ id, name, title, description, onChange, chooseFileLabel, dr
 
 export default function CVForm() {
   const [formData, setFormData] = useState(initialFormData);
+  const [primaryCvFile, setPrimaryCvFile] = useState(null);
+  const [extraAttachment, setExtraAttachment] = useState(null);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -206,6 +209,10 @@ export default function CVForm() {
 
   const handleInputChange = (e) => {
     const { name, value, files } = e.target;
+    if (files?.[0]) {
+      if (name === "file-upload") setPrimaryCvFile(files[0]);
+      if (name === "extrafile-upload") setExtraAttachment(files[0]);
+    }
     setFormData((current) => ({
       ...current,
       [name]: files?.[0]?.name ?? value,
@@ -226,18 +233,28 @@ export default function CVForm() {
     setSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:3001/applications/application", {
+      const payload = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (["file-upload", "extrafile-upload"].includes(key)) return;
+        payload.append(key, String(value || ""));
+      });
+      if (primaryCvFile) payload.append("cv", primaryCvFile);
+      if (extraAttachment) payload.append("extraDocument", extraAttachment);
+
+      const response = await apiFetchRaw("/public/cv-submissions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
+        body: payload,
       });
 
-      if (!response.ok) throw new Error(t.submitError);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || t.submitError);
+      }
 
       setStatus({ type: "success", message: t.successMessage });
       setFormData(initialFormData);
+      setPrimaryCvFile(null);
+      setExtraAttachment(null);
     } catch (error) {
       setStatus({
         type: "error",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiUrl, getToken } from "@/lib/api";
+import { authFetch, getToken } from "@/lib/api";
 
 type Overview = {
   totalUsers?: number;
@@ -18,9 +18,8 @@ export default function AdminOverviewBanner() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    fetch(apiUrl("/admin/overview"), { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setData(d.overview ?? d); })
+    authFetch<Overview | { overview?: Overview }>("/admin/overview", token)
+      .then((d) => { if (d) setData((d as { overview?: Overview }).overview ?? (d as Overview)); })
       .catch(() => {/* non-critical */});
   }, []);
 

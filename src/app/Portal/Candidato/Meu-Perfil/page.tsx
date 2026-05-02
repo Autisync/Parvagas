@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import PageHeader from "@/app/components/PageHeader";
 import Avatar from "@/app/components/Avatar";
 import FileUpload from "@/app/components/FileUpload";
@@ -127,11 +127,8 @@ export default function MeuPerfilPage() {
       const formData = new FormData();
       formData.append("photo", photoFile);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/candidates/profile/photo`, {
+      const response = await authFetchRaw("/candidates/profile/photo", token, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       });
 

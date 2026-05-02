@@ -1,6 +1,6 @@
 import { getGlobalErrorDispatch } from "@/lib/errorBridge";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const DEV_API_FALLBACK = "http://localhost:6001";
 
 const DEFAULT_TIMEOUT_MS = 20000;
 
@@ -42,7 +42,24 @@ export function getErrorMessage(error: unknown, fallback = "Ocorreu um erro ines
 }
 
 export function apiUrl(path: string): string {
-  return `${API_URL}${path}`;
+  const base = getApiBaseUrl();
+  if (!base) {
+    throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
+  }
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function getApiBaseUrl(): string {
+  const configured = String(process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "");
+  if (configured) return configured;
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") return DEV_API_FALLBACK;
+    return "";
+  }
+
+  return process.env.NODE_ENV === "production" ? "" : DEV_API_FALLBACK;
 }
 
 async function parseResponseBody(res: Response) {
@@ -70,36 +87,10 @@ export async function apiFetch<T = unknown>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-  let res: Response;
-
-  try {
-    res = await fetch(apiUrl(path), {
-      headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
-      ...options,
-      signal: options?.signal ?? controller.signal,
-    });
-  } catch (error: unknown) {
-    clearTimeout(timeout);
-    if (error instanceof Error && error.name === "AbortError") {
-      getGlobalErrorDispatch()?.banner(
-        "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
-        "Reconectar",
-      );
-      throw new ApiError("A ligação expirou. Verifique a rede e tente novamente.", { isNetworkError: true });
-    }
-    getGlobalErrorDispatch()?.banner(
-      "Não foi possível estabelecer ligação com o servidor.",
-      "Reconectar",
-    );
-    throw new ApiError("Não foi possível ligar ao servidor. Verifique a sua ligação.", {
-      details: error,
-      isNetworkError: true,
-    });
-  }
-
-  clearTimeout(timeout);
+  const res = await apiFetchRaw(path, {
+    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+    ...options,
+  });
 
   if (!res.ok) {
     const body = await parseResponseBody(res);
@@ -142,8 +133,46 @@ export async function apiFetch<T = unknown>(
   return parseResponseBody(res) as Promise<T>;
 }
 
+export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(apiUrl(path), {
+      ...options,
+      signal: options?.signal ?? controller.signal,
+    });
+    clearTimeout(timeout);
+    return res;
+  } catch (error: unknown) {
+    clearTimeout(timeout);
+    if (error instanceof Error && error.name === "AbortError") {
+      getGlobalErrorDispatch()?.banner(
+        "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
+        "Reconectar",
+      );
+      throw new ApiError("A ligação expirou. Verifique a rede e tente novamente.", { isNetworkError: true });
+    }
+    getGlobalErrorDispatch()?.banner("Não foi possível ligar ao servidor.", "Tentar novamente");
+    throw new ApiError("Não foi possível ligar ao servidor. Verifique a sua ligação.", {
+      details: error,
+      isNetworkError: true,
+    });
+  }
+}
+
 export function authFetch<T = unknown>(path: string, token: string, options?: RequestInit): Promise<T> {
   return apiFetch<T>(path, {
+    ...options,
+    headers: {
+      ...(options?.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export function authFetchRaw(path: string, token: string, options?: RequestInit): Promise<Response> {
+  return apiFetchRaw(path, {
     ...options,
     headers: {
       ...(options?.headers || {}),

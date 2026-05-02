@@ -6,7 +6,8 @@ import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
-import { apiFetch, apiUrl, authFetch, getToken, getUser } from "@/lib/api";
+import { apiFetch, authFetch, getToken, getUser } from "@/lib/api";
+import { uploadWithProgress } from "@/lib/uploadClient";
 
 type JobDetail = {
   _id: string;
@@ -106,36 +107,6 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     return job.companyId.name || "Empresa";
   }, [job?.companyId]);
 
-  const uploadWithProgress = (url: string, formData: FormData, authToken?: string) => {
-    return new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", apiUrl(url));
-      if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
-
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        setUploadProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
-      };
-
-      xhr.onload = () => {
-        setUploadProgress(100);
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-          return;
-        }
-        try {
-          const parsed = JSON.parse(xhr.responseText || "{}");
-          reject(new Error(parsed.error || `HTTP ${xhr.status}`));
-        } catch {
-          reject(new Error(`HTTP ${xhr.status}`));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error("Falha de rede ao submeter candidatura."));
-      xhr.send(formData);
-    });
-  };
-
   const submitCandidateApplication = async () => {
     if (!token) {
       notify("Sessão expirada. Inicie sessão novamente.", "error");
@@ -155,7 +126,12 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
         formData.append("customCv", candidateForm.customCv);
       }
 
-      await uploadWithProgress("/candidates/jobs/apply", formData, token);
+      await uploadWithProgress({
+        path: "/candidates/jobs/apply",
+        formData,
+        token,
+        onProgress: setUploadProgress,
+      });
       notify("Candidatura submetida com sucesso.", "success");
     } catch (error: unknown) {
       notify(error instanceof Error ? error.message : "Erro ao submeter candidatura.", "error");
@@ -184,7 +160,11 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       formData.append("coverLetter", guestForm.coverLetter);
       formData.append("cv", guestForm.cv);
 
-      await uploadWithProgress(`/public/jobs/${job._id}/quick-apply`, formData);
+      await uploadWithProgress({
+        path: `/public/jobs/${job._id}/quick-apply`,
+        formData,
+        onProgress: setUploadProgress,
+      });
       notify("Candidatura rápida submetida. Enviámos instruções para o seu email.", "success");
       setGuestForm((prev) => ({ ...prev, cv: null, coverLetter: "" }));
     } catch (error: unknown) {

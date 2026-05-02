@@ -3,6 +3,7 @@ import Footer from "../../components/Footer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerDictionary } from "@/lib/i18n/server";
+import { serverGetJson } from "@/lib/dataClient";
 
 type CareerPost = {
   _id: string;
@@ -19,17 +20,10 @@ type CareerPost = {
 };
 
 async function getPost(slug: string): Promise<CareerPost | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-  try {
-    const res = await fetch(`${apiUrl}/public/career/posts/${slug}`, {
-      next: { revalidate: 600 },
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
-    return res.json();
-  } catch {
-    return null;
-  }
+  const data = await serverGetJson<{ post?: CareerPost }>(`/public/career/posts/${slug}`, {
+    revalidateSeconds: 600,
+  });
+  return data?.post ?? null;
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {

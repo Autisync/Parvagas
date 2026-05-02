@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { getServerDictionary } from "@/lib/i18n/server";
+import { serverGetJson } from "@/lib/dataClient";
 
 type Job = {
   _id: string;
@@ -35,15 +36,8 @@ type Job = {
 };
 
 async function getJob(id: string): Promise<Job | null> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-  try {
-    const res = await fetch(`${apiUrl}/jobs/${id}`, { next: { revalidate: 60 } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.job || null;
-  } catch {
-    return null;
-  }
+  const data = await serverGetJson<{ job?: Job }>(`/jobs/${id}`, { revalidateSeconds: 60 });
+  return data?.job || null;
 }
 
 export default async function JobDetailPage({ params }: { params: { id: string } }) {

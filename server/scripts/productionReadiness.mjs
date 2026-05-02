@@ -24,6 +24,11 @@ const required = [
   "EMAIL_FROM",
 ];
 
+const recommended = [
+  "SUPABASE_ANON_KEY",
+  "AUTH_CALLBACK_URL",
+];
+
 const failures = [];
 const warnings = [];
 const passes = [];
@@ -50,6 +55,10 @@ function isPlaceholder(value) {
 
 for (const name of required) {
   if (!env(name)) fail(`${name} is required for production.`);
+}
+
+for (const name of recommended) {
+  if (!env(name)) warn(`${name} is recommended for production (auth/callback client flows).`);
 }
 
 if (env("JWT_SECRET").length < 32 || isPlaceholder(env("JWT_SECRET"))) {

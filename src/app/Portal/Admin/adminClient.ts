@@ -1,6 +1,6 @@
 "use client";
 
-import { apiUrl, authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 
 export type AdminLevel = "super-admin" | "moderator";
 
@@ -303,11 +303,7 @@ export function toDateLabel(value?: string) {
 }
 
 export async function downloadCsv(path: string, token: string, fileName: string) {
-  const res = await fetch(apiUrl(path), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await authFetchRaw(path, token);
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

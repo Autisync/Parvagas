@@ -6,7 +6,7 @@ import Image from "next/image";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Link from "next/link";
-import { apiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import BannerError from "@/app/components/errors/BannerError";
 
@@ -119,8 +119,14 @@ function VagasDisponiveisContent() {
       if (filters.category) params.set("category", filters.category);
       if (filters.workMode) params.set("workMode", filters.workMode);
       if (updateUrl) router.push(`/Vagas-Disponiveis?${params.toString()}`);
-      const res = await fetch(apiUrl(`/jobs?${params}`));
-      const data = await res.json();
+      const data = await apiFetch<{
+        jobs?: Job[];
+        pagination?: PaginationMeta;
+        page?: number;
+        limit?: number;
+        total?: number;
+        totalPages?: number;
+      }>(`/jobs?${params}`);
       setJobs(data.jobs || []);
       const meta = data.pagination || data;
       setPagination({

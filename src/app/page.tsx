@@ -3,6 +3,7 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
+import { serverGetJson } from "@/lib/dataClient";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -50,16 +51,14 @@ async function getHomepageData(): Promise<{
   featuredJobs: Job[];
   featuredCareerPosts: CareerPost[];
 }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-  try {
-    const res = await fetch(`${apiUrl}/public/homepage?jobsLimit=6&postsLimit=3`, {
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return { featuredJobs: [], featuredCareerPosts: [] };
-    return res.json();
-  } catch {
+  const data = await serverGetJson<{ featuredJobs: Job[]; featuredCareerPosts: CareerPost[] }>(
+    "/public/homepage?jobsLimit=6&postsLimit=3",
+    { revalidateSeconds: 300 },
+  );
+  if (!data) {
     return { featuredJobs: [], featuredCareerPosts: [] };
   }
+  return data;
 }
 
 function salaryLabel(job: Job): string | null {

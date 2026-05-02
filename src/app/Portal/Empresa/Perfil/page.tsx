@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { apiUrl, authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import CompanySidebar from "../components/CompanySidebar";
 import JobPostingModal from "../components/JobPostingModal";
@@ -275,9 +275,8 @@ function EmpresaPerfilContent() {
     setUploadingLogo(true);
     setLogoMsg("");
     try {
-      const res = await fetch(apiUrl("/companies/profile/logo"), {
+      const res = await authFetchRaw("/companies/profile/logo", token, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
 

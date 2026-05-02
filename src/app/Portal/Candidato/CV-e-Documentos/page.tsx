@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { apiUrl, authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
 
 type ParsedDraft = {
@@ -150,9 +150,8 @@ export default function CvDocumentosPage() {
     try {
       const form = new FormData();
       form.append("cv", file);
-      const res = await fetch(apiUrl("/candidates/cv/parse"), {
+      const res = await authFetchRaw("/candidates/cv/parse", token!, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
       const data = await res.json();
@@ -176,9 +175,9 @@ export default function CvDocumentosPage() {
     setApproving(true);
     setError("");
     try {
-      const res = await fetch(apiUrl("/candidates/profile/approve"), {
+      const res = await authFetchRaw("/candidates/profile/approve", token!, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profileDraft: draft, parseRunId, consentGiven: true }),
       });
       const data = await res.json();
