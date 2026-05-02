@@ -1,3 +1,5 @@
+import { getGlobalErrorDispatch } from "@/lib/errorBridge";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 const DEFAULT_TIMEOUT_MS = 20000;
@@ -61,7 +63,7 @@ function fallbackStatusMessage(status: number) {
   if (status === 422) return "Dados inválidos para esta operação.";
   if (status === 429) return "Demasiadas tentativas. Tente novamente em instantes.";
   if (status >= 500) return "Erro interno do servidor. Tente novamente.";
-  return `HTTP ${status}`;
+  return "Não foi possível concluir o pedido neste momento.";
 }
 
 export async function apiFetch<T = unknown>(
@@ -81,8 +83,16 @@ export async function apiFetch<T = unknown>(
   } catch (error: unknown) {
     clearTimeout(timeout);
     if (error instanceof Error && error.name === "AbortError") {
+      getGlobalErrorDispatch()?.banner(
+        "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
+        "Reconectar",
+      );
       throw new ApiError("A ligação expirou. Verifique a rede e tente novamente.", { isNetworkError: true });
     }
+    getGlobalErrorDispatch()?.banner(
+      "Não foi possível estabelecer ligação com o servidor.",
+      "Reconectar",
+    );
     throw new ApiError("Não foi possível ligar ao servidor. Verifique a sua ligação.", {
       details: error,
       isNetworkError: true,
@@ -108,6 +118,18 @@ export async function apiFetch<T = unknown>(
           requestId,
         }
       );
+    }
+
+    if (res.status >= 500) {
+      getGlobalErrorDispatch()?.modal(
+        "Serviço temporariamente indisponível",
+        "Estamos com instabilidade no servidor. Aguarde alguns instantes e tente novamente.",
+        requestId,
+      );
+    } else if (res.status === 401) {
+      getGlobalErrorDispatch()?.banner("A sua sessão expirou. Faça login novamente.", "Reconectar");
+    } else {
+      getGlobalErrorDispatch()?.toast(message);
     }
 
     throw new ApiError(message, {

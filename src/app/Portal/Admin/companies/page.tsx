@@ -9,6 +9,7 @@ import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 type CompanyDecision = "verified" | "rejected" | "pending" | "needs_more_info" | "suspended";
 
@@ -27,6 +28,8 @@ export default function AdminCompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<CompanyRecord | null>(null);
   const [modalReason, setModalReason] = useState("");
   const [bulkReason, setBulkReason] = useState("");
+  const [bulkReasonError, setBulkReasonError] = useState("");
+  const [modalReasonError, setModalReasonError] = useState("");
   const { notify } = useAppNotifier();
 
   const {
@@ -61,7 +64,6 @@ export default function AdminCompaniesPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {
@@ -73,7 +75,9 @@ export default function AdminCompaniesPage() {
   const clearSelectionState = () => {
     clearSelection();
     setBulkReason("");
+    setBulkReasonError("");
     setModalReason("");
+    setModalReasonError("");
   };
 
   const applyDecision = async (ids: string[], status: CompanyDecision, reason: string) => {
@@ -83,9 +87,15 @@ export default function AdminCompaniesPage() {
       return;
     }
     if (["rejected", "needs_more_info", "suspended"].includes(status) && !reason.trim()) {
-      setError("Este estado exige um motivo antes de continuar.");
+      if (ids.length > 1) {
+        setBulkReasonError("Este estado exige um motivo antes de continuar.");
+      } else {
+        setModalReasonError("Este estado exige um motivo antes de continuar.");
+      }
       return;
     }
+    setBulkReasonError("");
+    setModalReasonError("");
     setBusy(ids[0]);
     setError("");
     setNotice("");
@@ -171,7 +181,8 @@ export default function AdminCompaniesPage() {
             <div className="mt-4 grid gap-3 lg:grid-cols-[1fr,auto] lg:items-end">
               <label className="grid gap-1 text-sm text-slate-700">
                 <span>Motivo para ação em lote</span>
-                <textarea value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Necessário para rejeitar, pedir informação ou suspender" />
+                <textarea value={bulkReason} onChange={(e) => { setBulkReason(e.target.value); if (bulkReasonError) setBulkReasonError(""); }} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Necessário para rejeitar, pedir informação ou suspender" />
+                <FormFieldError id="bulk-reason-error" message={bulkReasonError} />
               </label>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => applyDecision(selectedIds, "verified", bulkReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Verificar</button>
@@ -233,12 +244,14 @@ export default function AdminCompaniesPage() {
         onClose={() => {
           setSelectedCompany(null);
           setModalReason("");
+          setModalReasonError("");
         }}
         footer={selectedCompany ? (
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm text-slate-700">
               <span>Motivo da decisão</span>
-              <textarea value={modalReason} onChange={(e) => setModalReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Obrigatório para rejeitar, pedir informação ou suspender" />
+              <textarea value={modalReason} onChange={(e) => { setModalReason(e.target.value); if (modalReasonError) setModalReasonError(""); }} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Obrigatório para rejeitar, pedir informação ou suspender" />
+              <FormFieldError id="modal-reason-error" message={modalReasonError} />
             </label>
             <div className="flex flex-wrap gap-2">
               <button disabled={busy === selectedCompany._id} onClick={() => applyDecision([selectedCompany._id], "verified", modalReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Verificar</button>

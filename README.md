@@ -206,11 +206,35 @@ npm run server
 4. Antes do primeiro arranque em ambiente novo, execute a migração SQL de bootstrap no SQL Editor do Supabase:
   - `server/migrations/2026-04-26-supabase-document-store.sql`
 
+## Tratamento de erros unificado
+
+- Biblioteca de UI:
+  - `src/app/components/errors/FormFieldError.tsx`
+  - `src/app/components/errors/ToastError.tsx`
+  - `src/app/components/errors/BannerError.tsx`
+  - `src/app/components/errors/ModalError.tsx`
+- Handler global:
+  - `src/app/components/AppNotifier.tsx`
+  - `src/lib/errorBridge.ts`
+  - `src/lib/errorMonitoring.ts`
+- Fallbacks amigáveis:
+  - `src/app/not-found.tsx`
+  - `src/app/error.tsx`
+  - `src/app/global-error.tsx`
+
+## Modo português temporário
+
+- Configuração central em `src/config/appConfig.ts`.
+- `ENABLE_I18N=false` força locale `pt` em client/server e oculta seletores de idioma.
+- Para reativar i18n no futuro, ajustar:
+  - `ENABLE_I18N=true`
+
 ## Comandos de qualidade
 
 ```bash
 npm run lint
 npm run test
+npm run test:ui
 npm run typecheck
 npm run build
 npm run db:migration:generate

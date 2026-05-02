@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 export default function GlobalError({
   error,
@@ -16,17 +17,32 @@ export default function GlobalError({
   return (
     <html lang="pt">
       <body className="bg-slate-100 p-6">
-        <main className="mx-auto mt-20 max-w-2xl rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-700">Falha crítica</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">Não foi possível renderizar a aplicação</h1>
-          <p className="mt-2 text-sm text-slate-600">{error?.message || "Erro inesperado."}</p>
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-6 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-          >
-            Recarregar aplicação
-          </button>
+        <main className="mx-auto mt-20 max-w-3xl rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-700">Falha crítica</p>
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">Não foi possível renderizar a aplicação</h1>
+          <p className="mt-3 text-sm text-slate-700">
+            Detectámos uma falha crítica inesperada. Pode tentar recarregar agora ou voltar para uma área segura do site.
+          </p>
+          {error?.digest && (
+            <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600">
+              Código de suporte: {error.digest}
+            </p>
+          )}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              Recarregar aplicação
+            </button>
+            <Link href="/" className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Voltar ao início
+            </Link>
+            <a href="mailto:suporte@parvagas.co.ao" className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Contactar o suporte
+            </a>
+          </div>
         </main>
       </body>
     </html>

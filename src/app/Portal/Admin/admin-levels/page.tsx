@@ -73,7 +73,6 @@ export default function AdminLevelsPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {

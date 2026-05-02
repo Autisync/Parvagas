@@ -32,7 +32,6 @@ export default function AdminExportsPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   const exportFile = async (kind: "users" | "jobs" | "companies") => {

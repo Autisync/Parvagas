@@ -56,7 +56,6 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {

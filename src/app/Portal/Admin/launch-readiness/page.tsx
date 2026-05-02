@@ -53,7 +53,6 @@ export default function AdminLaunchReadinessPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   if (adminLevel !== "super-admin") {

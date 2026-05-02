@@ -58,7 +58,6 @@ export default function AdminScrapedPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {

@@ -8,6 +8,7 @@ import Logo from "/public/icon2.png";
 import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 type AuthRole = "candidate" | "company";
 
@@ -51,6 +52,8 @@ function SignUpContent() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const { notify } = useAppNotifier();
   const { dict, locale } = useClientLocale();
   const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
@@ -61,7 +64,6 @@ function SignUpContent() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {
@@ -70,10 +72,37 @@ function SignUpContent() {
     setSuccess("");
   }, [success, notify]);
 
+  const normalizedIdentifier = normalizeCompanyIdentifier(companyIdentifier);
+  const fieldErrors = {
+    fullName: !fullName.trim() ? dict.auth.signup.errorFillRequired : "",
+    email: !email.trim() ? dict.auth.signup.errorFillRequired : "",
+    password: !password.trim() ? dict.auth.signup.errorFillRequired : "",
+    confirmPassword: password !== confirmPassword ? dict.auth.signup.errorPasswordsMismatch : "",
+    companyName:
+      selectedRole === "company" && !inviteToken && !companyName.trim()
+        ? dict.auth.signup.errorCompanyNameRequired
+        : "",
+    companyIdentifier:
+      selectedRole === "company" && !inviteToken
+        ? !normalizedIdentifier
+          ? dict.auth.signup.errorIdentifierRequired
+          : !/^[A-Z0-9]{6,20}$/.test(normalizedIdentifier)
+            ? dict.auth.signup.errorIdentifierInvalid
+            : ""
+        : "",
+  };
+
+  const shouldShowFieldError = (fieldName: string) => submitted || touched[fieldName];
+
+  const markTouched = (fieldName: string) => {
+    setTouched((current) => ({ ...current, [fieldName]: true }));
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setSubmitted(true);
 
     if (!fullName.trim() || !email.trim() || !password.trim()) {
       setError(dict.auth.signup.errorFillRequired);
@@ -211,8 +240,12 @@ function SignUpContent() {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  onBlur={() => markTouched("fullName")}
+                  aria-invalid={Boolean(shouldShowFieldError("fullName") && fieldErrors.fullName)}
+                  aria-describedby="fullName-error"
                   className={inputClass()}
                 />
+                <FormFieldError id="fullName-error" message={shouldShowFieldError("fullName") ? fieldErrors.fullName : ""} />
               </div>
 
               {selectedRole === "company" && !inviteToken && (
@@ -226,8 +259,12 @@ function SignUpContent() {
                       required
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
+                      onBlur={() => markTouched("companyName")}
+                      aria-invalid={Boolean(shouldShowFieldError("companyName") && fieldErrors.companyName)}
+                      aria-describedby="companyName-error"
                       className={inputClass()}
                     />
+                    <FormFieldError id="companyName-error" message={shouldShowFieldError("companyName") ? fieldErrors.companyName : ""} />
                   </div>
 
                   <div>
@@ -252,9 +289,13 @@ function SignUpContent() {
                       required
                       value={companyIdentifier}
                       onChange={(e) => setCompanyIdentifier(e.target.value)}
+                      onBlur={() => markTouched("companyIdentifier")}
+                      aria-invalid={Boolean(shouldShowFieldError("companyIdentifier") && fieldErrors.companyIdentifier)}
+                      aria-describedby="companyIdentifier-error"
                       className={inputClass()}
                     />
                     <p className="mt-1.5 text-xs text-slate-500">{dict.auth.signup.companyIdentifierHelp}</p>
+                    <FormFieldError id="companyIdentifier-error" message={shouldShowFieldError("companyIdentifier") ? fieldErrors.companyIdentifier : ""} />
                   </div>
                 </>
               )}
@@ -269,8 +310,12 @@ function SignUpContent() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => markTouched("email")}
+                  aria-invalid={Boolean(shouldShowFieldError("email") && fieldErrors.email)}
+                  aria-describedby="email-error"
                   className={inputClass()}
                 />
+                <FormFieldError id="email-error" message={shouldShowFieldError("email") ? fieldErrors.email : ""} />
               </div>
 
               <div>
@@ -283,8 +328,12 @@ function SignUpContent() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => markTouched("password")}
+                  aria-invalid={Boolean(shouldShowFieldError("password") && fieldErrors.password)}
+                  aria-describedby="password-error"
                   className={inputClass()}
                 />
+                <FormFieldError id="password-error" message={shouldShowFieldError("password") ? fieldErrors.password : ""} />
               </div>
 
               <div>
@@ -297,8 +346,12 @@ function SignUpContent() {
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  onBlur={() => markTouched("confirmPassword")}
+                  aria-invalid={Boolean(shouldShowFieldError("confirmPassword") && fieldErrors.confirmPassword)}
+                  aria-describedby="confirmPassword-error"
                   className={inputClass()}
                 />
+                <FormFieldError id="confirmPassword-error" message={shouldShowFieldError("confirmPassword") ? fieldErrors.confirmPassword : ""} />
               </div>
 
               <button

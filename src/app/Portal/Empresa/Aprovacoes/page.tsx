@@ -62,7 +62,6 @@ export default function CompanyApprovalsPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   const review = async (id: string, decision: "approve" | "reject" | "request_changes") => {

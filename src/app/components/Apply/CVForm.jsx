@@ -3,6 +3,7 @@
 import { DocumentArrowUpIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { useClientLocale } from "@/lib/i18n/client";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 const initialFormData = {
   fullName: "",
@@ -69,6 +70,8 @@ export default function CVForm() {
   const [formData, setFormData] = useState(initialFormData);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({ file: "" });
   const { locale } = useClientLocale();
   const t =
     locale === "en"
@@ -134,6 +137,7 @@ export default function CVForm() {
           legalBody: "I agree and authorize Parvagas to securely process the information provided, declaring it is true.",
           clear: "Clear",
           submitting: "Submitting...",
+          requiredAttachment: "Attach your CV before submitting.",
         }
       : {
           chooseFile: "Escolher ficheiro",
@@ -197,6 +201,7 @@ export default function CVForm() {
           legalBody: "Concordo e garanto à Parvagas a segurança e o processamento das informações fornecidas, declarando que são verdadeiras.",
           clear: "Limpar",
           submitting: "A submeter...",
+          requiredAttachment: "Anexe o seu CV antes de submeter.",
         };
 
   const handleInputChange = (e) => {
@@ -209,7 +214,15 @@ export default function CVForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitted(true);
     setStatus({ type: "", message: "" });
+    setFieldErrors({ file: "" });
+
+    if (!formData["file-upload"]) {
+      setFieldErrors({ file: t.requiredAttachment });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -389,10 +402,14 @@ export default function CVForm() {
                 name="file-upload"
                 title={t.cvTitle}
                 description={t.cvDescription}
-                onChange={handleInputChange}
+                onChange={(event) => {
+                  handleInputChange(event);
+                  setFieldErrors((current) => ({ ...current, file: "" }));
+                }}
                 chooseFileLabel={t.chooseFile}
                 dragDropLabel={t.dragDrop}
               />
+              <FormFieldError id="file-upload-error" message={submitted ? fieldErrors.file : ""} />
               <UploadBox
                 id="extrafile-upload"
                 name="extrafile-upload"

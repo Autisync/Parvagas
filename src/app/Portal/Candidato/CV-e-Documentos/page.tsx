@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiUrl, authFetch } from "@/lib/api";
+import BannerError from "@/app/components/errors/BannerError";
 
 type ParsedDraft = {
   fullName?: string;
@@ -293,7 +294,18 @@ export default function CvDocumentosPage() {
           )}
         </div>
 
-        {error ? <p className="mt-4 text-red-600">{error}</p> : null}
+        {error ? (
+          <div className="mt-4">
+            <BannerError
+              title="Não foi possível concluir a operação"
+              message={error}
+              actionLabel="Reconectar"
+              onAction={() => {
+                void loadLists();
+              }}
+            />
+          </div>
+        ) : null}
         {message ? <p className="mt-4 text-green-600">{message}</p> : null}
 
         {draft ? (

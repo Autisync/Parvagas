@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/api";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 type Props = {
   token: string;
@@ -36,17 +37,24 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
   const [form, setForm] = useState<JobForm>(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   if (!open) return null;
 
   const setField = (k: keyof JobForm, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+  const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }));
+  const showFieldError = (field: string) => submitted || touched[field];
+  const titleError = !form.title.trim() ? "Informe o título da vaga." : "";
+  const descriptionError = !form.description.trim() ? "Informe a descrição da vaga." : "";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSubmitted(true);
 
     if (!form.title.trim() || !form.description.trim()) {
-      setError("Título e descrição são obrigatórios.");
+      setError("Preencha os campos obrigatórios para continuar.");
       return;
     }
 
@@ -110,7 +118,8 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Título *</label>
-              <input value={form.title} onChange={(e) => setField("title", e.target.value)} className="w-full app-input" />
+              <input value={form.title} onChange={(e) => setField("title", e.target.value)} onBlur={() => markTouched("title")} aria-invalid={Boolean(showFieldError("title") && titleError)} aria-describedby="job-title-error" className="w-full app-input" />
+              <FormFieldError id="job-title-error" message={showFieldError("title") ? titleError : ""} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Categoria</label>
@@ -151,7 +160,8 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Descrição *</label>
-            <textarea rows={5} value={form.description} onChange={(e) => setField("description", e.target.value)} className="w-full app-input" />
+            <textarea rows={5} value={form.description} onChange={(e) => setField("description", e.target.value)} onBlur={() => markTouched("description")} aria-invalid={Boolean(showFieldError("description") && descriptionError)} aria-describedby="job-description-error" className="w-full app-input" />
+            <FormFieldError id="job-description-error" message={showFieldError("description") ? descriptionError : ""} />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

@@ -9,115 +9,198 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import BannerError from "@/app/components/errors/BannerError";
+import ModalError from "@/app/components/errors/ModalError";
+import ToastError from "@/app/components/errors/ToastError";
+import { ERROR_AUTO_DISMISS_MS } from "@/config/appConfig";
+import { setGlobalErrorDispatch } from "@/lib/errorBridge";
+import { logErrorToMonitoring } from "@/lib/errorMonitoring";
 
 export type AppToastTone = "success" | "error" | "warning" | "info";
 
 type AppToast = {
   id: number;
   message: string;
+  title: string;
   tone: AppToastTone;
   durationMs: number;
+  retry?: () => void;
 };
 
+type BannerState = {
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+} | null;
+
+type ModalState = {
+  title: string;
+  message: string;
+  supportCode?: string;
+} | null;
+
 type AppNotifierContextValue = {
-  notify: (message: string, tone?: AppToastTone, durationMs?: number) => void;
+  notify: (message: string, tone?: AppToastTone, durationMs?: number, retry?: () => void) => void;
   dismiss: (id: number) => void;
+  showBanner: (message: string, actionLabel?: string, onAction?: () => void) => void;
+  clearBanner: () => void;
+  showModalError: (title: string, message: string, supportCode?: string) => void;
+  clearModalError: () => void;
 };
 
 const AppNotifierContext = createContext<AppNotifierContextValue | null>(null);
 
-function ToastItem({
-  toast,
-  onDismiss,
-}: {
-  toast: AppToast;
-  onDismiss: (id: number) => void;
-}) {
-  const [remaining, setRemaining] = useState(toast.durationMs);
-
-  useEffect(() => {
-    setRemaining(toast.durationMs);
-    const startedAt = Date.now();
-    const interval = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const next = Math.max(toast.durationMs - elapsed, 0);
-      setRemaining(next);
-      if (next <= 0) {
-        window.clearInterval(interval);
-        onDismiss(toast.id);
-      }
-    }, 80);
-
-    return () => window.clearInterval(interval);
-  }, [toast, onDismiss]);
-
-  const toneStyles: Record<AppToastTone, { box: string; bar: string }> = {
-    error: {
-      box: "border-rose-300 text-rose-800",
-      bar: "bg-rose-500",
-    },
-    success: {
-      box: "border-emerald-300 text-emerald-800",
-      bar: "bg-emerald-500",
-    },
-    warning: {
-      box: "border-amber-300 text-amber-800",
-      bar: "bg-amber-500",
-    },
-    info: {
-      box: "border-sky-300 text-sky-800",
-      bar: "bg-sky-500",
-    },
-  };
-
-  const ratio = toast.durationMs > 0 ? Math.max(remaining / toast.durationMs, 0) : 0;
-  const style = toneStyles[toast.tone] || toneStyles.info;
-
-  return (
-    <div className={`pointer-events-auto overflow-hidden rounded-2xl border bg-[whitesmoke] shadow-xl ${style.box}`}>
-      <div className="flex items-start justify-between gap-3 px-4 py-3">
-        <p className="text-sm font-semibold leading-5">{toast.message}</p>
-        <button
-          type="button"
-          aria-label="Fechar notificação"
-          onClick={() => onDismiss(toast.id)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-current/25 opacity-80 transition hover:opacity-100"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
-            <path fillRule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 01-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clipRule="evenodd" />
-          </svg>
-        </button>
-      </div>
-      <div className="h-1.5 w-full bg-white/60">
-        <div className={`h-full transition-[width] duration-75 ease-linear ${style.bar}`} style={{ width: `${Math.round(ratio * 100)}%` }} />
-      </div>
-    </div>
-  );
-}
-
 export function AppNotifierProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<AppToast[]>([]);
+  const [banner, setBanner] = useState<BannerState>(null);
+  const [modal, setModal] = useState<ModalState>(null);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const notify = useCallback((message: string, tone: AppToastTone = "info", durationMs = 4500) => {
+  const notify = useCallback(
+    (message: string, tone: AppToastTone = "info", durationMs = ERROR_AUTO_DISMISS_MS, retry?: () => void) => {
+      if (!message.trim()) return;
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      const title =
+        tone === "error"
+          ? "Erro"
+          : tone === "warning"
+            ? "Atenção"
+            : tone === "success"
+              ? "Concluído"
+              : "Informação";
+      setToasts((prev) => [...prev.slice(-3), { id, message, title, tone, durationMs, retry }]);
+      if (tone === "error") {
+        void logErrorToMonitoring({
+          level: "error",
+          message,
+          timestamp: new Date().toISOString(),
+          path: typeof window !== "undefined" ? window.location.pathname : undefined,
+        });
+      }
+    },
+    [],
+  );
+
+  const showBanner = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
     if (!message.trim()) return;
-    const id = Date.now() + Math.floor(Math.random() * 1000);
-    setToasts((prev) => [...prev.slice(-3), { id, message, tone, durationMs }]);
+    setBanner({
+      title: "Problema de ligação",
+      message,
+      actionLabel,
+      onAction,
+    });
+    void logErrorToMonitoring({
+      level: "warning",
+      message,
+      timestamp: new Date().toISOString(),
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
   }, []);
 
-  const value = useMemo(() => ({ notify, dismiss }), [notify, dismiss]);
+  const clearBanner = useCallback(() => setBanner(null), []);
+
+  const showModalError = useCallback((title: string, message: string, supportCode?: string) => {
+    setModal({ title, message, supportCode });
+    void logErrorToMonitoring({
+      level: "critical",
+      message: `${title}: ${message}`,
+      details: supportCode,
+      timestamp: new Date().toISOString(),
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
+  }, []);
+
+  const clearModalError = useCallback(() => setModal(null), []);
+
+  useEffect(() => {
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : "Falha crítica inesperada.";
+      showModalError(
+        "Não foi possível concluir esta operação",
+        `${message} Verifique a ligação à internet e tente novamente.`,
+      );
+    };
+
+    const onError = (event: ErrorEvent) => {
+      showModalError(
+        "Ocorreu uma falha no sistema",
+        event.message || "A aplicação encontrou um erro inesperado.",
+      );
+    };
+
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    window.addEventListener("error", onError);
+
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("error", onError);
+    };
+  }, [showModalError]);
+
+  useEffect(() => {
+    setGlobalErrorDispatch({
+      toast: (message, retry) => notify(message, "error", ERROR_AUTO_DISMISS_MS, retry),
+      banner: (message, actionLabel, onAction) => showBanner(message, actionLabel, onAction),
+      modal: (title, message, supportCode) => showModalError(title, message, supportCode),
+    });
+
+    return () => setGlobalErrorDispatch(null);
+  }, [notify, showBanner, showModalError]);
+
+  const value = useMemo(
+    () => ({
+      notify,
+      dismiss,
+      showBanner,
+      clearBanner,
+      showModalError,
+      clearModalError,
+    }),
+    [notify, dismiss, showBanner, clearBanner, showModalError, clearModalError],
+  );
 
   return (
     <AppNotifierContext.Provider value={value}>
+      {banner && (
+        <BannerError
+          title={banner.title}
+          message={banner.message}
+          actionLabel={banner.actionLabel}
+          onAction={banner.onAction}
+          onDismiss={clearBanner}
+        />
+      )}
       {children}
       <div className="pointer-events-none fixed right-4 top-4 z-[95] w-[min(92vw,420px)] space-y-2">
         {toasts.map((toast) => (
-          <ToastItem key={toast.id} toast={toast} onDismiss={dismiss} />
+          <ToastError
+            key={toast.id}
+            id={toast.id}
+            title={toast.title}
+            message={toast.message}
+            onDismiss={dismiss}
+            onRetry={toast.retry}
+          />
         ))}
       </div>
+      <ModalError
+        open={Boolean(modal)}
+        title={modal?.title || "Erro"}
+        message={modal?.message || "Falha inesperada."}
+        supportCode={modal?.supportCode}
+        onPrimary={() => {
+          clearModalError();
+          if (typeof window !== "undefined") window.history.back();
+        }}
+        onSecondary={() => {
+          if (typeof window !== "undefined") window.open("mailto:suporte@parvagas.co.ao", "_blank");
+        }}
+      />
     </AppNotifierContext.Provider>
   );
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, ENABLE_I18N } from "@/config/appConfig";
+
 export type AppLocale = "pt" | "en";
 
 export type Dictionary = {
@@ -782,5 +784,6 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
 };
 
 export const normalizeLocale = (value: string | null | undefined): AppLocale => {
+  if (!ENABLE_I18N) return DEFAULT_LOCALE;
   return String(value || "").toLowerCase() === "en" ? "en" : "pt";
 };

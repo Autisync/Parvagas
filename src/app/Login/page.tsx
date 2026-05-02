@@ -9,6 +9,7 @@ import Reset from "../components/RestorePass";
 import { apiUrl, setToken, setUser } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 type LoginResponse = {
   token: string;
@@ -63,6 +64,8 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const { notify } = useAppNotifier();
   const { dict, locale } = useClientLocale();
   const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
@@ -85,7 +88,6 @@ function LoginContent() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   useEffect(() => {
@@ -94,10 +96,30 @@ function LoginContent() {
     setNotice("");
   }, [notice, notify]);
 
+  const modeReset = Boolean(firstLoginResetToken || passwordResetToken);
+  const fieldErrors = {
+    email: !modeReset && !email.trim() ? dict.auth.login.errorFillCredentials : "",
+    password: !modeReset && !password.trim() ? dict.auth.login.errorFillCredentials : "",
+    newPassword: modeReset && !newPassword.trim() ? (locale === "en" ? "Fill in the new password." : "Preencha a nova password.") : "",
+    confirmNewPassword:
+      modeReset && newPassword !== confirmNewPassword
+        ? locale === "en"
+          ? "New passwords do not match."
+          : "As novas palavras-passe não coincidem."
+        : "",
+  };
+
+  const shouldShowFieldError = (fieldName: string) => submitted || touched[fieldName];
+
+  const markTouched = (fieldName: string) => {
+    setTouched((current) => ({ ...current, [fieldName]: true }));
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setNotice("");
+    setSubmitted(true);
 
     if (!email.trim() || !password.trim()) {
       setError(dict.auth.login.errorFillCredentials);
@@ -123,7 +145,7 @@ function LoginContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || dict.auth.login.errorInvalidCredentials);
       }
 
       const data = (await res.json()) as LoginResponse;
@@ -158,6 +180,7 @@ function LoginContent() {
     e.preventDefault();
     setError("");
     setNotice("");
+    setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       setError("Preencha e confirme a nova password.");
@@ -184,7 +207,7 @@ function LoginContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
       }
 
       const data = (await res.json()) as LoginResponse;
@@ -213,6 +236,7 @@ function LoginContent() {
     e.preventDefault();
     setError("");
     setNotice("");
+    setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       setError("Preencha e confirme a nova password.");
@@ -239,7 +263,7 @@ function LoginContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
       }
 
       setPasswordResetToken("");
@@ -318,8 +342,12 @@ function LoginContent() {
                   disabled={Boolean(firstLoginResetToken || passwordResetToken)}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => markTouched("email")}
+                  aria-invalid={Boolean(shouldShowFieldError("email") && fieldErrors.email)}
+                  aria-describedby="login-email-error"
                   className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
                 />
+                <FormFieldError id="login-email-error" message={shouldShowFieldError("email") ? fieldErrors.email : ""} />
               </div>
 
               <div>
@@ -337,7 +365,26 @@ function LoginContent() {
                   required
                   value={firstLoginResetToken || passwordResetToken ? newPassword : password}
                   onChange={(e) => (firstLoginResetToken || passwordResetToken ? setNewPassword(e.target.value) : setPassword(e.target.value))}
+                  onBlur={() => markTouched(firstLoginResetToken || passwordResetToken ? "newPassword" : "password")}
+                  aria-invalid={Boolean(
+                    firstLoginResetToken || passwordResetToken
+                      ? shouldShowFieldError("newPassword") && fieldErrors.newPassword
+                      : shouldShowFieldError("password") && fieldErrors.password,
+                  )}
+                  aria-describedby="login-password-error"
                   className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                />
+                <FormFieldError
+                  id="login-password-error"
+                  message={
+                    firstLoginResetToken || passwordResetToken
+                      ? shouldShowFieldError("newPassword")
+                        ? fieldErrors.newPassword
+                        : ""
+                      : shouldShowFieldError("password")
+                        ? fieldErrors.password
+                        : ""
+                  }
                 />
               </div>
 
@@ -352,7 +399,14 @@ function LoginContent() {
                     required
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    onBlur={() => markTouched("confirmNewPassword")}
+                    aria-invalid={Boolean(shouldShowFieldError("confirmNewPassword") && fieldErrors.confirmNewPassword)}
+                    aria-describedby="confirm-new-password-error"
                     className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                  <FormFieldError
+                    id="confirm-new-password-error"
+                    message={shouldShowFieldError("confirmNewPassword") ? fieldErrors.confirmNewPassword : ""}
                   />
                 </div>
               )}

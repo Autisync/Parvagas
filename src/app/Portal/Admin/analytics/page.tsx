@@ -129,7 +129,6 @@ export default function AdminAnalyticsPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   const setRangeDays = (days: number) => {

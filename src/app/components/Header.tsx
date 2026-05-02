@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken, getToken } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
+import { ENABLE_I18N } from "@/config/appConfig";
 import Logo from "/public/icon2.png";
 
 const isCurrentPath = (pathname: string, href: string) => {
@@ -113,7 +114,8 @@ export default function Header() {
           >
             {dict.header.portal}
           </Link>
-          <div className="hidden items-center gap-1 rounded-full border border-slate-200 bg-white p-1 sm:inline-flex">
+          {ENABLE_I18N && (
+            <div className="hidden items-center gap-1 rounded-full border border-slate-200 bg-white p-1 sm:inline-flex">
             <button
               type="button"
               onClick={() => {
@@ -136,7 +138,8 @@ export default function Header() {
             >
               EN
             </button>
-          </div>
+            </div>
+          )}
           {isAuthenticated ? (
             <button
               type="button"

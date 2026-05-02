@@ -38,7 +38,6 @@ export default function VagasGuardadasPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   const unsave = async (savedRecordId: string, jobId: string) => {

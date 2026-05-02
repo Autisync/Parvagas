@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useId } from "react";
 import Image from "next/image";
 import { XMarkIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 type FileUploadProps = {
   accept?: string;
@@ -29,14 +30,18 @@ export default function FileUpload({
 }: FileUploadProps) {
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
+  const [localError, setLocalError] = useState("");
+  const errorId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setLocalError("");
+
     if (file.size > maxSize) {
-      alert(`Arquivo muito grande. Máximo ${Math.round(maxSize / 1024 / 1024)}MB.`);
+      setLocalError(`Arquivo muito grande. Máximo ${Math.round(maxSize / 1024 / 1024)}MB.`);
       return;
     }
 
@@ -56,11 +61,13 @@ export default function FileUpload({
   const handleClear = () => {
     setLocalPreview(null);
     setFileName("");
+    setLocalError("");
     onFileSelected(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const displayPreview = localPreview || preview;
+  const effectiveError = error || localError;
 
   return (
     <div>
@@ -68,7 +75,7 @@ export default function FileUpload({
 
       <div
         className={`relative rounded-xl border-2 border-dashed transition ${
-          error ? "border-red-300 bg-red-50" : "border-slate-300 bg-slate-50"
+          effectiveError ? "border-red-300 bg-red-50" : "border-slate-300 bg-slate-50"
         } ${disabled ? "opacity-50" : ""}`}
       >
         {displayPreview ? (
@@ -102,8 +109,8 @@ export default function FileUpload({
       </div>
 
       {fileName && <p className="mt-1 text-xs text-slate-500">{fileName}</p>}
-      {helpText && !error && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {helpText && !effectiveError && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+      <FormFieldError id={errorId} message={effectiveError} />
     </div>
   );
 }

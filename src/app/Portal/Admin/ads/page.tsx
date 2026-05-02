@@ -60,7 +60,6 @@ export default function AdminAdsPage() {
   useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   const submit = async (event: React.FormEvent) => {

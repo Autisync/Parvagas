@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useClientLocale } from "@/lib/i18n/client";
+import { ENABLE_I18N } from "@/config/appConfig";
 
 export default function LocaleCompactControl({
   className = "",
@@ -10,6 +11,8 @@ export default function LocaleCompactControl({
 }) {
   const router = useRouter();
   const { locale, changeLocale } = useClientLocale();
+
+  if (!ENABLE_I18N) return null;
 
   return (
     <div className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 ${className}`}>

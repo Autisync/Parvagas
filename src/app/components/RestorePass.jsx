@@ -14,6 +14,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
+import FormFieldError from "@/app/components/errors/FormFieldError";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,6 +24,8 @@ export default function DialogWithForm() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
+  const [submitted, setSubmitted] = React.useState(false);
+  const [touched, setTouched] = React.useState(false);
   const { notify } = useAppNotifier();
   const { dict } = useClientLocale();
 
@@ -31,7 +34,6 @@ export default function DialogWithForm() {
   React.useEffect(() => {
     if (!error) return;
     notify(error, "error");
-    setError("");
   }, [error, notify]);
 
   React.useEffect(() => {
@@ -43,6 +45,7 @@ export default function DialogWithForm() {
   const handleSubmit = async () => {
     setError("");
     setSuccess("");
+    setSubmitted(true);
 
     if (!email.trim()) {
       setError(dict.auth.resetDialog.errorEmailRequired);
@@ -97,6 +100,11 @@ export default function DialogWithForm() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              onBlur={() => setTouched(true)}
+            />
+            <FormFieldError
+              id="reset-email-error"
+              message={submitted || touched ? error : ""}
             />
             <Typography
               className="font-normal text-xs text-gray-900"

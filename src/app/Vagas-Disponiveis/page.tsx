@@ -8,6 +8,7 @@ import Footer from "../components/Footer";
 import Link from "next/link";
 import { apiUrl } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
+import BannerError from "@/app/components/errors/BannerError";
 
 type Job = {
   _id: string;
@@ -202,7 +203,16 @@ function VagasDisponiveisContent() {
           </div>
         </form>
 
-        {error && <p className="mt-6 text-red-600">{error}</p>}
+        {error && (
+          <div className="mt-6">
+            <BannerError
+              title="Não foi possível carregar as vagas"
+              message={error}
+              actionLabel="Reconectar"
+              onAction={() => fetchJobs(pagination.page || 1, applied)}
+            />
+          </div>
+        )}
         {loading && <div className="mt-12 flex justify-center"><div className="w-8 h-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" /></div>}
 
         {!loading && !error && (

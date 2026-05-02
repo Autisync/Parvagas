@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import CompanySidebar from "../components/CompanySidebar";
 import { useToasts } from "../components/useToasts";
+import FormFieldError from "@/app/components/errors/FormFieldError";
+import BannerError from "@/app/components/errors/BannerError";
 
 type TeamMember = {
   _id: string;
@@ -41,6 +43,7 @@ export default function EmpresaUtilizadoresPage() {
     nextRole?: "recruiter" | "viewer";
   }>(null);
   const [removeConfirmationText, setRemoveConfirmationText] = useState("");
+  const [inviteSubmitted, setInviteSubmitted] = useState(false);
   const [invite, setInvite] = useState({
     email: "",
     teamRole: "recruiter" as "owner" | "recruiter" | "viewer",
@@ -70,7 +73,6 @@ export default function EmpresaUtilizadoresPage() {
   useEffect(() => {
     if (!pageError) return;
     pushToast("error", pageError);
-    setPageError("");
   }, [pageError, pushToast]);
 
   const currentUserId = String(
@@ -155,6 +157,7 @@ export default function EmpresaUtilizadoresPage() {
 
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault();
+    setInviteSubmitted(true);
     if (!token) return;
     if (!invite.email.trim()) {
       pushToast("error", "Preencha o email para convidar o membro.");
@@ -248,6 +251,17 @@ export default function EmpresaUtilizadoresPage() {
               <p className="mt-2 max-w-3xl text-sm text-slate-600">Convide membros, ajuste roles e remova acessos da conta empresarial principal.</p>
             </div>
 
+            {pageError && (
+              <div className="mb-6">
+                <BannerError
+                  title="Não foi possível carregar os utilizadores"
+                  message={pageError}
+                  actionLabel="Reconectar"
+                  onAction={() => window.location.reload()}
+                />
+              </div>
+            )}
+
             {!isOwner ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <h2 className="text-lg font-bold text-amber-900">Acesso reservado ao owner</h2>
@@ -306,10 +320,16 @@ export default function EmpresaUtilizadoresPage() {
                     <input
                       value={invite.email}
                       onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
+                      onBlur={() => setInviteSubmitted(true)}
                       placeholder="email@empresa.com"
                       type="email"
+                      aria-invalid={Boolean(inviteSubmitted && !invite.email.trim())}
+                      aria-describedby="invite-email-error"
                       className="app-input md:col-span-2"
                     />
+                    <div className="md:col-span-2">
+                      <FormFieldError id="invite-email-error" message={inviteSubmitted && !invite.email.trim() ? "Preencha o email para convidar o membro." : ""} />
+                    </div>
                     <select
                       value={invite.teamRole}
                       onChange={(e) => setInvite((prev) => ({ ...prev, teamRole: e.target.value as "owner" | "recruiter" | "viewer" }))}
@@ -402,8 +422,11 @@ export default function EmpresaUtilizadoresPage() {
                     value={removeConfirmationText}
                     onChange={(e) => setRemoveConfirmationText(e.target.value)}
                     placeholder="REMOVER"
+                    aria-invalid={removeConfirmationText.trim() !== "REMOVER"}
+                    aria-describedby="remove-confirm-error"
                     className="mt-2 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
                   />
+                  <FormFieldError id="remove-confirm-error" message={removeConfirmationText.trim() !== "REMOVER" ? "Digite exatamente REMOVER para confirmar a ação." : ""} />
                 </div>
               )}
               <div className="mt-4 flex justify-end gap-2">
