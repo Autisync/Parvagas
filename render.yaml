@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: parvagas-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node server/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: parvagas-private
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_SIGNUP_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://parvagas.vercel.app
+      - key: STORAGE_PROVIDER
+        value: supabase
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_SECURE
+        value: "false"
