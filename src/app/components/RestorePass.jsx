@@ -13,6 +13,7 @@ import {
 } from "@material-tailwind/react";
 import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import { useClientLocale } from "@/lib/i18n/client";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,6 +24,7 @@ export default function DialogWithForm() {
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
   const { notify } = useAppNotifier();
+  const { dict } = useClientLocale();
 
   const handleOpen = () => setOpen((cur) => !cur);
 
@@ -43,12 +45,12 @@ export default function DialogWithForm() {
     setSuccess("");
 
     if (!email.trim()) {
-      setError("Informe o email associado à sua conta.");
+      setError(dict.auth.resetDialog.errorEmailRequired);
       return;
     }
 
     if (!emailRegex.test(email.trim())) {
-      setError("Informe um email válido.");
+      setError(dict.auth.resetDialog.errorEmailInvalid);
       return;
     }
 
@@ -58,7 +60,7 @@ export default function DialogWithForm() {
         method: "POST",
         body: JSON.stringify({ email: email.trim() }),
       });
-      setSuccess(response?.message || "Se existir uma conta com este email, será enviado um link de recuperação.");
+      setSuccess(response?.message || dict.auth.resetDialog.successFallback);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar o pedido de recuperação.");
     } finally {
@@ -73,7 +75,7 @@ export default function DialogWithForm() {
         className="font-normal text-red-500 hover:text-red-400"
         onClick={handleOpen}
       >
-        Esqueceu a palavra-passe?
+        {dict.auth.resetDialog.trigger}
       </button>
       <Dialog
         size="xs"
@@ -84,14 +86,14 @@ export default function DialogWithForm() {
         <Card className="mx-auto w-full max-w-[24rem]">
           <CardBody className="flex flex-col gap-4">
             <Typography variant="h4" color="red">
-              Recuperar Palavra-Passe
+              {dict.auth.resetDialog.title}
             </Typography>
 
             <Typography className="-mb-2 text-gray-900" variant="h6">
-              Email associado à sua conta
+              {dict.auth.resetDialog.emailLabel}
             </Typography>
             <Input
-              label="Email"
+              label={dict.auth.resetDialog.emailLabel}
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -101,13 +103,13 @@ export default function DialogWithForm() {
               variant="paragraph"
               color="gray"
             >
-              Vamos enviar um link para redefinir a palavra-passe da sua conta.
+              {dict.auth.resetDialog.helper}
             </Typography>
 
           </CardBody>
           <CardFooter className="pt-0">
             <Button variant="gradient" type="button" onClick={handleSubmit} disabled={loading} fullWidth>
-              {loading ? "A enviar..." : "Recuperar Palavra-Passe"}
+              {loading ? dict.auth.resetDialog.sending : dict.auth.resetDialog.submit}
             </Button>
           </CardFooter>
         </Card>

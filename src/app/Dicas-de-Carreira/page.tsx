@@ -1,6 +1,7 @@
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Link from "next/link";
+import { getServerDictionary } from "@/lib/i18n/server";
 
 type CareerPost = {
   _id: string;
@@ -29,18 +30,19 @@ async function getPosts(): Promise<CareerPost[]> {
 
 export default async function DicasCarreiraPage() {
   const posts = await getPosts();
+  const dict = getServerDictionary();
 
   return (
     <div className="bg-white min-h-screen">
       <Header />
       <main className="px-6 py-8 mx-auto max-w-5xl">
-        <h1 className="text-4xl font-bold">Dicas de Carreira</h1>
+        <h1 className="text-4xl font-bold">{dict.careerList.title}</h1>
         <p className="mt-3 text-gray-600 max-w-2xl">
-          Conteúdo editorial para melhorar candidatura, entrevistas e posicionamento profissional no mercado angolano.
+          {dict.careerList.subtitle}
         </p>
         <div className="mt-8 grid gap-5 md:grid-cols-2">
           {posts.length === 0 ? (
-            <p className="text-gray-500 col-span-2 py-12 text-center">Artigos em breve.</p>
+            <p className="text-gray-500 col-span-2 py-12 text-center">{dict.careerList.empty}</p>
           ) : (
             posts.map((post) => (
               <Link
@@ -66,7 +68,7 @@ export default async function DicasCarreiraPage() {
                   )}
                 </div>
                 <span className="inline-block mt-3 text-sm text-red-700 font-semibold group-hover:underline">
-                  Ler artigo →
+                  {dict.careerList.readArticle} →
                 </span>
               </Link>
             ))

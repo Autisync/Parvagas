@@ -7,13 +7,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "/public/icon2.png";
 import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import { useClientLocale } from "@/lib/i18n/client";
 
 type AuthRole = "candidate" | "company";
-
-const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
-  { id: "candidate", label: "Candidato", hint: "Perfil, recomendações e candidaturas" },
-  { id: "company", label: "Empresa", hint: "Publicar vagas e gerir candidaturas" },
-];
 
 function normalizeRole(value: string | null): AuthRole {
   if (value === "company") return "company";
@@ -56,6 +52,11 @@ function SignUpContent() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const { notify } = useAppNotifier();
+  const { dict, locale } = useClientLocale();
+  const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
+    { id: "candidate", label: dict.auth.signup.roleCandidate, hint: dict.auth.signup.roleCandidateHint },
+    { id: "company", label: dict.auth.signup.roleCompany, hint: dict.auth.signup.roleCompanyHint },
+  ];
 
   useEffect(() => {
     if (!error) return;
@@ -75,29 +76,29 @@ function SignUpContent() {
     setSuccess("");
 
     if (!fullName.trim() || !email.trim() || !password.trim()) {
-      setError("Preencha nome, email e palavra-passe.");
+      setError(dict.auth.signup.errorFillRequired);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("As palavras-passe não coincidem.");
+      setError(dict.auth.signup.errorPasswordsMismatch);
       return;
     }
 
     if (selectedRole === "company" && !inviteToken) {
       if (!companyName.trim()) {
-        setError("Informe o nome da empresa.");
+        setError(dict.auth.signup.errorCompanyNameRequired);
         return;
       }
 
       const normalizedIdentifier = normalizeCompanyIdentifier(companyIdentifier);
       if (!normalizedIdentifier) {
-        setError("Informe o NIF/identificador da empresa.");
+        setError(dict.auth.signup.errorIdentifierRequired);
         return;
       }
 
       if (!/^[A-Z0-9]{6,20}$/.test(normalizedIdentifier)) {
-        setError("NIF inválido. Use 6-20 caracteres alfanuméricos.");
+        setError(dict.auth.signup.errorIdentifierInvalid);
         return;
       }
     }
@@ -134,12 +135,12 @@ function SignUpContent() {
 
       setSuccess(
         selectedRole === "company" && inviteToken
-          ? "Convite aceite. Faça login com o email convidado e altere a password no primeiro acesso."
-          : "Conta criada com sucesso. Pode iniciar sessão agora.",
+          ? dict.auth.signup.successInviteAccepted
+          : dict.auth.signup.successAccountCreated,
       );
       setTimeout(() => router.push(`/Login?role=${selectedRole}`), 800);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível criar a conta.");
+      setError(err instanceof Error ? err.message : (locale === "en" ? "Could not create account." : "Não foi possível criar a conta."));
     } finally {
       setLoading(false);
     }
@@ -152,16 +153,16 @@ function SignUpContent() {
           <div>
             <Image width={180} height={180} className="h-14 w-auto" src={Logo} alt="Parvagas" />
             <div className="mt-16">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Criar conta</p>
-              <h1 className="mt-4 text-4xl font-bold leading-tight">Um início simples para cada tipo de utilizador.</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">{dict.auth.signup.sideEyebrow}</p>
+              <h1 className="mt-4 text-4xl font-bold leading-tight">{dict.auth.signup.sideTitle}</h1>
               <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-                Candidatos e empresas entram por fluxos públicos separados. A criação de administradores fica reservada ao super-admin.
+                {dict.auth.signup.sideDescription}
               </p>
             </div>
           </div>
           <div className="grid gap-3 text-sm text-slate-300">
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Empresas passam por validação de NIF e nome normalizado para evitar duplicados.</p>
-            <Link href="/" className="font-semibold text-red-200 hover:text-white">Voltar ao site público</Link>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">{dict.auth.signup.sideBadge1}</p>
+            <Link href="/" className="font-semibold text-red-200 hover:text-white">{dict.auth.signup.sideLinkHome}</Link>
           </div>
         </section>
 
@@ -170,9 +171,9 @@ function SignUpContent() {
             <div className="lg:hidden">
               <Image width={160} height={160} className="h-14 w-auto" src={Logo} alt="Parvagas" />
             </div>
-            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-red-600 lg:mt-0">Signup</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Criar conta</h2>
-            <p className="mt-2 text-sm text-slate-600">Escolha o perfil correto para configurar o acesso inicial.</p>
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-red-600 lg:mt-0">{dict.auth.signup.pageEyebrow}</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{dict.auth.signup.pageTitle}</h2>
+            <p className="mt-2 text-sm text-slate-600">{dict.auth.signup.pageSubtitle}</p>
 
             <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
               {roleTabs.map((role) => {
@@ -195,13 +196,13 @@ function SignUpContent() {
 
             {selectedRole === "company" && inviteToken && (
               <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Convite de equipa detectado. O email deve corresponder ao convite para associar à empresa.
+                {dict.auth.signup.inviteDetected}
               </div>
             )}
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
               <div>
-                <label htmlFor="fullName" className="block text-sm font-semibold text-slate-800">Nome completo</label>
+                <label htmlFor="fullName" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.fullName}</label>
                 <input
                   id="fullName"
                   name="fullName"
@@ -217,7 +218,7 @@ function SignUpContent() {
               {selectedRole === "company" && !inviteToken && (
                 <>
                   <div>
-                    <label htmlFor="companyName" className="block text-sm font-semibold text-slate-800">Nome da empresa</label>
+                    <label htmlFor="companyName" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.companyName}</label>
                     <input
                       id="companyName"
                       name="companyName"
@@ -230,7 +231,7 @@ function SignUpContent() {
                   </div>
 
                   <div>
-                    <label htmlFor="companyLegalName" className="block text-sm font-semibold text-slate-800">Razão social</label>
+                    <label htmlFor="companyLegalName" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.legalName}</label>
                     <input
                       id="companyLegalName"
                       name="companyLegalName"
@@ -238,12 +239,12 @@ function SignUpContent() {
                       value={companyLegalName}
                       onChange={(e) => setCompanyLegalName(e.target.value)}
                       className={inputClass()}
-                      placeholder="Opcional"
+                      placeholder={dict.auth.signup.legalNameOptional}
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="companyIdentifier" className="block text-sm font-semibold text-slate-800">NIF / Identificador único</label>
+                    <label htmlFor="companyIdentifier" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.companyIdentifier}</label>
                     <input
                       id="companyIdentifier"
                       name="companyIdentifier"
@@ -253,13 +254,13 @@ function SignUpContent() {
                       onChange={(e) => setCompanyIdentifier(e.target.value)}
                       className={inputClass()}
                     />
-                    <p className="mt-1.5 text-xs text-slate-500">Use 6-20 caracteres alfanuméricos, sem espaços especiais.</p>
+                    <p className="mt-1.5 text-xs text-slate-500">{dict.auth.signup.companyIdentifierHelp}</p>
                   </div>
                 </>
               )}
 
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-slate-800">Email</label>
+                <label htmlFor="email" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.email}</label>
                 <input
                   id="email"
                   name="email"
@@ -273,7 +274,7 @@ function SignUpContent() {
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-slate-800">Palavra-passe</label>
+                <label htmlFor="password" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.password}</label>
                 <input
                   id="password"
                   name="password"
@@ -287,7 +288,7 @@ function SignUpContent() {
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-slate-800">Confirmar palavra-passe</label>
+                <label htmlFor="confirmPassword" className="block text-sm font-semibold text-slate-800">{dict.auth.signup.confirmPassword}</label>
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
@@ -305,13 +306,13 @@ function SignUpContent() {
                 disabled={loading}
                 className="flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "A criar conta..." : "Criar conta"}
+                {loading ? dict.auth.signup.creatingAccount : dict.auth.signup.createAccount}
               </button>
 
               <p className="text-center text-sm text-slate-600">
-                Já tem conta?{" "}
+                {dict.auth.signup.hasAccount}{" "}
                 <Link href={`/Login?role=${selectedRole}`} className="font-semibold text-red-600 hover:text-red-700">
-                  Entrar
+                  {dict.auth.signup.signIn}
                 </Link>
               </p>
             </form>

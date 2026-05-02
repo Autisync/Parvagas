@@ -3,6 +3,7 @@ import Footer from "../../components/Footer";
 import Link from "next/link";
 import Image from "next/image";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
+import { getServerDictionary } from "@/lib/i18n/server";
 
 type Job = {
   _id: string;
@@ -47,15 +48,16 @@ async function getJob(id: string): Promise<Job | null> {
 
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const job = await getJob(params.id);
+  const dict = getServerDictionary();
 
   if (!job) {
     return (
       <div className="bg-white min-h-screen">
         <Header />
         <main className="px-6 py-8 max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mt-12">Vaga não encontrada</h1>
-          <p className="text-gray-500 mt-2">Esta vaga pode ter sido removida ou já não está disponível.</p>
-          <Link href="/Vagas-Disponiveis" className="mt-6 inline-block text-red-600 font-medium hover:underline">← Voltar às vagas</Link>
+          <h1 className="text-2xl font-bold mt-12">{dict.jobDetail.notFoundTitle}</h1>
+          <p className="text-gray-500 mt-2">{dict.jobDetail.notFoundDescription}</p>
+          <Link href="/Vagas-Disponiveis" className="mt-6 inline-block text-red-600 font-medium hover:underline">← {dict.jobDetail.backToJobs}</Link>
         </main>
         <Footer />
       </div>
@@ -63,7 +65,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   }
 
   const company = job.companyId && typeof job.companyId === "object" ? job.companyId : null;
-  const companyName = company?.name ?? "Empresa";
+  const companyName = company?.name ?? dict.jobDetail.companyFallback;
   const mode = job.workMode || "";
 
   return (
@@ -73,8 +75,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         <Breadcrumbs
           className="mb-8"
           items={[
-            { label: "Início", href: "/" },
-            { label: "Vagas", href: "/Vagas-Disponiveis" },
+            { label: dict.jobDetail.breadcrumbHome, href: "/" },
+            { label: dict.jobDetail.breadcrumbJobs, href: "/Vagas-Disponiveis" },
             { label: job.title },
           ]}
         />
@@ -107,14 +109,14 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
             {job.description && (
               <section>
-                <h2 className="text-xl font-bold mb-3">Sobre a vaga</h2>
+                <h2 className="text-xl font-bold mb-3">{dict.jobDetail.aboutJob}</h2>
                 <div className="text-gray-700 leading-relaxed whitespace-pre-line">{job.description}</div>
               </section>
             )}
 
             {job.responsibilities && job.responsibilities.length > 0 && (
               <section>
-                <h2 className="text-xl font-bold mb-3">Responsabilidades</h2>
+                <h2 className="text-xl font-bold mb-3">{dict.jobDetail.responsibilities}</h2>
                 <ul className="space-y-2">
                   {job.responsibilities.map((r, i) => (
                     <li key={i} className="flex gap-2 text-gray-700">
@@ -128,7 +130,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
             {job.requiredSkills && job.requiredSkills.length > 0 && (
               <section>
-                <h2 className="text-xl font-bold mb-3">Competências obrigatórias</h2>
+                <h2 className="text-xl font-bold mb-3">{dict.jobDetail.requiredSkills}</h2>
                 <div className="flex flex-wrap gap-2">
                   {job.requiredSkills.map(s => <span key={s} className="text-sm border border-red-200 rounded-lg px-3 py-1 text-red-700 bg-red-50">{s}</span>)}
                 </div>
@@ -137,7 +139,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
             {job.preferredSkills && job.preferredSkills.length > 0 && (
               <section>
-                <h2 className="text-xl font-bold mb-3">Competências valorizadas</h2>
+                <h2 className="text-xl font-bold mb-3">{dict.jobDetail.preferredSkills}</h2>
                 <div className="flex flex-wrap gap-2">
                   {job.preferredSkills.map(s => <span key={s} className="text-sm border border-gray-200 rounded-lg px-3 py-1 text-gray-600">{s}</span>)}
                 </div>
@@ -148,35 +150,35 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           {/* Right sidebar */}
           <aside className="space-y-6">
             <div className="rounded-2xl border border-gray-100 p-5">
-              <h3 className="font-bold text-lg mb-4">Resumo</h3>
+              <h3 className="font-bold text-lg mb-4">{dict.jobDetail.summary}</h3>
               <dl className="space-y-3 text-sm">
                 {job.salaryRange && (
                   <>
-                    <dt className="text-gray-500">Salário</dt>
+                    <dt className="text-gray-500">{dict.jobDetail.salary}</dt>
                     <dd className="font-medium text-gray-800">{job.salaryRange}</dd>
                   </>
                 )}
                 {(job.requiredExperienceYears || job.experienceLevel) && (
                   <>
-                    <dt className="text-gray-500">Experiência</dt>
-                    <dd className="font-medium">{job.requiredExperienceYears ? `${job.requiredExperienceYears}+ anos` : job.experienceLevel}</dd>
+                    <dt className="text-gray-500">{dict.jobDetail.experience}</dt>
+                    <dd className="font-medium">{job.requiredExperienceYears ? dict.jobDetail.yearsExperience(job.requiredExperienceYears) : job.experienceLevel}</dd>
                   </>
                 )}
                 {job.expiresAt && (
                   <>
-                    <dt className="text-gray-500">Válido até</dt>
+                    <dt className="text-gray-500">{dict.jobDetail.validUntil}</dt>
                     <dd className="font-medium">{new Date(job.expiresAt).toLocaleDateString("pt-AO", { day: "numeric", month: "long", year: "numeric" })}</dd>
                   </>
                 )}
                 {job.createdAt && (
                   <>
-                    <dt className="text-gray-500">Publicado em</dt>
+                    <dt className="text-gray-500">{dict.jobDetail.publishedOn}</dt>
                     <dd className="font-medium">{new Date(job.createdAt).toLocaleDateString("pt-AO", { day: "numeric", month: "long", year: "numeric" })}</dd>
                   </>
                 )}
                 {job.languages && job.languages.length > 0 && (
                   <>
-                    <dt className="text-gray-500">Idiomas</dt>
+                    <dt className="text-gray-500">{dict.jobDetail.languages}</dt>
                     <dd className="font-medium">{job.languages.join(", ")}</dd>
                   </>
                 )}
@@ -185,9 +187,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
             {company && (company.description || company.size || company.website) && (
               <div className="rounded-2xl border border-gray-100 p-5">
-                <h3 className="font-bold text-lg mb-3">Empresa</h3>
+                <h3 className="font-bold text-lg mb-3">{dict.jobDetail.company}</h3>
                 {company.description && <p className="text-sm text-gray-600 mb-3 leading-relaxed">{company.description}</p>}
-                {company.size && <p className="text-sm text-gray-500">Dimensão: <strong>{company.size}</strong></p>}
+                {company.size && <p className="text-sm text-gray-500">{dict.jobDetail.companySize}: <strong>{company.size}</strong></p>}
                 {company.website && (
                   <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-sm text-red-600 hover:underline mt-1 block">{company.website}</a>
                 )}
@@ -198,10 +200,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               href={`/Aplicar/${job._id}`}
               className="block w-full text-center rounded-xl bg-red-600 text-white font-semibold py-3 hover:bg-red-700 transition-colors"
             >
-              Candidatar-me agora
+              {dict.jobDetail.applyNow}
             </Link>
 
-            <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← Ver todas as vagas</Link>
+            <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
           </aside>
         </div>
       </main>

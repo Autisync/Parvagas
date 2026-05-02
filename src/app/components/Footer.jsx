@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useClientLocale } from "@/lib/i18n/client";
 
 const navigation = [
   {
@@ -39,6 +42,8 @@ const navigation = [
 ];
 
 export default function Footer() {
+  const { dict } = useClientLocale();
+
   return (
     <footer className="bg-white">
       <div className="mx-auto max-w-7xl px-6 py-12 md:flex md:items-center md:justify-between lg:px-8">
@@ -56,17 +61,16 @@ export default function Footer() {
         </div>
         <div className="mt-8 md:order-1 md:mt-0">
           <p className="text-center text-sm leading-3 text-gray-600">
-            Copyright &copy;{new Date().getFullYear()} ParVagas - All rights
-            reserved.
+            Copyright &copy;{new Date().getFullYear()} ParVagas - {dict.footer.allRightsReserved}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-            <Link href="/privacidade/" className="hover:text-red-500">Privacidade</Link>
-            <Link href="/termos/" className="hover:text-red-500">Termos</Link>
-            <Link href="/politica-retencao/" className="hover:text-red-500">Retenção</Link>
-            <Link href="/termos-empregador/" className="hover:text-red-500">Termos do Empregador</Link>
+            <Link href="/privacidade/" className="hover:text-red-500">{dict.footer.privacy}</Link>
+            <Link href="/termos/" className="hover:text-red-500">{dict.footer.terms}</Link>
+            <Link href="/politica-retencao/" className="hover:text-red-500">{dict.footer.retention}</Link>
+            <Link href="/termos-empregador/" className="hover:text-red-500">{dict.footer.employerTerms}</Link>
           </div>
           <span className="text-xs">
-            Design and Hosted by{" "}
+            {dict.footer.designHostedBy}{" "}
             <Link
               className="hover:text-red-500"
               href={"https://www.enovtechnologies.com/"}

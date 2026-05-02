@@ -68,7 +68,41 @@ function VagasDisponiveisContent() {
   const [category, setCategory] = useState("");
   const [workMode, setWorkMode] = useState("");
   const [applied, setApplied] = useState({ keyword: "", location: "", category: "", workMode: "" });
-  const { dict } = useClientLocale();
+  const { dict, locale } = useClientLocale();
+  const categoryLabels: Record<string, string> =
+    locale === "en"
+      ? {
+          Tecnologia: "Technology",
+          Energia: "Energy",
+          Saude: "Healthcare",
+          "Banca e Financas": "Banking and Finance",
+          Logistica: "Logistics",
+          "Recursos Humanos": "Human Resources",
+          Comercial: "Commercial",
+        }
+      : {
+          Tecnologia: "Tecnologia",
+          Energia: "Energia",
+          Saude: "Saúde",
+          "Banca e Financas": "Banca e Finanças",
+          Logistica: "Logística",
+          "Recursos Humanos": "Recursos Humanos",
+          Comercial: "Comercial",
+        };
+  const modeLabels: Record<string, string> =
+    locale === "en"
+      ? {
+          Presencial: "On-site",
+          Hibrido: "Hybrid",
+          Remoto: "Remote",
+          Rotativo: "Shift",
+        }
+      : {
+          Presencial: "Presencial",
+          Hibrido: "Híbrido",
+          Remoto: "Remoto",
+          Rotativo: "Rotativo",
+        };
 
   const fetchJobs = useCallback(async (
     page = 1,
@@ -147,21 +181,21 @@ function VagasDisponiveisContent() {
             <input className="app-input" placeholder={dict.jobsList.searchLocation} value={location} onChange={e => setLocation(e.target.value)} />
             <select className="app-input" value={category} onChange={e => setCategory(e.target.value)}>
               <option value="">{dict.jobsList.allCategories}</option>
-              <option value="Tecnologia">Tecnologia</option>
-              <option value="Energia">Energia</option>
-              <option value="Saude">Saúde</option>
-              <option value="Banca e Financas">Banca e Finanças</option>
-              <option value="Logistica">Logística</option>
-              <option value="Recursos Humanos">Recursos Humanos</option>
-              <option value="Comercial">Comercial</option>
+              <option value="Tecnologia">{categoryLabels.Tecnologia}</option>
+              <option value="Energia">{categoryLabels.Energia}</option>
+              <option value="Saude">{categoryLabels.Saude}</option>
+              <option value="Banca e Financas">{categoryLabels["Banca e Financas"]}</option>
+              <option value="Logistica">{categoryLabels.Logistica}</option>
+              <option value="Recursos Humanos">{categoryLabels["Recursos Humanos"]}</option>
+              <option value="Comercial">{categoryLabels.Comercial}</option>
             </select>
             <div className="flex gap-2">
               <select className="app-input flex-1" value={workMode} onChange={e => setWorkMode(e.target.value)}>
                 <option value="">{dict.jobsList.modePlaceholder}</option>
-                <option value="Presencial">Presencial</option>
-                <option value="Hibrido">Híbrido</option>
-                <option value="Remoto">Remoto</option>
-                <option value="Rotativo">Rotativo</option>
+                <option value="Presencial">{modeLabels.Presencial}</option>
+                <option value="Hibrido">{modeLabels.Hibrido}</option>
+                <option value="Remoto">{modeLabels.Remoto}</option>
+                <option value="Rotativo">{modeLabels.Rotativo}</option>
               </select>
               <button type="submit" className="app-btn-primary px-4 text-sm">{dict.jobsList.searchButton}</button>
             </div>
@@ -195,7 +229,7 @@ function VagasDisponiveisContent() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {job.location && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">📍 {job.location}</span>}
-                    {mode && <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${modeColor[mode] ?? "bg-gray-100 text-gray-700"}`}>{mode}</span>}
+                    {mode && <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${modeColor[mode] ?? "bg-gray-100 text-gray-700"}`}>{modeLabels[mode] ?? mode}</span>}
                     {job.category && <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${categoryColor[job.category] ?? "bg-gray-100 text-gray-700"}`}>{job.category}</span>}
                     {(job.contractType || job.jobType) && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{job.contractType || job.jobType}</span>}
                   </div>
@@ -207,7 +241,7 @@ function VagasDisponiveisContent() {
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-4 text-sm text-gray-500">
                       {job.salaryRange && <span>💰 {job.salaryRange}</span>}
-                      {(job.requiredExperienceYears ?? 0) > 0 && <span>🎓 {job.requiredExperienceYears}+ anos</span>}
+                      {(job.requiredExperienceYears ?? 0) > 0 && <span>🎓 {dict.jobDetail.yearsExperience(job.requiredExperienceYears ?? 0)}</span>}
                       {job.expiresAt && <span>⏳ Expira {new Date(job.expiresAt).toLocaleDateString("pt-AO", { day: "numeric", month: "short", year: "numeric" })}</span>}
                     </div>
                     <Link href={`/Vagas-Disponiveis/${job._id}`} className="app-btn-secondary text-sm px-4 py-1.5">{dict.jobsList.viewDetails}</Link>
@@ -233,7 +267,7 @@ function VagasDisponiveisContent() {
 
 export default function VagasDisponiveisPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">A carregar vagas...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading jobs...</div>}>
       <VagasDisponiveisContent />
     </Suspense>
   );

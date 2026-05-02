@@ -2,6 +2,7 @@ import Header from "../../components/Header";
 import Footer from "../../components/Footer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getServerDictionary } from "@/lib/i18n/server";
 
 type CareerPost = {
   _id: string;
@@ -33,9 +34,10 @@ async function getPost(slug: string): Promise<CareerPost | null> {
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
+  const dict = getServerDictionary();
   return {
-    title: post ? `${post.title} | Parvagas` : "Dicas de Carreira | Parvagas",
-    description: post?.excerpt ?? "Conteúdo editorial para profissionais angolanos.",
+    title: post ? `${post.title} | Parvagas` : dict.careerPost.fallbackTitle,
+    description: post?.excerpt ?? dict.careerPost.fallbackDescription,
   };
 }
 
@@ -58,13 +60,14 @@ function BodyParagraph({ text }: { text: string }) {
 export default async function CareerPostPage({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
   if (!post) notFound();
+  const dict = getServerDictionary();
 
   return (
     <div className="bg-white min-h-screen">
       <Header />
       <main className="py-10 pb-20 px-6 mx-auto max-w-3xl">
         <Link href="/Dicas-de-Carreira/" className="text-sm text-red-700 font-semibold hover:underline">
-          ← Voltar a Dicas de Carreira
+          ← {dict.careerPost.backToCareer}
         </Link>
 
         {post.category && (
@@ -76,7 +79,7 @@ export default async function CareerPostPage({ params }: { params: { slug: strin
         <h1 className="mt-3 text-3xl sm:text-4xl font-bold leading-tight">{post.title}</h1>
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-400">
-          {post.author && <span>Por {post.author}</span>}
+          {post.author && <span>{dict.careerPost.by(post.author)}</span>}
           {post.readTime && <span>⏱ {post.readTime}</span>}
           {post.publishedAt && (
             <span>
@@ -110,7 +113,7 @@ export default async function CareerPostPage({ params }: { params: { slug: strin
 
         {post.takeaways && post.takeaways.length > 0 && (
           <aside className="mt-10 rounded-2xl bg-red-50 border border-red-100 p-6">
-            <h2 className="font-bold text-lg text-red-700">Pontos-chave</h2>
+            <h2 className="font-bold text-lg text-red-700">{dict.careerPost.keyPoints}</h2>
             <ul className="mt-3 space-y-2">
               {post.takeaways.map((point, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
@@ -124,7 +127,7 @@ export default async function CareerPostPage({ params }: { params: { slug: strin
 
         <div className="mt-12 pt-8 border-t border-red-100">
           <Link href="/Dicas-de-Carreira/" className="text-sm text-red-700 font-semibold hover:underline">
-            ← Ver todos os artigos
+            ← {dict.careerPost.viewAll}
           </Link>
         </div>
       </main>

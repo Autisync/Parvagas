@@ -8,6 +8,7 @@ import Logo from "/public/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiUrl, setToken, setUser } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import { useClientLocale } from "@/lib/i18n/client";
 
 type LoginResponse = {
   token: string;
@@ -28,17 +29,12 @@ type FirstLoginResetChallenge = {
 
 type AuthRole = "candidate" | "company";
 
-const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
-  { id: "candidate", label: "Candidato", hint: "Perfil, recomendações e candidaturas" },
-  { id: "company", label: "Empresa", hint: "Vagas, equipa e candidaturas" },
-];
-
-function validatePasswordStrength(password: string): string {
-  if (password.length < 8) return "A nova password deve ter pelo menos 8 caracteres.";
-  if (!/[A-Z]/.test(password)) return "A nova password deve incluir pelo menos 1 letra maiúscula.";
-  if (!/[a-z]/.test(password)) return "A nova password deve incluir pelo menos 1 letra minúscula.";
-  if (!/[0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 número.";
-  if (!/[^A-Za-z0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 símbolo.";
+function validatePasswordStrength(password: string, locale: "pt" | "en"): string {
+  if (password.length < 8) return locale === "en" ? "New password must be at least 8 characters long." : "A nova password deve ter pelo menos 8 caracteres.";
+  if (!/[A-Z]/.test(password)) return locale === "en" ? "New password must include at least one uppercase letter." : "A nova password deve incluir pelo menos 1 letra maiúscula.";
+  if (!/[a-z]/.test(password)) return locale === "en" ? "New password must include at least one lowercase letter." : "A nova password deve incluir pelo menos 1 letra minúscula.";
+  if (!/[0-9]/.test(password)) return locale === "en" ? "New password must include at least one number." : "A nova password deve incluir pelo menos 1 número.";
+  if (!/[^A-Za-z0-9]/.test(password)) return locale === "en" ? "New password must include at least one symbol." : "A nova password deve incluir pelo menos 1 símbolo.";
   return "";
 }
 
@@ -68,6 +64,11 @@ function LoginContent() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const { notify } = useAppNotifier();
+  const { dict, locale } = useClientLocale();
+  const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
+    { id: "candidate", label: dict.auth.login.roleCandidate, hint: dict.auth.login.roleCandidateHint },
+    { id: "company", label: dict.auth.login.roleCompany, hint: dict.auth.login.roleCompanyHint },
+  ];
 
   useEffect(() => {
     if (rawRole === "admin") router.replace("/Admin/Login");
@@ -77,9 +78,9 @@ function LoginContent() {
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
-      setError("Defina uma nova password para concluir a recuperação de conta.");
+      setError(dict.auth.login.resetPrompt);
     }
-  }, [queryResetToken]);
+  }, [queryResetToken, dict.auth.login.resetPrompt]);
 
   useEffect(() => {
     if (!error) return;
@@ -99,7 +100,7 @@ function LoginContent() {
     setNotice("");
 
     if (!email.trim() || !password.trim()) {
-      setError("Preencha o email e a palavra-passe.");
+      setError(dict.auth.login.errorFillCredentials);
       return;
     }
 
@@ -127,12 +128,12 @@ function LoginContent() {
 
       const data = (await res.json()) as LoginResponse;
         if (data.user.role === "admin") {
-          setError("Use o acesso administrativo dedicado.");
+          setError(dict.auth.login.errorUseAdminAccess);
           router.replace("/Admin/Login");
           return;
         }
       if (selectedRole !== data.user.role) {
-        setError(`Esta área é para ${selectedRole}. Use o portal correto para a sua conta.`);
+        setError(dict.auth.login.errorRoleMismatch(selectedRole === "company" ? dict.auth.login.roleCompany : dict.auth.login.roleCandidate));
         return;
       }
 
@@ -147,7 +148,7 @@ function LoginContent() {
       });
       router.push(portalRoute(data.user.role));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Credenciais inválidas.");
+      setError(err instanceof Error ? err.message : dict.auth.login.errorInvalidCredentials);
     } finally {
       setLoading(false);
     }
@@ -163,11 +164,11 @@ function LoginContent() {
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError("As novas palavras-passe não coincidem.");
+      setError(locale === "en" ? "New passwords do not match." : "As novas palavras-passe não coincidem.");
       return;
     }
 
-    const passwordError = validatePasswordStrength(newPassword);
+    const passwordError = validatePasswordStrength(newPassword, locale);
     if (passwordError) {
       setError(passwordError);
       return;
@@ -188,7 +189,7 @@ function LoginContent() {
 
       const data = (await res.json()) as LoginResponse;
       if (data.user.role === "admin") {
-        setError("Use o acesso administrativo dedicado.");
+        setError(dict.auth.login.errorUseAdminAccess);
         router.replace("/Admin/Login");
         return;
       }
@@ -202,7 +203,7 @@ function LoginContent() {
       });
       router.push(portalRoute(data.user.role));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível redefinir password.");
+      setError(err instanceof Error ? err.message : (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
     } finally {
       setLoading(false);
     }
@@ -218,11 +219,11 @@ function LoginContent() {
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError("As novas palavras-passe não coincidem.");
+      setError(locale === "en" ? "New passwords do not match." : "As novas palavras-passe não coincidem.");
       return;
     }
 
-    const passwordError = validatePasswordStrength(newPassword);
+    const passwordError = validatePasswordStrength(newPassword, locale);
     if (passwordError) {
       setError(passwordError);
       return;
@@ -244,10 +245,10 @@ function LoginContent() {
       setPasswordResetToken("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setNotice("Password redefinida com sucesso. Faça login com a nova credencial.");
+      setNotice(dict.auth.login.resetSuccess);
       router.replace(`/Login?role=${selectedRole}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível redefinir password.");
+      setError(err instanceof Error ? err.message : (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
     } finally {
       setLoading(false);
     }
@@ -260,16 +261,16 @@ function LoginContent() {
           <div>
             <Image width={180} height={180} className="h-14 w-auto" src={Logo} alt="Parvagas" />
             <div className="mt-16">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Portal Parvagas</p>
-              <h1 className="mt-4 text-4xl font-bold leading-tight text-white">Acesso focado para candidatos e empresas.</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">{dict.auth.login.sideEyebrow}</p>
+              <h1 className="mt-4 text-4xl font-bold leading-tight text-white">{dict.auth.login.sideTitle}</h1>
               <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-                Entre no fluxo correto para gerir candidaturas, recomendações, vagas e equipas com uma experiência simples e segura.
+                {dict.auth.login.sideDescription}
               </p>
             </div>
           </div>
           <div className="grid gap-3 text-sm text-slate-300">
-            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">Admins usam uma rota dedicada fora do login público.</p>
-            <Link href="/" className="font-semibold text-red-200 hover:text-white">Voltar ao site público</Link>
+            <p className="rounded-2xl border border-white/10 bg-white/5 p-4">{dict.auth.login.sideBadge1}</p>
+            <Link href="/" className="font-semibold text-red-200 hover:text-white">{dict.auth.login.sideLinkHome}</Link>
           </div>
         </section>
 
@@ -278,9 +279,9 @@ function LoginContent() {
             <div className="lg:hidden">
               <Image width={160} height={160} className="h-14 w-auto" src={Logo} alt="Parvagas" />
             </div>
-            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-red-600 lg:mt-0">Login</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Entrar no portal</h2>
-            <p className="mt-2 text-sm text-slate-600">Escolha o tipo de conta e autentique-se no ambiente correto.</p>
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-red-600 lg:mt-0">{dict.auth.login.pageEyebrow}</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{dict.auth.login.pageTitle}</h2>
+            <p className="mt-2 text-sm text-slate-600">{dict.auth.login.pageSubtitle}</p>
 
             <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
               {roleTabs.map((role) => {
@@ -307,7 +308,7 @@ function LoginContent() {
               noValidate
             >
               <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-slate-800">Email</label>
+                <label htmlFor="email" className="block text-sm font-semibold text-slate-800">{dict.auth.login.email}</label>
                 <input
                   id="email"
                   name="email"
@@ -324,7 +325,7 @@ function LoginContent() {
               <div>
                 <div className="flex items-center justify-between">
                   <label htmlFor="password" className="block text-sm font-semibold text-slate-800">
-                    {firstLoginResetToken || passwordResetToken ? "Nova password" : "Palavra-passe"}
+                    {firstLoginResetToken || passwordResetToken ? dict.auth.login.newPassword : dict.auth.login.password}
                   </label>
                   {!firstLoginResetToken && !passwordResetToken && <div className="text-sm"><Reset /></div>}
                 </div>
@@ -342,7 +343,7 @@ function LoginContent() {
 
               {(firstLoginResetToken || passwordResetToken) && (
                 <div>
-                  <label htmlFor="confirmNewPassword" className="block text-sm font-semibold text-slate-800">Confirmar nova password</label>
+                  <label htmlFor="confirmNewPassword" className="block text-sm font-semibold text-slate-800">{dict.auth.login.confirmNewPassword}</label>
                   <input
                     id="confirmNewPassword"
                     name="confirmNewPassword"
@@ -361,13 +362,13 @@ function LoginContent() {
                 disabled={loading}
                 className="flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "A processar..." : passwordResetToken ? "Redefinir password" : firstLoginResetToken ? "Redefinir e entrar" : "Entrar"}
+                {loading ? dict.auth.login.processing : passwordResetToken ? dict.auth.login.resetPassword : firstLoginResetToken ? dict.auth.login.resetAndSignIn : dict.auth.login.signIn}
               </button>
 
               <p className="text-center text-sm text-slate-600">
-                Ainda não tem conta?{" "}
+                {dict.auth.login.noAccount}{" "}
                 <Link href={`/Signup?role=${selectedRole}`} className="font-semibold text-red-600 hover:text-red-700">
-                  Criar conta
+                  {dict.auth.login.createAccount}
                 </Link>
               </p>
             </form>
