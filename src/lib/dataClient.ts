@@ -12,6 +12,7 @@ export async function serverGetJson<T>(path: string, options: ServerGetOptions =
   try {
     const res = await fetch(`${base}${normalizedPath}`, {
       next: { revalidate: options.revalidateSeconds ?? 60 },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
