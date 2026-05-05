@@ -72,18 +72,17 @@ if (!hasSupabase) {
       location: "Luanda",
       nationality: "Angolana",
       professionalTitle: "Software Engineer",
-      summary: "Perfil validado para testes.",
-      experience: [{ company: "X", role: "Dev", years: 2 }],
-      education: [{ school: "Uni", degree: "Licenciatura" }],
+      summary: "Perfil validado para testes com competências reais, disponibilidade clara e foco em backend moderno.",
+      experience: [{ company: "X", jobTitle: "Dev", startDate: "2023-01", endDate: "2024-01", description: "Entrega de APIs." }],
+      education: [{ institution: "Uni", degree: "Licenciatura", startDate: "2018-01", endDate: "2022-12" }],
       skills: ["JavaScript", "Node.js"],
       languages: ["Português"],
       certifications: [],
       preferredRoles: ["Backend Developer"],
       preferredLocations: ["Luanda"],
-      preferredJobType: "full-time",
-      salaryExpectation: "negociável",
-      availability: "immediate",
-      expectedSalary: "negotiable",
+      preferredJobType: "tempo_integral",
+      expectedSalaryAoa: 250000,
+      availability: "imediata",
     };
 
     const res = await request(app)
@@ -804,3 +803,93 @@ if (!hasSupabase) {
     assert.equal(typeof match.score, "number");
   });
 }
+
+  test("candidate: partial profile save persists without all required fields", async () => {
+    await clearAllModelTables();
+    const { token } = await registerAndLogin({ role: "candidate", fullName: "Parcial User" });
+
+    // Save only fullName — should succeed (no blocking required-field validation)
+    const save1 = await request(app)
+      .patch("/candidates/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ fullName: "Parcial User" });
+    assert.strictEqual(save1.status, 200, `Expected 200 but got ${save1.status}: ${JSON.stringify(save1.body)}`);
+    assert.ok(save1.body.isPartial === true, "Expected isPartial: true for incomplete profile");
+    assert.strictEqual(save1.body.profile.fullName, "Parcial User");
+
+    // Add email incrementally
+    const save2 = await request(app)
+      .patch("/candidates/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "parcial@parvagas.ao" });
+    assert.strictEqual(save2.status, 200);
+    // Existing fullName should be preserved after incremental save
+    assert.strictEqual(save2.body.profile.fullName, "Parcial User");
+    assert.strictEqual(save2.body.profile.email, "parcial@parvagas.ao");
+  });
+
+  test("candidate: partial save rejects invalid email format", async () => {
+    await clearAllModelTables();
+    const { token } = await registerAndLogin({ role: "candidate", fullName: "Format User" });
+
+    const res = await request(app)
+      .patch("/candidates/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "not-an-email" });
+    assert.strictEqual(res.status, 400);
+    assert.ok(Array.isArray(res.body.fieldErrors));
+    const emailError = res.body.fieldErrors.find((e) => e.field === "email");
+    assert.ok(emailError, "Expected email fieldError");
+  });
+
+  test("candidate: profile approve with full draft returns 200 and updates profile", async () => {
+    await clearAllModelTables();
+    const { token } = await registerAndLogin({ role: "candidate", fullName: "Approve User" });
+
+    const profileDraft = {
+      fullName: "Approve User",
+      email: "approve@parvagas.ao",
+      phone: "+244900000099",
+      location: "Luanda",
+      professionalTitle: "QA Engineer",
+      summary: "Teste de aprovação de perfil gerado por IA com dados completos para validação.",
+      skills: ["Testing", "Selenium"],
+      experience: [{ jobTitle: "QA", company: "Acme", startDate: "2022-01", endDate: "2024-01" }],
+      education: [{ degree: "Licenciatura", institution: "Uni", startDate: "2018-01", endDate: "2022-12" }],
+      preferredJobType: "tempo_integral",
+      availability: "imediata",
+      expectedSalaryAoa: 200000,
+    };
+
+    const res = await request(app)
+      .post("/candidates/profile/approve")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ profileDraft, consentGiven: true });
+    assert.strictEqual(res.status, 200, `Approve failed: ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.body.profile.fullName, "Approve User");
+  });
+
+  test("candidate: summary-draft endpoint returns draft text", async () => {
+    await clearAllModelTables();
+    const { token } = await registerAndLogin({ role: "candidate", fullName: "Summary User" });
+
+    const res = await request(app)
+      .post("/candidates/profile/summary-draft")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        profile: {
+          fullName: "Summary User",
+          professionalTitle: "Frontend Developer",
+          skills: ["React", "TypeScript"],
+          experience: [{ jobTitle: "Dev", company: "Acme", startDate: "2022-01", endDate: "2024-01" }],
+          education: [{ degree: "Licenciatura", institution: "Uni" }],
+          availability: "imediata",
+        },
+      });
+    // AI provider may be fallback or real — either way we expect 200 with a draft or a graceful warning
+    assert.strictEqual(res.status, 200, `Summary draft failed: ${JSON.stringify(res.body)}`);
+    assert.ok(
+      typeof res.body.draft === "string" || typeof res.body.warning === "string",
+      "Expected draft or warning in response"
+    );
+  });

@@ -19,6 +19,7 @@ describe("Error UI components", () => {
         id={1}
         title="Erro"
         message="Não foi possível concluir a operação."
+        durationMs={5000}
         onDismiss={onDismiss}
         onRetry={onRetry}
       />,

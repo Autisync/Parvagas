@@ -32,11 +32,6 @@ export default function DialogWithForm() {
   const handleOpen = () => setOpen((cur) => !cur);
 
   React.useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
-  React.useEffect(() => {
     if (!success) return;
     notify(success, "success");
     setSuccess("");
@@ -61,6 +56,7 @@ export default function DialogWithForm() {
     try {
       const response = await apiFetch("/auth/forgot-password", {
         method: "POST",
+        suppressGlobalErrors: true,
         body: JSON.stringify({ email: email.trim() }),
       });
       setSuccess(response?.message || dict.auth.resetDialog.successFallback);

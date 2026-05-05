@@ -8,6 +8,7 @@ import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import Link from "next/link";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -106,11 +107,6 @@ export default function VagasRecomendadasPage() {
   }, [page, totalPages]);
 
   useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
-  useEffect(() => {
     if (!message) return;
     notify(message, message.toLowerCase().includes("erro") ? "error" : "success");
     setMessage("");
@@ -178,6 +174,8 @@ export default function VagasRecomendadasPage() {
         meta={`${filteredJobs.length} de ${jobs.length} recomendacoes visiveis`}
         topClassName="top-4"
       />
+
+      {error ? <div className="mb-4"><InlineErrorState /></div> : null}
 
       <DecisionDashboard
         className="mb-6"

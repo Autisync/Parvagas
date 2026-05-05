@@ -9,6 +9,7 @@ import DashboardCard from "@/app/components/DashboardCard";
 import EmptyState from "@/app/components/EmptyState";
 import ProfileCompletionCard from "@/app/components/ProfileCompletionCard";
 import { useClientLocale } from "@/lib/i18n/client";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import {
   SparklesIcon,
   BriefcaseIcon,
@@ -39,6 +40,7 @@ export default function CandidatoDashboard() {
   const [stats, setStats] = useState<DashboardStats>({});
   const [profile, setProfile] = useState<Profile>({});
   const [fetching, setFetching] = useState(true);
+  const [pageError, setPageError] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -46,14 +48,20 @@ export default function CandidatoDashboard() {
     const fetchStats = async () => {
       try {
         setFetching(true);
+        setPageError(false);
         const [profileRes, recommendedRes, savedRes, applicationsRes, alertsRes, docsRes] = await Promise.allSettled([
-          authFetch("/candidates/profile", token),
-          authFetch("/candidates/jobs/recommended?limit=1&page=1", token),
-          authFetch("/candidates/jobs/saved?limit=1&page=1", token),
-          authFetch("/candidates/applications?limit=1&page=1", token),
-          authFetch("/candidates/alerts?limit=1&page=1", token),
-          authFetch("/candidates/cv/documents", token),
+          authFetch("/candidates/profile", token, { suppressGlobalErrors: true }),
+          authFetch("/candidates/jobs/recommended?limit=1&page=1", token, { suppressGlobalErrors: true }),
+          authFetch("/candidates/jobs/saved?limit=1&page=1", token, { suppressGlobalErrors: true }),
+          authFetch("/candidates/applications?limit=1&page=1", token, { suppressGlobalErrors: true }),
+          authFetch("/candidates/alerts?limit=1&page=1", token, { suppressGlobalErrors: true }),
+          authFetch("/candidates/cv/documents", token, { suppressGlobalErrors: true }),
         ]);
+
+        const failedCount = [profileRes, recommendedRes, savedRes, applicationsRes, alertsRes, docsRes].filter((r) => r.status === "rejected").length;
+        if (failedCount > 0) {
+          setPageError(true);
+        }
 
         if (profileRes.status === "fulfilled") {
           const data = profileRes.value as any;
@@ -95,6 +103,7 @@ export default function CandidatoDashboard() {
       />
 
       {/* Profile Completion */}
+      {pageError && <InlineErrorState className="mb-2" onAction={() => window.location.reload()} />}
       <ProfileCompletionCard completion={stats.profileCompletion || 0} />
 
       {/* Main Actions Grid */}

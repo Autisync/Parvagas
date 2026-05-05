@@ -1,69 +1,17 @@
-const profileFields = [
-  "fullName",
-  "email",
-  "phone",
-  "location",
-  "nationality",
-  "professionalTitle",
-  "summary",
-  "experience",
-  "education",
-  "skills",
-  "languages",
-  "certifications",
-  "preferredRoles",
-  "preferredLocations",
-  "availability",
-  "expectedSalary",
-];
-
-const extractEmail = (text) => text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)?.[0] || "";
-const extractPhone = (text) => text.match(/\+?\d[\d\s()-]{7,}/)?.[0] || "";
-
-export const parseCvToProfile = async (text) => {
-  const provider = process.env.AI_PROVIDER || "fallback";
-
-  // Adapter boundary: replace this fallback with real provider integration.
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const fullName = lines[0] || "";
-  const professionalTitle = lines[1] || "";
-  const skills = lines
-    .filter((line) => /skills|compet[êe]ncias|tecnologias/i.test(line))
-    .flatMap((line) => line.split(":").slice(1).join(":").split(","))
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  const profile = {
-    fullName,
-    email: extractEmail(text),
-    phone: extractPhone(text),
-    location: "Angola",
-    nationality: "",
-    professionalTitle,
-    summary: lines.slice(2, 6).join(" ").slice(0, 500),
-    experience: [],
-    education: [],
-    skills,
-    languages: [],
-    certifications: [],
-    preferredRoles: professionalTitle ? [professionalTitle] : [],
-    preferredLocations: ["Luanda"],
-    availability: "",
-    expectedSalary: "",
-  };
-
-  return {
-    provider,
-    profile,
-    missingFields: profileFields.filter((field) => {
-      const value = profile[field];
-      return Array.isArray(value) ? value.length === 0 : !String(value || "").trim();
-    }),
-  };
+/**
+ * parseCvToProfile — delegates to the active CV parser configured by
+ * RESUME_PARSER_PROVIDER (default: "skima").
+ *
+ * Signature changed from (text: string) to (file: multer file object) so that
+ * API-based parsers can pass the raw buffer directly without a text extraction
+ * step.  ManualFallbackParser handles text extraction internally when needed.
+ *
+ * @param {{ buffer: Buffer, originalname: string, mimetype: string }} file
+ * @returns {Promise<{ provider: string, profile: object, missingFields: string[], fallbackUsed?: boolean }>}
+ */
+export const parseCvToProfile = async (file) => {
+  const { parseCvFile } = await import("./parsers/cvParserFactory.js");
+  return parseCvFile(file);
 };
 
 export const generateApplicationSummaryDraft = async ({ profile, job }) => {
@@ -73,6 +21,35 @@ export const generateApplicationSummaryDraft = async ({ profile, job }) => {
     .slice(0, 5)
     .join(", ")}.`;
   return summary;
+};
+
+export const generateProfessionalSummaryDraft = async (profile = {}) => {
+  const normalizedSkills = Array.isArray(profile.skills) ? profile.skills.filter(Boolean).slice(0, 6) : [];
+  const latestExperience = Array.isArray(profile.experience)
+    ? profile.experience.find((item) => item?.jobTitle || item?.role || item?.title)
+    : null;
+  const latestEducation = Array.isArray(profile.education)
+    ? profile.education.find((item) => item?.degree || item?.institution)
+    : null;
+
+  const parts = [
+    profile.professionalTitle
+      ? `${profile.professionalTitle} com base em ${profile.location || "Angola"}.`
+      : "Profissional com experiência em evolução.",
+    latestExperience
+      ? `Experiência recente como ${latestExperience.jobTitle || latestExperience.role || latestExperience.title}${latestExperience.company ? ` na ${latestExperience.company}` : ""}.`
+      : "Perfil em fase de consolidação profissional.",
+    normalizedSkills.length > 0 ? `Competências-chave: ${normalizedSkills.join(", ")}.` : "",
+    latestEducation?.degree
+      ? `Formação em ${latestEducation.degree}${latestEducation.institution ? ` pela ${latestEducation.institution}` : ""}.`
+      : "",
+    profile.availability ? `Disponibilidade: ${String(profile.availability).replace(/_/g, " ")}.` : "",
+  ].filter(Boolean);
+
+  return {
+    draft: parts.join(" ").slice(0, 600),
+    warning: "Revise sempre o texto antes de guardar.",
+  };
 };
 
 export const generateFieldSpecificCvProfile = async ({ profile, targetField, jobDescription = "" }) => {

@@ -1,7 +1,10 @@
+import type { AppError } from "@/lib/errorModel";
+
 export type GlobalErrorDispatch = {
   toast: (message: string, retry?: () => void) => void;
   banner: (message: string, actionLabel?: string, onAction?: () => void) => void;
   modal: (title: string, message: string, supportCode?: string) => void;
+  appError?: (error: AppError) => void;
 };
 
 let dispatch: GlobalErrorDispatch | null = null;

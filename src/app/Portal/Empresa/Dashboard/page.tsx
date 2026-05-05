@@ -16,6 +16,7 @@ import {
 } from "@heroicons/react/24/outline";
 import CompanySidebar from "../components/CompanySidebar";
 import { useClientLocale } from "@/lib/i18n/client";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type CompanyStats = {
   totalJobs?: number;
@@ -67,6 +68,7 @@ export default function EmpresaDashboard() {
   const [stats, setStats] = useState<CompanyStats>({});
   const [profile, setProfile] = useState<CompanyProfile>({});
   const [fetching, setFetching] = useState(true);
+  const [pageError, setPageError] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -74,11 +76,17 @@ export default function EmpresaDashboard() {
     const fetchStats = async () => {
       try {
         setFetching(true);
+        setPageError(false);
         const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
-          authFetch("/companies/profile", token),
-          authFetch("/companies/jobs?page=1&limit=1", token),
-          authFetch("/applications?page=1&limit=100", token),
+          authFetch("/companies/profile", token, { suppressGlobalErrors: true }),
+          authFetch("/companies/jobs?page=1&limit=1", token, { suppressGlobalErrors: true }),
+          authFetch("/applications?page=1&limit=100", token, { suppressGlobalErrors: true }),
         ]);
+
+        const failedCount = [profileRes, jobsRes, appsRes].filter((r) => r.status === "rejected").length;
+        if (failedCount > 0) {
+          setPageError(true);
+        }
 
         if (profileRes.status === "fulfilled") {
           const data = profileRes.value as any;
@@ -151,6 +159,8 @@ export default function EmpresaDashboard() {
                 </a>
               }
             />
+
+            {pageError && <InlineErrorState onAction={() => window.location.reload()} />}
 
             {/* Profile Completion */}
             <CompanyCompletionCard completion={profile.completionScore ?? 0} />

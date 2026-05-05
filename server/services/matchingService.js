@@ -4,18 +4,19 @@ export const calculateProfileCompletion = (profile) => {
     "email",
     "phone",
     "location",
-    "nationality",
     "professionalTitle",
     "summary",
     "skills",
     "experience",
     "education",
-    "languages",
-    "preferredRoles",
+    "preferredJobType",
+    "availability",
+    "expectedSalaryAoa",
   ];
 
   const completed = keys.filter((key) => {
     const value = profile[key];
+    if (key === "expectedSalaryAoa") return Number.isFinite(value) && Number(value) > 0;
     return Array.isArray(value) ? value.length > 0 : Boolean(String(value || "").trim());
   }).length;
 

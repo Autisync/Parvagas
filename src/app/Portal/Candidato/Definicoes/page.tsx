@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
+import { RocketLaunchIcon, AcademicCapIcon } from "@heroicons/react/24/outline";
 
 type Prefs = {
   emailJobAlerts?: boolean;
@@ -84,6 +86,44 @@ export default function DefinicoesPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Definições</h1>
         <p className="mt-2 text-slate-600">Gerencie as suas preferências de notificação.</p>
+      </div>
+
+      {/* Tutorial replay card */}
+      <div className="mb-4 flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+          <AcademicCapIcon className="h-6 w-6" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-900">Tutorial da plataforma</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Rever o guia de navegação da plataforma — útil para redescobrir funcionalidades.
+          </p>
+        </div>
+        <Link
+          href="/Portal/Candidato/Dashboard?tutorial=1"
+          className="shrink-0 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-50"
+        >
+          Ver tutorial novamente
+        </Link>
+      </div>
+
+      {/* Onboarding re-run card */}
+      <div className="mb-8 flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+          <RocketLaunchIcon className="h-6 w-6" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-900">Configuração do perfil</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Actualize o seu perfil completo — experiência, competências, educação e resumo profissional.
+          </p>
+        </div>
+        <Link
+          href="/Portal/Candidato/Onboarding"
+          className="shrink-0 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-red-700"
+        >
+          Actualizar perfil
+        </Link>
       </div>
 
       <form onSubmit={handleSave}>

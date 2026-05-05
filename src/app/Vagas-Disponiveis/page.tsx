@@ -8,7 +8,7 @@ import Footer from "../components/Footer";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
-import BannerError from "@/app/components/errors/BannerError";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type Job = {
   _id: string;
@@ -126,7 +126,7 @@ function VagasDisponiveisContent() {
         limit?: number;
         total?: number;
         totalPages?: number;
-      }>(`/jobs?${params}`);
+      }>(`/jobs?${params}`, { suppressGlobalErrors: true });
       setJobs(data.jobs || []);
       const meta = data.pagination || data;
       setPagination({
@@ -211,10 +211,10 @@ function VagasDisponiveisContent() {
 
         {error && (
           <div className="mt-6">
-            <BannerError
-              title="Não foi possível carregar as vagas"
-              message={error}
-              actionLabel="Reconectar"
+            <InlineErrorState
+              title="Não foi possível carregar esta informação"
+              message="Verifique a ligação e tente novamente."
+              actionLabel="Recarregar"
               onAction={() => fetchJobs(pagination.page || 1, applied)}
             />
           </div>

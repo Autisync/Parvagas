@@ -6,15 +6,34 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import BannerError from "@/app/components/errors/BannerError";
 import ModalError from "@/app/components/errors/ModalError";
 import ToastError from "@/app/components/errors/ToastError";
-import { ERROR_AUTO_DISMISS_MS } from "@/config/appConfig";
+import { ERROR_AUTO_DISMISS_MS, ERROR_DEDUPE_WINDOW_MS } from "@/config/appConfig";
 import { setGlobalErrorDispatch } from "@/lib/errorBridge";
+import type { AppError } from "@/lib/errorModel";
+import { normalizeErrorMessage } from "@/lib/errorMessage";
 import { logErrorToMonitoring } from "@/lib/errorMonitoring";
+
+function isConnectionIssueMessage(message: string) {
+  const m = message.toLowerCase();
+  return (
+    m.includes("nao foi possivel ligar ao servidor") ||
+    m.includes("não foi possível ligar ao servidor") ||
+    m.includes("nao conseguimos contactar o servidor") ||
+    m.includes("não conseguimos contactar o servidor") ||
+    m.includes("ligacao") ||
+    m.includes("ligação") ||
+    m.includes("ligar ao servidor") ||
+    m.includes("internet") ||
+    m.includes("network") ||
+    m.includes("connection")
+  );
+}
 
 export type AppToastTone = "success" | "error" | "warning" | "info";
 
@@ -55,6 +74,7 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<AppToast[]>([]);
   const [banner, setBanner] = useState<BannerState>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const recentErrorsRef = useRef<Record<string, number>>({});
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -62,7 +82,30 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback(
     (message: string, tone: AppToastTone = "info", durationMs = ERROR_AUTO_DISMISS_MS, retry?: () => void) => {
-      if (!message.trim()) return;
+      const normalized = normalizeErrorMessage(message);
+      if (!normalized) return;
+
+      const dedupeKey = `${tone}:${normalized.toLowerCase()}`;
+      const now = Date.now();
+      const lastShownAt = recentErrorsRef.current[dedupeKey] || 0;
+      if (now - lastShownAt < ERROR_DEDUPE_WINDOW_MS) return;
+
+      if (tone === "error" && isConnectionIssueMessage(normalized)) {
+        recentErrorsRef.current[dedupeKey] = now;
+        if (banner?.message !== normalized) {
+          setBanner({
+            title: "Ligação indisponível",
+            message: normalized,
+            actionLabel: "Tentar novamente",
+          });
+        }
+        return;
+      }
+
+      if (tone === "error" && banner && isConnectionIssueMessage(normalized)) {
+        return;
+      }
+
       const id = Date.now() + Math.floor(Math.random() * 1000);
       const title =
         tone === "error"
@@ -72,47 +115,53 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
             : tone === "success"
               ? "Concluído"
               : "Informação";
-      setToasts((prev) => [...prev.slice(-3), { id, message, title, tone, durationMs, retry }]);
+      recentErrorsRef.current[dedupeKey] = now;
+      setToasts((prev) => [...prev.slice(-3), { id, message: normalized, title, tone, durationMs, retry }]);
       if (tone === "error") {
         void logErrorToMonitoring({
           level: "error",
-          message,
+          message: normalized,
           timestamp: new Date().toISOString(),
           path: typeof window !== "undefined" ? window.location.pathname : undefined,
         });
       }
     },
-    [],
+    [banner],
   );
 
   const showBanner = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
-    if (!message.trim()) return;
+    const normalized = normalizeErrorMessage(message) || "Não conseguimos contactar o servidor neste momento.";
+    if (banner?.message === normalized) return;
+
     setBanner({
-      title: "Problema de ligação",
-      message,
-      actionLabel,
+      title: "Ligação indisponível",
+      message: normalized,
+      actionLabel: actionLabel || "Tentar novamente",
       onAction,
     });
     void logErrorToMonitoring({
       level: "warning",
-      message,
+      message: normalized,
       timestamp: new Date().toISOString(),
       path: typeof window !== "undefined" ? window.location.pathname : undefined,
     });
-  }, []);
+  }, [banner]);
 
   const clearBanner = useCallback(() => setBanner(null), []);
 
   const showModalError = useCallback((title: string, message: string, supportCode?: string) => {
-    setModal({ title, message, supportCode });
+    const normalized = normalizeErrorMessage(message) || "Falha inesperada.";
+    if (modal?.title === title && modal?.message === normalized) return;
+
+    setModal({ title, message: normalized, supportCode });
     void logErrorToMonitoring({
       level: "critical",
-      message: `${title}: ${message}`,
+      message: `${title}: ${normalized}`,
       details: supportCode,
       timestamp: new Date().toISOString(),
       path: typeof window !== "undefined" ? window.location.pathname : undefined,
     });
-  }, []);
+  }, [modal]);
 
   const clearModalError = useCallback(() => setModal(null), []);
 
@@ -143,10 +192,58 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
   }, [showModalError]);
 
   useEffect(() => {
+    const handleAppError = (error: AppError) => {
+      const message = normalizeErrorMessage(error.message);
+
+      if (error.type === "validation") return;
+
+      if (error.type === "network") {
+        showBanner("Não conseguimos contactar o servidor neste momento.", "Tentar novamente");
+        return;
+      }
+
+      if (error.type === "auth") {
+        showBanner("A sua sessão expirou. Faça login novamente.", "Iniciar sessão", () => {
+          if (typeof window !== "undefined") window.location.assign("/Login");
+        });
+        return;
+      }
+
+      if (error.type === "permission") {
+        showBanner("Não tem permissão para esta ação.");
+        return;
+      }
+
+      if (error.type === "critical") {
+        showModalError("Falha crítica", message || "Falha inesperada.");
+        return;
+      }
+
+      if (error.type === "rate_limit") {
+        notify(message || "Demasiadas tentativas. Tente novamente em instantes.", "warning");
+        return;
+      }
+
+      if (error.action === "reload" || error.action === "retry") {
+        showBanner(message || "Não foi possível concluir o pedido.", error.action === "reload" ? "Recarregar" : "Tentar novamente");
+        return;
+      }
+
+      notify(message || "Não foi possível concluir o pedido.", "error", ERROR_AUTO_DISMISS_MS);
+    };
+
     setGlobalErrorDispatch({
-      toast: (message, retry) => notify(message, "error", ERROR_AUTO_DISMISS_MS, retry),
+      toast: (message, retry) => {
+        const normalized = normalizeErrorMessage(message);
+        if (isConnectionIssueMessage(normalized)) {
+          showBanner("Não conseguimos contactar o servidor neste momento.", "Tentar novamente", retry);
+          return;
+        }
+        notify(normalized, "error", ERROR_AUTO_DISMISS_MS, retry);
+      },
       banner: (message, actionLabel, onAction) => showBanner(message, actionLabel, onAction),
       modal: (title, message, supportCode) => showModalError(title, message, supportCode),
+      appError: handleAppError,
     });
 
     return () => setGlobalErrorDispatch(null);
@@ -183,6 +280,8 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
             id={toast.id}
             title={toast.title}
             message={toast.message}
+            tone={toast.tone}
+            durationMs={toast.durationMs}
             onDismiss={dismiss}
             onRetry={toast.retry}
           />

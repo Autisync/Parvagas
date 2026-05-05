@@ -25,6 +25,15 @@ class StorageService {
     return storagePath;
   }
 
+  async deleteFile(storagePath) {
+    if (!storagePath) return;
+    if (configuredProvider === "supabase") {
+      await this._deleteSupabase(storagePath);
+      return;
+    }
+    await this._deleteLocal(storagePath);
+  }
+
   async _uploadLocal({ buffer, fileName }) {
     await fs.promises.mkdir(uploadsRoot, { recursive: true });
     const safeName = `${Date.now()}-${fileName}`.replace(/\s+/g, "-");
@@ -54,6 +63,25 @@ class StorageService {
       provider: "supabase",
       bucket,
     };
+  }
+
+  async _deleteLocal(storagePath) {
+    const safeName = path.basename(String(storagePath || ""));
+    if (!safeName) return;
+    const fullPath = path.join(uploadsRoot, safeName);
+    try {
+      await fs.promises.unlink(fullPath);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+
+  async _deleteSupabase(storagePath) {
+    const { requireSupabase } = await import("../db/supabaseClient.js");
+    const client = requireSupabase();
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || "parvagas-private";
+    const { error } = await client.storage.from(bucket).remove([storagePath]);
+    if (error) throw new Error(`Storage delete failed: ${error.message}`);
   }
 
   async _getSupabaseSignedUrl(storagePath) {

@@ -174,9 +174,18 @@ STORAGE_PROVIDER=local
 AI_PROVIDER=fallback
 AI_API_KEY=
 
+# CV Resume Parser
+# Options: skima (default), apyhub, manual
+RESUME_PARSER_PROVIDER=skima
+SKIMA_API_KEY=
+APYHUB_API_KEY=
+
 # MeiliSearch (opcional)
-MEILISEARCH_HOST=http://127.0.0.1:7700
+MEILISEARCH_HOST=http://localhost:7700
 MEILISEARCH_API_KEY=
+
+# Sentry (opcional)
+SENTRY_DSN=https://<key>@o<org>.ingest.sentry.io/<project>
 
 # Email adapter (opcional)
 EMAIL_HOST=
@@ -184,6 +193,59 @@ EMAIL_PORT=587
 EMAIL_USER=
 EMAIL_PASS=
 EMAIL_FROM=no-reply@parvagas.local
+```
+
+Crie também um `.env.local` (frontend) com:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:6001
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Se `NEXT_PUBLIC_SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY` não estiverem definidos, a aplicação mostra um aviso no console em desenvolvimento.
+
+## CV Parser
+
+O pipeline de parsing de CVs suporta múltiplos providers, selecionados via variável de ambiente — sem necessidade de alterar código.
+
+### Configuração
+
+| Variável | Valores possíveis | Padrão |
+|---|---|---|
+| `RESUME_PARSER_PROVIDER` | `skima`, `apyhub`, `manual` | `skima` |
+| `SKIMA_API_KEY` | chave API Skima AI | — |
+| `APYHUB_API_KEY` | chave API ApyHub | — |
+
+### Providers
+
+**`skima`** (recomendado para desenvolvimento — tier gratuito disponível)
+- Registe-se em [skima.ai](https://skima.ai) para obter uma chave gratuita
+- Suporta PDF, DOCX, DOC, TXT e imagens
+- Endpoint: `POST https://parser.skima.ai/api/parse-resume`
+
+**`apyhub`** (baseado em tokens — para produção)
+- Registe-se em [apyhub.com](https://apyhub.com/utility/resume-extractor)
+- Suporta PDF e DOCX
+- Endpoint: `POST https://api.apyhub.com/extract/resume/file/json`
+
+**`manual`** (sem chamada externa — extração local por regex)
+- Não requer chave API
+- Qualidade de parsing limitada; ideal para desenvolvimento offline ou como medida de segurança
+- Usa `pdf-parse` e `mammoth` para extração de texto
+
+### Fallback automático
+
+Se o provider primário falhar (timeout ou erro de API), o sistema recorre automaticamente ao `ManualFallbackParser` e devolve `fallbackUsed: true` na resposta. O frontend mostra os dados parciais e pede ao candidato que reveja os campos.
+
+### Notas de operação
+
+- Se `MEILISEARCH_HOST` estiver vazio, a indexação/pesquisa fica desativada no backend.
+- Se `SENTRY_DSN` estiver vazio, o SDK não envia eventos de erro.
+
+Para forçar sempre o parser local:
+```bash
+RESUME_PARSER_PROVIDER=manual
 ```
 
 ## Setup local

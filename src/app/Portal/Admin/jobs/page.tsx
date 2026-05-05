@@ -9,6 +9,7 @@ import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type JobDecision = "published" | "approved" | "platform_rejected" | "archived";
 
@@ -53,11 +54,6 @@ export default function AdminJobsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!notice) return;
@@ -130,6 +126,8 @@ export default function AdminJobsPage() {
         title="Moderação de Vagas"
         description="Aprove, rejeite e arquive vagas com rastreabilidade operacional."
       />
+
+      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
 
       <AdminFilterBar>
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar vagas" className={adminFieldClass} />

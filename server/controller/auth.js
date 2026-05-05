@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 import Company from "../models/company.js";
+import CandidateProfile from "../models/candidateProfile.js";
 import CompanyInvite from "../models/companyInvite.js";
 import { sendEmailNotification } from "../services/notificationService.js";
 import { logAudit } from "../services/auditService.js";
@@ -59,6 +60,21 @@ const signAuthToken = (user) => {
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
   );
+};
+
+const toPublicUser = (user) => {
+  const userObject = typeof user?.toObject === "function" ? user.toObject() : { ...(user || {}) };
+  if (userObject.role === "admin") {
+    userObject.adminLevel = normalizeAdminLevel(userObject.adminLevel);
+  }
+  if (userObject.role === "company") {
+    userObject.companyTeamRole = normalizeCompanyTeamRole(userObject.companyTeamRole || userObject.teamRole);
+  }
+  userObject.id = String(userObject._id || userObject.id || "");
+  userObject.hasCompletedOnboarding = Boolean(userObject.hasCompletedOnboarding ?? true);
+  userObject.hasSeenTutorial = Boolean(userObject.hasSeenTutorial ?? false);
+  delete userObject.password;
+  return userObject;
 };
 
 export const register = async (req, res) => {
@@ -126,6 +142,7 @@ export const register = async (req, res) => {
       email: normalizedEmail,
       password: passwordHash,
       role: normalizedRole,
+      ...(normalizedRole === "candidate" ? { hasCompletedOnboarding: false, hasSeenTutorial: false } : {}),
       ...(normalizedRole === "admin"
         ? {
             adminLevel: normalizeAdminLevel(adminLevel),
@@ -149,6 +166,31 @@ export const register = async (req, res) => {
       await User.findByIdAndUpdate(savedUser._id, { companyTeamRole: "owner" }, { new: true });
     }
 
+    if (normalizedRole === "candidate") {
+      await CandidateProfile.findOneAndUpdate(
+        { userId: savedUser._id },
+        {
+          userId: savedUser._id,
+          fullName: String(fullName || "").trim(),
+          email: normalizedEmail,
+          phone: "",
+          location: "",
+          professionalTitle: "",
+          summary: "",
+          professionalSummary: "",
+          preferredJobType: "",
+          availability: "",
+          expectedSalaryAoa: null,
+          skills: [],
+          languages: [],
+          certifications: [],
+          experience: [],
+          education: [],
+        },
+        { new: true, upsert: true }
+      );
+    }
+
     await logAudit({
       actorUserId: savedUser._id,
       action: "user.register",
@@ -156,8 +198,7 @@ export const register = async (req, res) => {
       resourceId: String(savedUser._id),
     });
 
-    const userObject = savedUser.toObject();
-    delete userObject.password;
+    const userObject = toPublicUser(savedUser);
     return res.status(201).json({ user: userObject, message: "Conta criada com sucesso." });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -167,13 +208,17 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!String(email || "").trim() || !String(password || "").trim()) {
+      return res.status(400).json({ error: "Email e palavra-passe são obrigatórios." });
+    }
+
     const user = await User.findOne({ email: String(email || "").trim().toLowerCase() });
 
-    if (!user) return res.status(400).json({ error: "Utilizador não existe." });
+    if (!user) return res.status(401).json({ error: "Credenciais inválidas." });
     if (user.suspended) return res.status(403).json({ error: "Conta suspensa." });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Credenciais inválidas." });
+    const isMatch = user.password ? await bcrypt.compare(password, user.password) : false;
+    if (!isMatch) return res.status(401).json({ error: "Credenciais inválidas." });
 
     if (user.role === "admin" && user.firstLoginRequired) {
       const resetToken = jwt.sign(
@@ -192,17 +237,9 @@ export const login = async (req, res) => {
       });
     }
 
-    const normalizedAdminLevel = user.role === "admin" ? normalizeAdminLevel(user.adminLevel) : undefined;
     const token = signAuthToken(user);
 
-    const userObject = user.toObject();
-    if (userObject.role === "admin") {
-      userObject.adminLevel = normalizedAdminLevel;
-    }
-    if (userObject.role === "company") {
-      userObject.companyTeamRole = normalizeCompanyTeamRole(userObject.companyTeamRole || userObject.teamRole);
-    }
-    delete userObject.password;
+    const userObject = toPublicUser(user);
     return res.status(200).json({ token, user: userObject });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -242,14 +279,7 @@ export const firstLoginReset = async (req, res) => {
     await user.save();
 
     const token = signAuthToken(user);
-    const userObject = user.toObject();
-    if (userObject.role === "admin") {
-      userObject.adminLevel = normalizeAdminLevel(user.adminLevel);
-    }
-    if (userObject.role === "company") {
-      userObject.companyTeamRole = normalizeCompanyTeamRole(userObject.companyTeamRole || userObject.teamRole);
-    }
-    delete userObject.password;
+    const userObject = toPublicUser(user);
 
     return res.status(200).json({ token, user: userObject });
   } catch (err) {

@@ -10,6 +10,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import Link from "next/link";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type Job = {
   _id: string;
@@ -115,11 +116,6 @@ export default function PortalVagasDisponiveisPage() {
     setMessage("");
   }, [message, notify]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify((error as Error).message || "Erro ao carregar vagas.", "error");
-  }, [error, notify]);
-
   const applyPreset = (presetKey: string) => {
     setActivePreset(presetKey);
     if (presetKey === "overview") {
@@ -194,6 +190,8 @@ export default function PortalVagasDisponiveisPage() {
         meta={`${filteredJobs.length} de ${total} vagas visiveis`}
         topClassName="top-4"
       />
+
+      {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
       <DecisionDashboard
         className="mt-6 mb-6"

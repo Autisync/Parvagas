@@ -9,6 +9,7 @@ import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 export default function AdminUsersPage() {
   const { token, user } = useAuth("admin");
@@ -52,11 +53,6 @@ export default function AdminUsersPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!notice) return;
@@ -134,6 +130,8 @@ export default function AdminUsersPage() {
         description="Monitorize perfis, papéis e estado de acesso com uma vista operacional clara."
         action={<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Permissões: {level}</span>}
       />
+
+      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
 
       <AdminFilterBar>
           <input

@@ -23,6 +23,7 @@ import {
 } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 export default function AdminLevelsPage() {
   const { token } = useAuth("admin");
@@ -69,11 +70,6 @@ export default function AdminLevelsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!createdMsg) return;
@@ -137,6 +133,8 @@ export default function AdminLevelsPage() {
         title="Admins e Moderadores"
         description="Crie admins/moderadores, promova níveis administrativos e mantenha todas as alterações registadas em auditoria."
       />
+
+      {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
       <form onSubmit={createAdmin} className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">

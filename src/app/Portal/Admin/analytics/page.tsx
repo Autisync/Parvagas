@@ -28,6 +28,7 @@ import {
 } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
   ssr: false,
@@ -126,11 +127,6 @@ export default function AdminAnalyticsPage() {
     loadTables();
   }, [loadTables]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
   const setRangeDays = (days: number) => {
     setQuickRange(String(days));
     setFrom(toInputDate(days - 1));
@@ -198,6 +194,8 @@ export default function AdminAnalyticsPage() {
         title="Centro Analítico Admin"
         description="KPIs, tendências, densidade geográfica e tabelas operacionais para decisões rápidas e auditáveis."
       />
+
+      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

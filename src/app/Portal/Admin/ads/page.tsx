@@ -16,7 +16,7 @@ import {
   type AdminMe,
 } from "../adminClient";
 import { AdminPageHeader, AdminRestricted, adminButtonClass, adminFieldClass, adminSecondaryButtonClass } from "../components/AdminUI";
-import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 const emptyForm = {
   title: "",
@@ -36,7 +36,6 @@ export default function AdminAdsPage() {
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const { notify } = useAppNotifier();
 
   const canManage = useMemo(() => hasPermission(me, AdminPermissions.ADS_MANAGE), [me]);
   const canCreate = useMemo(() => hasPermission(me, AdminPermissions.ADS_CREATE), [me]);
@@ -56,11 +55,6 @@ export default function AdminAdsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -118,6 +112,8 @@ export default function AdminAdsPage() {
         title="Gestão de Ad Campaigns"
         description="Controle placements, janelas de execução e estado das campanhas publicitárias."
       />
+
+      {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
       {canCreate && (
         <form onSubmit={submit} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

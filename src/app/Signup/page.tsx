@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import AppErrorBanner from "@/app/components/errors/AppErrorBanner";
 
 type AuthRole = "candidate" | "company";
 
@@ -28,6 +29,11 @@ type RegisterResponse = {
 
 function inputClass() {
   return "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100";
+}
+
+function isConnectionError(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("servidor") || m.includes("ligacao") || m.includes("internet") || m.includes("network");
 }
 
 function SignUpContent() {
@@ -60,11 +66,6 @@ function SignUpContent() {
     { id: "candidate", label: dict.auth.signup.roleCandidate, hint: dict.auth.signup.roleCandidateHint },
     { id: "company", label: dict.auth.signup.roleCompany, hint: dict.auth.signup.roleCompanyHint },
   ];
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!success) return;
@@ -137,6 +138,7 @@ function SignUpContent() {
       if (selectedRole === "company" && inviteToken) {
         await apiFetch<{ message: string }>("/auth/company-invite/accept", {
           method: "POST",
+          suppressGlobalErrors: true,
           body: JSON.stringify({
             inviteToken,
             fullName: fullName.trim(),
@@ -146,6 +148,7 @@ function SignUpContent() {
       } else {
         await apiFetch<RegisterResponse>("/auth/register", {
           method: "POST",
+          suppressGlobalErrors: true,
           body: JSON.stringify({
             fullName: fullName.trim(),
             email: email.trim(),
@@ -353,6 +356,18 @@ function SignUpContent() {
                 />
                 <FormFieldError id="confirmPassword-error" message={shouldShowFieldError("confirmPassword") ? fieldErrors.confirmPassword : ""} />
               </div>
+
+              {error && (
+                isConnectionError(error) ? (
+                  <AppErrorBanner
+                    title="Ligação indisponível"
+                    message="Não conseguimos contactar o servidor neste momento."
+                    actionLabel="Tentar novamente"
+                  />
+                ) : (
+                  <p role="alert" className="text-sm font-medium text-rose-600">{error}</p>
+                )
+              )}
 
               <button
                 type="submit"

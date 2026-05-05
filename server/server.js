@@ -17,11 +17,66 @@ import companyRoutes from "./routes/companies.js";
 import jobRoutes from "./routes/jobs.js";
 import adminRoutes from "./routes/admin.js";
 import publicRoutes from "./routes/public.js";
+import { initSentry, captureSentryException } from "./services/sentryService.js";
+
+function normalizeErrorMessage(message) {
+  const raw = String(message || "").trim();
+  if (!raw) return "";
+
+  const withoutRepeatedPrefix = raw.replace(/^(?:error\s*:\s*)+/i, "").trim();
+  const compact = withoutRepeatedPrefix
+    .replace(/\s+/g, " ")
+    .replace(/([.!?])\1+/g, "$1")
+    .trim();
+
+  const duplicatePattern = /^(.+?)\s*(?:\||-|\.)\s*\1$/i;
+  const duplicateMatch = compact.match(duplicatePattern);
+  if (duplicateMatch?.[1]) return duplicateMatch[1].trim();
+
+  return compact;
+}
 
 /* Middleware CONFIGURATIONS */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const shellEnv = {
+  nodeEnv: String(process.env.NODE_ENV || "").trim(),
+  port: String(process.env.PORT || "").trim(),
+  publicApiUrl: String(process.env.NEXT_PUBLIC_API_URL || "").trim(),
+  corsOrigin: String(process.env.CORS_ORIGIN || "").trim(),
+};
+
 dotenv.config({ path: new URL(".env", import.meta.url).pathname });
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local"), override: true });
+dotenv.config({ path: path.resolve(__dirname, ".env.local"), override: true });
+
+const forcedLocalPort = "6001";
+const forcedLocalApiUrl = `http://localhost:${forcedLocalPort}`;
+const forcedLocalCorsOrigin = "http://localhost:3000";
+const runningLocally = process.env.RENDER !== "true" && process.env.NODE_ENV !== "test";
+
+if (runningLocally) {
+  process.env.NODE_ENV = shellEnv.nodeEnv || "development";
+
+  if (!shellEnv.port && (!process.env.PORT || process.env.PORT === "3001")) {
+    process.env.PORT = forcedLocalPort;
+  }
+
+  if (
+    !shellEnv.publicApiUrl &&
+    (!process.env.NEXT_PUBLIC_API_URL || /^https?:\/\/(api\.|parvagas\.)/i.test(process.env.NEXT_PUBLIC_API_URL))
+  ) {
+    process.env.NEXT_PUBLIC_API_URL = forcedLocalApiUrl;
+  }
+
+  if (
+    !shellEnv.corsOrigin &&
+    (!process.env.CORS_ORIGIN || !/localhost|127\.0\.0\.1/i.test(process.env.CORS_ORIGIN))
+  ) {
+    process.env.CORS_ORIGIN = forcedLocalCorsOrigin;
+  }
+}
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
@@ -103,10 +158,11 @@ export function createApp() {
   app.use((err, req, res, _next) => {
     const status = Number(err?.status || err?.statusCode || 500);
     const exposeDetails = status >= 400 && status < 500;
-    const message =
+    const message = normalizeErrorMessage(
       typeof err?.message === "string" && err.message.trim()
         ? err.message
-        : "Erro interno do servidor.";
+        : "Erro interno do servidor.",
+    );
 
     console.error("[server-error]", {
       requestId: req.requestId,
@@ -117,8 +173,15 @@ export function createApp() {
       stack: err?.stack,
     });
 
+    captureSentryException(err, {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      status,
+    });
+
     return res.status(status).json({
-      error: exposeDetails ? message : "Erro interno do servidor.",
+      error: exposeDetails ? message || "Não foi possível concluir o pedido." : "Erro interno do servidor.",
       requestId: req.requestId,
     });
   });
@@ -128,19 +191,42 @@ export function createApp() {
 
 /* Supabase startup check — only runs when this file is the entry point */
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  initSentry();
+
   process.on("unhandledRejection", (reason) => {
     console.error("[unhandledRejection]", reason);
+    captureSentryException(reason instanceof Error ? reason : new Error(String(reason || "Unhandled rejection")), {
+      source: "process.unhandledRejection",
+    });
   });
 
   process.on("uncaughtException", (error) => {
     console.error("[uncaughtException]", error);
+    captureSentryException(error, { source: "process.uncaughtException" });
   });
 
   const app = createApp();
   const PORT = process.env.PORT || 6001;
+  const publicApiUrl = String(process.env.NEXT_PUBLIC_API_URL || "").trim();
+
+  if (process.env.NODE_ENV !== "production" && publicApiUrl && !publicApiUrl.includes(`:${PORT}`)) {
+    console.warn(
+      `[dev-warning] NEXT_PUBLIC_API_URL (${publicApiUrl}) não corresponde ao PORT do servidor (${PORT}).`
+    );
+  }
+
   pingSupabase()
     .then(() => {
-      app.listen(PORT, () => console.log(`Server Port: ${PORT}`));
+      const server = app.listen(PORT, () => console.log(`Server Port: ${PORT}`));
+      server.on("error", (error) => {
+        if (error && error.code === "EADDRINUSE") {
+          console.error(
+            `[dev-error] Porta ${PORT} já está em uso. Termine o processo atual ou ajuste PORT/NEXT_PUBLIC_API_URL.`
+          );
+          return;
+        }
+        console.error("[server-listen-error]", error);
+      });
     })
     .catch((error) => {
       console.log(`${error} did not connect`);

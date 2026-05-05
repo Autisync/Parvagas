@@ -66,7 +66,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     const bootstrap = async () => {
       try {
         const [jobRes] = await Promise.all([
-          apiFetch<{ job?: JobDetail }>(`/jobs/${params.id}`),
+          apiFetch<{ job?: JobDetail }>(`/jobs/${params.id}`, { suppressGlobalErrors: true }),
         ]);
 
         if (!mounted) return;
@@ -79,7 +79,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
         setMode(isCandidate ? "candidate" : "guest");
 
         if (isCandidate && t) {
-          const profileRes = await authFetch<ProfileResponse>("/candidates/profile", t);
+          const profileRes = await authFetch<ProfileResponse>("/candidates/profile", t, { suppressGlobalErrors: true });
           if (!mounted) return;
           setCandidateForm((prev) => ({
             ...prev,

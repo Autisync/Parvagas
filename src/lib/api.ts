@@ -1,8 +1,13 @@
 import { getGlobalErrorDispatch } from "@/lib/errorBridge";
+import { normalizeErrorMessage } from "@/lib/errorMessage";
 
 const DEV_API_FALLBACK = "http://localhost:6001";
 
 const DEFAULT_TIMEOUT_MS = 20000;
+
+export type ApiFetchOptions = RequestInit & {
+  suppressGlobalErrors?: boolean;
+};
 
 export class ApiError extends Error {
   status?: number;
@@ -30,13 +35,13 @@ export class ApiError extends Error {
 
 export function getErrorMessage(error: unknown, fallback = "Ocorreu um erro inesperado.") {
   if (error instanceof ApiError) {
-    return error.message || fallback;
+    return normalizeErrorMessage(error.message) || fallback;
   }
   if (error instanceof Error) {
-    return error.message || fallback;
+    return normalizeErrorMessage(error.message) || fallback;
   }
   if (typeof error === "string" && error.trim()) {
-    return error;
+    return normalizeErrorMessage(error);
   }
   return fallback;
 }
@@ -85,7 +90,7 @@ function fallbackStatusMessage(status: number) {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  options?: RequestInit
+  options?: ApiFetchOptions
 ): Promise<T> {
   const res = await apiFetchRaw(path, {
     headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
@@ -96,7 +101,7 @@ export async function apiFetch<T = unknown>(
     const body = await parseResponseBody(res);
     const requestId = res.headers.get("x-request-id") || undefined;
     const messageFromBody = typeof (body as { error?: unknown })?.error === "string" ? String((body as { error?: string }).error) : "";
-    const message = messageFromBody || fallbackStatusMessage(res.status);
+    const message = normalizeErrorMessage(messageFromBody) || fallbackStatusMessage(res.status);
 
     if (res.status === 429) {
       const retryAfter = res.headers.get("Retry-After");
@@ -111,16 +116,37 @@ export async function apiFetch<T = unknown>(
       );
     }
 
-    if (res.status >= 500) {
-      getGlobalErrorDispatch()?.modal(
-        "Serviço temporariamente indisponível",
-        "Estamos com instabilidade no servidor. Aguarde alguns instantes e tente novamente.",
-        requestId,
-      );
-    } else if (res.status === 401) {
-      getGlobalErrorDispatch()?.banner("A sua sessão expirou. Faça login novamente.", "Reconectar");
-    } else {
-      getGlobalErrorDispatch()?.toast(message);
+    if (!options?.suppressGlobalErrors) {
+      if (res.status >= 500) {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "critical",
+          message: "Estamos com instabilidade no servidor. Aguarde alguns instantes e tente novamente.",
+          action: "retry",
+        });
+      } else if (res.status === 401) {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "auth",
+          message: "A sua sessão expirou. Faça login novamente.",
+          action: "login",
+        });
+      } else if (res.status === 403) {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "permission",
+          message,
+        });
+      } else if (res.status === 429) {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "rate_limit",
+          message,
+          action: "retry",
+        });
+      } else {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "server",
+          message,
+          action: "retry",
+        });
+      }
     }
 
     throw new ApiError(message, {
@@ -133,7 +159,7 @@ export async function apiFetch<T = unknown>(
   return parseResponseBody(res) as Promise<T>;
 }
 
-export async function apiFetchRaw(path: string, options?: RequestInit): Promise<Response> {
+export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
 
@@ -147,13 +173,22 @@ export async function apiFetchRaw(path: string, options?: RequestInit): Promise<
   } catch (error: unknown) {
     clearTimeout(timeout);
     if (error instanceof Error && error.name === "AbortError") {
-      getGlobalErrorDispatch()?.banner(
-        "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
-        "Reconectar",
-      );
+      if (!options?.suppressGlobalErrors) {
+        getGlobalErrorDispatch()?.appError?.({
+          type: "network",
+          message: "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
+          action: "retry",
+        });
+      }
       throw new ApiError("A ligação expirou. Verifique a rede e tente novamente.", { isNetworkError: true });
     }
-    getGlobalErrorDispatch()?.banner("Não foi possível ligar ao servidor.", "Tentar novamente");
+    if (!options?.suppressGlobalErrors) {
+      getGlobalErrorDispatch()?.appError?.({
+        type: "network",
+        message: "Não foi possível ligar ao servidor.",
+        action: "retry",
+      });
+    }
     throw new ApiError("Não foi possível ligar ao servidor. Verifique a sua ligação.", {
       details: error,
       isNetworkError: true,
@@ -161,7 +196,7 @@ export async function apiFetchRaw(path: string, options?: RequestInit): Promise<
   }
 }
 
-export function authFetch<T = unknown>(path: string, token: string, options?: RequestInit): Promise<T> {
+export function authFetch<T = unknown>(path: string, token: string, options?: ApiFetchOptions): Promise<T> {
   return apiFetch<T>(path, {
     ...options,
     headers: {
@@ -171,7 +206,7 @@ export function authFetch<T = unknown>(path: string, token: string, options?: Re
   });
 }
 
-export function authFetchRaw(path: string, token: string, options?: RequestInit): Promise<Response> {
+export function authFetchRaw(path: string, token: string, options?: ApiFetchOptions): Promise<Response> {
   return apiFetchRaw(path, {
     ...options,
     headers: {

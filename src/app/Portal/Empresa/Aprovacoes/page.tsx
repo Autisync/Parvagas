@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/api";
 import CompanySidebar from "../components/CompanySidebar";
 import Footer from "@/app/components/Footer";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type ApprovalItem = {
   _id: string;
@@ -59,11 +60,6 @@ export default function CompanyApprovalsPage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
   const review = async (id: string, decision: "approve" | "reject" | "request_changes") => {
     if (!token) return;
     const reason = decision === "approve" ? "" : window.prompt("Motivo da decisão:") || "";
@@ -116,6 +112,8 @@ export default function CompanyApprovalsPage() {
                 <option value="published">Publicadas</option>
               </select>
             </div>
+
+            {error ? <div className="mt-4"><InlineErrorState onAction={load} /></div> : null}
 
             {!isApprover && (
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

@@ -11,6 +11,8 @@ type User = {
   name?: string;
   adminLevel?: "super-admin" | "moderator";
   companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
+  hasCompletedOnboarding?: boolean;
+  hasSeenTutorial?: boolean;
 };
 
 type UseAuthOptions = {
@@ -26,7 +28,14 @@ export function useAuth(requiredRole?: string, options: UseAuthOptions = {}) {
 
   useEffect(() => {
     const t = getToken();
-    const u = getUser() as User | null;
+    const raw = getUser() as (User & { _id?: string; fullName?: string }) | null;
+    const u = raw
+      ? {
+          ...raw,
+          id: String(raw.id || raw._id || "").trim(),
+          name: String(raw.name || raw.fullName || "").trim(),
+        }
+      : null;
     if (!t || !u) {
       router.replace("/Login");
       return;

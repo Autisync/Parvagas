@@ -2,18 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "/public/icon2.png";
 import Reset from "@/app/components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
-import { useAppNotifier } from "@/app/components/AppNotifier";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
 
 type LoginResponse = {
   token: string;
   user: {
-    id: string;
+    id?: string;
+    _id?: string;
     email: string;
     role: string;
     fullName?: string;
@@ -26,6 +27,14 @@ type FirstLoginResetChallenge = {
   resetToken: string;
 };
 
+type FormFeedback = {
+  variant: FeedbackVariant;
+  title?: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+};
+
 function validatePasswordStrength(password: string): string {
   if (password.length < 8) return "A nova password deve ter pelo menos 8 caracteres.";
   if (!/[A-Z]/.test(password)) return "A nova password deve incluir pelo menos 1 letra maiúscula.";
@@ -33,6 +42,11 @@ function validatePasswordStrength(password: string): string {
   if (!/[0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 número.";
   if (!/[^A-Za-z0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 símbolo.";
   return "";
+}
+
+function isConnectionError(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("servidor") || m.includes("ligacao") || m.includes("internet") || m.includes("network");
 }
 
 function AdminLoginContent() {
@@ -45,36 +59,37 @@ function AdminLoginContent() {
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const { notify } = useAppNotifier();
+  const feedbackHashRef = useRef("");
 
   useEffect(() => {
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
-      setError("Defina uma nova password para concluir a recuperação de conta.");
+      setFormFeedback({ variant: "info", message: "Defina uma nova password para concluir a recuperação de conta." });
     }
   }, [queryResetToken]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
+  const showFeedback = (next: FormFeedback | null) => {
+    if (!next) {
+      feedbackHashRef.current = "";
+      setFormFeedback(null);
+      return;
+    }
 
-  useEffect(() => {
-    if (!notice) return;
-    notify(notice, "success");
-    setNotice("");
-  }, [notice, notify]);
+    const hash = `${next.variant}:${next.title || ""}:${next.message}`.toLowerCase();
+    if (feedbackHashRef.current === hash) return;
+    feedbackHashRef.current = hash;
+    setFormFeedback(next);
+  };
 
   const modeReset = Boolean(firstLoginResetToken || passwordResetToken);
   const fieldErrors = {
-    email: !modeReset && !email.trim() ? "Preencha o email administrativo." : "",
-    password: !modeReset && !password.trim() ? "Preencha a palavra-passe." : "",
+    email: !modeReset && !email.trim() ? "Introduza o seu email." : "",
+    password: !modeReset && !password.trim() ? "Introduza a sua palavra-passe." : "",
     newPassword: modeReset && !newPassword.trim() ? "Preencha a nova password." : "",
     confirmNewPassword:
       modeReset && newPassword !== confirmNewPassword
@@ -95,8 +110,9 @@ function AdminLoginContent() {
 
   const persistAdmin = (data: LoginResponse) => {
     setToken(data.token);
+    const userId = String(data.user.id || data.user._id || "").trim();
     setUser({
-      id: data.user.id,
+      id: userId,
       email: data.user.email,
       role: data.user.role,
       adminLevel: data.user.adminLevel,
@@ -107,12 +123,10 @@ function AdminLoginContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!email.trim() || !password.trim()) {
-      setError("Preencha o email e a palavra-passe.");
       return;
     }
 
@@ -120,6 +134,7 @@ function AdminLoginContent() {
     try {
       const res = await apiFetchRaw("/auth/login", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
@@ -128,24 +143,41 @@ function AdminLoginContent() {
         const challenge = (await res.json()) as FirstLoginResetChallenge;
         if (challenge.requiresPasswordReset && challenge.resetToken) {
           setFirstLoginResetToken(challenge.resetToken);
-          setError("Primeiro acesso: defina uma nova password para continuar.");
+          showFeedback({ variant: "info", message: "Primeiro acesso: defina uma nova password para continuar." });
           return;
         }
       }
 
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Email ou palavra-passe incorretos.");
+        }
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || "Não foi possível iniciar sessão.");
       }
 
       const data = (await res.json()) as LoginResponse;
       if (data.user.role !== "admin") {
-        setError("Este acesso é exclusivo para administradores.");
+        showFeedback({ variant: "warning", message: "Este acesso é exclusivo para administradores." });
         return;
       }
+      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       persistAdmin(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Credenciais inválidas.");
+      const message = err instanceof Error ? err.message : "Não foi possível iniciar sessão.";
+      if (isConnectionError(message)) {
+        showFeedback({
+          variant: "warning",
+          title: "Ligação indisponível",
+          message: "Não conseguimos contactar o servidor neste momento. Verifique a ligação e tente novamente.",
+          actionLabel: "Tentar novamente",
+          onAction: () => showFeedback(null),
+        });
+      } else if (message.toLowerCase().includes("incorret") || message.toLowerCase().includes("credencia")) {
+        showFeedback({ variant: "error", message: "Email ou palavra-passe incorretos." });
+      } else {
+        showFeedback({ variant: "error", message });
+      }
     } finally {
       setLoading(false);
     }
@@ -153,22 +185,21 @@ function AdminLoginContent() {
 
   async function handleFirstLoginReset(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
-      setError("Preencha e confirme a nova password.");
+      showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError("As novas palavras-passe não coincidem.");
+      showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
       return;
     }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
-      setError(passwordError);
+      showFeedback({ variant: "error", message: passwordError });
       return;
     }
 
@@ -176,23 +207,25 @@ function AdminLoginContent() {
     try {
       const res = await apiFetchRaw("/auth/first-login-reset", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: firstLoginResetToken, newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
       }
 
       const data = (await res.json()) as LoginResponse;
       if (data.user.role !== "admin") {
-        setError("Este acesso é exclusivo para administradores.");
+        showFeedback({ variant: "warning", message: "Este acesso é exclusivo para administradores." });
         return;
       }
+      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       persistAdmin(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível redefinir password.");
+      showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
       setLoading(false);
     }
@@ -200,22 +233,21 @@ function AdminLoginContent() {
 
   async function handlePasswordReset(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
-      setError("Preencha e confirme a nova password.");
+      showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError("As novas palavras-passe não coincidem.");
+      showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
       return;
     }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
-      setError(passwordError);
+      showFeedback({ variant: "error", message: passwordError });
       return;
     }
 
@@ -223,22 +255,23 @@ function AdminLoginContent() {
     try {
       const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: passwordResetToken, newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
       }
 
       setPasswordResetToken("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setNotice("Password redefinida com sucesso. Faça login com a nova credencial.");
+      showFeedback({ variant: "success", message: "Password redefinida com sucesso. Faça login com a nova credencial." });
       router.replace("/Admin/Login");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível redefinir password.");
+      showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
       setLoading(false);
     }
@@ -351,6 +384,16 @@ function AdminLoginContent() {
                   <FormFieldError id="admin-confirm-password-error" message={shouldShowFieldError("confirmNewPassword") ? fieldErrors.confirmNewPassword : ""} />
                 </div>
               )}
+
+              {formFeedback ? (
+                <FeedbackAlert
+                  variant={formFeedback.variant}
+                  title={formFeedback.title}
+                  message={formFeedback.message}
+                  actionLabel={formFeedback.actionLabel}
+                  onAction={formFeedback.onAction}
+                />
+              ) : null}
 
               <button
                 type="submit"

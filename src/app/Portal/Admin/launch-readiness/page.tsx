@@ -8,7 +8,7 @@ import {
   type LaunchReadinessResponse,
 } from "../adminClient";
 import { AdminPageHeader, AdminRestricted, adminButtonClass, adminSecondaryButtonClass } from "../components/AdminUI";
-import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 function statusClass(status: LaunchReadinessCheck["status"]) {
   if (status === "pass") return "border-emerald-200 bg-emerald-50 text-emerald-800";
@@ -22,7 +22,6 @@ export default function AdminLaunchReadinessPage() {
   const [checkServices, setCheckServices] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { notify } = useAppNotifier();
 
   const adminLevel = useMemo(
     () => (user?.adminLevel === "moderator" ? "moderator" : "super-admin"),
@@ -50,11 +49,6 @@ export default function AdminLaunchReadinessPage() {
     load(false);
   }, [load]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
   if (adminLevel !== "super-admin") {
     return (
       <AdminRestricted title="Acesso restrito">
@@ -70,6 +64,8 @@ export default function AdminLaunchReadinessPage() {
         title="Launch Readiness"
         description="Checklist técnico de ambiente e serviços para validar o estado de produção."
       />
+
+      {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
       <div className="mt-4 flex flex-wrap gap-3">
         <button

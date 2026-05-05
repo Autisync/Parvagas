@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { AdminPermissions, fetchAdminMe, fetchOverview, fetchAnalytics, hasPermission, type AdminMe } from "./adminClient";
 import { AdminPageHeader } from "./components/AdminUI";
-import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type Overview = {
   users: number;
@@ -40,7 +40,6 @@ export default function AdminOverviewPage() {
   const [ops, setOps] = useState<Analytics | null>(null);
   const [me, setMe] = useState<AdminMe | null>(null);
   const [error, setError] = useState("");
-  const { notify } = useAppNotifier();
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -59,11 +58,6 @@ export default function AdminOverviewPage() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
   return (
     <div>
       <AdminPageHeader
@@ -71,6 +65,12 @@ export default function AdminOverviewPage() {
         title={dict.portal.admin.dashboardTitle}
         description={dict.portal.admin.dashboardDescription}
       />
+
+      {error && (
+        <div className="mt-6">
+          <InlineErrorState onAction={load} />
+        </div>
+      )}
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {[

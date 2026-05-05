@@ -10,6 +10,7 @@ import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type CompanyDecision = "verified" | "rejected" | "pending" | "needs_more_info" | "suspended";
 
@@ -60,11 +61,6 @@ export default function AdminCompaniesPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!notice) return;
@@ -148,6 +144,8 @@ export default function AdminCompaniesPage() {
         title="Verificação de Empresas"
         description="Aplique validação de reputação e conformidade de parceiros empregadores."
       />
+
+      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
 
       <AdminFilterBar>
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar empresas" className={`${adminFieldClass} md:col-span-2`} />

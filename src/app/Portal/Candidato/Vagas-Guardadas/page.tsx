@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type SavedJobItem = {
   _id: string;
@@ -35,11 +36,6 @@ export default function VagasGuardadasPage() {
       .finally(() => setFetching(false));
   }, [token]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
-
   const unsave = async (savedRecordId: string, jobId: string) => {
     setRemovingId(savedRecordId);
     try {
@@ -66,6 +62,8 @@ export default function VagasGuardadasPage() {
         <h1 className="text-3xl font-bold text-slate-900">Vagas Guardadas</h1>
         <p className="mt-2 text-slate-600">Gerencie as oportunidades guardadas e retome candidaturas quando quiser.</p>
       </div>
+
+      {error ? <div className="mb-4"><InlineErrorState /></div> : null}
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">

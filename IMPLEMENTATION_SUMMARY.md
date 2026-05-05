@@ -1,5 +1,7 @@
 # Parvagas UI/UX Redesign & Profile Photo Upload — Implementation Summary
 
+> Update 2026-05-03: the candidate profile photo flow described below is deprecated. The active candidate profile contract now uses enum-backed `preferredJobType`, enum-backed `availability`, and numeric `expectedSalaryAoa`, and profile photo fields/routes have been removed.
+
 ## 🎯 Mission Accomplished — Phases 1-3 Complete
 
 This document summarizes the UI/UX improvements and profile photo upload feature successfully implemented for the Parvagas hiring platform.

@@ -9,6 +9,7 @@ import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -109,11 +110,6 @@ export default function CandidaturasPage() {
     setMessage("");
   }, [message, notify]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify((error as Error).message || "Erro ao carregar candidaturas.", "error");
-  }, [error, notify]);
-
   const applyPreset = (presetKey: string) => {
     setActivePreset(presetKey);
     if (presetKey === "overview") {
@@ -163,6 +159,8 @@ export default function CandidaturasPage() {
         meta={`${filteredApplications.length} de ${totalRecords} candidatura${totalRecords !== 1 ? "s" : ""}`}
         topClassName="top-4"
       />
+
+      {error ? <div className="mb-4"><InlineErrorState /></div> : null}
 
       <DecisionDashboard
         className="mb-6"

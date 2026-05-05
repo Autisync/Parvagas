@@ -1,5 +1,8 @@
-import Image from "next/image";
 import HeroEmpresa from "../components/Empresa/hero";
+import EmpresaBenefits from "../components/Empresa/benefits";
+import EmpresaSteps from "../components/Empresa/steps";
+import EmpresaSocialProof from "../components/Empresa/social-proof";
+import EmpresaFaq from "../components/Empresa/faq";
 import { Metadata } from "next";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -34,6 +37,10 @@ export default function Empresa() {
     <div>
       <Header />
       <HeroEmpresa />
+      <EmpresaBenefits />
+      <EmpresaSteps />
+      <EmpresaSocialProof />
+      <EmpresaFaq />
       <Footer />
     </div>
   );

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Dialog } from "@headlessui/react";
+import { Dialog, Menu, Transition } from "@headlessui/react";
 import Image from "next/image";
-import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Bars3Icon, ChevronDownIcon, UserCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { clearToken, getToken } from "@/lib/api";
+import { clearToken, getToken, getUser } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import { ENABLE_I18N } from "@/config/appConfig";
 import Logo from "/public/icon2.png";
@@ -20,12 +20,11 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authUser, setAuthUser] = useState<{ role?: string; name?: string; email?: string } | null>(null);
   const { locale, dict, changeLocale } = useClientLocale();
   const isPortalPath = pathname.startsWith("/Portal/");
 
   const navigation = [
-    { name: dict.header.home, href: "/" },
     { name: dict.header.jobs, href: "/Vagas-Disponiveis/" },
     { name: dict.header.companies, href: "/Empresa/" },
     { name: dict.header.career, href: "/Dicas-de-Carreira/" },
@@ -37,7 +36,16 @@ export default function Header() {
 
   useEffect(() => {
     const token = getToken();
-    setIsAuthenticated(Boolean(token));
+    const user = getUser() as { role?: string; name?: string; fullName?: string; email?: string } | null;
+    if (token && user) {
+      setAuthUser({
+        role: user.role,
+        name: String(user.name || user.fullName || "").trim(),
+        email: String(user.email || "").trim(),
+      });
+      return;
+    }
+    setAuthUser(null);
   }, [pathname]);
 
   useEffect(() => {
@@ -50,8 +58,22 @@ export default function Header() {
   const handleSignout = () => {
     clearToken();
     setMobileMenuOpen(false);
-    setIsAuthenticated(false);
+    setAuthUser(null);
     router.push("/Login");
+  };
+
+  const getPortalRoute = (role?: string) => {
+    if (role === "company") return "/Portal/Empresa/Perfil";
+    if (role === "admin") return "/Portal/Admin";
+    return "/Portal/Candidato";
+  };
+
+  const getInitials = () => {
+    const source = String(authUser?.name || authUser?.email || "U").trim();
+    if (!source) return "U";
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
   };
 
   return (
@@ -108,12 +130,6 @@ export default function Header() {
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          <Link
-            href="/Login"
-            className="hidden rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-red-200 hover:text-red-700 sm:inline-flex"
-          >
-            {dict.header.portal}
-          </Link>
           {ENABLE_I18N && (
             <div className="hidden items-center gap-1 rounded-full border border-slate-200 bg-white p-1 sm:inline-flex">
             <button
@@ -140,20 +156,75 @@ export default function Header() {
             </button>
             </div>
           )}
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={handleSignout}
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-            >
-              {dict.header.signOut}
-            </button>
+          {authUser ? (
+            <Menu as="div" className="relative hidden sm:block">
+              <Menu.Button className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-red-200 hover:text-red-700">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">
+                  {getInitials()}
+                </span>
+                <span className="max-w-[140px] truncate">{authUser.name || "Utilizador"}</span>
+                <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
+              </Menu.Button>
+              <Transition
+                enter="transition duration-100 ease-out"
+                enterFrom="transform scale-95 opacity-0"
+                enterTo="transform scale-100 opacity-100"
+                leave="transition duration-75 ease-in"
+                leaveFrom="transform scale-100 opacity-100"
+                leaveTo="transform scale-95 opacity-0"
+              >
+                <Menu.Items className="absolute right-0 z-30 mt-2 w-52 origin-top-right rounded-2xl border border-slate-200 bg-white p-1 shadow-lg focus:outline-none">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <Link
+                        href={getPortalRoute(authUser.role)}
+                        className={`block rounded-xl px-3 py-2 text-sm font-medium ${
+                          active ? "bg-red-50 text-red-700" : "text-slate-700"
+                        }`}
+                      >
+                        Meu Perfil
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        type="button"
+                        onClick={handleSignout}
+                        className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-medium ${
+                          active ? "bg-slate-100 text-slate-900" : "text-slate-700"
+                        }`}
+                      >
+                        {dict.header.signOut}
+                      </button>
+                    )}
+                  </Menu.Item>
+                </Menu.Items>
+              </Transition>
+            </Menu>
           ) : (
+            <>
+              <Link
+                href="/Login"
+                className="hidden rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-red-200 hover:text-red-700 sm:inline-flex"
+              >
+                Entrar
+              </Link>
+              <Link
+                href="/Signup"
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+              >
+                Criar conta
+              </Link>
+            </>
+          )}
+          {authUser && (
             <Link
-              href="/Submission/"
-              className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+              href={getPortalRoute(authUser.role)}
+              className="inline-flex items-center rounded-full border border-slate-200 p-2 text-slate-700 sm:hidden"
+              aria-label="Abrir perfil"
             >
-              {dict.header.submitCv}
+              <UserCircleIcon className="h-6 w-6" aria-hidden="true" />
             </Link>
           )}
         </div>
@@ -198,27 +269,37 @@ export default function Header() {
           )}
 
           <div className="mt-7 space-y-3 border-t border-red-100 pt-5">
-            <Link
-              href="/Login"
-              className="block rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
-            >
-              {dict.header.enterPortal}
-            </Link>
-            {isAuthenticated ? (
-              <button
-                type="button"
-                onClick={handleSignout}
-                className="block w-full rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white"
-              >
-                {dict.header.signOut}
-              </button>
+            {authUser ? (
+              <>
+                <Link
+                  href={getPortalRoute(authUser.role)}
+                  className="block rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
+                >
+                  Meu Perfil
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleSignout}
+                  className="block w-full rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white"
+                >
+                  {dict.header.signOut}
+                </button>
+              </>
             ) : (
-              <Link
-                href="/Submission/"
-                className="block rounded-xl bg-red-600 px-4 py-3 text-center text-sm font-semibold text-white"
-              >
-                {dict.header.submitCv}
-              </Link>
+              <>
+                <Link
+                  href="/Login"
+                  className="block rounded-xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
+                >
+                  Entrar
+                </Link>
+                <Link
+                  href="/Signup"
+                  className="block rounded-xl bg-red-600 px-4 py-3 text-center text-sm font-semibold text-white"
+                >
+                  Criar conta
+                </Link>
+              </>
             )}
           </div>
         </Dialog.Panel>

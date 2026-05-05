@@ -1,16 +1,24 @@
 import { MeiliSearch } from "meilisearch";
 
-const host = process.env.MEILISEARCH_HOST;
-const key = process.env.MEILISEARCH_API_KEY;
+let warnedMissingHost = false;
 
-let client = null;
-if (host) {
-  client = new MeiliSearch({ host, apiKey: key });
+function getClient() {
+  const host = process.env.MEILISEARCH_HOST;
+  const key = process.env.MEILISEARCH_API_KEY;
+  if (!host) {
+    if (!warnedMissingHost) {
+      console.warn("[search-service] MEILISEARCH_HOST is not configured. Search indexing is disabled.");
+      warnedMissingHost = true;
+    }
+    return null;
+  }
+  return new MeiliSearch({ host, apiKey: key });
 }
 
 const INDEX_NAME = "public_jobs";
 
 export const indexPublicJobs = async (jobs) => {
+  const client = getClient();
   if (!client) return { skipped: true, reason: "MEILISEARCH_HOST not configured" };
 
   const index = client.index(INDEX_NAME);
@@ -29,6 +37,7 @@ export const indexPublicJobs = async (jobs) => {
 };
 
 export const searchPublicJobs = async (query, options = {}) => {
+  const client = getClient();
   if (!client) {
     return { hits: [], estimatedTotalHits: 0, skipped: true, reason: "MEILISEARCH_HOST not configured" };
   }
@@ -38,6 +47,7 @@ export const searchPublicJobs = async (query, options = {}) => {
 };
 
 export const resetPublicJobsIndex = async () => {
+  const client = getClient();
   if (!client) return { skipped: true, reason: "MEILISEARCH_HOST not configured" };
   const index = client.index(INDEX_NAME);
   await index.deleteAllDocuments();

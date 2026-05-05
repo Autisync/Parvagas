@@ -129,6 +129,23 @@ export type Dictionary = {
     subtitle: string;
     empty: string;
     readArticle: string;
+    // Landing hero
+    heroEyebrow: string;
+    heroTitle: string;
+    heroSubtitle: string;
+    heroCta: string;
+    // Featured video
+    videoTitle: string;
+    videoSubtitle: string;
+    videoPlayLabel: string;
+    // Category pills
+    catAll: string;
+    catCv: string;
+    catInterview: string;
+    catCareer: string;
+    catRemote: string;
+    // Articles section
+    articlesTitle: string;
   };
   careerPost: {
     backToCareer: string;
@@ -179,6 +196,55 @@ export type Dictionary = {
     heroTitleLine2Emphasis: string;
     heroSubtitle: string;
     heroCta: string;
+    // Benefits section
+    benefitsEyebrow: string;
+    benefitsTitle: string;
+    benefitsSubtitle: string;
+    benefit1Title: string;
+    benefit1Desc: string;
+    benefit2Title: string;
+    benefit2Desc: string;
+    benefit3Title: string;
+    benefit3Desc: string;
+    benefit4Title: string;
+    benefit4Desc: string;
+    benefit5Title: string;
+    benefit5Desc: string;
+    // Steps section
+    stepsEyebrow: string;
+    stepsTitle: string;
+    stepsSubtitle: string;
+    step1Title: string;
+    step1Desc: string;
+    step2Title: string;
+    step2Desc: string;
+    step3Title: string;
+    step3Desc: string;
+    stepsCta: string;
+    // Social proof
+    proofEyebrow: string;
+    proofStat1Value: string;
+    proofStat1Label: string;
+    proofStat2Value: string;
+    proofStat2Label: string;
+    proofStat3Value: string;
+    proofStat3Label: string;
+    proofTestimonialQuote: string;
+    proofTestimonialAuthor: string;
+    proofTestimonialRole: string;
+    // FAQ
+    faqEyebrow: string;
+    faqTitle: string;
+    faqSubtitle: string;
+    faq1Q: string;
+    faq1A: string;
+    faq2Q: string;
+    faq2A: string;
+    faq3Q: string;
+    faq3A: string;
+    faq4Q: string;
+    faq4A: string;
+    faqSupportLink: string;
   };
   auth: {
     login: {
@@ -390,6 +456,19 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       subtitle: "Conteúdo editorial para melhorar candidatura, entrevistas e posicionamento profissional no mercado angolano.",
       empty: "Artigos em breve.",
       readArticle: "Ler artigo",
+      heroEyebrow: "Desenvolva a sua carreira",
+      heroTitle: "Conselhos práticos para crescer no mercado angolano",
+      heroSubtitle: "Artigos, guias e vídeos escritos por especialistas para o ajudar a escrever um CV vencedor, brilhar em entrevistas e avançar na carreira.",
+      heroCta: "Explorar artigos",
+      videoTitle: "Como preparar o CV perfeito para o mercado angolano",
+      videoSubtitle: "Neste vídeo explicamos passo a passo como estruturar o seu currículo, destacar competências e passar pelos filtros das empresas.",
+      videoPlayLabel: "Reproduzir vídeo",
+      catAll: "Todos",
+      catCv: "CV & Perfil",
+      catInterview: "Entrevistas",
+      catCareer: "Carreira",
+      catRemote: "Trabalho Remoto",
+      articlesTitle: "Artigos recentes",
     },
     careerPost: {
       backToCareer: "Voltar a Dicas de Carreira",
@@ -439,7 +518,56 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       heroTitleLine2Lead: "Base de Dados de",
       heroTitleLine2Emphasis: "Talentos em Angola",
       heroSubtitle: "Uma plataforma útil para quem procura talento profissional para seus projetos em Angola. Oferecemos acesso a uma ampla gama de profissionais em diferentes setores e locais.",
-      heroCta: "Encontrar Talento Profissional",
+      heroCta: "Criar Perfil de Empresa",
+      // Benefits
+      benefitsEyebrow: "Por que recrutar com Parvagas?",
+      benefitsTitle: "Contrate mais rápido, com mais qualidade",
+      benefitsSubtitle: "Parvagas foi construída para ligar empresas angolanas e portuguesas aos candidatos certos — activos, qualificados e prontos para trabalhar.",
+      benefit1Title: "Candidatos activos e comprometidos",
+      benefit1Desc: "O nosso público são profissionais em busca activa de emprego, não utilizadores passivos de redes sociais. Isso traduz‑se em taxas de resposta mais elevadas e processos mais rápidos.",
+      benefit2Title: "Filtragem avançada de candidatos",
+      benefit2Desc: "Filtre por competências, anos de experiência, localização e área de atuação. Poupe horas de triagem e foque‑se apenas nos perfis relevantes.",
+      benefit3Title: "Employer branding profissional",
+      benefit3Desc: "Apresente a cultura, benefícios e missão da sua empresa numa página dedicada. Atraia talentos que partilham os seus valores antes mesmo de publicar a primeira vaga.",
+      benefit4Title: "Analytics e relatórios de recrutamento",
+      benefit4Desc: "Aceda a painéis com dados sobre origem dos candidatos, taxa de candidatura, tempo de resposta e tendências de contratação para otimizar cada processo.",
+      benefit5Title: "Alcance Angola e Portugal",
+      benefit5Desc: "Publique vagas com visibilidade simultânea em Angola e Portugal, ampliando o seu leque de talento sem custos adicionais.",
+      // Steps
+      stepsEyebrow: "Comece em minutos",
+      stepsTitle: "Três passos para contratar",
+      stepsSubtitle: "Desde o registo à primeira candidatura qualificada, o processo é simples e rápido.",
+      step1Title: "Crie o perfil da sua empresa",
+      step1Desc: "Preencha as informações da empresa e verifique a sua conta. O perfil fica visível para milhares de candidatos qualificados.",
+      step2Title: "Publique uma vaga",
+      step2Desc: "Descreva os requisitos, defina se a vaga é pública ou privada e active recomendações automáticas por IA.",
+      step3Title: "Faça shortlist e contrate",
+      step3Desc: "Use filtros inteligentes e recomendações de IA para identificar os melhores candidatos e avance para a entrevista rapidamente.",
+      stepsCta: "Criar Perfil de Empresa",
+      // Social proof
+      proofEyebrow: "Resultados comprovados",
+      proofStat1Value: "90%",
+      proofStat1Label: "das empresas encontram candidatos qualificados em menos de duas semanas",
+      proofStat2Value: "5.000+",
+      proofStat2Label: "candidatos activos na plataforma",
+      proofStat3Value: "3×",
+      proofStat3Label: "mais rápido do que recrutamento tradicional via redes sociais",
+      proofTestimonialQuote: "O Parvagas simplificou o nosso recrutamento. Em menos de dez dias recebemos mais de 40 candidaturas qualificadas para uma vaga técnica — algo impensável nas redes sociais.",
+      proofTestimonialAuthor: "Ana Paula Ferreira",
+      proofTestimonialRole: "Directora de Recursos Humanos, Grupo Technode Angola",
+      // FAQ
+      faqEyebrow: "Perguntas frequentes",
+      faqTitle: "Tudo o que precisa de saber",
+      faqSubtitle: "Ainda tem dúvidas? Consulte as respostas abaixo ou entre em contacto com a nossa equipa.",
+      faq1Q: "Qual é o custo para publicar uma vaga?",
+      faq1A: "O registo de empresa é gratuito. A publicação de vagas públicas está disponível nos nossos planos mensais. Contacte‑nos para conhecer os preços actuais.",
+      faq2Q: "Como é feita a verificação da empresa?",
+      faq2A: "Após o registo, a nossa equipa revê as informações submetidas e confirma a autenticidade da empresa em até 48 horas úteis.",
+      faq3Q: "Posso publicar vagas privadas (apenas por convite)?",
+      faq3A: "Sim. As vagas privadas são visíveis apenas para candidatos seleccionados por si ou recomendados pela IA, garantindo maior discrição no processo.",
+      faq4Q: "Como funcionam as recomendações de IA?",
+      faq4A: "O nosso motor de correspondência analisa as competências, experiência e preferências dos candidatos e compara com os requisitos da vaga, sugerindo os perfis mais compatíveis.",
+      faqSupportLink: "Falar com o Suporte",
     },
     auth: {
       login: {
@@ -649,6 +777,19 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       subtitle: "Editorial content to improve applications, interviews, and professional positioning in Angola.",
       empty: "Articles coming soon.",
       readArticle: "Read article",
+      heroEyebrow: "Grow your career",
+      heroTitle: "Practical advice to advance in the Angolan market",
+      heroSubtitle: "Articles, guides and videos written by experts to help you write a winning CV, shine in interviews, and advance your career.",
+      heroCta: "Explore articles",
+      videoTitle: "How to prepare the perfect CV for the Angolan market",
+      videoSubtitle: "In this video we explain step by step how to structure your CV, highlight skills, and pass company filters.",
+      videoPlayLabel: "Play video",
+      catAll: "All",
+      catCv: "CV & Profile",
+      catInterview: "Interviews",
+      catCareer: "Career",
+      catRemote: "Remote Work",
+      articlesTitle: "Recent articles",
     },
     careerPost: {
       backToCareer: "Back to Career Tips",
@@ -698,7 +839,56 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       heroTitleLine2Lead: "Talent Database in",
       heroTitleLine2Emphasis: "Angola",
       heroSubtitle: "A practical platform for companies seeking professional talent for projects in Angola. We provide access to a broad range of professionals across sectors and locations.",
-      heroCta: "Find Professional Talent",
+      heroCta: "Create Company Profile",
+      // Benefits
+      benefitsEyebrow: "Why hire with Parvagas?",
+      benefitsTitle: "Hire faster, hire better",
+      benefitsSubtitle: "Parvagas connects Angolan and Portuguese companies with the right candidates — active, qualified and ready to work.",
+      benefit1Title: "Active, engaged candidates",
+      benefit1Desc: "Our audience are professionals actively seeking employment, not passive social media users. That means higher response rates and faster processes.",
+      benefit2Title: "Advanced candidate filtering",
+      benefit2Desc: "Filter by skills, years of experience, location and field. Save hours of screening and focus only on relevant profiles.",
+      benefit3Title: "Professional employer branding",
+      benefit3Desc: "Present your company culture, benefits and mission on a dedicated page. Attract talent that shares your values before you post your first job.",
+      benefit4Title: "Recruitment analytics",
+      benefit4Desc: "Access dashboards with data on candidate sources, application rate, response time and hiring trends to optimise each process.",
+      benefit5Title: "Reach Angola and Portugal",
+      benefit5Desc: "Post jobs with simultaneous visibility in Angola and Portugal, expanding your talent pool at no extra cost.",
+      // Steps
+      stepsEyebrow: "Get started in minutes",
+      stepsTitle: "Three steps to hire",
+      stepsSubtitle: "From registration to your first qualified application, the process is simple and fast.",
+      step1Title: "Create your company profile",
+      step1Desc: "Fill in your company information and verify your account. Your profile becomes visible to thousands of qualified candidates.",
+      step2Title: "Post a job",
+      step2Desc: "Describe your requirements, set whether the vacancy is public or private, and enable automatic AI recommendations.",
+      step3Title: "Shortlist and hire",
+      step3Desc: "Use smart filters and AI recommendations to identify the best candidates and move to interview quickly.",
+      stepsCta: "Create Company Profile",
+      // Social proof
+      proofEyebrow: "Proven results",
+      proofStat1Value: "90%",
+      proofStat1Label: "of companies find qualified candidates within two weeks",
+      proofStat2Value: "5,000+",
+      proofStat2Label: "active candidates on the platform",
+      proofStat3Value: "3×",
+      proofStat3Label: "faster than traditional social media recruitment",
+      proofTestimonialQuote: "Parvagas simplified our recruitment. In less than ten days we received over 40 qualified applications for a technical role — something unthinkable on social media.",
+      proofTestimonialAuthor: "Ana Paula Ferreira",
+      proofTestimonialRole: "HR Director, Grupo Technode Angola",
+      // FAQ
+      faqEyebrow: "Frequently asked questions",
+      faqTitle: "Everything you need to know",
+      faqSubtitle: "Still have questions? Check the answers below or contact our team.",
+      faq1Q: "How much does it cost to post a job?",
+      faq1A: "Company registration is free. Public job posting is available on our monthly plans. Contact us for current pricing.",
+      faq2Q: "How is company verification done?",
+      faq2A: "After registration, our team reviews the submitted information and confirms the company's authenticity within 48 business hours.",
+      faq3Q: "Can I post private jobs (invite only)?",
+      faq3A: "Yes. Private jobs are only visible to candidates you select or that are recommended by AI, ensuring greater discretion in the process.",
+      faq4Q: "How do AI recommendations work?",
+      faq4A: "Our matching engine analyses candidates' skills, experience and preferences and compares them with the job requirements, suggesting the most compatible profiles.",
+      faqSupportLink: "Contact Support",
     },
     auth: {
       login: {

@@ -2,24 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "/public/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
-import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
 
 type LoginResponse = {
   token: string;
   user: {
-    id: string;
+    id?: string;
+    _id?: string;
     email: string;
     role: string;
     fullName?: string;
     adminLevel?: "super-admin" | "moderator";
     companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
+    hasCompletedOnboarding?: boolean;
+    hasSeenTutorial?: boolean;
   };
 };
 
@@ -30,12 +33,20 @@ type FirstLoginResetChallenge = {
 
 type AuthRole = "candidate" | "company";
 
-function validatePasswordStrength(password: string, locale: "pt" | "en"): string {
-  if (password.length < 8) return locale === "en" ? "New password must be at least 8 characters long." : "A nova password deve ter pelo menos 8 caracteres.";
-  if (!/[A-Z]/.test(password)) return locale === "en" ? "New password must include at least one uppercase letter." : "A nova password deve incluir pelo menos 1 letra maiúscula.";
-  if (!/[a-z]/.test(password)) return locale === "en" ? "New password must include at least one lowercase letter." : "A nova password deve incluir pelo menos 1 letra minúscula.";
-  if (!/[0-9]/.test(password)) return locale === "en" ? "New password must include at least one number." : "A nova password deve incluir pelo menos 1 número.";
-  if (!/[^A-Za-z0-9]/.test(password)) return locale === "en" ? "New password must include at least one symbol." : "A nova password deve incluir pelo menos 1 símbolo.";
+type FormFeedback = {
+  variant: FeedbackVariant;
+  title?: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+};
+
+function validatePasswordStrength(password: string): string {
+  if (password.length < 8) return "A nova password deve ter pelo menos 8 caracteres.";
+  if (!/[A-Z]/.test(password)) return "A nova password deve incluir pelo menos 1 letra maiúscula.";
+  if (!/[a-z]/.test(password)) return "A nova password deve incluir pelo menos 1 letra minúscula.";
+  if (!/[0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 número.";
+  if (!/[^A-Za-z0-9]/.test(password)) return "A nova password deve incluir pelo menos 1 símbolo.";
   return "";
 }
 
@@ -46,7 +57,12 @@ function normalizeRole(value: string | null): AuthRole {
 
 function portalRoute(role: string): string {
   if (role === "company") return "/Portal/Empresa/Perfil";
-  return "/Portal/Candidato/Meu-Perfil";
+  return "/Portal/Candidato";
+}
+
+function isConnectionError(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("servidor") || m.includes("ligacao") || m.includes("internet") || m.includes("network");
 }
 
 function LoginContent() {
@@ -61,13 +77,12 @@ function LoginContent() {
   const [passwordResetToken, setPasswordResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const { notify } = useAppNotifier();
-  const { dict, locale } = useClientLocale();
+  const feedbackHashRef = useRef("");
+  const { dict } = useClientLocale();
   const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
     { id: "candidate", label: dict.auth.login.roleCandidate, hint: dict.auth.login.roleCandidateHint },
     { id: "company", label: dict.auth.login.roleCompany, hint: dict.auth.login.roleCompanyHint },
@@ -81,31 +96,34 @@ function LoginContent() {
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
-      setError(dict.auth.login.resetPrompt);
+      setFormFeedback({
+        variant: "info",
+        message: "Defina uma nova password para concluir a recuperação de conta.",
+      });
     }
-  }, [queryResetToken, dict.auth.login.resetPrompt]);
+  }, [queryResetToken]);
 
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
+  const showFeedback = (next: FormFeedback | null) => {
+    if (!next) {
+      feedbackHashRef.current = "";
+      setFormFeedback(null);
+      return;
+    }
 
-  useEffect(() => {
-    if (!notice) return;
-    notify(notice, "success");
-    setNotice("");
-  }, [notice, notify]);
+    const hash = `${next.variant}:${next.title || ""}:${next.message}`.toLowerCase();
+    if (feedbackHashRef.current === hash) return;
+    feedbackHashRef.current = hash;
+    setFormFeedback(next);
+  };
 
   const modeReset = Boolean(firstLoginResetToken || passwordResetToken);
   const fieldErrors = {
-    email: !modeReset && !email.trim() ? dict.auth.login.errorFillCredentials : "",
-    password: !modeReset && !password.trim() ? dict.auth.login.errorFillCredentials : "",
-    newPassword: modeReset && !newPassword.trim() ? (locale === "en" ? "Fill in the new password." : "Preencha a nova password.") : "",
+    email: !modeReset && !email.trim() ? "Introduza o seu email." : "",
+    password: !modeReset && !password.trim() ? "Introduza a sua palavra-passe." : "",
+    newPassword: modeReset && !newPassword.trim() ? "Preencha a nova password." : "",
     confirmNewPassword:
       modeReset && newPassword !== confirmNewPassword
-        ? locale === "en"
-          ? "New passwords do not match."
-          : "As novas palavras-passe não coincidem."
+        ? "As novas palavras-passe não coincidem."
         : "",
   };
 
@@ -117,12 +135,10 @@ function LoginContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!email.trim() || !password.trim()) {
-      setError(dict.auth.login.errorFillCredentials);
       return;
     }
 
@@ -130,6 +146,7 @@ function LoginContent() {
     try {
       const res = await apiFetchRaw("/auth/login", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
@@ -138,39 +155,72 @@ function LoginContent() {
         const challenge = (await res.json()) as FirstLoginResetChallenge;
         if (challenge.requiresPasswordReset && challenge.resetToken) {
           setFirstLoginResetToken(challenge.resetToken);
-          setError("Primeiro acesso: defina uma nova password para continuar.");
+          showFeedback({
+            variant: "info",
+            message: "Primeiro acesso: defina uma nova password para continuar.",
+          });
           return;
         }
       }
 
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Email ou palavra-passe incorretos.");
+        }
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || dict.auth.login.errorInvalidCredentials);
+        throw new Error((body as { error?: string }).error || "Não foi possível iniciar sessão.");
       }
 
       const data = (await res.json()) as LoginResponse;
         if (data.user.role === "admin") {
-          setError(dict.auth.login.errorUseAdminAccess);
+          showFeedback({
+            variant: "warning",
+            message: "Use o acesso administrativo para contas de administrador.",
+          });
           router.replace("/Admin/Login");
           return;
         }
       if (selectedRole !== data.user.role) {
-        setError(dict.auth.login.errorRoleMismatch(selectedRole === "company" ? dict.auth.login.roleCompany : dict.auth.login.roleCandidate));
+        showFeedback({
+          variant: "warning",
+          message: selectedRole === "company"
+            ? "Esta conta não pertence a Empresa. Troque para o acesso de Candidato."
+            : "Esta conta não pertence a Candidato. Troque para o acesso de Empresa.",
+        });
         return;
       }
 
       setToken(data.token);
+      const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
-        id: data.user.id,
+        id: userId,
         email: data.user.email,
         role: data.user.role,
         adminLevel: data.user.adminLevel,
         companyTeamRole: data.user.companyTeamRole,
         name: data.user.fullName,
+        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
+        hasSeenTutorial: data.user.hasSeenTutorial ?? false,
       });
-      router.push(portalRoute(data.user.role));
+      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
+      window.setTimeout(() => {
+        router.push(portalRoute(data.user.role));
+      }, 250);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : dict.auth.login.errorInvalidCredentials);
+      const message = err instanceof Error ? err.message : "Não foi possível iniciar sessão.";
+      if (isConnectionError(message)) {
+        showFeedback({
+          variant: "warning",
+          title: "Ligação indisponível",
+          message: "Não conseguimos contactar o servidor neste momento. Verifique a ligação e tente novamente.",
+          actionLabel: "Tentar novamente",
+          onAction: () => showFeedback(null),
+        });
+      } else if (message.toLowerCase().includes("incorret") || message.toLowerCase().includes("credencia")) {
+        showFeedback({ variant: "error", message: "Email ou palavra-passe incorretos." });
+      } else {
+        showFeedback({ variant: "error", message });
+      }
     } finally {
       setLoading(false);
     }
@@ -178,22 +228,21 @@ function LoginContent() {
 
   async function handleFirstLoginReset(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
-      setError("Preencha e confirme a nova password.");
+      showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError(locale === "en" ? "New passwords do not match." : "As novas palavras-passe não coincidem.");
+      showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
       return;
     }
 
-    const passwordError = validatePasswordStrength(newPassword, locale);
+    const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
-      setError(passwordError);
+      showFeedback({ variant: "error", message: passwordError });
       return;
     }
 
@@ -201,32 +250,40 @@ function LoginContent() {
     try {
       const res = await apiFetchRaw("/auth/first-login-reset", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: firstLoginResetToken, newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
+        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
       }
 
       const data = (await res.json()) as LoginResponse;
       if (data.user.role === "admin") {
-        setError(dict.auth.login.errorUseAdminAccess);
+        showFeedback({ variant: "warning", message: "Use o acesso administrativo para contas de administrador." });
         router.replace("/Admin/Login");
         return;
       }
       setToken(data.token);
+      const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
-        id: data.user.id,
+        id: userId,
         email: data.user.email,
         role: data.user.role,
         companyTeamRole: data.user.companyTeamRole,
         name: data.user.fullName,
+        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
+        hasSeenTutorial: data.user.hasSeenTutorial ?? false,
       });
-      router.push(portalRoute(data.user.role));
+      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
+      window.setTimeout(() => {
+        router.push(portalRoute(data.user.role));
+      }, 250);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
+      const message = err instanceof Error ? err.message : "Não foi possível redefinir password.";
+      showFeedback({ variant: "error", message });
     } finally {
       setLoading(false);
     }
@@ -234,22 +291,21 @@ function LoginContent() {
 
   async function handlePasswordReset(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    setNotice("");
+    showFeedback(null);
     setSubmitted(true);
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
-      setError("Preencha e confirme a nova password.");
+      showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
       return;
     }
     if (newPassword !== confirmNewPassword) {
-      setError(locale === "en" ? "New passwords do not match." : "As novas palavras-passe não coincidem.");
+      showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
       return;
     }
 
-    const passwordError = validatePasswordStrength(newPassword, locale);
+    const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
-      setError(passwordError);
+      showFeedback({ variant: "error", message: passwordError });
       return;
     }
 
@@ -257,22 +313,23 @@ function LoginContent() {
     try {
       const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
+        suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: passwordResetToken, newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
+        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
       }
 
       setPasswordResetToken("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setNotice(dict.auth.login.resetSuccess);
+      showFeedback({ variant: "success", message: "Password redefinida com sucesso. Faça login com a nova credencial." });
       router.replace(`/Login?role=${selectedRole}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : (locale === "en" ? "Could not reset password." : "Não foi possível redefinir password."));
+      showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
       setLoading(false);
     }
@@ -410,6 +467,16 @@ function LoginContent() {
                   />
                 </div>
               )}
+
+              {formFeedback ? (
+                <FeedbackAlert
+                  variant={formFeedback.variant}
+                  title={formFeedback.title}
+                  message={formFeedback.message}
+                  actionLabel={formFeedback.actionLabel}
+                  onAction={formFeedback.onAction}
+                />
+              ) : null}
 
               <button
                 type="submit"

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 
 type Alert = {
@@ -65,11 +66,6 @@ export default function AlertasPage() {
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!message) return;
@@ -162,6 +158,8 @@ export default function AlertasPage() {
         <h1 className="text-3xl font-bold text-slate-900">Alertas de Emprego</h1>
         <p className="mt-2 text-slate-600">Crie, edite e elimine alertas para receber oportunidades relevantes.</p>
       </div>
+
+      {error ? <div className="mb-4"><InlineErrorState onAction={fetchAlerts} /></div> : null}
 
       <form onSubmit={handleSubmit} className="mb-8 space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-6">
         <h2 className="text-lg font-bold text-slate-900">{editingId ? "Editar alerta" : "Novo alerta"}</h2>

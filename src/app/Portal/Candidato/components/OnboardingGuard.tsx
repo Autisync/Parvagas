@@ -1,0 +1,91 @@
+"use client";
+
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { getToken, getUser } from "@/lib/api";
+import TutorialModal from "./TutorialModal";
+
+// ── Inner component — isolated so Suspense can wrap only this part ────────────
+
+function GuardInner({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialToken, setTutorialToken] = useState<string | null>(null);
+  const [isReplay, setIsReplay] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    const token = getToken();
+    const user = getUser();
+
+    if (!token || !user || user.role !== "candidate") {
+      setChecked(true);
+      return;
+    }
+
+    const forceReplay = searchParams?.get("tutorial") === "1";
+
+    if (forceReplay || user.hasSeenTutorial === false) {
+      setTutorialToken(token as string);
+      setIsReplay(forceReplay);
+      setShowTutorial(true);
+      setChecked(true);
+      return;
+    }
+
+    // Tutorial already seen — check if profile onboarding is still needed
+    if (
+      user.hasCompletedOnboarding === false &&
+      !pathname?.startsWith("/Portal/Candidato/Onboarding")
+    ) {
+      router.replace("/Portal/Candidato/Onboarding");
+    }
+
+    setChecked(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleTutorialDone = useCallback(() => {
+    setShowTutorial(false);
+
+    const wasReplay = searchParams?.get("tutorial") === "1";
+
+    if (wasReplay) {
+      // Replay from Settings — strip the query param and stay on current page
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tutorial");
+      const next = params.toString() ? `${pathname}?${params.toString()}` : pathname || "";
+      router.replace(next);
+      return;
+    }
+
+    // First-time tutorial completion → always go to profile setup next
+    router.replace("/Portal/Candidato/Onboarding");
+  }, [pathname, router, searchParams]);
+
+  return (
+    <>
+      {checked && children}
+      {showTutorial && tutorialToken && (
+        <TutorialModal
+          token={tutorialToken}
+          onDone={handleTutorialDone}
+          forceReplay={isReplay}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Public wrapper — Suspense boundary required by Next.js for useSearchParams ─
+
+export default function OnboardingGuard({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<>{children}</>}>
+      <GuardInner>{children}</GuardInner>
+    </Suspense>
+  );
+}

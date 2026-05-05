@@ -6,6 +6,7 @@ import { downloadCsv, dateRangeQuery, fetchAdminMe, hasPermission, AdminPermissi
 import { AdminPageHeader, AdminRestricted, adminButtonClass, adminFieldClass } from "../components/AdminUI";
 import { useEffect } from "react";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 function toInputDate(daysAgo: number) {
   const d = new Date();
@@ -28,11 +29,6 @@ export default function AdminExportsPage() {
     if (!token) return;
     fetchAdminMe(token).then(setMe).catch(() => setMe(null));
   }, [token]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   const exportFile = async (kind: "users" | "jobs" | "companies") => {
     if (!token || !canExport) return;
@@ -63,6 +59,8 @@ export default function AdminExportsPage() {
         title="Exportações CSV"
         description="Exporte dados operacionais com filtro por intervalo de datas."
       />
+
+      {error ? <div className="mt-5"><InlineErrorState /></div> : null}
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-3">

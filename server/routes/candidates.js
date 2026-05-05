@@ -5,9 +5,11 @@ import {
   approveAndSaveProfile,
   getMyProfile,
   updateMyProfile,
-  uploadProfilePhoto,
-  deleteProfilePhoto,
+  createProfileSummaryDraft,
+  completeOnboarding,
+  markTutorialSeen,
   listCvDocuments,
+  deleteCvDocument,
   createGeneratedCvProfile,
   listGeneratedCvProfiles,
   updateGeneratedCvProfile,
@@ -30,15 +32,16 @@ import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
-const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 router.post("/cv/parse", verifyToken, requireRole("candidate"), upload.single("cv"), uploadCvAndParse);
 router.get("/cv/documents", verifyToken, requireRole("candidate"), listCvDocuments);
+router.delete("/cv/documents/:id", verifyToken, requireRole("candidate"), deleteCvDocument);
 router.post("/profile/approve", verifyToken, requireRole("candidate"), approveAndSaveProfile);
 router.get("/profile", verifyToken, requireRole("candidate"), getMyProfile);
 router.patch("/profile", verifyToken, requireRole("candidate"), updateMyProfile);
-router.post("/profile/photo", verifyToken, requireRole("candidate"), photoUpload.single("photo"), uploadProfilePhoto);
-router.delete("/profile/photo", verifyToken, requireRole("candidate"), deleteProfilePhoto);
+router.post("/profile/summary-draft", verifyToken, requireRole("candidate"), createProfileSummaryDraft);
+router.patch("/onboarding/complete", verifyToken, requireRole("candidate"), completeOnboarding);
+router.patch("/tutorial/seen", verifyToken, requireRole("candidate"), markTutorialSeen);
 router.post("/cv-profiles/generate", verifyToken, requireRole("candidate"), createGeneratedCvProfile);
 router.get("/cv-profiles", verifyToken, requireRole("candidate"), listGeneratedCvProfiles);
 router.patch("/cv-profiles/:id", verifyToken, requireRole("candidate"), updateGeneratedCvProfile);

@@ -19,6 +19,7 @@ import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages, collectSelectedItemsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type Tab = "audit" | "admin-actions";
 
@@ -63,11 +64,6 @@ export default function AdminAuditPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!error) return;
-    notify(error, "error");
-  }, [error, notify]);
 
   useEffect(() => {
     if (!notice) return;
@@ -173,6 +169,8 @@ export default function AdminAuditPage() {
         title="Ações Privilegiadas"
         description="Inspecione alterações sensíveis, moderação, acessos e operações administrativas."
       />
+
+      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button

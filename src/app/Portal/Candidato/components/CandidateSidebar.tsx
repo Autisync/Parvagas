@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { clearToken } from "@/lib/api";
+import { clearToken, authFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
 import {
@@ -16,7 +16,9 @@ import {
   CheckCircleIcon,
   BellIcon,
   CogIcon,
+  RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
 
 interface NavItem {
   href: string;
@@ -27,12 +29,22 @@ interface NavItem {
 export default function CandidateSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth("candidate");
+  const { user, token } = useAuth("candidate");
   const { dict } = useClientLocale();
   const candidateName = (user as { fullName?: string; name?: string } | null)?.fullName || user?.name || "Candidato";
 
+  const [profileCompletion, setProfileCompletion] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch<{ profile?: { completionScore?: number } }>("/candidates/profile", token, { suppressGlobalErrors: true })
+      .then((d) => setProfileCompletion(d.profile?.completionScore ?? null))
+      .catch(() => {/* ignore */});
+  }, [token]);
+
   const navItems: NavItem[] = [
     { href: "/Portal/Candidato/Dashboard", label: dict.portal.candidate.dashboard, icon: <HomeIcon className="h-5 w-5" /> },
+    { href: "/Portal/Candidato/Onboarding", label: "Configurar Perfil", icon: <RocketLaunchIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/Meu-Perfil", label: dict.portal.candidate.profile, icon: <UserIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/CV-e-Documentos", label: dict.portal.candidate.cvDocs, icon: <DocumentIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/Vagas-Recomendadas", label: dict.portal.candidate.recommended, icon: <SparklesIcon className="h-5 w-5" /> },
@@ -76,7 +88,18 @@ export default function CandidateSidebar() {
               ].join(" ")}
             >
               <span className={active ? "text-blue-700" : "text-slate-500"}>{item.icon}</span>
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.href === "/Portal/Candidato/Meu-Perfil" &&
+               profileCompletion !== null &&
+               profileCompletion < 100 ? (
+                <span
+                  className="relative flex h-2.5 w-2.5 shrink-0"
+                  title={`Perfil ${profileCompletion}% completo`}
+                >
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+                </span>
+              ) : null}
             </Link>
           );
         })}

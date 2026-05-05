@@ -4,21 +4,44 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
+import TagInput from "@/app/components/profile/TagInput";
+import AddItemModal from "@/app/components/profile/AddItemModal";
+import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
+import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
+
+const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
 
 type ParsedDraft = {
   fullName?: string;
   email?: string;
   phone?: string;
   location?: string;
+  nationality?: string;
   professionalTitle?: string;
   summary?: string;
   skills?: string[];
-  experience?: unknown[];
-  education?: unknown[];
+  languages?: string[];
+  experience?: Array<{
+    jobTitle?: string;
+    company?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+    current?: boolean;
+    description?: string;
+  }>;
+  education?: Array<{
+    degree?: string;
+    institution?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }>;
   certifications?: string[];
   portfolioLinks?: string[];
   preferredJobType?: string;
-  salaryExpectation?: string;
+  expectedSalaryAoa?: number | null;
   availability?: string;
   [key: string]: unknown;
 };
@@ -27,6 +50,7 @@ type ParseResponse = {
   parseRunId?: string;
   profileDraft?: ParsedDraft;
   missingFields?: string[];
+  parserError?: string;
 };
 
 type CandidateDocument = {
@@ -62,8 +86,67 @@ const TARGET_FIELDS = [
   "Hospitality",
 ];
 
+const PREFERRED_JOB_TYPE_OPTIONS = [
+  { value: "tempo_integral", label: "Tempo inteiro" },
+  { value: "meio_periodo", label: "Meio período" },
+  { value: "contrato", label: "Contrato" },
+  { value: "temporario", label: "Temporário" },
+  { value: "freelancer", label: "Freelancer" },
+  { value: "estagio", label: "Estágio" },
+  { value: "remoto", label: "Remoto" },
+  { value: "hibrido", label: "Híbrido" },
+  { value: "presencial", label: "Presencial" },
+];
+
+const AVAILABILITY_OPTIONS = [
+  { value: "imediata", label: "Imediata" },
+  { value: "1_semana", label: "1 semana" },
+  { value: "2_semanas", label: "2 semanas" },
+  { value: "1_mes", label: "1 mês" },
+  { value: "2_meses", label: "2 meses" },
+  { value: "a_combinar", label: "A combinar" },
+];
+
+const SKILL_SUGGESTIONS = ["React", "Node.js", "TypeScript", "Excel", "Power BI", "Atendimento ao cliente"];
+const LANGUAGE_SUGGESTIONS = ["Português", "Inglês", "Francês", "Espanhol"];
+const CERT_SUGGESTIONS = ["AWS", "Scrum", "CCNA", "Google UX", "PMI"];
+
+const DEFAULT_EXPERIENCE: ExperienceItem = {
+  jobTitle: "",
+  company: "",
+  location: "",
+  startDate: "",
+  endDate: "",
+  current: false,
+  description: "",
+};
+
+const DEFAULT_EDUCATION: EducationItem = {
+  degree: "",
+  institution: "",
+  location: "",
+  startDate: "",
+  endDate: "",
+  description: "",
+};
+
 const toCsv = (value?: string[]) => (Array.isArray(value) ? value.join(", ") : "");
 const fromCsv = (value: string) => value.split(",").map((x) => x.trim()).filter(Boolean);
+
+const normalizeMoney = (value: string) => {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const parsed = Number.parseInt(digits, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const reorderItem = <T,>(items: T[], from: number, to: number): T[] => {
+  if (to < 0 || to >= items.length) return items;
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+};
 
 export default function CvDocumentosPage() {
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
@@ -71,6 +154,8 @@ export default function CvDocumentosPage() {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [draft, setDraft] = useState<ParsedDraft | null>(null);
+  const [missingSections, setMissingSections] = useState<string[]>([]);
+  const [parseWarning, setParseWarning] = useState("");
   const [parseRunId, setParseRunId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -85,6 +170,16 @@ export default function CvDocumentosPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<GeneratedCvProfile | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+
+  const [expModalOpen, setExpModalOpen] = useState(false);
+  const [eduModalOpen, setEduModalOpen] = useState(false);
+  const [draftExperience, setDraftExperience] = useState<ExperienceItem>(DEFAULT_EXPERIENCE);
+  const [draftEducation, setDraftEducation] = useState<EducationItem>(DEFAULT_EDUCATION);
+  const [editingExpIndex, setEditingExpIndex] = useState<number | null>(null);
+  const [editingEduIndex, setEditingEduIndex] = useState<number | null>(null);
+  const [expFormError, setExpFormError] = useState("");
+  const [eduFormError, setEduFormError] = useState("");
 
   const latestCv = useMemo(() => documents.find((doc) => doc.type === "cv"), [documents]);
 
@@ -160,7 +255,13 @@ export default function CvDocumentosPage() {
       const parsed = data as ParseResponse;
       setDraft(parsed.profileDraft || {});
       setParseRunId(parsed.parseRunId || null);
-      setMessage("CV processado com sucesso. Reveja e confirme os dados.");
+      setMissingSections(parsed.missingFields || []);
+      setParseWarning(parsed.parserError || "");
+      setMessage("CV processado com sucesso. Reveja e confirme os dados abaixo, ou vá ao perfil para aplicar as sugestões.");
+      // Persist draft in sessionStorage so Meu-Perfil can show the AI suggestion banner
+      try {
+        sessionStorage.setItem(CV_DRAFT_SESSION_KEY, JSON.stringify(parsed.profileDraft || {}));
+      } catch { /* ignore */ }
       await loadLists();
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -172,6 +273,33 @@ export default function CvDocumentosPage() {
 
   const handleApprove = async () => {
     if (!draft) return;
+    const email = String(draft.email || "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Introduza um email válido antes de guardar.");
+      return;
+    }
+    if (
+      draft.preferredJobType &&
+      !PREFERRED_JOB_TYPE_OPTIONS.some((option) => option.value === draft.preferredJobType)
+    ) {
+      setError("Tipo de trabalho preferido inválido.");
+      return;
+    }
+    if (
+      draft.availability &&
+      !AVAILABILITY_OPTIONS.some((option) => option.value === draft.availability)
+    ) {
+      setError("Disponibilidade inválida.");
+      return;
+    }
+    if (
+      draft.expectedSalaryAoa !== null &&
+      draft.expectedSalaryAoa !== undefined &&
+      !Number.isFinite(Number(draft.expectedSalaryAoa))
+    ) {
+      setError("Expectativa salarial deve ser numérica.");
+      return;
+    }
     setApproving(true);
     setError("");
     try {
@@ -183,6 +311,8 @@ export default function CvDocumentosPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao guardar perfil.");
       setDraft(null);
+      setMissingSections([]);
+      setParseWarning("");
       setMessage("Perfil atualizado com sucesso a partir do CV.");
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -252,6 +382,92 @@ export default function CvDocumentosPage() {
     }
   };
 
+  const handleDeleteDocument = async (id: string) => {
+    if (!token) return;
+    setDeletingDocId(id);
+    setError("");
+    try {
+      await authFetch(`/candidates/cv/documents/${id}`, token, { method: "DELETE" });
+      await loadLists();
+      setMessage("Documento removido com sucesso.");
+    } catch (err: unknown) {
+      setError((err as Error).message || "Erro ao remover documento.");
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
+
+  const draftExperiences = ((draft?.experience as ParsedDraft["experience"]) || []) as ExperienceItem[];
+  const draftEducationList = ((draft?.education as ParsedDraft["education"]) || []) as EducationItem[];
+
+  const openNewExperience = () => {
+    setDraftExperience(DEFAULT_EXPERIENCE);
+    setEditingExpIndex(null);
+    setExpFormError("");
+    setExpModalOpen(true);
+  };
+
+  const openEditExperience = (index: number) => {
+    setDraftExperience(draftExperiences[index] || DEFAULT_EXPERIENCE);
+    setEditingExpIndex(index);
+    setExpFormError("");
+    setExpModalOpen(true);
+  };
+
+  const saveExperience = () => {
+    if (!draftExperience.jobTitle.trim() || !draftExperience.company.trim() || !draftExperience.startDate) {
+      setExpFormError("Preencha cargo, empresa e data de início.");
+      return;
+    }
+    if (!draftExperience.current && !draftExperience.endDate) {
+      setExpFormError("Preencha a data de fim ou ative experiência atual.");
+      return;
+    }
+    if (!draft) return;
+    const next = [...draftExperiences];
+    if (editingExpIndex === null) next.unshift(draftExperience);
+    else next[editingExpIndex] = draftExperience;
+    setDraft({ ...draft, experience: next });
+    setExpModalOpen(false);
+  };
+
+  const removeExperience = (index: number) => {
+    if (!draft) return;
+    setDraft({ ...draft, experience: draftExperiences.filter((_, i) => i !== index) });
+  };
+
+  const openNewEducation = () => {
+    setDraftEducation(DEFAULT_EDUCATION);
+    setEditingEduIndex(null);
+    setEduFormError("");
+    setEduModalOpen(true);
+  };
+
+  const openEditEducation = (index: number) => {
+    setDraftEducation(draftEducationList[index] || DEFAULT_EDUCATION);
+    setEditingEduIndex(index);
+    setEduFormError("");
+    setEduModalOpen(true);
+  };
+
+  const saveEducation = () => {
+    if (!draftEducation.degree.trim() || !draftEducation.institution.trim() || !draftEducation.startDate || !draftEducation.endDate) {
+      setEduFormError("Preencha curso, instituição e datas.");
+      return;
+    }
+    if (!draft) return;
+    const next = [...draftEducationList];
+    if (editingEduIndex === null) next.unshift(draftEducation);
+    else next[editingEduIndex] = draftEducation;
+    setDraft({ ...draft, education: next });
+    setEduModalOpen(false);
+  };
+
+  const removeEducation = (index: number) => {
+    if (!draft) return;
+    setDraft({ ...draft, education: draftEducationList.filter((_, i) => i !== index) });
+  };
+
   return (
     <div className="p-6 sm:p-8">
       <div className="mb-8">
@@ -307,9 +523,39 @@ export default function CvDocumentosPage() {
         ) : null}
         {message ? <p className="mt-4 text-green-600">{message}</p> : null}
 
+        {/* CV template download */}
+        <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Precisa de um modelo de CV?</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Descarregue o nosso modelo DOCX, preencha-o e volte aqui para carregar.
+            </p>
+          </div>
+          <a
+            href="/templates/modelo-cv-parvagas.docx"
+            download="modelo-cv-parvagas.docx"
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
+            </svg>
+            Descarregar modelo
+          </a>
+        </div>
+
         {draft ? (
           <div className="mt-8 rounded-2xl border border-gray-100 p-6">
             <h2 className="mb-4 text-xl font-bold">Revisão dos dados extraídos</h2>
+            {parseWarning ? (
+              <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {parseWarning}
+              </p>
+            ) : null}
+            {missingSections.length > 0 ? (
+              <p className="mb-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                Algumas secções vieram vazias ({missingSections.join(", ")}). Pode preencher manualmente abaixo.
+              </p>
+            ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Nome</span>
@@ -327,21 +573,136 @@ export default function CvDocumentosPage() {
                 <span className="mb-1 block text-gray-600">Título profissional</span>
                 <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.professionalTitle || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), professionalTitle: e.target.value }))} />
               </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Localização</span>
+                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.location || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), location: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Nacionalidade</span>
+                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.nationality || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), nationality: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Tipo de trabalho preferido</span>
+                <select
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={String(draft.preferredJobType || "")}
+                  onChange={(e) => setDraft((prev) => ({ ...(prev || {}), preferredJobType: e.target.value }))}
+                >
+                  <option value="">Selecione</option>
+                  {PREFERRED_JOB_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Disponibilidade</span>
+                <select
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={String(draft.availability || "")}
+                  onChange={(e) => setDraft((prev) => ({ ...(prev || {}), availability: e.target.value }))}
+                >
+                  <option value="">Selecione</option>
+                  {AVAILABILITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Expectativa salarial (AOA)</span>
+                <input
+                  inputMode="numeric"
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2"
+                  value={draft.expectedSalaryAoa ? String(draft.expectedSalaryAoa) : ""}
+                  onChange={(e) => setDraft((prev) => ({ ...(prev || {}), expectedSalaryAoa: normalizeMoney(e.target.value) }))}
+                />
+              </label>
             </div>
             <label className="mt-4 block text-sm">
               <span className="mb-1 block text-gray-600">Resumo</span>
               <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2" rows={4} value={String(draft.summary || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), summary: e.target.value }))} />
             </label>
-            <label className="mt-4 block text-sm">
-              <span className="mb-1 block text-gray-600">Skills (vírgula)</span>
-              <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={toCsv((draft.skills as string[]) || [])} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), skills: fromCsv(e.target.value) }))} />
-            </label>
+
+            <div className="mt-4 space-y-4">
+              <TagInput
+                label="Skills"
+                placeholder="Ex.: React"
+                values={(draft.skills as string[]) || []}
+                onChange={(next) => setDraft((prev) => ({ ...(prev || {}), skills: next }))}
+                suggestions={SKILL_SUGGESTIONS}
+              />
+              <TagInput
+                label="Idiomas"
+                placeholder="Ex.: Português"
+                values={(draft.languages as string[]) || []}
+                onChange={(next) => setDraft((prev) => ({ ...(prev || {}), languages: next }))}
+                suggestions={LANGUAGE_SUGGESTIONS}
+              />
+              <TagInput
+                label="Certificações"
+                placeholder="Ex.: AWS"
+                values={(draft.certifications as string[]) || []}
+                onChange={(next) => setDraft((prev) => ({ ...(prev || {}), certifications: next }))}
+                suggestions={CERT_SUGGESTIONS}
+              />
+            </div>
+
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">Experiência profissional</h3>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50"
+                  onClick={openNewExperience}
+                >
+                  Adicionar experiência
+                </button>
+              </div>
+              {draftExperiences.length === 0 ? <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">Sem experiências extraídas.</p> : null}
+              <div className="space-y-3">
+                {draftExperiences.map((item, index) => (
+                  <ExperienceCard
+                    key={`${item.jobTitle}-${index}`}
+                    item={item}
+                    onEdit={() => openEditExperience(index)}
+                    onDelete={() => removeExperience(index)}
+                    onMoveUp={index > 0 ? () => setDraft((prev) => ({ ...(prev || {}), experience: reorderItem(((prev?.experience as ExperienceItem[]) || []), index, index - 1) })) : undefined}
+                    onMoveDown={index < draftExperiences.length - 1 ? () => setDraft((prev) => ({ ...(prev || {}), experience: reorderItem(((prev?.experience as ExperienceItem[]) || []), index, index + 1) })) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">Educação</h3>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50"
+                  onClick={openNewEducation}
+                >
+                  Adicionar educação
+                </button>
+              </div>
+              {draftEducationList.length === 0 ? <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">Sem registos de educação extraídos.</p> : null}
+              <div className="space-y-3">
+                {draftEducationList.map((item, index) => (
+                  <EducationCard
+                    key={`${item.degree}-${index}`}
+                    item={item}
+                    onEdit={() => openEditEducation(index)}
+                    onDelete={() => removeEducation(index)}
+                    onMoveUp={index > 0 ? () => setDraft((prev) => ({ ...(prev || {}), education: reorderItem(((prev?.education as EducationItem[]) || []), index, index - 1) })) : undefined}
+                    onMoveDown={index < draftEducationList.length - 1 ? () => setDraft((prev) => ({ ...(prev || {}), education: reorderItem(((prev?.education as EducationItem[]) || []), index, index + 1) })) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
 
             <div className="mt-4 flex gap-3">
               <button onClick={handleApprove} disabled={approving} className="rounded-xl bg-red-600 px-6 py-2.5 font-semibold text-white hover:bg-red-700 disabled:opacity-60">
                 {approving ? "A guardar..." : "Confirmar e guardar"}
               </button>
-              <button onClick={() => setDraft(null)} className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm hover:bg-gray-50">
+              <button onClick={() => { setDraft(null); setMissingSections([]); setParseWarning(""); }} className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm hover:bg-gray-50">
                 Cancelar
               </button>
             </div>
@@ -437,11 +798,65 @@ export default function CvDocumentosPage() {
                   <p className="font-medium">{doc.fileName || "Documento"}</p>
                   <p className="text-xs text-gray-500">{doc.type || "file"} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-AO") : ""}</p>
                 </div>
-                {doc.signedUrl ? <a href={doc.signedUrl} target="_blank" rel="noreferrer" className="text-red-600 hover:underline">Abrir</a> : null}
+                <div className="flex items-center gap-3">
+                  {doc.signedUrl ? <a href={doc.signedUrl} target="_blank" rel="noreferrer" className="text-red-600 hover:underline">Abrir</a> : null}
+                  <button
+                    type="button"
+                    disabled={deletingDocId === doc._id}
+                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    onClick={() => handleDeleteDocument(doc._id)}
+                  >
+                    {deletingDocId === doc._id ? "A remover..." : "Eliminar"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </section>
+
+      <AddItemModal
+        open={expModalOpen}
+        title={editingExpIndex === null ? "Adicionar experiência" : "Editar experiência"}
+        onClose={() => setExpModalOpen(false)}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Cargo" value={draftExperience.jobTitle} onChange={(e) => setDraftExperience((prev) => ({ ...prev, jobTitle: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Empresa" value={draftExperience.company} onChange={(e) => setDraftExperience((prev) => ({ ...prev, company: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftExperience.location} onChange={(e) => setDraftExperience((prev) => ({ ...prev, location: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.startDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, startDate: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.endDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, endDate: e.target.value }))} disabled={draftExperience.current} />
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={draftExperience.current} onChange={(e) => setDraftExperience((prev) => ({ ...prev, current: e.target.checked, endDate: e.target.checked ? "" : prev.endDate }))} />
+            Trabalho atual
+          </label>
+        </div>
+        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
+        {expFormError ? <p className="mt-2 text-xs text-rose-700">{expFormError}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setExpModalOpen(false)}>Cancelar</button>
+          <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveExperience}>Guardar</button>
+        </div>
+      </AddItemModal>
+
+      <AddItemModal
+        open={eduModalOpen}
+        title={editingEduIndex === null ? "Adicionar educação" : "Editar educação"}
+        onClose={() => setEduModalOpen(false)}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Curso/Grau" value={draftEducation.degree} onChange={(e) => setDraftEducation((prev) => ({ ...prev, degree: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Instituição" value={draftEducation.institution} onChange={(e) => setDraftEducation((prev) => ({ ...prev, institution: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftEducation.location} onChange={(e) => setDraftEducation((prev) => ({ ...prev, location: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.startDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, startDate: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.endDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, endDate: e.target.value }))} />
+        </div>
+        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição" value={draftEducation.description} onChange={(e) => setDraftEducation((prev) => ({ ...prev, description: e.target.value }))} />
+        {eduFormError ? <p className="mt-2 text-xs text-rose-700">{eduFormError}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEduModalOpen(false)}>Cancelar</button>
+          <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveEducation}>Guardar</button>
+        </div>
+      </AddItemModal>
     </div>
   );
 }
