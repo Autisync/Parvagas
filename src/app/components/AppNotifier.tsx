@@ -273,7 +273,7 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
         />
       )}
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[95] w-[min(92vw,420px)] space-y-2">
+      <div className="pointer-events-none fixed right-4 top-4 z-[130] w-[min(92vw,420px)] space-y-2">
         {toasts.map((toast) => (
           <ToastError
             key={toast.id}

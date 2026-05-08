@@ -8,6 +8,7 @@ import {
   fetchAdminActions,
   fetchAdminMe,
   fetchAuditLogs,
+  downloadAuditLogsCsv,
   toDateLabel,
   type AdminActionRecord,
   type AdminLevel,
@@ -30,6 +31,9 @@ export default function AdminAuditPage() {
   const [keyword, setKeyword] = useState("");
   const [action, setAction] = useState("");
   const [resourceType, setResourceType] = useState("");
+  const [actorUserId, setActorUserId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
@@ -48,7 +52,7 @@ export default function AdminAuditPage() {
       if (me.adminLevel !== "super-admin") return;
 
       if (tab === "audit") {
-        const res = await fetchAuditLogs(token, { page, limit, keyword, action, resourceType });
+        const res = await fetchAuditLogs(token, { page, limit, keyword, action, resourceType, actorUserId, from, to });
         setAuditLogs(res.auditLogs || []);
         setPagination(res.pagination);
       } else {
@@ -59,7 +63,7 @@ export default function AdminAuditPage() {
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar auditoria."));
     }
-  }, [token, tab, page, limit, keyword, action, resourceType]);
+  }, [token, tab, page, limit, keyword, action, resourceType, actorUserId, from, to]);
 
   useEffect(() => {
     load();
@@ -92,7 +96,7 @@ export default function AdminAuditPage() {
       const ids = await collectAllIdsAcrossPages<AuditLogRecord | AdminActionRecord>({
         fetchPage: async (currentPage) => {
           if (tab === "audit") {
-            const res = await fetchAuditLogs(token, { page: currentPage, limit: 100, keyword, action, resourceType });
+            const res = await fetchAuditLogs(token, { page: currentPage, limit: 100, keyword, action, resourceType, actorUserId, from, to });
             return { items: res.auditLogs || [], totalPages: res.pagination?.totalPages || 1 };
           }
           const res = await fetchAdminActions(token, { page: currentPage, limit: 100, keyword, action, targetType: resourceType });
@@ -114,7 +118,7 @@ export default function AdminAuditPage() {
       selectedIds,
       fetchPage: async (currentPage) => {
         if (tab === "audit") {
-          const res = await fetchAuditLogs(token, { page: currentPage, limit: 100, keyword, action, resourceType });
+          const res = await fetchAuditLogs(token, { page: currentPage, limit: 100, keyword, action, resourceType, actorUserId, from, to });
           return { items: res.auditLogs || [], totalPages: res.pagination?.totalPages || 1 };
         }
         const res = await fetchAdminActions(token, { page: currentPage, limit: 100, keyword, action, targetType: resourceType });
@@ -154,6 +158,16 @@ export default function AdminAuditPage() {
     }
   };
 
+  const exportFilteredCsv = async () => {
+    if (!token || tab !== "audit") return;
+    try {
+      await downloadAuditLogsCsv(token, { keyword, action, resourceType, actorUserId, from, to });
+      setNotice("CSV de auditoria exportado com sucesso.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível exportar CSV de auditoria."));
+    }
+  };
+
   if (level !== "super-admin") {
     return (
       <AdminRestricted title="Auditoria restrita">
@@ -170,7 +184,7 @@ export default function AdminAuditPage() {
         description="Inspecione alterações sensíveis, moderação, acessos e operações administrativas."
       />
 
-      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
+      {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
@@ -193,6 +207,9 @@ export default function AdminAuditPage() {
         <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar logs" className={adminFieldClass} />
         <input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Filtrar por ação" className={adminFieldClass} />
         <input value={resourceType} onChange={(e) => { setResourceType(e.target.value); setPage(1); clearSelectionState(); }} placeholder={tab === "audit" ? "Resource type" : "Target type"} className={adminFieldClass} />
+        <input value={actorUserId} onChange={(e) => { setActorUserId(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Utilizador (ID)" className={adminFieldClass} />
+        <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
+        <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
       </AdminFilterBar>
 
       {currentItems.length > 0 ? (
@@ -215,6 +232,7 @@ export default function AdminAuditPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" onClick={copySelectedIds} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Copiar IDs</button>
               <button type="button" onClick={exportSelected} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">Exportar JSON</button>
+              {tab === "audit" ? <button type="button" onClick={exportFilteredCsv} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Exportar CSV filtrado</button> : null}
             </div>
           ) : null}
 

@@ -4,6 +4,45 @@ import { normalizeErrorMessage } from "@/lib/errorMessage";
 const DEV_API_FALLBACK = "http://localhost:6001";
 
 const DEFAULT_TIMEOUT_MS = 20000;
+const SESSION_TOKEN_KEY = "parvagas_token";
+const SESSION_USER_KEY = "parvagas_user";
+const SESSION_ACTIVITY_KEY = "parvagas_last_activity_at";
+const SESSION_LOGOUT_KEY = "parvagas_logout_at";
+const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+function notifySessionChange(event: "logout" | "activity") {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("parvagas:session", { detail: { event, at: Date.now() } }));
+}
+
+function clearSessionData() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_USER_KEY);
+  localStorage.removeItem(SESSION_ACTIVITY_KEY);
+}
+
+function recordLogoutSignal() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SESSION_LOGOUT_KEY, String(Date.now()));
+}
+
+export function getSessionIdleTimeoutMs(): number {
+  const configured = Number(process.env.NEXT_PUBLIC_SESSION_IDLE_TIMEOUT_MS || DEFAULT_SESSION_IDLE_TIMEOUT_MS);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return DEFAULT_SESSION_IDLE_TIMEOUT_MS;
+}
+
+export function getLastSessionActivityAt(): number {
+  if (typeof window === "undefined") return 0;
+  return Number(localStorage.getItem(SESSION_ACTIVITY_KEY) || 0);
+}
+
+export function touchClientSession() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
+  notifySessionChange("activity");
+}
 
 export type ApiFetchOptions = RequestInit & {
   suppressGlobalErrors?: boolean;
@@ -93,8 +132,8 @@ export async function apiFetch<T = unknown>(
   options?: ApiFetchOptions
 ): Promise<T> {
   const res = await apiFetchRaw(path, {
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
   });
 
   if (!res.ok) {
@@ -124,6 +163,9 @@ export async function apiFetch<T = unknown>(
           action: "retry",
         });
       } else if (res.status === 401) {
+        clearSessionData();
+        recordLogoutSignal();
+        notifySessionChange("logout");
         getGlobalErrorDispatch()?.appError?.({
           type: "auth",
           message: "A sua sessão expirou. Faça login novamente.",
@@ -218,22 +260,24 @@ export function authFetchRaw(path: string, token: string, options?: ApiFetchOpti
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("parvagas_token");
+  return localStorage.getItem(SESSION_TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem("parvagas_token", token);
+  localStorage.setItem(SESSION_TOKEN_KEY, token);
+  touchClientSession();
 }
 
 export function clearToken() {
-  localStorage.removeItem("parvagas_token");
-  localStorage.removeItem("parvagas_user");
+  clearSessionData();
+  recordLogoutSignal();
+  notifySessionChange("logout");
 }
 
 export function getUser(): Record<string, unknown> | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem("parvagas_user");
+    const raw = localStorage.getItem(SESSION_USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -241,5 +285,20 @@ export function getUser(): Record<string, unknown> | null {
 }
 
 export function setUser(user: Record<string, unknown>) {
-  localStorage.setItem("parvagas_user", JSON.stringify(user));
+  localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+}
+
+export async function logoutCurrentSession(token?: string | null) {
+  try {
+    if (token) {
+      await authFetchRaw("/auth/logout", token, {
+        method: "POST",
+        suppressGlobalErrors: true,
+      });
+    }
+  } catch {
+    // Session cleanup must still succeed locally if the backend is unavailable.
+  } finally {
+    clearToken();
+  }
 }

@@ -23,6 +23,8 @@ type LoginResponse = {
     companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
     hasCompletedOnboarding?: boolean;
     hasSeenTutorial?: boolean;
+    hasSeenEmpresaTutorial?: boolean;
+    companyStatus?: "inactive" | "pending_verification" | "active" | "rejected";
   };
 };
 
@@ -70,6 +72,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const rawRole = searchParams.get("role");
   const queryResetToken = useMemo(() => searchParams.get("resetToken") || "", [searchParams]);
+  const queryFirstLoginToken = useMemo(() => searchParams.get("firstLoginToken") || "", [searchParams]);
   const selectedRole = useMemo(() => normalizeRole(rawRole), [rawRole]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,6 +96,16 @@ function LoginContent() {
   }, [rawRole, router]);
 
   useEffect(() => {
+    if (queryFirstLoginToken) {
+      setFirstLoginResetToken(queryFirstLoginToken);
+      setPasswordResetToken("");
+      setFormFeedback({
+        variant: "info",
+        message: "Defina uma nova password para ativar a sua conta.",
+      });
+      return;
+    }
+
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
@@ -101,7 +114,7 @@ function LoginContent() {
         message: "Defina uma nova password para concluir a recuperação de conta.",
       });
     }
-  }, [queryResetToken]);
+  }, [queryFirstLoginToken, queryResetToken]);
 
   const showFeedback = (next: FormFeedback | null) => {
     if (!next) {
@@ -201,6 +214,8 @@ function LoginContent() {
         name: data.user.fullName,
         hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
         hasSeenTutorial: data.user.hasSeenTutorial ?? false,
+        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
+        companyStatus: data.user.companyStatus,
       });
       showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       window.setTimeout(() => {
@@ -276,6 +291,8 @@ function LoginContent() {
         name: data.user.fullName,
         hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
         hasSeenTutorial: data.user.hasSeenTutorial ?? false,
+        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
+        companyStatus: data.user.companyStatus,
       });
       showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       window.setTimeout(() => {

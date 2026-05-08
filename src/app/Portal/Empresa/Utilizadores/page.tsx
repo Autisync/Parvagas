@@ -348,8 +348,12 @@ export default function EmpresaUtilizadoresPage() {
                       <option value={14}>Expira em 14 dias</option>
                     </select>
                     <div className="md:col-span-4">
-                      <button type="submit" disabled={inviting} className="app-btn-primary disabled:opacity-60">
-                        {inviting ? "A criar convite..." : "Criar convite pendente"}
+                      <button
+                        type="submit"
+                        disabled={inviting}
+                        className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {inviting ? "A criar convite..." : "Criar convite"}
                       </button>
                     </div>
                   </form>
@@ -400,8 +404,17 @@ export default function EmpresaUtilizadoresPage() {
         </div>
 
         {memberActionModal && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4"
+            onClick={() => {
+              setMemberActionModal(null);
+              setRemoveConfirmationText("");
+            }}
+          >
+            <div
+              className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
               <h3 className="text-lg font-bold text-slate-900">
                 {memberActionModal.type === "remove" ? "Confirmar remoção de membro" : "Confirmar downgrade de permissões"}
               </h3>

@@ -11,6 +11,9 @@ Canonical template file: .env.production.example
 - [ ] SUPABASE_STORAGE_BUCKET=parvagas-private
 - [ ] JWT_SECRET=0fda5e2e-4e77-4bb7-8eeb-703b75a639bc
   - Rule: at least 32 chars, non-placeholder, random.
+- [ ] AUTH_MAX_FAILED_LOGINS=8
+- [ ] AUTH_LOCK_MINUTES=15
+- [ ] TEMP_PASSWORD_TTL_MINUTES=60
 - [ ] NEXT_PUBLIC_SITE_URL=https://parvagas.vercel.app
 - [ ] NEXT_PUBLIC_API_URL=https://api.parvagas.vercel.app
 - [ ] CORS_ORIGIN=https://parvagas.vercel.app
@@ -30,6 +33,9 @@ Canonical template file: .env.production.example
 ## 2. Validation Rules (Must Pass)
 
 - [ ] JWT_SECRET is not placeholder text and length >= 32.
+- [ ] AUTH_MAX_FAILED_LOGINS >= 3.
+- [ ] AUTH_LOCK_MINUTES >= 5.
+- [ ] TEMP_PASSWORD_TTL_MINUTES between 10 and 120.
 - [ ] STORAGE_PROVIDER is exactly supabase.
 - [ ] NEXT_PUBLIC_SITE_URL starts with https://
 - [ ] NEXT_PUBLIC_API_URL starts with https://
@@ -59,6 +65,9 @@ SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 SUPABASE_STORAGE_BUCKET=parvagas-private
 JWT_SECRET=REPLACE_WITH_LONG_RANDOM_SECRET_MIN_32
+AUTH_MAX_FAILED_LOGINS=8
+AUTH_LOCK_MINUTES=15
+TEMP_PASSWORD_TTL_MINUTES=60
 PORT=3001
 NODE_ENV=production
 

@@ -34,6 +34,13 @@ type Profile = {
   completionScore?: number;
 };
 
+const readTotal = (value: any): number => {
+  if (!value || typeof value !== "object") return 0;
+  if (typeof value.total === "number") return value.total;
+  if (typeof value?.pagination?.total === "number") return value.pagination.total;
+  return 0;
+};
+
 export default function CandidatoDashboard() {
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
   const { dict } = useClientLocale();
@@ -69,12 +76,17 @@ export default function CandidatoDashboard() {
         }
 
         setStats({
-          recommendedJobs: 0,
-          savedJobs: savedRes.status === "fulfilled" ? (savedRes.value as any)?.total || 0 : 0,
-          applications: applicationsRes.status === "fulfilled" ? (applicationsRes.value as any)?.total || 0 : 0,
-          jobAlerts: alertsRes.status === "fulfilled" ? (alertsRes.value as any)?.total || 0 : 0,
+          recommendedJobs: recommendedRes.status === "fulfilled" ? readTotal(recommendedRes.value) : 0,
+          savedJobs: savedRes.status === "fulfilled" ? readTotal(savedRes.value) : 0,
+          applications: applicationsRes.status === "fulfilled" ? readTotal(applicationsRes.value) : 0,
+          jobAlerts: alertsRes.status === "fulfilled" ? readTotal(alertsRes.value) : 0,
           profileCompletion: profileRes.status === "fulfilled" ? (profileRes.value as any)?.profile?.completionScore || 0 : 0,
-          cvDocuments: docsRes.status === "fulfilled" ? ((docsRes.value as any)?.length || 0) : 0,
+          cvDocuments:
+            docsRes.status === "fulfilled"
+              ? Array.isArray((docsRes.value as any)?.documents)
+                ? (docsRes.value as any).documents.length
+                : 0
+              : 0,
         });
       } catch (error) {
         console.error("Failed to fetch dashboard stats", error);

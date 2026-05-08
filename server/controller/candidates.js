@@ -564,17 +564,16 @@ export const completeOnboarding = async (req, res) => {
   }
 };
 
-export const getRecommendedJobs = async (req, res) => {
-  export const markTutorialSeen = async (req, res) => {
-    try {
-      await User.findByIdAndUpdate(req.user.id, { hasSeenTutorial: true }, { new: true });
-      return res.status(200).json({ hasSeenTutorial: true });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-  };
+export const markTutorialSeen = async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user.id, { hasSeenTutorial: true }, { new: true });
+    return res.status(200).json({ hasSeenTutorial: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
 
-  export const getRecommendedJobs = async (req, res) => {
+export const getRecommendedJobs = async (req, res) => {
   const { page, limit, skip } = readPagination(req, { defaultLimit: 10, maxLimit: 30 });
   const profile = await CandidateProfile.findOne({ userId: req.user.id });
   if (!profile) return res.status(404).json({ error: "Perfil não encontrado." });
@@ -675,6 +674,7 @@ export const applyToJob = async (req, res) => {
     profileSource = "main_profile",
     generatedCvProfileId,
     useLatestCv = false,
+    savedCvDocumentId,
     coverLetter = "",
   } = req.body;
   const customCv = req.file;
@@ -739,6 +739,12 @@ export const applyToJob = async (req, res) => {
     });
 
     customCvDocumentId = document._id;
+  } else if (savedCvDocumentId) {
+    const selectedCv = await CandidateDocument.findById(savedCvDocumentId);
+    if (!selectedCv || selectedCv.type !== "cv" || String(selectedCv.userId) !== String(req.user.id)) {
+      return res.status(404).json({ error: "CV guardado selecionado não foi encontrado." });
+    }
+    customCvDocumentId = selectedCv._id;
   } else if (useLatestCv) {
     const latestCv = await CandidateDocument.find({ userId: req.user.id, type: "cv" })
       .sort({ createdAt: -1 })

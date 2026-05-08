@@ -8,7 +8,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { pingSupabase } from "./db/modelFactory.js";
-import { authLimiter, uploadLimiter, applyLimiter, generalLimiter } from "./middleware/rateLimiter.js";
+import {
+  authLimiter,
+  uploadLimiter,
+  applyLimiter,
+  publicReadLimiter,
+  generalReadLimiter,
+  writeLimiter,
+} from "./middleware/rateLimiter.js";
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import applicationRoutes from "./routes/applications.js";
@@ -17,7 +24,9 @@ import companyRoutes from "./routes/companies.js";
 import jobRoutes from "./routes/jobs.js";
 import adminRoutes from "./routes/admin.js";
 import publicRoutes from "./routes/public.js";
+import notificationsRoutes from "./routes/notifications.js";
 import { initSentry, captureSentryException } from "./services/sentryService.js";
+import { publishLiveUpdate, registerLiveUpdatesClient } from "./services/liveUpdatesService.js";
 
 function normalizeErrorMessage(message) {
   const raw = String(message || "").trim();
@@ -129,13 +138,37 @@ export function createApp() {
 
   /* HEALTH CHECK */
   app.get("/health", (_req, res) => res.status(200).json({ status: "ok", ts: new Date().toISOString() }));
+  app.get("/events/stream", (req, res) => registerLiveUpdatesClient(req, res));
+
+  app.use((req, res, next) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+
+    res.on("finish", () => {
+      if (res.statusCode >= 400) return;
+      if (req.originalUrl.startsWith("/events/")) return;
+      if (req.originalUrl.startsWith("/health")) return;
+
+      const topLevelPath = req.originalUrl.split("?")[0].split("/").filter(Boolean)[0] || "app";
+      publishLiveUpdate({
+        scope: topLevelPath,
+        entity: topLevelPath,
+        action: req.method.toLowerCase(),
+        path: req.originalUrl,
+      });
+    });
+
+    next();
+  });
 
   /* RATE LIMITING per route group */
   app.use("/auth", authLimiter);
   app.use("/candidates/cv", uploadLimiter);
   app.use("/candidates/jobs/apply", applyLimiter);
   app.use("/applications", applyLimiter);
-  app.use(generalLimiter);
+  app.use("/public", publicReadLimiter);
+  app.use("/jobs", publicReadLimiter);
+  app.use(generalReadLimiter);
+  app.use(writeLimiter);
 
   /* ROUTES */
   app.use("/auth", authRoutes);
@@ -146,6 +179,7 @@ export function createApp() {
   app.use("/jobs", jobRoutes);
   app.use("/admin", adminRoutes);
   app.use("/public", publicRoutes);
+  app.use("/notifications", notificationsRoutes);
 
   app.use((req, res) => {
     return res.status(404).json({

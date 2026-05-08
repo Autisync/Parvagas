@@ -59,38 +59,64 @@ Plataforma de recrutamento Angola-first com foco em:
 - Criação e gestão de vagas
 - Restrição para impedir edição de vagas de outras empresas
 
+### Employer workflow (atualizado)
+- Onboarding multi-passo para conta empresa com progresso persistido por utilizador (`hasSeenEmpresaTutorial` + passo em localStorage)
+- Página dedicada de Definições no portal empresa para reabrir tutorial
+- Auto-preenchimento inicial do perfil da empresa com dados do registo do owner
+- Bloqueio de publicação de vagas enquanto `companyStatus !== active`
+- Campos adicionais no modal de vaga: `responsibilities` e `requirements`
+
+### Verificação e moderação de empresas
+- Estados suportados: `pending_verification`, `active`, `rejected`, `inactive`
+- Ações de moderador/admin na página de empresas:
+  - Aprovar / rejeitar / inativar / devolver para pendente
+  - Pré-visualizar email por template (`approval`, `more_info`, `rejected`, `meeting`)
+  - Enviar email de verificação com assunto/corpo editáveis
+- Fluxo de exclusão:
+  - Moderador pode criar pedido de exclusão
+  - Super-admin pode aprovar/rejeitar pedidos pendentes
+
+### Notificações e mensagens internas
+- Sino de notificações em portais candidate/company/admin
+- Ações: marcar lida/não lida, resolver
+- Mensagem interna de membro de equipa para owner com motivos whitelist:
+  - `Solicitar aprovação de vaga`
+  - `Atualizar perfil`
+  - `Assunto administrativo`
+  - `Outro`
+
 ### Vagas e visibilidade
 - Campos de vaga suportados no schema
 - Visibilidade: `public`, `private`, `draft`, `archived`
-- Moderação por admin com status `pending`, `approved`, `rejected`
-- Listagem pública apenas para vagas `public + approved`
+- Moderação por admin com status `pending_company_approval`, `pending_platform_review`, `approved`, `published`, `platform_rejected`, `archived`
+- Listagem pública apenas para vagas `public + published/approved`
 
 ### Admin
 - Overview
 - Suspensão de utilizadores
-- Moderação de vagas
-- Verificação de empresas
-- Gestão de campanhas de anúncios
-- Fluxo de scraping com revisão manual
-- Logs de auditoria/admin actions
+- Moderação de vagas com atualização otimista no UI e sincronização periódica
+- Verificação de empresas com templates de email (aprovar, pedir informação, rejeitar, inativar)
+- Gestão de campanhas de anúncios (criar, editar, ativar/desativar, eliminar)
+- Fluxo de scraping com revisão manual + edição e eliminação
+- Logs de auditoria/admin actions com filtros por ação, utilizador, intervalo de datas e exportação CSV
 
 ### Ads (sem Stripe)
 - Gestão manual de campanhas
 - Placement suportado:
   - `homepage_banner`
-  - `job_listing_sidebar`
-  - `job_detail_page`
-  - `sponsored_company_card`
-  - `blog_article_ad`
+  - `sidebar`
+  - `inline`
+  - `newsletter`
 - Tracking de impressões e cliques
 - Sem checkout, subscrição, webhook ou qualquer processamento de pagamento
 
 ### Scraping (admin-reviewed)
 - Scraped jobs entram como `pending` por padrão
 - Detecção de duplicados por fingerprint
-- Review admin para aprovar/rejeitar/merge
+- Review admin para aprovar/rejeitar/duplicado/arquivar
 - Publicação nunca automática
 - Atribuição de fonte suportada por `sourceUrl` e `sourceType`
+- Seed de dados de teste: `npm run db:seed:scraped`
 
 ### Search / MeiliSearch
 - Script de reindex: `npm run reindex:jobs`
@@ -135,6 +161,18 @@ Plataforma de recrutamento Angola-first com foco em:
 - `GET /companies/jobs`
 - `GET /companies/applications`
 - `PATCH /companies/:id/verification` (admin)
+- `POST /companies/:id/verification/preview-email` (admin)
+- `POST /companies/:id/verification/send-email` (admin)
+- `POST /companies/:id/deletion-request` (admin)
+- `GET /companies/deletion-requests` (admin)
+- `PATCH /companies/deletion-requests/:id/review` (super-admin)
+- `PATCH /companies/tutorial/seen`
+
+- `GET /notifications`
+- `PATCH /notifications/:id/read`
+- `PATCH /notifications/:id/unread`
+- `PATCH /notifications/:id/resolve`
+- `POST /notifications/company-admin-message`
 
 - `GET /jobs`
 - `GET /jobs/:id`
@@ -145,13 +183,30 @@ Plataforma de recrutamento Angola-first com foco em:
 - `PATCH /admin/jobs/:id/moderate`
 - `POST /admin/ads`
 - `GET /admin/ads`
+- `PUT /admin/ads/:id`
+- `PATCH /admin/ads/:id/status`
+- `PATCH /admin/ads/:id`
+- `DELETE /admin/ads/:id`
 - `POST /admin/scraped-jobs`
+- `PATCH /admin/scraped-jobs/:id`
 - `PATCH /admin/scraped-jobs/:id/review`
+- `DELETE /admin/scraped-jobs/:id`
+- `GET /admin/audit-logs`
+- `GET /admin/audit-logs/export.csv`
 
 - `GET /public/ads`
 - `POST /public/ads/:id/impression`
 - `POST /public/ads/:id/click`
 - `GET /public/sitemap-jobs`
+
+## Regras de validação operacional
+
+- `PATCH /admin/jobs/:id/moderate` devolve a vaga atualizada e o frontend deve refrescar a lista após sucesso para evitar sobrescrever estado com polling antigo.
+- `PATCH /companies/:id/verification` aceita aliases como `pending`, `pendente`, `ativa`, `inativa` e `rejeitada`, mas normaliza tudo para `active`, `pending_verification`, `inactive` e `rejected`.
+- `PATCH /companies/:id/verification` valida transições e devolve mensagens específicas, por exemplo quando se tenta mover uma empresa ativa para pendente.
+- `GET /admin/companies?status=...` filtra por `status` normalizado e também por `verificationStatus` legado, para que listas de empresas ativas/rejeitadas/inativas não desapareçam durante a migração de dados.
+- `PATCH /admin/users/:id/suspend` exige `suspended` boolean, `reason`, e está restrito a `super-admin`; a API devolve erros específicos para auto-suspensão e utilizador inexistente.
+- `POST /admin/ads`, `PUT /admin/ads/:id` e `PATCH /admin/ads/:id` validam `title`, `placement`, `link`, `startDate` e `endDate`, incluindo URL completo e `startDate <= endDate`; o frontend deve mostrar a mensagem específica devolvida pela API para erros `400`.
 
 ## Variáveis de ambiente
 
@@ -163,6 +218,9 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 JWT_SECRET=change-me
 PORT=6001
+AUTH_MAX_FAILED_LOGINS=8
+AUTH_LOCK_MINUTES=15
+TEMP_PASSWORD_TTL_MINUTES=60
 
 # Frontend
 NEXT_PUBLIC_SITE_URL=https://parvagas.co.ao
@@ -193,7 +251,34 @@ EMAIL_PORT=587
 EMAIL_USER=
 EMAIL_PASS=
 EMAIL_FROM=no-reply@parvagas.local
+EMAIL_REQUIRE_TLS=true
+
+# Legal consent versions (signup)
+TERMS_VERSION=2026-05
+PRIVACY_VERSION=2026-05
 ```
+
+### Onboarding de contas criadas por admin
+
+- `POST /admin/users` e `POST /admin/users/admin` criam contas com password temporária forte, hash com `bcrypt` e expiração curta (`TEMP_PASSWORD_TTL_MINUTES`).
+- `credentialDeliveryMode` suporta:
+  - `set_password_link` (recomendado): envia link único de definição de password (`firstLoginToken`) com expiração curta.
+  - `temporary_password`: envia password temporária e força alteração no primeiro login.
+- Nota de segurança: prefira sempre `set_password_link` para evitar envio de passwords em texto simples por email.
+- Proteção de autenticação:
+  - `AUTH_MAX_FAILED_LOGINS` controla limite de tentativas falhadas.
+  - `AUTH_LOCK_MINUTES` define o tempo de bloqueio temporário da conta.
+
+### RBAC de moderação (jobs e anúncios)
+
+- Migração SQL: `server/migrations/2026-05-07-rbac-permissions.sql`
+- Permissões de moderação suportadas:
+  - `job.review`, `job.approve`, `job.reject`
+  - `ad.flag`, `ad.pause`, `ad.draft`, `ad.publish`
+- Perfil `moderator` por omissão:
+  - permitido: `job.review`, `job.approve`, `job.reject`, `ad.flag`, `ad.pause`, `ad.draft`
+  - não permitido: `ad.publish`
+- O backend continua a aplicar validação por permissão em cada rota protegida (`hasPermission`/`requirePermission`/`requireAnyPermission`).
 
 Crie também um `.env.local` (frontend) com:
 
@@ -297,6 +382,7 @@ npm run server
 npm run lint
 npm run test
 npm run test:ui
+npm run test:load:gate
 npm run typecheck
 npm run build
 npm run db:migration:generate
@@ -326,6 +412,35 @@ Este projeto usa Supabase Postgres. Para checkpoint de migração foi adicionado
 4. Start frontend: `npm run start`
 5. Start API server: `npm run server`
 6. Opcional: configurar MeiliSearch e executar `npm run reindex:jobs`
+7. Gate de carga (staging/CI): `npm run test:load:gate`
+
+### Gate de carga e limites por rota
+
+- O backend aplica limites diferenciados por classe de rota:
+  - Auth e escrita sensível: limites mais estritos
+  - Leitura pública: janela curta para burst
+  - Uploads/candidaturas: limites dedicados
+- Variáveis de tuning:
+  - `RATE_LIMIT_PUBLIC_READ_WINDOW_MS`
+  - `RATE_LIMIT_PUBLIC_READ_MAX`
+  - `RATE_LIMIT_GENERAL_READ_MAX`
+  - `RATE_LIMIT_WRITE_MAX`
+  - Todos os `429` passam a emitir evento externo via Sentry com `routeClass`, `path` e `method` para alertas por classe de rota.
+- O gate de carga usa thresholds p95/p99/error-rate via env:
+  - `LOAD_HEALTH_MAX_P95_MS`, `LOAD_HEALTH_MAX_P99_MS`, `LOAD_HEALTH_MAX_ERROR_RATE`
+  - `LOAD_PUBLIC_MAX_P95_MS`, `LOAD_PUBLIC_MAX_P99_MS`, `LOAD_PUBLIC_MAX_ERROR_RATE`
+- O gate também permite modelar taxa por conexão (simulação de utilizadores simultâneos sem sobrecarga sintética):
+  - `LOAD_HEALTH_CONNECTIONS`, `LOAD_HEALTH_CONNECTION_RATE`
+  - `LOAD_PUBLIC_CONNECTIONS`, `LOAD_PUBLIC_CONNECTION_RATE`
+- CI inclui um job `Load Gate` que arranca a API localmente e falha o workflow se os thresholds forem ultrapassados.
+- Para staging/prod-like infra, executar o mesmo gate apontando `LOAD_BASE_URL` para o ambiente alvo. Exemplo: `LOAD_BASE_URL=$STAGING_LOAD_BASE_URL npm run test:load:gate`
+- Falhas de Supabase no boundary do document-store são emitidas para Sentry com contexto de `operation`, `tableName` e `modelName` para alertas de upstream DB.
+
+### Sessões e timeout por inatividade
+
+- Login passa a manter apenas uma sessão ativa por utilizador; novo login invalida o token anterior.
+- Sessões expiram por inatividade via `AUTH_SESSION_IDLE_TIMEOUT_MS` no backend e `NEXT_PUBLIC_SESSION_IDLE_TIMEOUT_MS` no frontend.
+- Logout manual chama `/auth/logout`, revoga a sessão ativa e sincroniza saída entre separadores do browser.
 
 ## Limitações atuais e próximos passos
 

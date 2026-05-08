@@ -27,6 +27,7 @@ import NotificationPreference from "../models/notificationPreference.js";
 import SavedJob from "../models/savedJob.js";
 import ScrapedJob from "../models/scrapedJob.js";
 import GeneratedCvProfile from "../models/generatedCvProfile.js";
+import UserNotification from "../models/userNotification.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const id = () => randomUUID();
@@ -924,6 +925,45 @@ async function seedGeneratedCvProfiles() {
   log("Generated CV Profile: Miguel – Construction", genB);
 }
 
+// ─── 20. USER NOTIFICATIONS ────────────────────────────────────────────────
+async function seedUserNotifications() {
+  console.log("\n[user_notifications]");
+
+  const notifA = await UserNotification.create({
+    userId: CANDIDATE_A_ID,
+    senderUserId: COMPANY_OWNER_A_ID,
+    companyId: COMPANY_A_ID,
+    type: "company_internal_message",
+    title: "Confirmação de entrevista",
+    description: "A sua candidatura para Desenvolvedor Full-Stack foi seleccionada. Por favor confirme disponibilidade para entrevista amanhã às 10h.",
+    metadata: {
+      reason: "Agendamento de entrevista",
+      senderName: "Diogo Sapalalo",
+      senderRole: "owner",
+    },
+    readAt: null,
+    createdAt: daysAgo(3),
+  });
+  log("User Notification: interview confirm → Ana", notifA);
+
+  const notifB = await UserNotification.create({
+    userId: CANDIDATE_B_ID,
+    senderUserId: COMPANY_OWNER_B_ID,
+    companyId: COMPANY_B_ID,
+    type: "company_internal_message",
+    title: "Informação adicional necessária",
+    description: "Para prosseguir com a sua candidatura, precisamos de uma cópia do seu registo na Ordem dos Engenheiros de Angola.",
+    metadata: {
+      reason: "Documentação em falta",
+      senderName: "Helena Nzinga",
+      senderRole: "owner",
+    },
+    readAt: daysAgo(1),
+    createdAt: daysAgo(2),
+  });
+  log("User Notification: doc request → Miguel (read)", notifB);
+}
+
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 async function main() {
   console.log("=== Parvagas – Full Database Seed ===");
@@ -949,8 +989,9 @@ async function main() {
     await seedNotificationPreferences();
     await seedSavedJobs();
     await seedGeneratedCvProfiles();
+    await seedUserNotifications();
 
-    console.log("\n=== Seed complete! All 19 tables populated. ===");
+    console.log("\n=== Seed complete! All 20 tables populated. ===");
   } catch (err) {
     if (String(err.message).includes("generated_cv_profiles") && String(err.message).includes("schema cache")) {
       console.warn("\n[WARN] generated_cv_profiles table not found in schema cache.");

@@ -27,6 +27,15 @@ export function captureSentryException(error, context = {}) {
   });
 }
 
+export function captureSentryMessage(message, context = {}, level = "warning") {
+  if (!sentryEnabled || !message) return;
+  Sentry.withScope((scope) => {
+    scope.setLevel(level);
+    Object.entries(context || {}).forEach(([key, value]) => scope.setExtra(key, value));
+    Sentry.captureMessage(String(message));
+  });
+}
+
 export function isSentryEnabled() {
   return sentryEnabled;
 }

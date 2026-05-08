@@ -11,6 +11,7 @@ import Application from "../models/application.js";
 import SavedJob from "../models/savedJob.js";
 import JobAlert from "../models/jobAlert.js";
 import NotificationPreference from "../models/notificationPreference.js";
+import CompanyDeletionRequest from "../models/companyDeletionRequest.js";
 import AdCampaign from "../models/adCampaign.js";
 import ScrapedJob from "../models/scrapedJob.js";
 import { clearAllModelTables } from "../db/modelFactory.js";
@@ -114,7 +115,7 @@ const companyBlueprints = [
     contactPerson: "Mario Neto",
     contactEmail: "talento@globotech.ao",
     phone: "+244 923 331 210",
-    verificationStatus: "verified",
+    status: "active",
   },
   {
     key: "kixi",
@@ -131,7 +132,7 @@ const companyBlueprints = [
     contactPerson: "Lurdes Mateus",
     contactEmail: "rh@kixienergia.ao",
     phone: "+244 928 650 444",
-    verificationStatus: "verified",
+    status: "pending_verification",
   },
   {
     key: "benguela",
@@ -148,7 +149,7 @@ const companyBlueprints = [
     contactPerson: "Helder Jamba",
     contactEmail: "recrutamento@blogistica.ao",
     phone: "+244 943 102 991",
-    verificationStatus: "verified",
+    status: "rejected",
   },
   {
     key: "sagrada",
@@ -165,7 +166,7 @@ const companyBlueprints = [
     contactPerson: "Conceicao Mbala",
     contactEmail: "rh@sagradaesperanca.ao",
     phone: "+244 222 480 000",
-    verificationStatus: "verified",
+    status: "active",
   },
   {
     key: "bai",
@@ -182,7 +183,7 @@ const companyBlueprints = [
     contactPerson: "Rui Fernandes",
     contactEmail: "talentos@bai.ao",
     phone: "+244 222 693 000",
-    verificationStatus: "verified",
+    status: "active",
   },
 ];
 
@@ -571,6 +572,11 @@ async function upsertUser(base, passwordHash) {
     password: passwordHash,
     role: base.role,
     ...(base.role === "admin" ? { adminLevel: base.adminLevel || "super-admin" } : {}),
+    ...(base.role === "company"
+      ? {
+          hasSeenEmpresaTutorial: base.key === "company_kixi" ? false : true,
+        }
+      : {}),
     suspended: false,
     seedTag: seedStamp,
   };
@@ -584,6 +590,9 @@ async function upsertUser(base, passwordHash) {
 
 async function upsertCompany(base, ownerUserId) {
   const existing = await Company.findOne({ ownerUserId });
+  const status = String(base.status || "pending_verification").toLowerCase();
+  const verificationStatus = status === "active" ? "verified" : (status === "rejected" ? "rejected" : "pending");
+
   const payload = {
     name: base.name,
     legalName: base.legalName,
@@ -597,7 +606,8 @@ async function upsertCompany(base, ownerUserId) {
     contactEmail: base.contactEmail,
     phone: base.phone,
     ownerUserId,
-    verificationStatus: base.verificationStatus,
+    status,
+    verificationStatus,
     seedTag: seedStamp,
   };
 
@@ -975,7 +985,28 @@ async function seed() {
   for (const company of companyBlueprints) {
     const owner = usersByKey[company.ownerKey];
     companiesByKey[company.key] = await upsertCompany(company, owner._id);
+    await User.findByIdAndUpdate(owner._id, {
+      companyId: companiesByKey[company.key]._id,
+      companyStatus: String(company.status || "pending_verification").toLowerCase(),
+      companyTeamRole: "owner",
+    });
   }
+
+  await CompanyDeletionRequest.findOneAndUpdate(
+    {
+      companyId: String(companiesByKey.benguela._id),
+      status: "pending_admin_approval",
+    },
+    {
+      companyId: String(companiesByKey.benguela._id),
+      requestedByUserId: String(usersByKey.admin_moderator._id),
+      requestedByAdminLevel: "moderator",
+      reason: "Dados legais desatualizados e sem resposta após pedido de regularização.",
+      status: "pending_admin_approval",
+      seedTag: seedStamp,
+    },
+    { upsert: true, new: true }
+  );
 
   const jobsByKey = {};
   for (const job of jobBlueprints) {

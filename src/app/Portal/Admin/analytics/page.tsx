@@ -1,7 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -21,24 +20,30 @@ import {
 import {
   AdminAlert,
   AdminEmptyState,
+  AdminLoadingLabel,
   AdminPageHeader,
   adminButtonClass,
   adminFieldClass,
   adminSecondaryButtonClass,
 } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
+import AdminAnalyticsCharts from "../components/AdminAnalyticsCharts";
+import AnalyticsErrorBoundary from "../components/AnalyticsErrorBoundary";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
-
-const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
-  ssr: false,
-  loading: () => <div className="h-72 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">A preparar gráficos...</div>,
-});
 
 function toInputDate(daysAgo: number) {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   return d.toISOString().slice(0, 10);
+}
+
+function canPublishJob(status?: string) {
+  return ["pending_platform_review", "approved", "archived", "suspended"].includes(String(status || ""));
+}
+
+function canRejectJob(status?: string) {
+  return String(status || "") === "pending_platform_review";
 }
 
 export default function AdminAnalyticsPage() {
@@ -55,7 +60,7 @@ export default function AdminAnalyticsPage() {
   const [jobSearch, setJobSearch] = useState("");
   const [jobStatus, setJobStatus] = useState("pending_platform_review");
   const [jobSort, setJobSort] = useState("createdAt_desc");
-  const [companyStatus, setCompanyStatus] = useState("pending");
+  const [companyStatus, setCompanyStatus] = useState("pending_verification");
   const [companySort, setCompanySort] = useState("createdAt_desc");
   const [applicationStatus, setApplicationStatus] = useState("all");
   const [applicationSort, setApplicationSort] = useState("createdAt_desc");
@@ -72,6 +77,7 @@ export default function AdminAnalyticsPage() {
   const [companiesPagination, setCompaniesPagination] = useState<Pagination | undefined>();
   const [applicationsPagination, setApplicationsPagination] = useState<Pagination | undefined>();
   const { notify } = useAppNotifier();
+  const liveRefreshTimer = useRef<number | null>(null);
 
   const isSuperAdmin = useMemo(
     () => (me?.adminLevel || user?.adminLevel || "moderator") === "super-admin",
@@ -127,6 +133,31 @@ export default function AdminAnalyticsPage() {
     loadTables();
   }, [loadTables]);
 
+  useEffect(() => {
+    const onLiveUpdate = (event: Event) => {
+      const payload = (event as CustomEvent<{ scope?: string }>).detail || {};
+      const relevant = new Set(["admin", "jobs", "companies", "applications", "users", "candidates", "global"]);
+      if (!relevant.has(String(payload.scope || "global"))) return;
+
+      if (liveRefreshTimer.current) {
+        window.clearTimeout(liveRefreshTimer.current);
+      }
+
+      liveRefreshTimer.current = window.setTimeout(() => {
+        void load();
+        void loadTables();
+      }, 700);
+    };
+
+    window.addEventListener("parvagas:live-update", onLiveUpdate);
+    return () => {
+      window.removeEventListener("parvagas:live-update", onLiveUpdate);
+      if (liveRefreshTimer.current) {
+        window.clearTimeout(liveRefreshTimer.current);
+      }
+    };
+  }, [load, loadTables]);
+
   const setRangeDays = (days: number) => {
     setQuickRange(String(days));
     setFrom(toInputDate(days - 1));
@@ -136,30 +167,44 @@ export default function AdminAnalyticsPage() {
   const moderateJob = async (id: string, status: "published" | "platform_rejected") => {
     if (!token) return;
     const reason = window.prompt("Nota de moderação (opcional):") || "";
+    const previous = jobs;
+    setJobs((current) => current.map((job) => (job._id === id ? { ...job, status } : job)));
     try {
       await authFetch(`/admin/jobs/${id}/moderate`, token, {
         method: "PATCH",
         body: JSON.stringify({ status, reason }),
       });
+      notify("Estado da vaga atualizado.", "success");
       await load();
       await loadTables();
     } catch (err: unknown) {
+      setJobs(previous);
       setError(getErrorMessage(err, "Erro ao moderar vaga."));
     }
   };
 
-  const verifyCompany = async (id: string, status: "verified" | "rejected") => {
+  const verifyCompany = async (id: string, status: "active" | "rejected") => {
     if (!token) return;
     const reason = status === "rejected" ? (window.prompt("Motivo da rejeição:") || "") : "";
     if (status === "rejected" && !reason.trim()) return;
+    const previous = companies;
+    setCompanies((current) =>
+      current.map((company) =>
+        company._id === id
+          ? { ...company, status, verificationStatus: status === "active" ? "verified" : "rejected" }
+          : company
+      )
+    );
     try {
       await authFetch(`/companies/${id}/verification`, token, {
         method: "PATCH",
         body: JSON.stringify({ status, reason }),
       });
+      notify("Estado da empresa atualizado.", "success");
       await load();
       await loadTables();
     } catch (err: unknown) {
+      setCompanies(previous);
       setError(getErrorMessage(err, "Erro ao atualizar empresa."));
     }
   };
@@ -195,7 +240,7 @@ export default function AdminAnalyticsPage() {
         description="KPIs, tendências, densidade geográfica e tabelas operacionais para decisões rápidas e auditáveis."
       />
 
-      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
+      {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -217,14 +262,21 @@ export default function AdminAnalyticsPage() {
           </label>
           <div className="grid gap-2 sm:grid-cols-2 sm:items-end xl:col-span-2">
             <button onClick={load} disabled={loading} className={adminButtonClass}>
-              {loading ? "A calcular..." : "Atualizar analytics"}
+              <AdminLoadingLabel loading={loading} idle="Atualizar analytics" busy="A calcular..." />
             </button>
             <button onClick={loadTables} disabled={tableLoading} className={adminSecondaryButtonClass}>
-              {tableLoading ? "A atualizar..." : "Atualizar tabelas"}
+              <AdminLoadingLabel loading={tableLoading} idle="Atualizar tabelas" busy="A atualizar..." />
             </button>
           </div>
         </div>
       </section>
+
+      <AnalyticsErrorBoundary
+        onRetry={() => {
+          void load();
+          void loadTables();
+        }}
+      >
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {[
@@ -396,8 +448,15 @@ export default function AdminAnalyticsPage() {
                   <td className="px-2 py-2 text-slate-500">{toDateLabel(job.createdAt)}</td>
                   <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={() => moderateJob(job._id, "published")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Aprovar</button>
-                      <button onClick={() => moderateJob(job._id, "platform_rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
+                      {canPublishJob(job.status) ? (
+                        <button onClick={() => moderateJob(job._id, "published")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Publicar</button>
+                      ) : null}
+                      {canRejectJob(job.status) ? (
+                        <button onClick={() => moderateJob(job._id, "platform_rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
+                      ) : null}
+                      {!canPublishJob(job.status) && !canRejectJob(job.status) ? (
+                        <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600">Aguarda fluxo interno</span>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -421,8 +480,8 @@ export default function AdminAnalyticsPage() {
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-2 sm:grid-cols-2">
             <select value={companyStatus} onChange={(e) => { setCompanyStatus(e.target.value); setPageCompanies(1); }} className={adminFieldClass}>
-              <option value="pending">Empresas pendentes</option>
-              <option value="verified">Empresas verificadas</option>
+              <option value="pending_verification">Empresas pendentes</option>
+              <option value="active">Empresas ativas</option>
               <option value="all">Todas</option>
             </select>
             <select value={companySort} onChange={(e) => { setCompanySort(e.target.value); setPageCompanies(1); }} className={adminFieldClass} aria-label="Ordenação de empresas">
@@ -438,7 +497,7 @@ export default function AdminAnalyticsPage() {
                 <p className="font-semibold text-slate-900">{company.name || "Empresa"}</p>
                 <p className="text-xs text-slate-500">{company.location || "--"} · {toDateLabel(company.createdAt)}</p>
                 <div className="mt-2 flex gap-2">
-                  <button onClick={() => verifyCompany(company._id, "verified")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Verificar</button>
+                  <button onClick={() => verifyCompany(company._id, "active")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Verificar</button>
                   <button onClick={() => verifyCompany(company._id, "rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
                 </div>
               </div>
@@ -498,6 +557,7 @@ export default function AdminAnalyticsPage() {
           />
         </article>
       </section>
+      </AnalyticsErrorBoundary>
 
       {!isSuperAdmin && (
         <AdminAlert tone="warning">

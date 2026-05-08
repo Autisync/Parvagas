@@ -53,6 +53,7 @@ function AdminLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryResetToken = useMemo(() => searchParams.get("resetToken") || "", [searchParams]);
+  const queryFirstLoginToken = useMemo(() => searchParams.get("firstLoginToken") || "", [searchParams]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstLoginResetToken, setFirstLoginResetToken] = useState("");
@@ -66,12 +67,19 @@ function AdminLoginContent() {
   const feedbackHashRef = useRef("");
 
   useEffect(() => {
+    if (queryFirstLoginToken) {
+      setFirstLoginResetToken(queryFirstLoginToken);
+      setPasswordResetToken("");
+      setFormFeedback({ variant: "info", message: "Defina uma nova password para ativar a sua conta administrativa." });
+      return;
+    }
+
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
       setFormFeedback({ variant: "info", message: "Defina uma nova password para concluir a recuperação de conta." });
     }
-  }, [queryResetToken]);
+  }, [queryFirstLoginToken, queryResetToken]);
 
   const showFeedback = (next: FormFeedback | null) => {
     if (!next) {

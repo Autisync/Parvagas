@@ -6,6 +6,13 @@ export const normalizeAdminLevel = (value) => {
 };
 
 export const Permissions = {
+  JOB_REVIEW: "job.review",
+  JOB_APPROVE: "job.approve",
+  JOB_REJECT: "job.reject",
+  AD_FLAG: "ad.flag",
+  AD_PAUSE: "ad.pause",
+  AD_DRAFT: "ad.draft",
+  AD_PUBLISH: "ad.publish",
   ADMIN_DASHBOARD_VIEW: "admin.dashboard.view",
   ADMIN_ANALYTICS_VIEW: "admin.analytics.view",
   ADMIN_JOBS_MODERATE: "admin.jobs.moderate",
@@ -30,6 +37,12 @@ export const Permissions = {
 };
 
 const moderatorPermissions = new Set([
+  Permissions.JOB_REVIEW,
+  Permissions.JOB_APPROVE,
+  Permissions.JOB_REJECT,
+  Permissions.AD_FLAG,
+  Permissions.AD_PAUSE,
+  Permissions.AD_DRAFT,
   Permissions.ADMIN_DASHBOARD_VIEW,
   Permissions.ADMIN_ANALYTICS_VIEW,
   Permissions.ADMIN_JOBS_MODERATE,

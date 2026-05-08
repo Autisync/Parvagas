@@ -29,6 +29,12 @@ type CandidateUser = {
   role?: string;
 };
 
+type CvDocument = {
+  _id: string;
+  fileName?: string;
+  createdAt?: string;
+};
+
 type ViewMode = "candidate" | "guest";
 
 export default function ApplyJobPage({ params }: { params: { id: string } }) {
@@ -40,6 +46,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
 
   const [token, setToken] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("guest");
+  const [savedCvs, setSavedCvs] = useState<CvDocument[]>([]);
 
   const [candidateForm, setCandidateForm] = useState({
     fullName: "",
@@ -48,6 +55,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     location: "",
     coverLetter: "",
     useLatestCv: true,
+    savedCvDocumentId: "",
     customCv: null as File | null,
   });
 
@@ -79,14 +87,20 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
         setMode(isCandidate ? "candidate" : "guest");
 
         if (isCandidate && t) {
-          const profileRes = await authFetch<ProfileResponse>("/candidates/profile", t, { suppressGlobalErrors: true });
+          const [profileRes, docsRes] = await Promise.all([
+            authFetch<ProfileResponse>("/candidates/profile", t, { suppressGlobalErrors: true }),
+            authFetch<{ documents?: CvDocument[] }>("/candidates/cv/documents", t, { suppressGlobalErrors: true }),
+          ]);
           if (!mounted) return;
+          const docs = docsRes.documents || [];
+          setSavedCvs(docs);
           setCandidateForm((prev) => ({
             ...prev,
             fullName: profileRes.profile?.fullName || prev.fullName,
             email: profileRes.profile?.email || prev.email,
             phone: profileRes.profile?.phone || prev.phone,
             location: profileRes.profile?.location || prev.location,
+            savedCvDocumentId: docs[0]?._id || "",
           }));
         }
       } catch (error: unknown) {
@@ -122,6 +136,9 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       formData.append("jobId", job._id);
       formData.append("useLatestCv", candidateForm.useLatestCv ? "true" : "false");
       formData.append("coverLetter", candidateForm.coverLetter);
+      if (candidateForm.useLatestCv && candidateForm.savedCvDocumentId) {
+        formData.append("savedCvDocumentId", candidateForm.savedCvDocumentId);
+      }
       if (!candidateForm.useLatestCv && candidateForm.customCv) {
         formData.append("customCv", candidateForm.customCv);
       }
@@ -243,6 +260,26 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
                           <input type="radio" checked={candidateForm.useLatestCv} onChange={() => setCandidateForm((p) => ({ ...p, useLatestCv: true }))} />
                           Usar CV já guardado
                         </label>
+                        {candidateForm.useLatestCv ? (
+                          savedCvs.length > 0 ? (
+                            <select
+                              value={candidateForm.savedCvDocumentId}
+                              onChange={(e) => setCandidateForm((p) => ({ ...p, savedCvDocumentId: e.target.value }))}
+                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                            >
+                              {savedCvs.map((doc) => (
+                                <option key={doc._id} value={doc._id}>
+                                  {doc.fileName || "CV"}
+                                  {doc.createdAt ? ` (${new Date(doc.createdAt).toLocaleDateString("pt-PT")})` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="text-xs text-amber-700">
+                              Não encontrou CV guardado. Selecione &quot;Enviar novo CV&quot; para anexar um ficheiro.
+                            </p>
+                          )
+                        ) : null}
                         <label className="flex items-center gap-2 text-sm text-slate-700">
                           <input type="radio" checked={!candidateForm.useLatestCv} onChange={() => setCandidateForm((p) => ({ ...p, useLatestCv: false }))} />
                           Enviar novo CV (PDF/DOCX)
@@ -268,7 +305,11 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
                       <button
                         type="button"
                         onClick={submitCandidateApplication}
-                        disabled={submitting || (!candidateForm.useLatestCv && !candidateForm.customCv)}
+                        disabled={
+                          submitting ||
+                          (!candidateForm.useLatestCv && !candidateForm.customCv) ||
+                          (candidateForm.useLatestCv && !candidateForm.savedCvDocumentId)
+                        }
                         className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
                       >
                         {submitting ? "A submeter..." : "Confirmar candidatura"}

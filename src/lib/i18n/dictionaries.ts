@@ -81,6 +81,7 @@ export type Dictionary = {
       applications: string;
       approvals: string;
       users: string;
+      settings: string;
       singleSession: string;
       doubleSession: string;
       logout: string;
@@ -408,6 +409,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
         applications: "Candidaturas",
         approvals: "Aprovações",
         users: "Utilizadores",
+        settings: "Definições",
         singleSession: "Sessão única",
         doubleSession: "Sessão dupla detectada",
         logout: "Terminar sessão",
@@ -729,6 +731,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
         applications: "Applicants",
         approvals: "Approvals",
         users: "Users",
+        settings: "Settings",
         singleSession: "Single session",
         doubleSession: "Concurrent session detected",
         logout: "Sign out",

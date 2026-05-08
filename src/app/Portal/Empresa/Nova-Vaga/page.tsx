@@ -26,7 +26,7 @@ export default function NovaVagaPage() {
             <h1 className="text-3xl font-bold">Nova Vaga</h1>
             <p className="mt-2 text-gray-500">A criação de vagas agora é feita em modal para manter o fluxo rápido no portal.</p>
             <div className="mt-4 flex gap-3">
-              <button onClick={() => setOpen(true)} className="app-btn-primary">
+              <button onClick={() => setOpen(true)} className="app-btn-primary px-5 py-2.5 text-sm shadow-sm">
                 Abrir modal de vaga
               </button>
               <Link href="/Portal/Empresa/Perfil" className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">

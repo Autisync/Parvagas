@@ -1,18 +1,19 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { authFetch, authFetchRaw } from "@/lib/api";
+import { authFetch } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import CompanySidebar from "../components/CompanySidebar";
 import JobPostingModal from "../components/JobPostingModal";
+import LogoUploadModal, { resolveLogoUrl } from "../components/LogoUploadModal";
 import { useToasts } from "../components/useToasts";
 
 type CompanyProfile = {
   name?: string;
+  status?: "inactive" | "pending_verification" | "active" | "rejected";
   industry?: string;
   size?: string;
   website?: string;
@@ -82,6 +83,7 @@ const statusLabel: Record<string, string> = {
   withdrawn: "Retirada",
 };
 
+
 function EmpresaPerfilContent() {
   const searchParams = useSearchParams();
   const { token, loading, user } = useAuth("company");
@@ -90,8 +92,8 @@ function EmpresaPerfilContent() {
   const [applications, setApplications] = useState<CompanyApplication[]>([]);
   const [fetchingData, setFetchingData] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [jobModalOpen, setJobModalOpen] = useState(false);
+  const [logoModalOpen, setLogoModalOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [logoMsg, setLogoMsg] = useState("");
   const [fetchError, setFetchError] = useState("");
@@ -108,7 +110,6 @@ function EmpresaPerfilContent() {
     limit: 12,
   });
   const [teamOwnerUserId, setTeamOwnerUserId] = useState("");
-  const [logoCropMode, setLogoCropMode] = useState<"fit" | "square">("fit");
   const { pushToast } = useToasts();
 
   useEffect(() => {
@@ -203,99 +204,7 @@ function EmpresaPerfilContent() {
     }
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!token) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    const allowed = ["image/png", "image/jpeg", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setLogoMsg("Formato inválido. Use PNG, JPG ou WEBP.");
-      return;
-    }
-
-    const MAX_SIZE_MB = 4;
-    const MAX_DIM = 1600;
-    const TARGET_DIM = 600;
-
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setLogoMsg(`Ficheiro muito grande. Limite de ${MAX_SIZE_MB}MB.`);
-      return;
-    }
-
-    let processedFile: File = file;
-
-    try {
-      const imageBitmap = await createImageBitmap(file);
-      if (imageBitmap.width > MAX_DIM || imageBitmap.height > MAX_DIM) {
-        setLogoMsg(`Dimensão inválida. Máximo permitido: ${MAX_DIM}x${MAX_DIM}px.`);
-        imageBitmap.close();
-        return;
-      }
-
-      let sourceX = 0;
-      let sourceY = 0;
-      let sourceW = imageBitmap.width;
-      let sourceH = imageBitmap.height;
-
-      if (logoCropMode === "square") {
-        const side = Math.min(imageBitmap.width, imageBitmap.height);
-        sourceX = Math.floor((imageBitmap.width - side) / 2);
-        sourceY = Math.floor((imageBitmap.height - side) / 2);
-        sourceW = side;
-        sourceH = side;
-      }
-
-      const scale = Math.min(1, TARGET_DIM / Math.max(sourceW, sourceH));
-      const outW = Math.max(1, Math.round(sourceW * scale));
-      const outH = Math.max(1, Math.round(sourceH * scale));
-
-      const canvas = document.createElement("canvas");
-      canvas.width = outW;
-      canvas.height = outH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        imageBitmap.close();
-        throw new Error("Não foi possível processar a imagem.");
-      }
-      ctx.drawImage(imageBitmap, sourceX, sourceY, sourceW, sourceH, 0, 0, outW, outH);
-      imageBitmap.close();
-
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
-      if (!blob) throw new Error("Falha ao comprimir imagem.");
-      processedFile = new File([blob], "company-logo.webp", { type: "image/webp" });
-    } catch (err: unknown) {
-      setLogoMsg(err instanceof Error ? err.message : "Erro ao processar imagem.");
-      return;
-    }
-
-    const form = new FormData();
-    form.append("logo", processedFile);
-
-    setUploadingLogo(true);
-    setLogoMsg("");
-    try {
-      const res = await authFetchRaw("/companies/profile/logo", token, {
-        method: "POST",
-        body: form,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      setProfile((prev) => ({ ...prev, logo: data.company?.logo || data.logoUrl }));
-      setLogoMsg("Logo actualizada com sucesso (comprimida no browser). Limites: 4MB, 1600x1600px.");
-      pushToast("success", "Logo da empresa actualizada.");
-    } catch (err: unknown) {
-      setLogoMsg(err instanceof Error ? err.message : "Erro ao carregar logo.");
-      pushToast("error", err instanceof Error ? err.message : "Erro ao carregar logo.");
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
 
   const currentUserId = String(
     (user as { id?: string; _id?: string } | null)?.id ||
@@ -316,13 +225,22 @@ function EmpresaPerfilContent() {
                 <h1 className="text-3xl font-bold">Perfil da Empresa</h1>
                 <p className="mt-1 text-gray-500">Actualize as informações públicas e gerencie vagas/candidaturas.</p>
               </div>
-              <button
-                onClick={() => setJobModalOpen(true)}
-                className="app-btn-primary"
-              >
-                + Nova vaga (modal)
-              </button>
             </div>
+
+            {(profile.status === "pending_verification" || profile.status === "rejected") && (
+              <section className={`mb-6 rounded-2xl border p-4 ${profile.status === "pending_verification" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
+                <p className={`text-sm font-semibold ${profile.status === "pending_verification" ? "text-amber-900" : "text-red-900"}`}>
+                  {profile.status === "pending_verification"
+                    ? "Conta em verificação: ainda não pode publicar vagas"
+                    : "Conta rejeitada: contacte o suporte para nova análise"}
+                </p>
+                <p className={`mt-1 text-sm ${profile.status === "pending_verification" ? "text-amber-800" : "text-red-800"}`}>
+                  {profile.status === "pending_verification"
+                    ? "Complete os dados do perfil e aguarde aprovação da equipa Parvagas."
+                    : "Revise os dados da empresa e peça reavaliação no suporte."}
+                </p>
+              </section>
+            )}
 
             <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
@@ -341,7 +259,7 @@ function EmpresaPerfilContent() {
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
                   <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {profile.logo ? (
-                      <Image src={profile.logo} alt="Logo da empresa" width={144} height={144} className="h-full w-full object-contain p-3" unoptimized />
+                      <img src={resolveLogoUrl(profile.logo)} alt="Logo da empresa" className="h-full w-full object-contain p-3" />
                     ) : (
                       <div className="text-center">
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-lg font-bold text-red-700">
@@ -358,44 +276,19 @@ function EmpresaPerfilContent() {
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Imagem pública da empresa</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      O ficheiro é comprimido no browser e validado com limite máximo de 1600x1600px.
+                      Gestão de upload, corte e escala agora é feita em modal para melhor controlo visual.
                     </p>
                   </div>
 
-                  <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700">
-                    {uploadingLogo ? "A carregar logo..." : profile.logo ? "Substituir logo" : "Carregar logo"}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      className="hidden"
-                      onChange={handleLogoUpload}
-                      disabled={uploadingLogo}
-                    />
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setLogoModalOpen(true)}
+                    className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm"
+                  >
+                    {profile.logo ? "Gerir logo" : "Carregar logo"}
+                  </button>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Modo de corte</p>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        aria-pressed={logoCropMode === "fit"}
-                        onClick={() => setLogoCropMode("fit")}
-                        className={`rounded-xl border px-3 py-2 text-left text-sm transition ${logoCropMode === "fit" ? "border-red-200 bg-red-50 text-red-800 shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"}`}
-                      >
-                        <span className="block font-semibold">Manter proporção</span>
-                        <span className="mt-0.5 block text-xs opacity-80">Preserva a imagem completa.</span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={logoCropMode === "square"}
-                        onClick={() => setLogoCropMode("square")}
-                        className={`rounded-xl border px-3 py-2 text-left text-sm transition ${logoCropMode === "square" ? "border-red-200 bg-red-50 text-red-800 shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"}`}
-                      >
-                        <span className="block font-semibold">Quadrado</span>
-                        <span className="mt-0.5 block text-xs opacity-80">Centraliza para avatar/logo.</span>
-                      </button>
-                    </div>
-                  </div>
+                  <p className="text-xs text-slate-500">Suporta PNG, JPG, WEBP, AVIF, GIF, BMP, TIFF, SVG e HEIC/HEIF (conversão automática para WEBP).</p>
 
                   {logoMsg && (
                     <p className={logoMsg.includes("sucesso") ? "rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700" : "rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"}>
@@ -426,10 +319,13 @@ function EmpresaPerfilContent() {
               </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-3">
-                <Link href="/Portal/Empresa/Utilizadores" className="app-btn-primary">
+                <Link href="/Portal/Empresa/Utilizadores" className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100">
                   Abrir gestão de utilizadores
                 </Link>
-                <p className="text-sm text-slate-500">Convites, roles e remoções agora são geridos apenas nessa página.</p>
+                <Link href="/Portal/Empresa/Definicoes" className="inline-flex items-center rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100">
+                  Abrir definições
+                </Link>
+                <p className="text-sm text-slate-500">Convites, roles e remoções são geridos em Utilizadores. Tutorial disponível em Definições.</p>
               </div>
             </section>
 
@@ -589,6 +485,19 @@ function EmpresaPerfilContent() {
             onCreated={(job) => {
               setJobs((prev) => [job, ...prev]);
               pushToast("success", "Pedido de vaga submetido para revisão.");
+            }}
+          />
+        )}
+
+        {token && (
+          <LogoUploadModal
+            token={token}
+            open={logoModalOpen}
+            currentLogo={profile.logo}
+            onClose={() => setLogoModalOpen(false)}
+            onUploaded={(newLogo) => {
+              setProfile((prev) => ({ ...prev, logo: newLogo }));
+              setLogoMsg("Logo actualizada com sucesso.");
             }}
           />
         )}

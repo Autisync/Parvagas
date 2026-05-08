@@ -14,8 +14,9 @@ test("calculateProfileCompletion returns percentage", () => {
     skills: ["SQL"],
     experience: [{ title: "Dev" }],
     education: [{ title: "Licenciatura" }],
-    languages: ["Português"],
-    preferredRoles: ["Data Engineer"],
+    preferredJobType: "tempo_integral",
+    availability: "imediata",
+    expectedSalaryAoa: 350000,
   });
 
   assert.equal(score, 100);

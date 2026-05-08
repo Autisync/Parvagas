@@ -218,6 +218,68 @@ Current state:
 - AI-generated application content must be approved if the candidate supplies an AI draft.
 - Duplicate applications are upserted by candidate and job.
 
+## 11. Admin Job Moderation (Real-Time Friendly)
+
+```mermaid
+flowchart TD
+  moderator["Admin/Moderator"] --> click["Clica Aprovar/Rejeitar/Arquivar"]
+  click --> optimistic["UI atualiza badge localmente"]
+  optimistic --> patch["PATCH /admin/jobs/:id/moderate"]
+  patch --> ok{"200 OK?"}
+  ok -- "Sim" --> toast["Toast de sucesso"]
+  ok -- "Não" --> revert["UI reverte estado anterior + erro"]
+  toast --> polling["Polling periódico atualiza concorrência"]
+```
+
+Current state:
+- O backend devolve o objeto `job` atualizado.
+- A UI de moderação aplica atualização otimista e rollback em erro.
+- Há refresh periódico para refletir alterações concorrentes entre admins.
+
+## 12. Verificação de Empresas Com Templates
+
+```mermaid
+flowchart TD
+  moderator["Moderator"] --> openDetail["Abre detalhe da empresa"]
+  openDetail --> chooseTemplate["Escolhe template: aprovar/pedir info/rejeitar/inativar"]
+  chooseTemplate --> preview["POST /companies/:id/verification/preview-email"]
+  preview --> editBody["Edita assunto/corpo"]
+  editBody --> confirm["Modal de confirmação"]
+  confirm --> sendEmail["POST /companies/:id/verification/send-email"]
+  confirm --> setStatus["PATCH /companies/:id/verification"]
+  sendEmail --> done["Toast + atualização de estado"]
+  setStatus --> done
+```
+
+Current state:
+- Templates padrão configurados em `server/config/companyVerificationEmailTemplates.js`.
+- Placeholders (`{{contactPerson}}`, `{{companyName}}`, etc.) são resolvidos antes de enviar.
+- Estados suportados: `active`, `pending_verification`, `rejected`, `inactive`.
+
+## 13. Scraped Jobs: Curadoria E Conversão
+
+```mermaid
+flowchart TD
+  admin["Admin"] --> list["GET /admin/scraped-jobs"]
+  list --> review["PATCH /admin/scraped-jobs/:id/review"]
+  review --> approve{"approved + publishAsPublicJob?"}
+  approve -- "Sim" --> createJob["Cria Job normal (sourceType=scraped)"]
+  approve -- "Não" --> keep["Mantém somente scraped status"]
+  list --> edit["PATCH /admin/scraped-jobs/:id"]
+  list --> remove["DELETE /admin/scraped-jobs/:id"]
+```
+
+Current state:
+- Empty-state explícito no portal admin: “Nenhum anúncio de vaga raspado disponível.”
+- A aprovação pode converter o registo scraped numa vaga normal.
+
+## 14. Auditoria Operacional
+
+Current state:
+- Ações críticas são registadas via `logAudit` e `logAdminAction`.
+- Página de auditoria suporta filtros por ação, tipo de recurso, userId e intervalo de datas.
+- Exportação CSV disponível por `GET /admin/audit-logs/export.csv`.
+
 ## 11. Application Status Management
 
 ```mermaid
@@ -240,6 +302,57 @@ flowchart TD
 Current state:
 - Statuses include draft, submitted, viewed, shortlisted, interview, rejected, hired, withdrawn.
 - Candidates can update status on their own application if allowed by route/middleware.
+
+## 13. Employer Onboarding Tutorial (Multi-step + Resume)
+
+```mermaid
+flowchart TD
+  companyUser["Company user opens portal"] --> seen{"hasSeenEmpresaTutorial?"}
+  seen -- "No" --> openTutorial["Open tutorial modal"]
+  seen -- "Yes" --> normalPortal["Load portal normally"]
+  openTutorial --> stepNav["Next / Back / Save and exit"]
+  stepNav --> saveProgress["Persist step in localStorage per user"]
+  stepNav --> complete{"Concluir tutorial?"}
+  complete -- "Yes" --> apiSeen["PATCH /companies/tutorial/seen"]
+  apiSeen --> updateUser["Persist hasSeenEmpresaTutorial=true"]
+  complete -- "No" --> resumeLater["Resume from saved step"]
+```
+
+Current state:
+- Tutorial opens automatically for first-time company users and can be relaunched from `/Portal/Empresa/Definicoes`.
+- Progress resumes from the last saved step.
+
+## 14. Company Verification Email + Deletion Approval Workflow
+
+```mermaid
+flowchart TD
+  admin["Admin opens /Portal/Admin/companies"] --> selectCompany["Open company detail"]
+  selectCompany --> previewEmail["POST /companies/:id/verification/preview-email"]
+  previewEmail --> editDraft["Adjust subject/body"]
+  editDraft --> sendEmail["POST /companies/:id/verification/send-email"]
+  selectCompany --> statusDecision["PATCH /companies/:id/verification"]
+  moderator["Moderator requests deletion"] --> deletionReq["POST /companies/:id/deletion-request"]
+  deletionReq --> superAdminQueue["GET /companies/deletion-requests"]
+  superAdminQueue --> reviewReq["PATCH /companies/deletion-requests/:id/review"]
+```
+
+Current state:
+- Moderators can request deletion, but only super-admin can approve/reject pending deletion requests.
+- Verification emails support templates: approval, more_info, rejected, meeting.
+
+## 15. Internal Company Messaging via Notifications
+
+```mermaid
+flowchart TD
+  teamMember["Company team member (non-owner)"] --> openBell["Open notification bell"]
+  openBell --> pickReason["Select reason + write message"]
+  pickReason --> send["POST /notifications/company-admin-message"]
+  send --> ownerNotif["Owner receives company_internal_message notification"]
+  ownerNotif --> manage["Mark read/unread/resolve"]
+```
+
+Current state:
+- Reason values are whitelist-based and localized in Portuguese.
 
 ## 12. Company Registration And Job Management
 

@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchJobs, statusBadgeClass, toDateLabel, type JobRecord, type Pagination } from "../adminClient";
+import {
+  AdminPermissions,
+  fetchAdminMe,
+  fetchJobs,
+  hasPermission,
+  statusBadgeClass,
+  toDateLabel,
+  type AdminMe,
+  type JobRecord,
+  type Pagination,
+} from "../adminClient";
 import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
@@ -13,9 +23,40 @@ import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 type JobDecision = "published" | "approved" | "platform_rejected" | "archived";
 
+function canApplyJobDecision(status: string | undefined, decision: JobDecision) {
+  const current = String(status || "");
+
+  if (current === "pending_company_approval") {
+    return decision === "archived";
+  }
+
+  if (decision === "approved" || decision === "platform_rejected") {
+    return current === "pending_platform_review";
+  }
+
+  if (decision === "published") {
+    return ["pending_platform_review", "approved", "archived", "suspended"].includes(current);
+  }
+
+  if (decision === "archived") {
+    return [
+      "pending_company_approval",
+      "company_rejected",
+      "pending_platform_review",
+      "platform_rejected",
+      "approved",
+      "published",
+      "suspended",
+    ].includes(current);
+  }
+
+  return false;
+}
+
 export default function AdminJobsPage() {
   const { token } = useAuth("admin");
   const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [me, setMe] = useState<AdminMe | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("pending_platform_review");
   const [visibility, setVisibility] = useState("all");
@@ -43,17 +84,36 @@ export default function AdminJobsPage() {
     if (!token) return;
     setError("");
     try {
-      const res = await fetchJobs(token, { page, limit, keyword: search, status: filter, visibility });
+      const [res, admin] = await Promise.all([
+        fetchJobs(token, { page, limit, keyword: search, status: filter, visibility }),
+        fetchAdminMe(token),
+      ]);
       setJobs(res.jobs || []);
       setPagination(res.pagination);
+      setMe(admin);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar vagas."));
     }
   }, [token, page, limit, search, filter, visibility]);
 
+  const canReviewJobs = hasPermission(me, AdminPermissions.JOB_REVIEW) || hasPermission(me, AdminPermissions.JOBS_MODERATE);
+  const canApproveJobs = hasPermission(me, AdminPermissions.JOB_APPROVE);
+  const canRejectJobs = hasPermission(me, AdminPermissions.JOB_REJECT);
+  const canPublishJobs = hasPermission(me, AdminPermissions.JOBS_MODERATE);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!token) return;
+    // Guard: skip auto-refresh while a mutation is in progress to prevent
+    // the polling timer from overwriting optimistic state with stale server data.
+    const timer = window.setInterval(() => {
+      if (!busy) load();
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [token, load, busy]);
 
   useEffect(() => {
     if (!notice) return;
@@ -74,24 +134,56 @@ export default function AdminJobsPage() {
 
   const applyDecision = async (ids: string[], status: JobDecision, nextVisibility?: string, reason = "") => {
     if (!token || ids.length === 0) return;
-    setBusy(ids[0]);
+
+    if (status === "approved" && !canApproveJobs) {
+      notify("Sem permissão para aprovar vagas.", "error");
+      return;
+    }
+    if (status === "platform_rejected" && !canRejectJobs) {
+      notify("Sem permissão para rejeitar vagas.", "error");
+      return;
+    }
+    if (status === "published" && !canPublishJobs) {
+      notify("Sem permissão para publicar vagas.", "error");
+      return;
+    }
+    if (status === "archived" && !canReviewJobs) {
+      notify("Sem permissão para rever/arquivar vagas.", "error");
+      return;
+    }
+
+    const invalidSelection = jobs.find((job) => ids.includes(job._id) && !canApplyJobDecision(job.status, status));
+    if (invalidSelection) {
+      notify("A ação selecionada não é permitida para o estado atual desta vaga.", "error");
+      return;
+    }
+    setBusy(ids.length > 1 ? "bulk-jobs" : ids[0]);
     setError("");
     setNotice("");
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         ids.map((id) =>
-          authFetch(`/admin/jobs/${id}/moderate`, token, {
+          authFetch<{ job: JobRecord }>(`/admin/jobs/${id}/moderate`, token, {
             method: "PATCH",
             body: JSON.stringify({ status, visibility: nextVisibility, reason: reason.trim() }),
           })
         )
       );
+      const updatedJobs = responses
+        .map((entry) => entry.job)
+        .filter((entry): entry is JobRecord => Boolean(entry?._id));
+
+      if (updatedJobs.length > 0) {
+        const updatedById = new Map(updatedJobs.map((entry) => [entry._id, entry]));
+        setJobs((current) => current.map((job) => updatedById.get(job._id) || job));
+        setSelectedJob((current) => (current ? updatedById.get(current._id) || current : current));
+      }
       setNotice(ids.length > 1 ? `${ids.length} vagas atualizadas.` : "Vaga atualizada com sucesso.");
       clearSelectionState();
       setSelectedJob(null);
       await load();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Erro na moderação da vaga."));
+      notify(getErrorMessage(err, "Erro na moderação da vaga."), "error");
     } finally {
       setBusy(null);
     }
@@ -113,7 +205,7 @@ export default function AdminJobsPage() {
       replaceSelection(ids);
       setNotice(`${ids.length} vagas selecionadas em todas as páginas.`);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Não foi possível selecionar todas as vagas filtradas."));
+      notify(getErrorMessage(err, "Não foi possível selecionar todas as vagas filtradas."), "error");
     } finally {
       setBusy(null);
     }
@@ -127,7 +219,7 @@ export default function AdminJobsPage() {
         description="Aprove, rejeite e arquive vagas com rastreabilidade operacional."
       />
 
-      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
+      {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <AdminFilterBar>
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar vagas" className={adminFieldClass} />
@@ -171,10 +263,10 @@ export default function AdminJobsPage() {
                 <textarea value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Adicionar contexto para a ação selecionada" />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => applyDecision(selectedIds, "published", "public", bulkReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar</button>
-                <button type="button" onClick={() => applyDecision(selectedIds, "approved", undefined, bulkReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Aprovar</button>
-                <button type="button" onClick={() => applyDecision(selectedIds, "platform_rejected", undefined, bulkReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Rejeitar</button>
-                <button type="button" onClick={() => applyDecision(selectedIds, "archived", "archived", bulkReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Arquivar</button>
+                {canPublishJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "published", "public", bulkReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar</button> : null}
+                {canApproveJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "approved", undefined, bulkReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Aprovar</button> : null}
+                {canRejectJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "platform_rejected", undefined, bulkReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Rejeitar</button> : null}
+                {canReviewJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "archived", "archived", bulkReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Arquivar</button> : null}
               </div>
             </div>
           ) : null}
@@ -237,11 +329,12 @@ export default function AdminJobsPage() {
               <textarea value={modalReason} onChange={(e) => setModalReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Adicionar contexto para a decisão" />
             </label>
             <div className="flex flex-wrap gap-2">
-              <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "published", "public", modalReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Publicar</button>
-              <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "approved", undefined, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Aprovar</button>
-              <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "platform_rejected", undefined, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Rejeitar</button>
-              <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "archived", "archived", modalReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Arquivar</button>
+              {canPublishJobs && canApplyJobDecision(selectedJob.status, "published") ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "published", "public", modalReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Publicar</button> : null}
+              {canApproveJobs && canApplyJobDecision(selectedJob.status, "approved") ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "approved", undefined, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Aprovar</button> : null}
+              {canRejectJobs && canApplyJobDecision(selectedJob.status, "platform_rejected") ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "platform_rejected", undefined, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Rejeitar</button> : null}
+              {canReviewJobs ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "archived", "archived", modalReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Arquivar</button> : null}
             </div>
+            {selectedJob.status === "pending_company_approval" ? <p className="text-xs font-semibold text-amber-700">Esta vaga ainda depende da aprovação interna da empresa antes da moderação da plataforma.</p> : null}
           </div>
         ) : undefined}
       >

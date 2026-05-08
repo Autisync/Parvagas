@@ -55,6 +55,8 @@ function SignUpContent() {
   const [companyName, setCompanyName] = useState("");
   const [companyIdentifier, setCompanyIdentifier] = useState("");
   const [companyLegalName, setCompanyLegalName] = useState("");
+  const [acceptConsent, setAcceptConsent] = useState(false);
+  const [newsletterOptIn, setNewsletterOptIn] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -91,6 +93,7 @@ function SignUpContent() {
             ? dict.auth.signup.errorIdentifierInvalid
             : ""
         : "",
+    acceptConsent: !acceptConsent ? "É obrigatório aceitar os Termos de Uso e a Política de Privacidade." : "",
   };
 
   const shouldShowFieldError = (fieldName: string) => submitted || touched[fieldName];
@@ -133,6 +136,11 @@ function SignUpContent() {
       }
     }
 
+    if (!acceptConsent) {
+      setError("É obrigatório aceitar os Termos de Uso e a Política de Privacidade para continuar.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (selectedRole === "company" && inviteToken) {
@@ -143,6 +151,11 @@ function SignUpContent() {
             inviteToken,
             fullName: fullName.trim(),
             password,
+            acceptTerms: acceptConsent,
+            acceptPrivacy: acceptConsent,
+            newsletterOptIn,
+            termsVersion: "2026-05-05",
+            privacyVersion: "2026-05-05",
           }),
         });
       } else {
@@ -154,6 +167,11 @@ function SignUpContent() {
             email: email.trim(),
             password,
             role: selectedRole,
+            acceptTerms: acceptConsent,
+            acceptPrivacy: acceptConsent,
+            newsletterOptIn,
+            termsVersion: "2026-05-05",
+            privacyVersion: "2026-05-05",
             ...(selectedRole === "company" && !inviteToken
               ? {
                   companyName: companyName.trim(),
@@ -357,6 +375,56 @@ function SignUpContent() {
                 <FormFieldError id="confirmPassword-error" message={shouldShowFieldError("confirmPassword") ? fieldErrors.confirmPassword : ""} />
               </div>
 
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                {/* Required: T&C + Privacy combined */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptConsent}
+                    onChange={(e) => setAcceptConsent(e.target.checked)}
+                    onBlur={() => markTouched("acceptConsent")}
+                    aria-required="true"
+                    aria-describedby="acceptConsent-error"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-red-600 focus:ring-2 focus:ring-red-400"
+                  />
+                  <span className="text-sm leading-snug text-slate-700">
+                    Declaro que li e aceito integralmente os{" "}
+                    <Link
+                      href="/termos"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-red-600 underline-offset-2 hover:text-red-700 hover:underline"
+                    >
+                      Termos de Uso
+                    </Link>{" "}
+                    e a{" "}
+                    <Link
+                      href="/privacidade"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-red-600 underline-offset-2 hover:text-red-700 hover:underline"
+                    >
+                      Política de Privacidade
+                    </Link>{" "}
+                    da Parvagas.
+                  </span>
+                </label>
+                <FormFieldError id="acceptConsent-error" message={shouldShowFieldError("acceptConsent") ? fieldErrors.acceptConsent : ""} />
+
+                {/* Optional: newsletter opt-in */}
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newsletterOptIn}
+                    onChange={(e) => setNewsletterOptIn(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-red-600 focus:ring-2 focus:ring-red-400"
+                  />
+                  <span className="text-sm leading-snug text-slate-500">
+                    Desejo receber e-mails com notícias, vagas e ofertas da Parvagas. <span className="text-slate-400">(opcional)</span>
+                  </span>
+                </label>
+              </div>
+
               {error && (
                 isConnectionError(error) ? (
                   <AppErrorBanner
@@ -371,7 +439,7 @@ function SignUpContent() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !acceptConsent}
                 className="flex w-full items-center justify-center rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? dict.auth.signup.creatingAccount : dict.auth.signup.createAccount}

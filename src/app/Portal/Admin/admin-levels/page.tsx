@@ -41,8 +41,8 @@ export default function AdminLevelsPage() {
   const [newAdmin, setNewAdmin] = useState({
     fullName: "",
     email: "",
-    password: "",
     adminLevel: "moderator" as AdminLevel,
+    credentialDeliveryMode: "set_password_link" as "set_password_link" | "temporary_password",
   });
 
   const load = useCallback(async () => {
@@ -107,8 +107,8 @@ export default function AdminLevelsPage() {
         method: "POST",
         body: JSON.stringify(newAdmin),
       });
-      setCreatedMsg("Admin criado. Partilhe a password temporária fora da plataforma; no primeiro login será exigida nova password.");
-      setNewAdmin({ fullName: "", email: "", password: "", adminLevel: "moderator" });
+      setCreatedMsg("Admin criado e email de onboarding enviado. O utilizador terá de redefinir password no primeiro acesso.");
+      setNewAdmin({ fullName: "", email: "", adminLevel: "moderator", credentialDeliveryMode: "set_password_link" });
       setPage(1);
       await load();
     } catch (err: unknown) {
@@ -161,15 +161,6 @@ export default function AdminLevelsPage() {
             className={adminFieldClass}
             required
           />
-          <input
-            value={newAdmin.password}
-            onChange={(e) => setNewAdmin((prev) => ({ ...prev, password: e.target.value }))}
-            placeholder="Password temporária"
-            type="password"
-            minLength={8}
-            className={adminFieldClass}
-            required
-          />
           <select
             value={newAdmin.adminLevel}
             onChange={(e) => setNewAdmin((prev) => ({ ...prev, adminLevel: e.target.value as AdminLevel }))}
@@ -177,6 +168,14 @@ export default function AdminLevelsPage() {
           >
             <option value="moderator">Moderator</option>
             <option value="super-admin">Super-admin</option>
+          </select>
+          <select
+            value={newAdmin.credentialDeliveryMode}
+            onChange={(e) => setNewAdmin((prev) => ({ ...prev, credentialDeliveryMode: e.target.value as "set_password_link" | "temporary_password" }))}
+            className={adminFieldClass}
+          >
+            <option value="set_password_link">Link único para definir password (recomendado)</option>
+            <option value="temporary_password">Enviar password temporária por email</option>
           </select>
         </div>
 

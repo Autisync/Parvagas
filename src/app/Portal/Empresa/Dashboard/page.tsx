@@ -31,6 +31,7 @@ type CompanyStats = {
 
 type CompanyProfile = {
   name?: string;
+  status?: "inactive" | "pending_verification" | "active" | "rejected";
   completionScore?: number;
 };
 
@@ -152,13 +153,23 @@ export default function EmpresaDashboard() {
               action={
                 <a
                   href="/Portal/Empresa/Nova-Vaga"
-                  className="app-btn-primary inline-flex items-center gap-2"
+                  className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                 >
                   <PlusCircleIcon className="h-4 w-4" />
                   {dict.portal.company.newJob}
                 </a>
               }
             />
+
+            {(profile.status === "pending_verification" || profile.status === "rejected") && (
+              <section className={`rounded-2xl border p-4 ${profile.status === "pending_verification" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
+                <p className={`text-sm font-semibold ${profile.status === "pending_verification" ? "text-amber-900" : "text-red-900"}`}>
+                  {profile.status === "pending_verification"
+                    ? "A sua empresa está em validação. Publicação de vagas indisponível até aprovação."
+                    : "A conta da empresa está rejeitada ou inativa. Contacte o suporte para regularização."}
+                </p>
+              </section>
+            )}
 
             {pageError && <InlineErrorState onAction={() => window.location.reload()} />}
 

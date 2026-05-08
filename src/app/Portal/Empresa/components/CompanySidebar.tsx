@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { authFetch, clearToken } from "@/lib/api";
+import { authFetch, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
+import NotificationBell from "@/app/Portal/components/NotificationBell";
+import CompanyTutorialModal from "./CompanyTutorialModal";
 import {
   HomeIcon,
   BriefcaseIcon,
@@ -14,6 +16,7 @@ import {
   BuildingOfficeIcon,
   UserGroupIcon,
   PlusCircleIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
 export default function CompanySidebar() {
@@ -32,6 +35,7 @@ export default function CompanySidebar() {
     { href: "/Portal/Empresa/Nova-Vaga", label: dict.portal.company.newJob, icon: <PlusCircleIcon className="h-5 w-5" /> },
     { href: "/Portal/Empresa/Minhas-Vagas", label: dict.portal.company.jobs, icon: <BriefcaseIcon className="h-5 w-5" /> },
     { href: "/Portal/Empresa/Candidaturas", label: dict.portal.company.applications, icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
+    { href: "/Portal/Empresa/Definicoes", label: dict.portal.company.settings, icon: <Cog6ToothIcon className="h-5 w-5" /> },
   ];
 
   const navItems = [
@@ -41,8 +45,9 @@ export default function CompanySidebar() {
   ];
 
   const handleSignout = () => {
-    clearToken();
-    router.push("/Login");
+    logoutCurrentSession(token).finally(() => {
+      router.push("/Login");
+    });
   };
 
   useEffect(() => {
@@ -72,6 +77,9 @@ export default function CompanySidebar() {
 
   return (
     <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
+      <div className="mb-3 flex items-center justify-end">
+        {token && <NotificationBell token={token} role="company" teamRole={role} />}
+      </div>
       <p className="px-2 text-xs uppercase tracking-[0.18em] text-slate-500">{dict.portal.company.role}</p>
       <nav className="mt-4 space-y-1">
         {navItems.map((item) => {
@@ -109,6 +117,14 @@ export default function CompanySidebar() {
           {dict.portal.company.logout}
         </button>
       </div>
+
+      {token && user?.id ? (
+        <CompanyTutorialModal
+          token={token}
+          userId={user.id}
+          hasSeenTutorial={Boolean(user?.hasSeenEmpresaTutorial)}
+        />
+      ) : null}
     </aside>
   );
 }

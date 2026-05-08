@@ -13,6 +13,7 @@ import storageService from "../services/storageService.js";
 import { isSupportedCvFile } from "../services/cvTextExtractorService.js";
 import { sendEmailNotification } from "../services/notificationService.js";
 import { logAudit } from "../services/auditService.js";
+import { getOrSetCache, getStaleCachedValue } from "../services/publicCacheService.js";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
@@ -43,46 +44,103 @@ async function getFeaturedJobs(limit) {
 }
 
 router.get("/ads", async (req, res) => {
-  const placement = req.query.placement;
-  const now = new Date().toISOString();
-  const ads = await AdCampaign.find({
-    active: true,
-    startDate: { $lte: now },
-    endDate: { $gte: now },
-    ...(placement ? { placement } : {}),
-  });
-  return res.status(200).json({ ads });
+  try {
+    const placement = req.query.placement;
+    const now = new Date().toISOString();
+    const cacheKey = `public:ads:${String(placement || "all")}`;
+    const ads = await getOrSetCache(cacheKey, 15000, async () => {
+      return AdCampaign.find({
+        active: true,
+        startDate: { $lte: now },
+        endDate: { $gte: now },
+        ...(placement ? { placement } : {}),
+      });
+    });
+    return res.status(200).json({ ads });
+  } catch (_error) {
+    const placement = req.query.placement;
+    const cacheKey = `public:ads:${String(placement || "all")}`;
+    const staleAds = getStaleCachedValue(cacheKey);
+    if (staleAds !== null) {
+      res.set("x-cache", "stale-fallback");
+      res.set("retry-after", "3");
+      return res.status(200).json({ ads: staleAds });
+    }
+    return res.status(503).json({ error: "Serviço temporariamente indisponível. Tente novamente." });
+  }
 });
 
 /** Homepage feed: featured jobs + featured career post previews */
 router.get("/homepage", async (req, res) => {
   const jobsLimit = Math.max(1, Math.min(Number(req.query.jobsLimit) || 6, 12));
   const postsLimit = Math.max(1, Math.min(Number(req.query.postsLimit) || 3, 6));
+  const cacheKey = `public:homepage:${jobsLimit}:${postsLimit}`;
 
-  const [featuredJobs, featuredCareerPosts] = await Promise.all([
-    getFeaturedJobs(jobsLimit),
-    CareerPost.find({ status: "published", featuredOnHome: true })
-      .sort({ publishedAt: -1 })
-      .limit(postsLimit),
-  ]);
+  try {
+    const payload = await getOrSetCache(cacheKey, 15000, async () => {
+      const [featuredJobs, featuredCareerPosts] = await Promise.all([
+        getFeaturedJobs(jobsLimit),
+        CareerPost.find({ status: "published", featuredOnHome: true })
+          .sort({ publishedAt: -1 })
+          .limit(postsLimit),
+      ]);
 
-  return res.status(200).json({ featuredJobs, featuredCareerPosts });
+      return { featuredJobs, featuredCareerPosts };
+    });
+
+    return res.status(200).json(payload);
+  } catch (_error) {
+    const stalePayload = getStaleCachedValue(cacheKey);
+    if (stalePayload !== null) {
+      res.set("x-cache", "stale-fallback");
+      res.set("retry-after", "3");
+      return res.status(200).json(stalePayload);
+    }
+    return res.status(503).json({ error: "Serviço temporariamente indisponível. Tente novamente." });
+  }
 });
 
 /** Full career post list */
 router.get("/career/posts", async (req, res) => {
   const limit = Math.max(1, Math.min(Number(req.query.limit) || 12, 24));
-  const posts = await CareerPost.find({ status: "published" })
-    .sort({ publishedAt: -1 })
-    .limit(limit);
-  return res.status(200).json({ posts });
+  const cacheKey = `public:career:list:${limit}`;
+  try {
+    const posts = await getOrSetCache(cacheKey, 15000, async () => {
+      return CareerPost.find({ status: "published" })
+        .sort({ publishedAt: -1 })
+        .limit(limit);
+    });
+    return res.status(200).json({ posts });
+  } catch (_error) {
+    const stalePosts = getStaleCachedValue(cacheKey);
+    if (stalePosts !== null) {
+      res.set("x-cache", "stale-fallback");
+      res.set("retry-after", "3");
+      return res.status(200).json({ posts: stalePosts });
+    }
+    return res.status(503).json({ error: "Serviço temporariamente indisponível. Tente novamente." });
+  }
 });
 
 /** Single career post by slug */
 router.get("/career/posts/:slug", async (req, res) => {
-  const post = await CareerPost.findOne({ slug: req.params.slug, status: "published" });
-  if (!post) return res.status(404).json({ error: "Conteúdo de carreira não encontrado." });
-  return res.status(200).json({ post });
+  const slug = String(req.params.slug || "");
+  const cacheKey = `public:career:slug:${slug}`;
+  try {
+    const post = await getOrSetCache(cacheKey, 15000, async () => {
+      return CareerPost.findOne({ slug, status: "published" });
+    });
+    if (!post) return res.status(404).json({ error: "Conteúdo de carreira não encontrado." });
+    return res.status(200).json({ post });
+  } catch (_error) {
+    const stalePost = getStaleCachedValue(cacheKey);
+    if (stalePost !== null) {
+      res.set("x-cache", "stale-fallback");
+      res.set("retry-after", "3");
+      return res.status(200).json({ post: stalePost });
+    }
+    return res.status(503).json({ error: "Serviço temporariamente indisponível. Tente novamente." });
+  }
 });
 
 router.get("/sitemap-jobs", async (_req, res) => {

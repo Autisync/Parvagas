@@ -3,6 +3,8 @@ import Job from "../models/job.js";
 import Application from "../models/application.js";
 import User from "../models/user.js";
 import CompanyInvite from "../models/companyInvite.js";
+import CompanyDeletionRequest from "../models/companyDeletionRequest.js";
+import UserNotification from "../models/userNotification.js";
 import AuditLog from "../models/auditLog.js";
 import { logAdminAction, logAudit } from "../services/auditService.js";
 import { JobStatuses, canTransitionJobStatus, isPlatformReviewRequired } from "../services/jobWorkflowService.js";
@@ -14,10 +16,49 @@ import {
 } from "../services/companyUniquenessService.js";
 import { companyPresenceHeartbeat, companyPresenceStatus } from "../services/presenceService.js";
 import { sendEmailNotification } from "../services/notificationService.js";
+import {
+  TEMPLATE_KEYS,
+  applyTemplatePlaceholders,
+  getEmailTemplate,
+} from "../services/emailTemplateService.js";
+import {
+  companyVerificationEmailTemplates,
+  applyVerificationTemplatePlaceholders,
+} from "../config/companyVerificationEmailTemplates.js";
+import {
+  canTransitionCompanyStatus,
+  describeCompanyStatus,
+  normalizeCompanyStatusInput,
+  normalizePersistedCompanyStatus,
+} from "../services/companyVerificationStatusService.js";
 import crypto from "crypto";
+import { promises as fsPromises } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOADS_DIR = path.join(__dirname, "..", "public", "uploads");
 
 const dedupeIds = (items = []) => Array.from(new Set(items.map((id) => String(id))));
 const COMPANY_TEAM_ROLES = new Set(["owner", "manager", "recruiter", "viewer"]);
+const normalizeCompanyStatus = (value) => {
+  return normalizePersistedCompanyStatus(value);
+};
+
+const isMissingCompanyDeletionRequestsTableError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("company_deletion_requests") && message.includes("could not find the table");
+};
+
+const mapLegacyVerificationToCompanyStatus = (verificationStatus) => {
+  const legacy = String(verificationStatus || "").trim().toLowerCase();
+  if (legacy === "verified") return "active";
+  if (legacy === "rejected" || legacy === "suspended") return "rejected";
+  return "pending_verification";
+};
+
+const verificationLink = (companyId) => `${publicSiteUrl()}/Portal/Empresa/Perfil?verification=${encodeURIComponent(String(companyId || ""))}`;
 
 const isCompanyOwner = (company, userId) => String(company?.ownerUserId || "") === String(userId || "");
 
@@ -135,6 +176,7 @@ export const registerCompany = async (req, res) => {
       phone,
       ownerUserId: req.user.id,
       teamMemberUserIds: [req.user.id],
+      status: "pending_verification",
       verificationStatus: "pending",
     });
 
@@ -154,7 +196,34 @@ export const registerCompany = async (req, res) => {
 
 export const getMyCompany = async (req, res) => {
   const company = await resolveCompanyForUser(req.user);
+  if (!company) return res.status(200).json({ company: null });
+
+  const user = await User.findById(req.user.id);
+  const patch = {};
+
+  if (!company.name && user?.signupCompanyName) patch.name = user.signupCompanyName;
+  if (!company.legalName && user?.signupLegalName) patch.legalName = user.signupLegalName;
+  if (!company.nif && user?.signupNif) patch.nif = user.signupNif;
+  if (!company.contactEmail && user?.email) patch.contactEmail = user.email;
+  if (!company.contactPerson && (user?.signupContactPerson || user?.fullName)) {
+    patch.contactPerson = user.signupContactPerson || user.fullName;
+  }
+  if (!company.phone && user?.signupPhone) patch.phone = user.signupPhone;
+
+  const status = normalizeCompanyStatus(company.status || mapLegacyVerificationToCompanyStatus(company.verificationStatus));
+  patch.status = status;
+
+  if (Object.keys(patch).length > 0) {
+    const updated = await Company.findByIdAndUpdate(company._id, patch, { new: true });
+    return res.status(200).json({ company: updated });
+  }
+
   return res.status(200).json({ company });
+};
+
+export const markEmpresaTutorialSeen = async (req, res) => {
+  await User.findByIdAndUpdate(req.user.id, { hasSeenEmpresaTutorial: true }, { new: true });
+  return res.status(200).json({ hasSeenEmpresaTutorial: true });
 };
 
 export const updateMyCompany = async (req, res) => {
@@ -192,6 +261,7 @@ export const updateMyCompany = async (req, res) => {
         existing._id,
         {
           ...payload,
+          status: normalizeCompanyStatus(existing.status || mapLegacyVerificationToCompanyStatus(existing.verificationStatus)),
           teamMemberUserIds: dedupeIds([...(existing.teamMemberUserIds || []), req.user.id, existing.ownerUserId]),
         },
         { new: true }
@@ -201,6 +271,7 @@ export const updateMyCompany = async (req, res) => {
         name: payload.name || payload.companyName,
         ownerUserId: req.user.id,
         teamMemberUserIds: [req.user.id],
+        status: "pending_verification",
         verificationStatus: "pending",
       });
 
@@ -218,12 +289,17 @@ export const updateMyCompany = async (req, res) => {
 export const uploadCompanyLogo = async (req, res) => {
   if (!ensureCompanyPermission(req, res, ["owner", "recruiter"])) return;
 
-  if (!req.file) {
+  if (!req.file || !req.file.buffer) {
     return res.status(400).json({ error: "Ficheiro de logo não enviado." });
   }
 
+  // memoryStorage gives us a buffer — write it to disk explicitly
+  await fsPromises.mkdir(UPLOADS_DIR, { recursive: true });
+  const safeName = `logo-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
+  await fsPromises.writeFile(path.join(UPLOADS_DIR, safeName), req.file.buffer);
+
   const existing = await resolveCompanyForUser(req.user);
-  const logo = `/uploads/${req.file.filename}`;
+  const logo = `/uploads/${safeName}`;
 
   const company = existing
     ? await Company.findByIdAndUpdate(existing._id, {
@@ -235,6 +311,7 @@ export const uploadCompanyLogo = async (req, res) => {
         logo,
         name: "Empresa",
         teamMemberUserIds: [req.user.id],
+        status: "pending_verification",
         verificationStatus: "pending",
       });
 
@@ -256,6 +333,10 @@ export const createJob = async (req, res) => {
 
   const company = await resolveCompanyForUser(req.user);
   if (!company) return res.status(400).json({ error: "Crie a empresa antes de publicar vagas." });
+  const companyStatus = normalizeCompanyStatus(company.status || mapLegacyVerificationToCompanyStatus(company.verificationStatus));
+  if (companyStatus !== "active") {
+    return res.status(403).json({ error: "A conta da empresa está pendente de verificação e não pode publicar vagas ainda." });
+  }
   if (!req.body.title || !req.body.description) {
     return res.status(400).json({ error: "title e description são obrigatórios." });
   }
@@ -895,43 +976,314 @@ export const verifyCompany = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   const reason = String(req.body.reason || "").trim();
-  const allowedStatuses = ["verified", "rejected", "pending", "needs_more_info", "suspended"];
+  const normalized = normalizeCompanyStatusInput(status);
+  const allowedStatuses = ["active", "rejected", "pending_verification", "inactive"];
 
-  if (!allowedStatuses.includes(status)) {
-    return res.status(400).json({ error: "Estado de verificação inválido." });
+  if (!allowedStatuses.includes(normalized)) {
+    return res.status(400).json({ error: "Estado de verificação inválido. Use active, pending_verification, rejected ou inactive." });
   }
 
-  if (status === "suspended" && normalizeAdminLevel(req.user.adminLevel) !== "super-admin") {
-    return res.status(403).json({ error: "Apenas super-admin pode suspender empresas." });
-  }
-
-  if (["rejected", "needs_more_info", "suspended"].includes(status) && !reason) {
+  if (["rejected", "inactive"].includes(normalized) && !reason) {
     return res.status(400).json({ error: "reason é obrigatório para este estado de verificação." });
   }
 
+  const existing = await Company.findById(id);
+  if (!existing) return res.status(404).json({ error: "Empresa não encontrada." });
+
+  const currentStatus = normalizeCompanyStatus(existing.status || mapLegacyVerificationToCompanyStatus(existing.verificationStatus));
+  if (!canTransitionCompanyStatus(currentStatus, normalized)) {
+    return res.status(400).json({
+      error: `Não é possível alterar o estado de uma empresa ${describeCompanyStatus(currentStatus)} para ${describeCompanyStatus(normalized)}.`,
+    });
+  }
+
+  const verificationStatus =
+    normalized === "active"
+      ? "verified"
+      : normalized === "pending_verification"
+      ? "pending"
+      : normalized;
+
   const company = await Company.findByIdAndUpdate(
-    id,
-    { verificationStatus: status, verificationNote: reason || "" },
+    existing._id,
+    { status: normalized, verificationStatus, verificationNote: reason || "" },
     { new: true }
   );
-  if (!company) return res.status(404).json({ error: "Empresa não encontrada." });
+
+  if (company.ownerUserId) {
+    await User.findByIdAndUpdate(company.ownerUserId, { companyStatus: normalized }, { new: false }).catch(() => null);
+  }
 
   await logAdminAction({
     adminUserId: req.user.id,
     action: "company.verification.update",
     targetType: "Company",
     targetId: String(company._id),
-    payload: { status, reason },
+    payload: { status: normalized, reason },
   });
 
-  if (company.contactEmail) {
-    await sendEmailNotification({
-      userId: req.user.id,
-      toEmail: String(company.contactEmail),
-      subject: `Parvagas | Estado da empresa: ${status}`,
-      body: `O estado de verificação da empresa ${company.name || ""} foi atualizado para ${status}.${reason ? ` Motivo: ${reason}` : ""}`,
-    }).catch(() => null);
+  if (company.contactEmail && normalized === "active") {
+    try {
+      const template = await getEmailTemplate(TEMPLATE_KEYS.COMPANY_APPROVAL);
+      const context = {
+        companyName: company.name || "Empresa",
+        contactPerson: company.contactPerson || "equipa",
+        verificationLink: verificationLink(company._id),
+        portalLink: `${publicSiteUrl()}/Portal/Empresa`,
+      };
+      await sendEmailNotification({
+        userId: req.user.id,
+        toEmail: String(company.contactEmail),
+        subject: applyTemplatePlaceholders(template.subject, context),
+        body: applyTemplatePlaceholders(template.body, context),
+      }).catch(() => null);
+
+      const ownerId = String(company.ownerUserId || "");
+      if (ownerId) {
+        await UserNotification.create({
+          userId: ownerId,
+          type: "company_verification_approved",
+          title: "Empresa aprovada",
+          description: "A sua empresa foi ativada e já pode publicar vagas.",
+          metadata: { companyId: String(company._id) },
+        }).catch(() => null);
+      }
+    } catch (_notifyErr) {
+      // Non-critical: email/notification failure must not block the verification response
+    }
   }
 
   return res.status(200).json({ company });
+};
+
+export const previewVerificationEmail = async (req, res) => {
+  const { id } = req.params;
+  const type = String(req.body.type || "").trim();
+  const company = await Company.findById(id);
+  if (!company) return res.status(404).json({ error: "Empresa não encontrada." });
+
+  const keyMap = {
+    approval: TEMPLATE_KEYS.COMPANY_APPROVAL,
+    more_info: TEMPLATE_KEYS.COMPANY_MORE_INFO,
+    rejected: TEMPLATE_KEYS.COMPANY_REJECTED,
+    meeting: TEMPLATE_KEYS.COMPANY_MEETING,
+    inactive: TEMPLATE_KEYS.COMPANY_REJECTED,
+  };
+  const templateKey = keyMap[type];
+  if (!templateKey) return res.status(400).json({ error: "Tipo de template inválido." });
+
+  const dbTemplate = await getEmailTemplate(templateKey);
+  const template = companyVerificationEmailTemplates[type] || dbTemplate;
+  const context = {
+    companyName: company.name || "Empresa",
+    contactPerson: company.contactPerson || "equipa",
+    verificationLink: verificationLink(company._id),
+    portalLink: `${publicSiteUrl()}/Portal/Empresa`,
+  };
+
+  return res.status(200).json({
+    preview: {
+      subject: applyVerificationTemplatePlaceholders(template.subject, context),
+      body: applyVerificationTemplatePlaceholders(template.body, context),
+      toEmail: company.contactEmail || "",
+    },
+  });
+};
+
+export const sendVerificationEmail = async (req, res) => {
+  const { id } = req.params;
+  const type = String(req.body.type || "").trim();
+  const customBody = String(req.body.body || "");
+  const customSubject = String(req.body.subject || "");
+
+  const company = await Company.findById(id);
+  if (!company) return res.status(404).json({ error: "Empresa não encontrada." });
+  if (!company.contactEmail) return res.status(400).json({ error: "Empresa sem email de contacto." });
+
+  const keyMap = {
+    approval: TEMPLATE_KEYS.COMPANY_APPROVAL,
+    more_info: TEMPLATE_KEYS.COMPANY_MORE_INFO,
+    rejected: TEMPLATE_KEYS.COMPANY_REJECTED,
+    meeting: TEMPLATE_KEYS.COMPANY_MEETING,
+    inactive: TEMPLATE_KEYS.COMPANY_REJECTED,
+  };
+  const templateKey = keyMap[type];
+  if (!templateKey) return res.status(400).json({ error: "Tipo de template inválido." });
+
+  const dbTemplate = await getEmailTemplate(templateKey);
+  const template = companyVerificationEmailTemplates[type] || dbTemplate;
+  const context = {
+    companyName: company.name || "Empresa",
+    contactPerson: company.contactPerson || "equipa",
+    verificationLink: verificationLink(company._id),
+    portalLink: `${publicSiteUrl()}/Portal/Empresa`,
+  };
+
+  const subject = applyVerificationTemplatePlaceholders(customSubject || template.subject, context);
+  const body = applyVerificationTemplatePlaceholders(customBody || template.body, context);
+
+  await sendEmailNotification({
+    userId: req.user.id,
+    toEmail: String(company.contactEmail),
+    subject,
+    body,
+  });
+
+  await logAdminAction({
+    adminUserId: req.user.id,
+    action: "company.verification.email.send",
+    targetType: "Company",
+    targetId: String(company._id),
+    payload: { type },
+  });
+
+  return res.status(200).json({ message: "Email enviado." });
+};
+
+export const requestCompanyDeletion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reason = String(req.body.reason || "").trim();
+    if (!reason) return res.status(400).json({ error: "Motivo é obrigatório para pedido de exclusão." });
+
+    const company = await Company.findById(id);
+    if (!company) return res.status(404).json({ error: "Empresa não encontrada." });
+
+    const requesterLevel = normalizeAdminLevel(req.user.adminLevel);
+    if (requesterLevel === "super-admin") {
+      const updated = await Company.findByIdAndUpdate(
+        company._id,
+        { status: "rejected", verificationStatus: "rejected", verificationNote: reason },
+        { new: true }
+      );
+      if (company.ownerUserId) {
+        await User.findByIdAndUpdate(company.ownerUserId, { companyStatus: "rejected" }, { new: false }).catch(() => null);
+      }
+      await logAdminAction({
+        adminUserId: req.user.id,
+        action: "company.delete.direct",
+        targetType: "Company",
+        targetId: String(company._id),
+        payload: { reason },
+      });
+      return res.status(200).json({ company: updated, mode: "direct" });
+    }
+
+    const existingPending = await CompanyDeletionRequest.findOne({
+      companyId: String(company._id),
+      status: "pending_admin_approval",
+    });
+    if (existingPending) {
+      return res.status(409).json({ error: "Já existe um pedido pendente para esta empresa." });
+    }
+
+    const request = await CompanyDeletionRequest.create({
+      companyId: String(company._id),
+      requestedByUserId: req.user.id,
+      requestedByAdminLevel: requesterLevel,
+      status: "pending_admin_approval",
+      reason,
+    });
+
+    await logAdminAction({
+      adminUserId: req.user.id,
+      action: "company.delete.request",
+      targetType: "CompanyDeletionRequest",
+      targetId: String(request._id),
+      payload: { companyId: String(company._id), reason },
+    });
+
+    return res.status(201).json({ request, mode: "approval_required" });
+  } catch (error) {
+    if (isMissingCompanyDeletionRequestsTableError(error)) {
+      return res.status(503).json({ error: "Funcionalidade de exclusão pendente indisponível. Execute as migrações de base de dados." });
+    }
+    throw error;
+  }
+};
+
+export const listCompanyDeletionRequests = async (_req, res) => {
+  try {
+    const requests = await CompanyDeletionRequest.find({ status: "pending_admin_approval" }).sort({ createdAt: -1 });
+
+    const enriched = await Promise.all(
+      requests.map(async (item) => ({
+        ...item,
+        company: await Company.findById(item.companyId),
+        requestedBy: await User.findById(item.requestedByUserId),
+      }))
+    );
+
+    return res.status(200).json({ requests: enriched });
+  } catch (error) {
+    if (isMissingCompanyDeletionRequestsTableError(error)) {
+      return res.status(200).json({ requests: [], warning: "Tabela company_deletion_requests indisponível; fila de exclusão omitida." });
+    }
+    throw error;
+  }
+};
+
+export const reviewCompanyDeletionRequest = async (req, res) => {
+  try {
+    const reviewerLevel = normalizeAdminLevel(req.user?.adminLevel);
+    if (reviewerLevel !== "super-admin") {
+      return res.status(403).json({ error: "Apenas super-admin pode aprovar ou rejeitar pedidos de exclusão." });
+    }
+
+    const request = await CompanyDeletionRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: "Pedido não encontrado." });
+    if (String(request.status || "") !== "pending_admin_approval") {
+      return res.status(409).json({ error: "Pedido já foi processado." });
+    }
+
+    const decision = String(req.body.decision || "").trim().toLowerCase();
+    if (!["approve", "reject"].includes(decision)) {
+      return res.status(400).json({ error: "Decisão inválida." });
+    }
+
+    const reviewNote = String(req.body.reviewNote || "").trim();
+    const now = new Date().toISOString();
+
+    const nextStatus = decision === "approve" ? "approved" : "rejected";
+    const updatedRequest = await CompanyDeletionRequest.findByIdAndUpdate(
+      request._id,
+      {
+        status: nextStatus,
+        reviewedByUserId: req.user.id,
+        reviewedAt: now,
+        reviewNote,
+      },
+      { new: true }
+    );
+
+    if (decision === "approve") {
+      const targetCompany = await Company.findByIdAndUpdate(
+        request.companyId,
+        {
+          status: "rejected",
+          verificationStatus: "rejected",
+          verificationNote: reviewNote || request.reason || "Conta removida por decisão administrativa.",
+        },
+        { new: true }
+      );
+      if (targetCompany?.ownerUserId) {
+        await User.findByIdAndUpdate(targetCompany.ownerUserId, { companyStatus: "rejected" }, { new: false }).catch(() => null);
+      }
+    }
+
+    await logAdminAction({
+      adminUserId: req.user.id,
+      action: "company.delete.request.review",
+      targetType: "CompanyDeletionRequest",
+      targetId: String(request._id),
+      payload: { decision, reviewNote },
+    });
+
+    return res.status(200).json({ request: updatedRequest });
+  } catch (error) {
+    if (isMissingCompanyDeletionRequestsTableError(error)) {
+      return res.status(503).json({ error: "Funcionalidade de exclusão pendente indisponível. Execute as migrações de base de dados." });
+    }
+    throw error;
+  }
 };

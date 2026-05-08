@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { clearToken } from "@/lib/api";
+import { logoutCurrentSession } from "@/lib/api";
 import AdminSidebar from "./components/AdminSidebar";
 import { fetchAdminMe } from "./adminClient";
 import { useClientLocale } from "@/lib/i18n/client";
+import NotificationBell from "@/app/Portal/components/NotificationBell";
 import { ArrowRightOnRectangleIcon, Bars3Icon } from "@heroicons/react/24/outline";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -35,8 +36,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, [token]);
 
   const handleLogout = () => {
-    clearToken();
-    router.replace("/Admin/Login");
+    logoutCurrentSession(token).finally(() => {
+      router.replace("/Admin/Login");
+    });
   };
 
   if (loading) {
@@ -63,14 +65,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </button>
             <span className="text-sm font-semibold uppercase tracking-[0.18em] text-red-600">Parvagas Admin</span>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-          >
-            <ArrowRightOnRectangleIcon className="h-4 w-4" />
-            {dict.portal.admin.logout}
-          </button>
+          <div className="flex items-center gap-2">
+            {token && <NotificationBell token={token} role="admin" />}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+            >
+              <ArrowRightOnRectangleIcon className="h-4 w-4" />
+              {dict.portal.admin.logout}
+            </button>
+          </div>
         </div>
       </header>
 

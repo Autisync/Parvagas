@@ -160,7 +160,15 @@ export default function MinhasVagasPage() {
               subtitle="Publique, revise e acompanhe desempenho de vagas em um unico fluxo."
               meta={`${filteredJobs.length} de ${totalRecords} vaga${totalRecords !== 1 ? "s" : ""}`}
               topClassName="top-4"
-              action={<button onClick={() => setJobModalOpen(true)} className="rounded-xl bg-red-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-red-700">+ Nova Vaga</button>}
+              action={(
+                <button
+                  onClick={() => setJobModalOpen(true)}
+                  className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                >
+                  <span aria-hidden="true">+</span>
+                  <span>Nova vaga</span>
+                </button>
+              )}
             />
 
             <DecisionDashboard

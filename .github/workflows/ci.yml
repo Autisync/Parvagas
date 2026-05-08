@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   ci:
@@ -48,3 +49,68 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001
           NEXT_PUBLIC_SITE_URL: https://parvagas.co.ao
+
+  load-gate:
+    name: Load Gate
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start API server
+        run: |
+          npm run server > /tmp/parvagas-server.log 2>&1 &
+          echo $! > /tmp/parvagas-server.pid
+        env:
+          NODE_ENV: production
+          PORT: 6001
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:6001
+          CORS_ORIGIN: http://127.0.0.1:3000
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          JWT_SECRET: ci-test-secret
+          STORAGE_PROVIDER: local
+          AI_PROVIDER: fallback
+
+      - name: Wait for API health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:6001/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy in time"
+          cat /tmp/parvagas-server.log || true
+          exit 1
+
+      - name: Run load gate
+        run: npm run test:load:gate
+        env:
+          LOAD_BASE_URL: http://127.0.0.1:6001
+
+      - name: Upload API log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-gate-api-log
+          path: /tmp/parvagas-server.log
+
+      - name: Stop API server
+        if: always()
+        run: |
+          if [ -f /tmp/parvagas-server.pid ]; then
+            kill $(cat /tmp/parvagas-server.pid) || true
+          fi

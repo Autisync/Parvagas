@@ -114,6 +114,10 @@ export const getPublicJobDetail = async (req, res) => {
 };
 
 export const listPublicCompanies = async (req, res) => {
-  const companies = await Company.find({ verificationStatus: "verified" }).sort({ createdAt: -1 });
+  const companies = await Company.find({ status: "active" }).sort({ createdAt: -1 });
+  if (companies.length === 0) {
+    const legacyCompanies = await Company.find({ verificationStatus: "verified" }).sort({ createdAt: -1 });
+    return res.status(200).json({ companies: legacyCompanies });
+  }
   return res.status(200).json({ companies });
 };

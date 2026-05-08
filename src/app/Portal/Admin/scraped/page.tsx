@@ -3,8 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchScraped, statusBadgeClass, toDateLabel, type ScrapedRecord, type Pagination } from "../adminClient";
-import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminFieldClass } from "../components/AdminUI";
+import {
+  fetchScraped,
+  updateScrapedJob,
+  deleteScrapedJob,
+  statusBadgeClass,
+  toDateLabel,
+  type ScrapedRecord,
+  type Pagination,
+} from "../adminClient";
+import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, AdminSpinner, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -23,12 +31,18 @@ export default function AdminScrapedPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(15);
   const [pagination, setPagination] = useState<Pagination | undefined>();
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [bulkNote, setBulkNote] = useState("");
   const [selectedJob, setSelectedJob] = useState<ScrapedRecord | null>(null);
   const [modalNote, setModalNote] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editCompany, setEditCompany] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editSourceUrl, setEditSourceUrl] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
 
   const {
@@ -42,6 +56,7 @@ export default function AdminScrapedPage() {
 
   const load = useCallback(async () => {
     if (!token) return;
+    setLoading(true);
     setError("");
     try {
       const res = await fetchScraped(token, { page, limit, keyword: search, status: filter });
@@ -49,6 +64,8 @@ export default function AdminScrapedPage() {
       setPagination(res.pagination);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar scraped jobs."));
+    } finally {
+      setLoading(false);
     }
   }, [token, page, limit, search, filter]);
 
@@ -89,8 +106,46 @@ export default function AdminScrapedPage() {
   };
 
   const review = async (id: string, status: "approved" | "rejected" | "duplicate" | "archived", publishAsPublicJob = false) => {
-    const reviewNote = window.prompt("Nota de revisão (opcional):") || "";
+    const reviewNote = window.prompt("Nota de revisão (opcional):");
+    if (reviewNote === null) return; // user cancelled
     await applyReview([id], status, publishAsPublicJob, reviewNote);
+  };
+
+  const saveEdit = async () => {
+    if (!token || !selectedJob) return;
+    setBusy(selectedJob._id);
+    setError("");
+    try {
+      await updateScrapedJob(token, selectedJob._id, {
+        title: editTitle,
+        company: editCompany,
+        location: editLocation,
+        sourceUrl: editSourceUrl,
+      });
+      setNotice("Scraped job atualizado com sucesso.");
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao atualizar scraped job."), "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const removeScraped = async (job: ScrapedRecord) => {
+    if (!token) return;
+    setBusy(job._id);
+    setError("");
+    try {
+      await deleteScrapedJob(token, job._id);
+      setDeleteConfirmId(null);
+      setNotice("Scraped job eliminado.");
+      if (selectedJob?._id === job._id) setSelectedJob(null);
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao eliminar scraped job."), "error");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const applyReview = async (ids: string[], status: "approved" | "rejected" | "duplicate" | "archived", publishAsPublicJob = false, reviewNote = "") => {
@@ -112,7 +167,7 @@ export default function AdminScrapedPage() {
       setSelectedJob(null);
       await load();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Erro ao rever scraped job."));
+      notify(getErrorMessage(err, "Erro ao rever scraped job."), "error");
     } finally {
       setBusy(null);
     }
@@ -148,7 +203,7 @@ export default function AdminScrapedPage() {
         description="Controle qualidade de vagas externas e evite duplicados no catálogo."
       />
 
-      {error ? <div className="mt-4"><InlineErrorState /></div> : null}
+      {error ? <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <form onSubmit={createScraped} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-3 md:grid-cols-2">
@@ -203,42 +258,64 @@ export default function AdminScrapedPage() {
         </section>
       ) : null}
 
-      <div className="mt-5 grid gap-3">
-        {jobs.length === 0 && <AdminEmptyState title="Sem scraped jobs nesta vista" description="Ajuste os filtros ou aguarde a próxima importação." />}
-        {jobs.map((job) => {
-          const status = String(job.status || "pending");
-          const checked = selectedIds.includes(job._id);
-          return (
-            <div key={job._id} className={`rounded-2xl border bg-white p-5 shadow-sm transition ${checked ? "border-red-300 ring-2 ring-red-100" : "border-slate-200"}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-start gap-4">
-                  <label className="mt-1 inline-flex items-center">
-                    <input aria-label={`Selecionar scraped job ${job.title || job._id}`} type="checkbox" checked={checked} onChange={() => toggleSelect(job._id)} className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
-                  </label>
-                  <div>
-                    <p className="font-semibold text-slate-900">{job.title || "Vaga importada"}</p>
-                    <p className="text-xs text-slate-500">{job.company || "Fonte externa"} · {job.location || "Local"}</p>
-                    <p className="text-xs text-slate-400">{toDateLabel(job.createdAt)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(status)}`}>{status}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedJob(job);
-                      setModalNote("");
-                    }}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700"
-                  >
-                    Ver detalhe
-                  </button>
-                </div>
-              </div>
-              {job.duplicateOf && <p className="mt-2 text-xs text-amber-700">Possível duplicado detetado</p>}
-            </div>
-          );
-        })}
+      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {loading ? (
+          <div className="inline-flex items-center gap-2 p-6 text-sm text-slate-600">
+            <AdminSpinner />
+            A carregar vagas raspadas...
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="p-6">
+            <AdminEmptyState title="Sem vagas raspadas" description="Nenhum anúncio de vaga raspado disponível." />
+          </div>
+        ) : (
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-3">Título</th>
+                <th className="px-3 py-3">Empresa</th>
+                <th className="px-3 py-3">Local</th>
+                <th className="px-3 py-3">Fonte</th>
+                <th className="px-3 py-3">Data</th>
+                <th className="px-3 py-3">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <tr key={job._id} className="border-b border-slate-100 align-top">
+                  <td className="px-3 py-3">
+                    <div className="flex items-start gap-2">
+                      <input aria-label={`Selecionar scraped job ${job.title || job._id}`} type="checkbox" checked={selectedIds.includes(job._id)} onChange={() => toggleSelect(job._id)} className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
+                      <div>
+                        <p className="font-semibold text-slate-900">{job.title || "Vaga importada"}</p>
+                        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(String(job.status || "pending"))}`}>{job.status || "pending"}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-slate-700">{job.company || "--"}</td>
+                  <td className="px-3 py-3 text-slate-700">{job.location || "--"}</td>
+                  <td className="px-3 py-3 text-slate-700">{job.source || "Manual"}</td>
+                  <td className="px-3 py-3 text-slate-500">{toDateLabel(job.createdAt)}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => { setSelectedJob(job); setModalNote(""); setEditTitle(job.title || ""); setEditCompany(job.company || ""); setEditLocation(job.location || ""); setEditSourceUrl(job.sourceUrl || ""); }} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
+                      <button type="button" onClick={() => review(job._id, "approved", true)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Aprovar</button>
+                      <button type="button" onClick={() => review(job._id, "rejected", false)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">Rejeitar</button>
+                      {deleteConfirmId === job._id ? (
+                        <span className="inline-flex items-center gap-1">
+                          <button type="button" disabled={busy === job._id} onClick={() => removeScraped(job)} className="rounded-xl bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">Confirmar</button>
+                          <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">Cancelar</button>
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => setDeleteConfirmId(job._id)} className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700">Eliminar</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <AdminModal
@@ -268,6 +345,16 @@ export default function AdminScrapedPage() {
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(String(selectedJob.status || "pending"))}`}>{selectedJob.status || "pending"}</span>
               {selectedJob.duplicateOf ? <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Possível duplicado</span> : null}
+            </div>
+            <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Editar antes de rever</p>
+              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={adminFieldClass} placeholder="Título" />
+              <input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} className={adminFieldClass} placeholder="Empresa" />
+              <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className={adminFieldClass} placeholder="Localização" />
+              <input value={editSourceUrl} onChange={(e) => setEditSourceUrl(e.target.value)} className={adminFieldClass} placeholder="URL de origem" />
+              <div>
+                <button type="button" onClick={saveEdit} disabled={busy === selectedJob._id} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Salvar edição</button>
+              </div>
             </div>
             <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
               <p><span className="font-semibold">Empresa/Fonte:</span> {selectedJob.company || "--"}</p>

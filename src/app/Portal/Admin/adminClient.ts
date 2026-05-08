@@ -12,6 +12,13 @@ export type AdminMe = {
 };
 
 export const AdminPermissions = {
+  JOB_REVIEW: "job.review",
+  JOB_APPROVE: "job.approve",
+  JOB_REJECT: "job.reject",
+  AD_FLAG: "ad.flag",
+  AD_PAUSE: "ad.pause",
+  AD_DRAFT: "ad.draft",
+  AD_PUBLISH: "ad.publish",
   DASHBOARD_VIEW: "admin.dashboard.view",
   ANALYTICS_VIEW: "admin.analytics.view",
   JOBS_MODERATE: "admin.jobs.moderate",
@@ -143,10 +150,15 @@ export type ApplicationRecord = {
 export type CompanyRecord = {
   _id: string;
   name?: string;
+  nif?: string;
+  companyIdentifier?: string;
   industry?: string;
+  size?: string;
   location?: string;
+  status?: "inactive" | "pending_verification" | "active" | "rejected";
   verificationStatus?: string;
   contactEmail?: string;
+  contactPerson?: string;
   createdAt?: string;
 };
 
@@ -155,6 +167,8 @@ export type ScrapedRecord = {
   title?: string;
   company?: string;
   location?: string;
+  source?: string;
+  sourceUrl?: string;
   status?: string;
   duplicateOf?: string | null;
   createdAt?: string;
@@ -269,6 +283,11 @@ export async function fetchAuditLogs(token: string, params: Record<string, strin
   return authFetch<Paginated<"auditLogs", AuditLogRecord>>(`/admin/audit-logs${listQuery(params)}`, token);
 }
 
+export async function downloadAuditLogsCsv(token: string, params: Record<string, string | number | undefined> = {}) {
+  const query = listQuery(params);
+  return downloadCsv(`/admin/audit-logs/export.csv${query}`, token, "parvagas-audit-logs.csv");
+}
+
 export async function fetchAdminActions(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"adminActions", AdminActionRecord>>(`/admin/admin-actions${listQuery(params)}`, token);
 }
@@ -283,7 +302,7 @@ export function statusBadgeClass(status: string) {
   if (s === "moderator") return "bg-sky-100 text-sky-800 border-sky-200";
   if (["approved", "verified", "published", "active"].includes(s)) return "bg-emerald-100 text-emerald-800 border-emerald-200";
   if (["rejected", "archived", "suspended"].includes(s)) return "bg-rose-100 text-rose-800 border-rose-200";
-  if (["pending", "submitted", "under_review", "pending_company_approval", "pending_platform_review", "needs_more_info"].includes(s)) {
+  if (["pending", "submitted", "under_review", "pending_company_approval", "pending_platform_review", "needs_more_info", "pending_verification"].includes(s)) {
     return "bg-amber-100 text-amber-800 border-amber-200";
   }
   return "bg-slate-100 text-slate-700 border-slate-200";
@@ -330,6 +349,7 @@ export async function createAdminAd(token: string, payload: Partial<AdCampaignRe
   return authFetch<{ ad: AdCampaignRecord }>("/admin/ads", token, {
     method: "POST",
     body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
   });
 }
 
@@ -337,11 +357,58 @@ export async function updateAdminAd(token: string, id: string, payload: Partial<
   return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}`, token, {
     method: "PATCH",
     body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function replaceAdminAd(token: string, id: string, payload: Partial<AdCampaignRecord>) {
+  return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function setAdminAdStatus(token: string, id: string, active: boolean) {
+  return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}/status`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function pauseAdminAd(token: string, id: string, reason = "") {
+  return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}/pause`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ reason }),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function flagAdminAd(token: string, id: string, reason: string) {
+  return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}/flag`, token, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+    suppressGlobalErrors: true,
   });
 }
 
 export async function deleteAdminAd(token: string, id: string) {
   return authFetch<{ deleted: boolean }>(`/admin/ads/${id}`, token, {
+    method: "DELETE",
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function updateScrapedJob(token: string, id: string, payload: Partial<ScrapedRecord>) {
+  return authFetch<{ scraped: ScrapedRecord }>(`/admin/scraped-jobs/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteScrapedJob(token: string, id: string) {
+  return authFetch<{ deleted: boolean }>(`/admin/scraped-jobs/${id}`, token, {
     method: "DELETE",
   });
 }

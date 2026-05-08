@@ -13,6 +13,8 @@ type User = {
   companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
   hasCompletedOnboarding?: boolean;
   hasSeenTutorial?: boolean;
+  hasSeenEmpresaTutorial?: boolean;
+  companyStatus?: "inactive" | "pending_verification" | "active" | "rejected";
 };
 
 type UseAuthOptions = {

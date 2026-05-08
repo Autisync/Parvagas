@@ -7,7 +7,30 @@ export const adminButtonClass =
   "app-btn-primary rounded-xl px-4 py-2.5 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60";
 
 export const adminSecondaryButtonClass =
-  "app-btn-secondary";
+  "app-btn-secondary rounded-xl px-4 py-2.5 text-sm";
+
+export function AdminSpinner({ size = "sm" }: { size?: "sm" | "md" }) {
+  const dimensions = size === "md" ? "h-5 w-5 border-2" : "h-4 w-4 border-2";
+  return <span aria-hidden="true" className={`inline-block animate-spin rounded-full border-current border-t-transparent ${dimensions}`} />;
+}
+
+export function AdminLoadingLabel({
+  loading,
+  idle,
+  busy,
+}: {
+  loading: boolean;
+  idle: string;
+  busy: string;
+}) {
+  if (!loading) return <>{idle}</>;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <AdminSpinner />
+      {busy}
+    </span>
+  );
+}
 
 export function AdminPageHeader({
   eyebrow,
@@ -94,14 +117,14 @@ export function AdminModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-3 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -117,7 +140,7 @@ export function AdminModal({
             </svg>
           </button>
         </div>
-        <div className="max-h-[72vh] overflow-y-auto px-5 py-5">{children}</div>
+        <div className="max-h-[70vh] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">{children}</div>
         {footer ? <div className="border-t border-slate-200 px-5 py-4">{footer}</div> : null}
       </div>
     </div>

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { clearToken, authFetch } from "@/lib/api";
+import { logoutCurrentSession, authFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
+import NotificationBell from "@/app/Portal/components/NotificationBell";
 import {
   HomeIcon,
   UserIcon,
@@ -56,12 +57,16 @@ export default function CandidateSidebar() {
   ];
 
   const handleSignout = () => {
-    clearToken();
-    router.push("/Login");
+    logoutCurrentSession(token).finally(() => {
+      router.push("/Login");
+    });
   };
 
   return (
     <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
+      <div className="mb-2 flex items-center justify-end">
+        {token && <NotificationBell token={token} role="candidate" />}
+      </div>
       <div className="flex items-center gap-2 px-2 py-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100">
           {candidateName[0]?.toUpperCase() || "C"}

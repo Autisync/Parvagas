@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User from "../models/user.js";
 import Company from "../models/company.js";
 import CandidateProfile from "../models/candidateProfile.js";
@@ -15,6 +16,10 @@ const normalizeCompanyTeamRole = (value) => {
 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_LOGIN_ATTEMPTS = Number(process.env.AUTH_MAX_FAILED_LOGINS || 8);
+const LOGIN_LOCK_MINUTES = Number(process.env.AUTH_LOCK_MINUTES || 15);
+
+const sessionIdleTimeoutMs = () => Number(process.env.AUTH_SESSION_IDLE_TIMEOUT_MS || 30 * 60 * 1000);
 
 const validatePasswordStrength = (password) => {
   if (String(password || "").length < 8) return "A nova password deve ter pelo menos 8 caracteres.";
@@ -41,12 +46,38 @@ const mapJwtResetError = (error) => {
   return "Token inválido.";
 };
 
+const issueFirstAccessResetToken = async (user, expiresIn = "20m") => {
+  const jti = crypto.randomUUID();
+  const resetToken = jwt.sign(
+    {
+      userId: user._id,
+      purpose: "first-login-reset",
+      role: user.role,
+      jti,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn }
+  );
+
+  const decoded = jwt.decode(resetToken);
+  const expSeconds = Number(decoded?.exp || 0);
+  const firstAccessResetExpiresAt = expSeconds > 0 ? new Date(expSeconds * 1000).toISOString() : null;
+
+  await User.findByIdAndUpdate(user._id, {
+    firstAccessResetJti: jti,
+    firstAccessResetExpiresAt,
+  });
+
+  return resetToken;
+};
+
 const signAuthToken = (user) => {
   const normalizedAdminLevel = user.role === "admin" ? normalizeAdminLevel(user.adminLevel) : undefined;
   const companyTeamRole = user.role === "company" ? normalizeCompanyTeamRole(user.companyTeamRole || user.teamRole) : undefined;
   return jwt.sign(
     {
       id: user._id,
+      sid: user.activeSessionId,
       role: user.role,
       suspended: user.suspended,
       ...(user.role === "admin" ? { adminLevel: normalizedAdminLevel } : {}),
@@ -62,6 +93,29 @@ const signAuthToken = (user) => {
   );
 };
 
+const startUserSession = async (user, req) => {
+  const now = new Date().toISOString();
+  const activeSessionId = crypto.randomUUID();
+  const sessionMeta = {
+    activeSessionId,
+    activeSessionStartedAt: now,
+    lastActivityAt: now,
+    lastLoginAt: now,
+    lastLoginIp: String(req.ip || ""),
+    lastLoginUserAgent: String(req.headers["user-agent"] || ""),
+    sessionIdleTimeoutMs: sessionIdleTimeoutMs(),
+    sessionRevokedAt: null,
+  };
+
+  await User.findByIdAndUpdate(user._id, sessionMeta);
+  const refreshedUser = await User.findById(user._id);
+  const sessionUser = refreshedUser || { ...user, ...sessionMeta };
+  return {
+    token: signAuthToken(sessionUser),
+    user: sessionUser,
+  };
+};
+
 const toPublicUser = (user) => {
   const userObject = typeof user?.toObject === "function" ? user.toObject() : { ...(user || {}) };
   if (userObject.role === "admin") {
@@ -69,10 +123,12 @@ const toPublicUser = (user) => {
   }
   if (userObject.role === "company") {
     userObject.companyTeamRole = normalizeCompanyTeamRole(userObject.companyTeamRole || userObject.teamRole);
+    userObject.companyStatus = userObject.companyStatus || "pending_verification";
   }
   userObject.id = String(userObject._id || userObject.id || "");
   userObject.hasCompletedOnboarding = Boolean(userObject.hasCompletedOnboarding ?? true);
   userObject.hasSeenTutorial = Boolean(userObject.hasSeenTutorial ?? false);
+  userObject.hasSeenEmpresaTutorial = Boolean(userObject.hasSeenEmpresaTutorial ?? false);
   delete userObject.password;
   return userObject;
 };
@@ -89,12 +145,23 @@ export const register = async (req, res) => {
       companyName,
       legalName,
       nif,
+      phone,
+      contactPerson,
+      acceptTerms,
+      acceptPrivacy,
+      newsletterOptIn,
+      termsVersion,
+      privacyVersion,
     } = req.body;
 
     const normalizedRole = String(role || "candidate").trim().toLowerCase();
 
     if (!fullName || !email || !password) {
       return res.status(400).json({ error: "fullName, email e password são obrigatórios." });
+    }
+
+    if (!acceptTerms || !acceptPrivacy) {
+      return res.status(400).json({ error: "É obrigatório aceitar os Termos e a Política de Privacidade." });
     }
 
     if (!["candidate", "company", "admin"].includes(normalizedRole)) {
@@ -136,6 +203,9 @@ export const register = async (req, res) => {
 
     const salt = await bcrypt.genSalt();
     const passwordHash = await bcrypt.hash(password, salt);
+    const now = new Date().toISOString();
+    const normalizedTermsVersion = String(termsVersion || process.env.TERMS_VERSION || "2026-05").trim();
+    const normalizedPrivacyVersion = String(privacyVersion || process.env.PRIVACY_VERSION || "2026-05").trim();
 
     const savedUser = await User.create({
       fullName,
@@ -143,6 +213,23 @@ export const register = async (req, res) => {
       password: passwordHash,
       role: normalizedRole,
       ...(normalizedRole === "candidate" ? { hasCompletedOnboarding: false, hasSeenTutorial: false } : {}),
+      ...(normalizedRole === "company" ? { hasSeenEmpresaTutorial: false } : {}),
+      ...(normalizedRole === "company" ? { companyStatus: "pending_verification" } : {}),
+    consents: {
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+        termsVersion: normalizedTermsVersion,
+        privacyVersion: normalizedPrivacyVersion,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
+        newsletterOptIn: newsletterOptIn === true,
+        newsletterOptInAt: newsletterOptIn === true ? now : null,
+      },
+      signupCompanyName: normalizedRole === "company" ? String(companyName || "").trim() : undefined,
+      signupLegalName: normalizedRole === "company" ? String(legalName || "").trim() : undefined,
+      signupNif: normalizedRole === "company" ? normalizedNif : undefined,
+      signupPhone: normalizedRole === "company" ? String(phone || "").trim() : undefined,
+      signupContactPerson: normalizedRole === "company" ? String(contactPerson || fullName || "").trim() : undefined,
       ...(normalizedRole === "admin"
         ? {
             adminLevel: normalizeAdminLevel(adminLevel),
@@ -156,8 +243,11 @@ export const register = async (req, res) => {
         name: String(companyName).trim(),
         legalName: String(legalName || companyName).trim(),
         nif: normalizedNif,
+        status: "pending_verification",
         ownerUserId: savedUser._id,
         createdByUserId: savedUser._id,
+        contactPerson: String(contactPerson || fullName || "").trim(),
+        phone: String(phone || "").trim(),
         contactEmail: normalizedEmail,
         verificationStatus: "pending",
       });
@@ -217,19 +307,53 @@ export const login = async (req, res) => {
     if (!user) return res.status(401).json({ error: "Credenciais inválidas." });
     if (user.suspended) return res.status(403).json({ error: "Conta suspensa." });
 
-    const isMatch = user.password ? await bcrypt.compare(password, user.password) : false;
-    if (!isMatch) return res.status(401).json({ error: "Credenciais inválidas." });
+    if (user.lockUntil && new Date(user.lockUntil).getTime() > Date.now()) {
+      return res.status(423).json({ error: "Conta temporariamente bloqueada por excesso de tentativas. Tente novamente mais tarde." });
+    }
 
-    if (user.role === "admin" && user.firstLoginRequired) {
-      const resetToken = jwt.sign(
-        {
-          userId: user._id,
-          purpose: "first-login-reset",
-          role: "admin",
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: "20m" }
-      );
+    const isMatch = user.password ? await bcrypt.compare(password, user.password) : false;
+    if (!isMatch) {
+      const failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
+      const lockUntil = failedLoginAttempts >= MAX_LOGIN_ATTEMPTS
+        ? new Date(Date.now() + LOGIN_LOCK_MINUTES * 60 * 1000).toISOString()
+        : null;
+
+      await User.findByIdAndUpdate(user._id, {
+        failedLoginAttempts,
+        lockUntil,
+        lastFailedLoginAt: new Date().toISOString(),
+      }).catch(() => null);
+
+      await logAudit({
+        actorUserId: user._id,
+        actorRole: user.role,
+        action: "auth.login.failed",
+        resourceType: "User",
+        resourceId: String(user._id),
+        ip: req.ip || "",
+        userAgent: String(req.headers["user-agent"] || ""),
+        details: { failedLoginAttempts, lockUntil },
+      }).catch(() => null);
+
+      return res.status(401).json({ error: "Credenciais inválidas." });
+    }
+
+    if (Number(user.failedLoginAttempts || 0) > 0 || user.lockUntil) {
+      await User.findByIdAndUpdate(user._id, {
+        failedLoginAttempts: 0,
+        lockUntil: null,
+      }).catch(() => null);
+    }
+
+    if (user.forcePasswordReset && user.tempPasswordExpiresAt && new Date(user.tempPasswordExpiresAt).getTime() < Date.now()) {
+      return res.status(403).json({
+        error: "A credencial temporária expirou. Solicite um novo acesso ao administrador.",
+        code: "TEMP_PASSWORD_EXPIRED",
+      });
+    }
+
+    if (user.firstLoginRequired || user.forcePasswordReset) {
+      const resetToken = await issueFirstAccessResetToken(user, "20m");
 
       return res.status(428).json({
         requiresPasswordReset: true,
@@ -237,10 +361,9 @@ export const login = async (req, res) => {
       });
     }
 
-    const token = signAuthToken(user);
-
-    const userObject = toPublicUser(user);
-    return res.status(200).json({ token, user: userObject });
+    const session = await startUserSession(user, req);
+    const userObject = toPublicUser(session.user);
+    return res.status(200).json({ token: session.token, user: userObject });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -263,12 +386,20 @@ export const firstLoginReset = async (req, res) => {
       return res.status(400).json({ error: mapJwtResetError(error) });
     }
 
-    if (decoded?.purpose !== "first-login-reset" || !decoded?.userId) {
+    if (decoded?.purpose !== "first-login-reset" || !decoded?.userId || !decoded?.jti) {
       return res.status(400).json({ error: "Token inválido." });
     }
 
     const user = await User.findById(decoded.userId);
-    if (!user || user.role !== "admin") return res.status(404).json({ error: "Utilizador não encontrado." });
+    if (!user) return res.status(404).json({ error: "Utilizador não encontrado." });
+
+    if (!user.firstAccessResetJti || String(user.firstAccessResetJti) !== String(decoded.jti)) {
+      return res.status(400).json({ error: "Token inválido ou já utilizado." });
+    }
+
+    if (user.firstAccessResetExpiresAt && new Date(user.firstAccessResetExpiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ error: "Este link expirou. Solicite um novo acesso." });
+    }
 
     const isReuse = await bcrypt.compare(newPassword, user.password);
     if (isReuse) return res.status(400).json({ error: "A nova password deve ser diferente da atual." });
@@ -276,12 +407,16 @@ export const firstLoginReset = async (req, res) => {
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(newPassword, salt);
     user.firstLoginRequired = false;
+    user.forcePasswordReset = false;
+    user.tempPasswordExpiresAt = null;
+    user.firstAccessResetJti = null;
+    user.firstAccessResetExpiresAt = null;
     await user.save();
 
-    const token = signAuthToken(user);
-    const userObject = toPublicUser(user);
+    const session = await startUserSession(user, req);
+    const userObject = toPublicUser(session.user);
 
-    return res.status(200).json({ token, user: userObject });
+    return res.status(200).json({ token: session.token, user: userObject });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -364,9 +499,12 @@ export const resetPassword = async (req, res) => {
 
 export const acceptCompanyInvite = async (req, res) => {
   try {
-    const { inviteToken, fullName, password } = req.body;
+    const { inviteToken, fullName, password, acceptTerms, acceptPrivacy, newsletterOptIn, termsVersion, privacyVersion } = req.body;
     if (!inviteToken || !fullName || !password) {
       return res.status(400).json({ error: "inviteToken, fullName e password são obrigatórios." });
+    }
+    if (!acceptTerms || !acceptPrivacy) {
+      return res.status(400).json({ error: "É obrigatório aceitar os Termos e a Política de Privacidade." });
     }
 
     const invite = await CompanyInvite.findOne({ token: inviteToken, status: "pending" });
@@ -383,6 +521,9 @@ export const acceptCompanyInvite = async (req, res) => {
 
     const salt = await bcrypt.genSalt();
     const passwordHash = await bcrypt.hash(password, salt);
+    const now = new Date().toISOString();
+    const normalizedTermsVersion = String(termsVersion || process.env.TERMS_VERSION || "2026-05").trim();
+    const normalizedPrivacyVersion = String(privacyVersion || process.env.PRIVACY_VERSION || "2026-05").trim();
 
     const user = await User.create({
       fullName,
@@ -392,6 +533,16 @@ export const acceptCompanyInvite = async (req, res) => {
       companyId: invite.companyId,
       companyTeamRole: normalizeCompanyTeamRole(invite.teamRole || "recruiter"),
       firstLoginRequired: true,
+      consents: {
+        acceptedTerms: true,
+        acceptedPrivacy: true,
+        termsVersion: normalizedTermsVersion,
+        privacyVersion: normalizedPrivacyVersion,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
+        newsletterOptIn: newsletterOptIn === true,
+        newsletterOptInAt: newsletterOptIn === true ? now : null,
+      },
     });
 
     invite.status = "accepted";
@@ -399,16 +550,41 @@ export const acceptCompanyInvite = async (req, res) => {
     invite.acceptedUserId = user._id;
     await invite.save();
 
-    const token = signAuthToken(user);
+    const session = await startUserSession(user, req);
     const userObject = user.toObject();
     userObject.companyTeamRole = normalizeCompanyTeamRole(userObject.companyTeamRole || userObject.teamRole);
     delete userObject.password;
 
     return res.status(201).json({
-      token,
+      token: session.token,
       user: userObject,
       message: "Convite aceite com sucesso.",
     });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    const userId = String(req.user?.id || "").trim();
+    const sessionId = String(req.user?.sessionId || req.user?.sid || "").trim();
+
+    if (!userId || !sessionId) {
+      return res.status(400).json({ error: "Sessão inválida." });
+    }
+
+    const user = await User.findById(userId);
+    if (user && String(user.activeSessionId || "") === sessionId) {
+      await User.findByIdAndUpdate(userId, {
+        activeSessionId: null,
+        activeSessionStartedAt: null,
+        lastActivityAt: null,
+        sessionRevokedAt: new Date().toISOString(),
+      });
+    }
+
+    return res.status(200).json({ message: "Sessão terminada com sucesso." });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

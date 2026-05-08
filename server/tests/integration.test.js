@@ -7,6 +7,7 @@ import { calculateJobMatch, calculateProfileCompletion } from "../services/match
 import CareerPost from "../models/careerPost.js";
 import User from "../models/user.js";
 import Company from "../models/company.js";
+import Job from "../models/job.js";
 
 const hasSupabase = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 if (!process.env.ADMIN_SIGNUP_KEY) process.env.ADMIN_SIGNUP_KEY = "test-admin-key";
@@ -32,6 +33,8 @@ if (!hasSupabase) {
       email: resolvedEmail,
       password,
       role: normalizedRole,
+      acceptTerms: true,
+      acceptPrivacy: true,
       ...(adminLevel ? { adminLevel } : {}),
       ...(normalizedRole === "admin"
         ? { adminSignupKey: process.env.ADMIN_SIGNUP_KEY || "test-admin-key" }
@@ -113,6 +116,15 @@ if (!hasSupabase) {
 
     assert.strictEqual(companyRes.status, 201);
     assert.ok(companyRes.body.company?._id);
+    const companyId = companyRes.body.company._id;
+
+    // Admin must verify the company before it can post jobs
+    const adminAuth = await registerAndLogin({ role: "admin" });
+    const verifyRes = await request(app)
+      .patch(`/companies/${companyId}/verification`)
+      .set("Authorization", `Bearer ${adminAuth.token}`)
+      .send({ status: "active" });
+    assert.strictEqual(verifyRes.status, 200);
 
     // Refresh token so company claims (companyId/team context) are fully aligned after registration.
     const refreshedCompanyLogin = await request(app).post("/auth/login").send({
@@ -147,7 +159,7 @@ if (!hasSupabase) {
 
     return {
       companyAuth: refreshedCompanyAuth,
-      companyId: companyRes.body.company._id,
+      companyId,
       jobId,
     };
   }
@@ -178,6 +190,8 @@ if (!hasSupabase) {
       email,
       password: "Pass1234!",
       role: "candidate",
+      acceptTerms: true,
+      acceptPrivacy: true,
     });
     assert.strictEqual(first.status, 201);
 
@@ -186,6 +200,8 @@ if (!hasSupabase) {
       email,
       password: "Pass1234!",
       role: "candidate",
+      acceptTerms: true,
+      acceptPrivacy: true,
     });
     assert.strictEqual(second.status, 409);
   });
@@ -211,6 +227,45 @@ if (!hasSupabase) {
       password: "New5678!",
     });
     assert.strictEqual(relogin.status, 200);
+  });
+
+  test("auth: new login invalidates previous session token", async () => {
+    await clearAllModelTables();
+    const auth = await registerAndLogin({ role: "candidate" });
+
+    const secondLogin = await request(app).post("/auth/login").send({
+      email: auth.email,
+      password: auth.password,
+    });
+    assert.strictEqual(secondLogin.status, 200);
+
+    const firstSessionRequest = await request(app)
+      .get(`/users/${auth.user._id}`)
+      .set("Authorization", `Bearer ${auth.token}`);
+    assert.strictEqual(firstSessionRequest.status, 401);
+
+    const secondSessionRequest = await request(app)
+      .get(`/users/${auth.user._id}`)
+      .set("Authorization", `Bearer ${secondLogin.body.token}`);
+    assert.strictEqual(secondSessionRequest.status, 200);
+  });
+
+  test("auth: inactive sessions are rejected", async () => {
+    await clearAllModelTables();
+    const previousTimeout = process.env.AUTH_SESSION_IDLE_TIMEOUT_MS;
+    process.env.AUTH_SESSION_IDLE_TIMEOUT_MS = "1000";
+
+    const auth = await registerAndLogin({ role: "candidate" });
+    await User.findByIdAndUpdate(auth.user._id, {
+      lastActivityAt: new Date(Date.now() - 5_000).toISOString(),
+    });
+
+    const expiredRequest = await request(app)
+      .get(`/users/${auth.user._id}`)
+      .set("Authorization", `Bearer ${auth.token}`);
+    assert.strictEqual(expiredRequest.status, 401);
+
+    process.env.AUTH_SESSION_IDLE_TIMEOUT_MS = previousTimeout;
   });
 
   test("jobs: public listing and public companies endpoints", async () => {
@@ -389,6 +444,7 @@ if (!hasSupabase) {
       .set("Authorization", `Bearer ${admin.token}`)
       .send({ suspended: true, reason: "comportamento abusivo" });
     assert.strictEqual(suspend.status, 200);
+    assert.strictEqual(suspend.body.user.suspended, true);
 
     const now = new Date();
     const yesterday = new Date(now.getTime() - 86400000).toISOString();
@@ -436,6 +492,162 @@ if (!hasSupabase) {
       .set("Authorization", `Bearer ${admin.token}`)
       .send({ status: "approved" });
     assert.strictEqual(scrapedReview.status, 200);
+  });
+
+  test("admin: publishing a job persists across reloads", async () => {
+    await clearAllModelTables();
+
+    const owner = await registerAndLogin({ role: "company", fullName: "Owner" });
+    const companyRes = await request(app)
+      .post("/companies/register")
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({
+        companyName: "Publish Persist Corp",
+        legalName: "Publish Persist Corp Lda",
+        industry: "Tech",
+        companySize: "11-50",
+        location: "Luanda",
+        contactPerson: "Owner",
+        contactEmail: uniqueEmail("publish-owner"),
+      });
+    assert.strictEqual(companyRes.status, 201);
+    const companyId = companyRes.body.company._id;
+
+    // Company must be admin-verified before it can post jobs
+    const adminVerifier = await registerAndLogin({ role: "admin" });
+    const verifyRes = await request(app)
+      .patch(`/companies/${companyId}/verification`)
+      .set("Authorization", `Bearer ${adminVerifier.token}`)
+      .send({ status: "active" });
+    assert.strictEqual(verifyRes.status, 200);
+
+    // Refresh owner token after verification so JWT claims are current
+    const ownerRefresh = await request(app).post("/auth/login").send({
+      email: owner.email,
+      password: owner.password,
+    });
+    const ownerToken = ownerRefresh.body.token;
+
+    const recruiter = await registerAndLogin({ role: "candidate", fullName: "Recruiter" });
+    await User.findByIdAndUpdate(recruiter.user._id, {
+      role: "company",
+      companyId,
+      companyTeamRole: "recruiter",
+    });
+    const recruiterLogin = await request(app).post("/auth/login").send({
+      email: recruiter.email,
+      password: recruiter.password,
+    });
+    assert.strictEqual(recruiterLogin.status, 200);
+
+    const recruiterJob = await request(app)
+      .post("/companies/jobs")
+      .set("Authorization", `Bearer ${recruiterLogin.body.token}`)
+      .send({
+        title: "Persistent publish job",
+        description: "Normal business role",
+        visibility: "public",
+        location: "Luanda",
+      });
+    assert.strictEqual(recruiterJob.status, 201);
+    assert.strictEqual(recruiterJob.body.job.status, "pending_company_approval");
+
+    const ownerApprove = await request(app)
+      .patch(`/companies/job-approvals/${recruiterJob.body.job._id}/review`)
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ decision: "approve", reason: "ok", escalateToPlatformReview: true });
+    assert.strictEqual(ownerApprove.status, 200);
+    assert.strictEqual(ownerApprove.body.job.status, "pending_platform_review");
+
+    const moderator = await registerAndLogin({ role: "admin", adminLevel: "moderator" });
+    const publish = await request(app)
+      .patch(`/admin/jobs/${recruiterJob.body.job._id}/moderate`)
+      .set("Authorization", `Bearer ${moderator.token}`)
+      .send({ status: "published", visibility: "public", reason: "policy clear" });
+    assert.strictEqual(publish.status, 200);
+    assert.strictEqual(publish.body.job.status, "published");
+
+    const persisted = await Job.findById(recruiterJob.body.job._id);
+    assert.strictEqual(persisted?.status, "published");
+    assert.strictEqual(persisted?.visibility, "public");
+
+    const adminList = await request(app)
+      .get("/admin/jobs?status=published")
+      .set("Authorization", `Bearer ${moderator.token}`);
+    assert.strictEqual(adminList.status, 200);
+    assert.ok(adminList.body.jobs.some((job) => job._id === recruiterJob.body.job._id));
+
+    const publicDetail = await request(app).get(`/jobs/${recruiterJob.body.job._id}`);
+    assert.strictEqual(publicDetail.status, 200);
+    assert.strictEqual(publicDetail.body.job.status, "published");
+  });
+
+  test("admin: company verification normalizes aliases and rejects invalid transitions", async () => {
+    await clearAllModelTables();
+
+    const admin = await registerAndLogin({ role: "admin" });
+    const owner = await registerAndLogin({ role: "company", fullName: "Owner" });
+    const companyRes = await request(app)
+      .post("/companies/register")
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({
+        companyName: "Status Flow Corp",
+        legalName: "Status Flow Corp Lda",
+        industry: "Tech",
+        companySize: "11-50",
+        location: "Luanda",
+        contactPerson: "Owner",
+        contactEmail: uniqueEmail("status-owner"),
+      });
+    assert.strictEqual(companyRes.status, 201);
+
+    const activate = await request(app)
+      .patch(`/companies/${companyRes.body.company._id}/verification`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ status: "ativa" });
+    assert.strictEqual(activate.status, 200);
+    assert.strictEqual(activate.body.company.status, "active");
+
+    const activeList = await request(app)
+      .get("/admin/companies?status=active")
+      .set("Authorization", `Bearer ${admin.token}`);
+    assert.strictEqual(activeList.status, 200);
+    assert.ok(activeList.body.companies.some((company) => company._id === companyRes.body.company._id));
+
+    const invalidBackToPending = await request(app)
+      .patch(`/companies/${companyRes.body.company._id}/verification`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ status: "pendente" });
+    assert.strictEqual(invalidBackToPending.status, 400);
+    assert.match(invalidBackToPending.body.error, /ativa/i);
+    assert.match(invalidBackToPending.body.error, /pendente/i);
+
+    const inactive = await request(app)
+      .patch(`/companies/${companyRes.body.company._id}/verification`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ status: "inativa", reason: "Encerramento temporário" });
+    assert.strictEqual(inactive.status, 200);
+    assert.strictEqual(inactive.body.company.status, "inactive");
+
+    const reactivate = await request(app)
+      .patch(`/companies/${companyRes.body.company._id}/verification`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ status: "active" });
+    assert.strictEqual(reactivate.status, 200);
+    assert.strictEqual(reactivate.body.company.status, "active");
+
+    const reject = await request(app)
+      .patch(`/companies/${companyRes.body.company._id}/verification`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ status: "rejeitada", reason: "Documentação inválida" });
+    assert.strictEqual(reject.status, 200);
+    assert.strictEqual(reject.body.company.status, "rejected");
+
+    const rejectedList = await request(app)
+      .get("/admin/companies?status=rejected")
+      .set("Authorization", `Bearer ${admin.token}`);
+    assert.strictEqual(rejectedList.status, 200);
+    assert.ok(rejectedList.body.companies.some((company) => company._id === companyRes.body.company._id));
   });
 
   test("admin: paginated lists, admin level changes, and audit logs", async () => {
@@ -526,6 +738,7 @@ if (!hasSupabase) {
       .set("Authorization", `Bearer ${moderator.token}`)
       .send({ suspended: true, reason: "teste" });
     assert.strictEqual(suspend.status, 403);
+    assert.match(suspend.body.error, /super-admin/i);
 
     const exportUsers = await request(app)
       .get("/admin/exports/users.csv")
@@ -561,12 +774,119 @@ if (!hasSupabase) {
         startDate: new Date().toISOString(),
         endDate: new Date(Date.now() + 86400000).toISOString(),
       });
-    assert.strictEqual(createAd.status, 403);
+    assert.strictEqual(createAd.status, 201);
+
+    const publishAttempt = await request(app)
+      .patch(`/admin/ads/${createAd.body.ad._id}/status`)
+      .set("Authorization", `Bearer ${moderator.token}`)
+      .send({ active: true });
+    assert.strictEqual(publishAttempt.status, 403);
 
     const launchReadiness = await request(app)
       .get("/admin/launch-readiness")
       .set("Authorization", `Bearer ${moderator.token}`);
     assert.strictEqual(launchReadiness.status, 403);
+  });
+
+  test("admin: suspension validates missing reason and self-suspension", async () => {
+    await clearAllModelTables();
+
+    const admin = await registerAndLogin({ role: "admin" });
+    const candidate = await registerAndLogin({ role: "candidate" });
+
+    const missingReason = await request(app)
+      .patch(`/admin/users/${candidate.user._id}/suspend`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ suspended: true, reason: "" });
+    assert.strictEqual(missingReason.status, 400);
+    assert.match(missingReason.body.error, /reason/i);
+
+    const selfSuspend = await request(app)
+      .patch(`/admin/users/${admin.user._id}/suspend`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ suspended: true, reason: "teste" });
+    assert.strictEqual(selfSuspend.status, 400);
+    assert.match(selfSuspend.body.error, /própria conta/i);
+
+    const missingUser = await request(app)
+      .patch("/admin/users/00000000-0000-0000-0000-000000000000/suspend")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ suspended: true, reason: "teste" });
+    assert.strictEqual(missingUser.status, 404);
+    assert.match(missingUser.body.error, /não encontrado/i);
+  });
+
+  test("admin: ad validation rejects missing fields, invalid link and invalid date range", async () => {
+    await clearAllModelTables();
+
+    const admin = await registerAndLogin({ role: "admin" });
+
+    const missingFields = await request(app)
+      .post("/admin/ads")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({ title: "", placement: "", link: "", startDate: "", endDate: "" });
+    assert.strictEqual(missingFields.status, 400);
+    assert.match(missingFields.body.error, /title/i);
+    assert.match(missingFields.body.error, /placement/i);
+
+    const invalidLink = await request(app)
+      .post("/admin/ads")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({
+        title: "Invalid link ad",
+        placement: "homepage_banner",
+        link: "destino-invalido",
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 86400000).toISOString(),
+      });
+    assert.strictEqual(invalidLink.status, 400);
+    assert.match(invalidLink.body.error, /link inválido/i);
+
+    const validCreate = await request(app)
+      .post("/admin/ads")
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({
+        title: "Valid ad",
+        placement: "homepage_banner",
+        link: "https://example.com/promo",
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 86400000).toISOString(),
+      });
+    assert.strictEqual(validCreate.status, 201);
+
+    const invalidReplace = await request(app)
+      .put(`/admin/ads/${validCreate.body.ad._id}`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({
+        title: "Valid ad",
+        placement: "homepage_banner",
+        link: "https://example.com/promo",
+        startDate: new Date(Date.now() + 86400000).toISOString(),
+        endDate: new Date().toISOString(),
+      });
+    assert.strictEqual(invalidReplace.status, 400);
+    assert.match(invalidReplace.body.error, /startdate/i);
+
+    const validReplace = await request(app)
+      .put(`/admin/ads/${validCreate.body.ad._id}`)
+      .set("Authorization", `Bearer ${admin.token}`)
+      .send({
+        title: "Updated ad title",
+        placement: "sidebar",
+        link: "https://example.com/updated",
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 2 * 86400000).toISOString(),
+        active: true,
+      });
+    assert.strictEqual(validReplace.status, 200);
+    assert.strictEqual(validReplace.body.ad.title, "Updated ad title");
+    assert.strictEqual(validReplace.body.ad.placement, "sidebar");
+
+    const listedAds = await request(app)
+      .get("/admin/ads")
+      .set("Authorization", `Bearer ${admin.token}`);
+    assert.strictEqual(listedAds.status, 200);
+    assert.ok(listedAds.body.ads.some((ad) => ad._id === validCreate.body.ad._id && ad.title === "Updated ad title"));
   });
 
   test("company workflow: recruiter requests approval, owner approves, moderator only handles escalated queue", async () => {
@@ -587,6 +907,21 @@ if (!hasSupabase) {
       });
     assert.strictEqual(companyRes.status, 201);
     const companyId = companyRes.body.company._id;
+
+    // Company must be admin-verified before it can post jobs
+    const adminVerifier = await registerAndLogin({ role: "admin" });
+    const wfVerify = await request(app)
+      .patch(`/companies/${companyId}/verification`)
+      .set("Authorization", `Bearer ${adminVerifier.token}`)
+      .send({ status: "active" });
+    assert.strictEqual(wfVerify.status, 200);
+
+    // Refresh owner token after verification
+    const ownerRefresh = await request(app).post("/auth/login").send({
+      email: owner.email,
+      password: owner.password,
+    });
+    const ownerToken = ownerRefresh.body.token;
 
     const recruiter = await registerAndLogin({ role: "candidate", fullName: "Recruiter" });
     await User.findByIdAndUpdate(recruiter.user._id, {
@@ -616,14 +951,14 @@ if (!hasSupabase) {
 
     const queue = await request(app)
       .get("/companies/job-approvals?status=pending_company_approval")
-      .set("Authorization", `Bearer ${owner.token}`);
+      .set("Authorization", `Bearer ${ownerToken}`);
     assert.strictEqual(queue.status, 200);
     assert.ok(Array.isArray(queue.body.approvals));
     assert.ok(queue.body.approvals.some((entry) => entry._id === recruiterJob.body.job._id));
 
     const ownerApprove = await request(app)
       .patch(`/companies/job-approvals/${recruiterJob.body.job._id}/review`)
-      .set("Authorization", `Bearer ${owner.token}`)
+      .set("Authorization", `Bearer ${ownerToken}`)
       .send({ decision: "approve", reason: "ok", escalateToPlatformReview: true });
     assert.strictEqual(ownerApprove.status, 200);
     assert.strictEqual(ownerApprove.body.job.status, "pending_platform_review");
@@ -637,7 +972,7 @@ if (!hasSupabase) {
 
     const ownerDirectJob = await request(app)
       .post("/companies/jobs")
-      .set("Authorization", `Bearer ${owner.token}`)
+      .set("Authorization", `Bearer ${ownerToken}`)
       .send({
         title: "Owner direct publish",
         description: "Direct owner posting",
@@ -802,7 +1137,6 @@ if (!hasSupabase) {
     });
     assert.equal(typeof match.score, "number");
   });
-}
 
   test("candidate: partial profile save persists without all required fields", async () => {
     await clearAllModelTables();
@@ -893,3 +1227,4 @@ if (!hasSupabase) {
       "Expected draft or warning in response"
     );
   });
+}

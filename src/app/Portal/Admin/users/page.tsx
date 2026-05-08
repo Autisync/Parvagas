@@ -12,7 +12,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
 export default function AdminUsersPage() {
-  const { token, user } = useAuth("admin");
+  const { token } = useAuth("admin");
   const [list, setList] = useState<UserRecord[]>([]);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
@@ -22,10 +22,17 @@ export default function AdminUsersPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [level, setLevel] = useState<AdminLevel>(user?.adminLevel === "moderator" ? "moderator" : "super-admin");
+  // level and currentUserId are derived from the server-side /admin/me response so they
+  // are always accurate (not relying on possibly-stale localStorage JWT claims).
+  const [level, setLevel] = useState<AdminLevel>("moderator");
+  const [currentUserId, setCurrentUserId] = useState("");
   const [bulkReason, setBulkReason] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [modalReason, setModalReason] = useState("");
+  // quickSuspend holds the target user when the row "Suspender" button is pressed
+  // so we can prompt for a reason via the modal instead of window.prompt.
+  const [quickSuspend, setQuickSuspend] = useState<{ user: UserRecord; suspended: boolean } | null>(null);
+  const [quickReason, setQuickReason] = useState("");
   const { notify } = useAppNotifier();
 
   const {
@@ -45,6 +52,7 @@ export default function AdminUsersPage() {
       setList(usersRes.users || []);
       setPagination(usersRes.pagination);
       setLevel(me.adminLevel);
+      setCurrentUserId(me.id || "");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar utilizadores."));
     }
@@ -67,37 +75,74 @@ export default function AdminUsersPage() {
   };
 
   const applySuspension = async (ids: string[], suspended: boolean, reason: string) => {
-    if (!token || level !== "super-admin" || ids.length === 0) return;
+    if (!token || level !== "super-admin" || ids.length === 0) return false;
+    if (suspended && ids.includes(currentUserId)) {
+      notify("Não pode suspender a sua própria conta.", "error");
+      return false;
+    }
     if (!reason.trim()) {
-      setError(suspended ? "Indique o motivo da suspensão." : "Indique o motivo da reativação.");
-      return;
+      notify(
+        suspended ? "Indique o motivo da suspensão antes de continuar." : "Indique o motivo da reativação antes de continuar.",
+        "error"
+      );
+      return false;
     }
     setBusy(ids[0]);
     setError("");
     setNotice("");
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         ids.map((id) =>
-          authFetch(`/admin/users/${id}/suspend`, token, {
+          authFetch<{ user: UserRecord }>(`/admin/users/${id}/suspend`, token, {
             method: "PATCH",
             body: JSON.stringify({ suspended, reason: reason.trim() }),
           })
         )
       );
-      setNotice(ids.length > 1 ? `${ids.length} utilizadores atualizados.` : "Utilizador atualizado com sucesso.");
+      const updatedUsers = responses
+        .map((entry) => entry.user)
+        .filter((entry): entry is UserRecord => Boolean(entry?._id));
+
+      if (updatedUsers.length > 0) {
+        const updatedById = new Map(updatedUsers.map((entry) => [entry._id, entry]));
+        setList((current) => current.map((entry) => updatedById.get(entry._id) || entry));
+        setSelectedUser((current) => (current ? updatedById.get(current._id) || current : current));
+      }
+
+      setNotice(
+        ids.length > 1
+          ? `${ids.length} utilizadores ${suspended ? "suspensos" : "reativados"} com sucesso.`
+          : suspended
+          ? "Utilizador suspenso com sucesso."
+          : "Utilizador reativado com sucesso."
+      );
       clearSelectionState();
       setSelectedUser(null);
       await load();
+      return true;
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Falha ao atualizar utilizador."));
+      notify(
+        getErrorMessage(err, suspended ? "Erro ao suspender. Verifique a ligação e tente novamente." : "Erro ao reativar. Verifique a ligação e tente novamente."),
+        "error"
+      );
+      return false;
     } finally {
       setBusy(null);
     }
   };
 
-  const toggleSuspend = async (id: string, suspended: boolean) => {
-    const reason = window.prompt(suspended ? "Motivo da suspensão:" : "Motivo da reativação:") || "";
-    await applySuspension([id], suspended, reason);
+  const openQuickSuspend = (userRecord: UserRecord, suspended: boolean) => {
+    setQuickSuspend({ user: userRecord, suspended });
+    setQuickReason("");
+  };
+
+  const submitQuickSuspend = async () => {
+    if (!quickSuspend) return;
+    const ok = await applySuspension([quickSuspend.user._id], quickSuspend.suspended, quickReason);
+    if (ok) {
+      setQuickSuspend(null);
+      setQuickReason("");
+    }
   };
 
   const selectAllAcrossPages = async () => {
@@ -116,7 +161,7 @@ export default function AdminUsersPage() {
       replaceSelection(ids);
       setNotice(`${ids.length} utilizadores selecionados em todas as páginas.`);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Não foi possível selecionar todos os utilizadores filtrados."));
+      notify(getErrorMessage(err, "Não foi possível selecionar todos os utilizadores filtrados."), "error");
     } finally {
       setBusy(null);
     }
@@ -131,7 +176,7 @@ export default function AdminUsersPage() {
         action={<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Permissões: {level}</span>}
       />
 
-      {error ? <div className="mt-5"><InlineErrorState onAction={load} /></div> : null}
+      {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <AdminFilterBar>
           <input
@@ -185,6 +230,7 @@ export default function AdminUsersPage() {
           const state = userRecord.suspended ? "suspended" : "active";
           const adminInfo = userRecord.role === "admin" ? ` · ${userRecord.adminLevel || "super-admin"}` : "";
           const checked = selectedIds.includes(userRecord._id);
+          const isCurrentUser = userRecord._id === currentUserId;
           return (
             <div key={userRecord._id} className={`rounded-2xl border bg-white p-5 shadow-sm transition ${checked ? "border-red-300 ring-2 ring-red-100" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -213,11 +259,11 @@ export default function AdminUsersPage() {
                     Ver detalhe
                   </button>
                   <button
-                    disabled={busy === userRecord._id || level !== "super-admin"}
-                    onClick={() => toggleSuspend(userRecord._id, !userRecord.suspended)}
+                    disabled={busy === userRecord._id || level !== "super-admin" || isCurrentUser}
+                    onClick={() => openQuickSuspend(userRecord, !userRecord.suspended)}
                     className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
                   >
-                    {level !== "super-admin" ? "Apenas leitura" : userRecord.suspended ? "Reativar" : "Suspender"}
+                    {level !== "super-admin" ? "Apenas leitura" : isCurrentUser ? "Conta atual" : userRecord.suspended ? "Reativar" : "Suspender"}
                   </button>
                 </div>
               </div>
@@ -240,9 +286,10 @@ export default function AdminUsersPage() {
               <textarea value={modalReason} onChange={(e) => setModalReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Obrigatório para suspender ou reativar" />
             </label>
             <div className="flex flex-wrap gap-2">
-              <button disabled={busy === selectedUser._id} onClick={() => applySuspension([selectedUser._id], true, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Suspender</button>
-              <button disabled={busy === selectedUser._id} onClick={() => applySuspension([selectedUser._id], false, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Reativar</button>
+              <button disabled={busy === selectedUser._id || Boolean(selectedUser.suspended) || selectedUser._id === currentUserId} onClick={() => applySuspension([selectedUser._id], true, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Suspender</button>
+              <button disabled={busy === selectedUser._id || !Boolean(selectedUser.suspended)} onClick={() => applySuspension([selectedUser._id], false, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Reativar</button>
             </div>
+            {selectedUser._id === currentUserId ? <p className="text-xs font-semibold text-amber-700">A sua própria conta não pode ser suspensa a partir deste painel.</p> : null}
           </div>
         ) : undefined}
       >
@@ -260,6 +307,48 @@ export default function AdminUsersPage() {
             </div>
           </div>
         ) : null}
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(quickSuspend)}
+        title={quickSuspend?.suspended ? "Suspender utilizador" : "Reativar utilizador"}
+        onClose={() => { setQuickSuspend(null); setQuickReason(""); }}
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => { setQuickSuspend(null); setQuickReason(""); }} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(busy) || !quickReason.trim()}
+              onClick={submitQuickSuspend}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${quickSuspend?.suspended ? "bg-rose-600" : "bg-emerald-600"}`}
+            >
+              {busy ? "A processar..." : quickSuspend?.suspended ? "Suspender" : "Reativar"}
+            </button>
+          </div>
+        )}
+      >
+        {quickSuspend && (
+          <div className="grid gap-3">
+            <p className="text-sm text-slate-700">
+              {quickSuspend.suspended
+                ? `Tem a certeza que pretende suspender ${quickSuspend.user.fullName || quickSuspend.user.email || "este utilizador"}?`
+                : `Tem a certeza que pretende reativar ${quickSuspend.user.fullName || quickSuspend.user.email || "este utilizador"}?`}
+            </p>
+            <label className="grid gap-1 text-sm text-slate-700">
+              <span>Motivo <span className="text-rose-600">*</span></span>
+              <textarea
+                value={quickReason}
+                onChange={(e) => setQuickReason(e.target.value)}
+                rows={3}
+                className={`${adminFieldClass} resize-y`}
+                placeholder={quickSuspend.suspended ? "Explique o motivo da suspensão" : "Explique o motivo da reativação"}
+                autoFocus
+              />
+            </label>
+          </div>
+        )}
       </AdminModal>
 
       <PaginationControls
