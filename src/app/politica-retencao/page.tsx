@@ -1,7 +1,7 @@
 import { getServerDictionary } from "@/lib/i18n/server";
 
-export default function RetencaoPage() {
-  const dict = getServerDictionary();
+export default async function RetencaoPage() {
+  const dict = await getServerDictionary();
 
   return (
     <main className="p-8 max-w-4xl mx-auto">

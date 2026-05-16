@@ -287,7 +287,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
                         {!candidateForm.useLatestCv ? (
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             onChange={(e) => setCandidateForm((p) => ({ ...p, customCv: e.target.files?.[0] || null }))}
                             className="block w-full rounded-xl border border-slate-300 px-3 py-2"
                           />
@@ -328,7 +328,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
 
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     onChange={(e) => setGuestForm((p) => ({ ...p, cv: e.target.files?.[0] || null }))}
                     className="block w-full rounded-xl border border-slate-300 px-3 py-2"
                   />

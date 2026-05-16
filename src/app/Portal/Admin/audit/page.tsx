@@ -1,9 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getErrorMessage } from "@/lib/api";
-import JsonBlock from "@/app/Portal/Admin/components/JsonBlock";
 import {
   fetchAdminActions,
   fetchAdminMe,
@@ -21,6 +21,10 @@ import { collectAllIdsAcrossPages, collectSelectedItemsAcrossPages } from "../ho
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+
+const JsonBlock = dynamic(() => import("@/app/Portal/Admin/components/JsonBlock"), {
+  ssr: false,
+});
 
 type Tab = "audit" | "admin-actions";
 

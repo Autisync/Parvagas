@@ -1,15 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import Footer from "@/app/components/Footer";
-import CompanySidebar from "../components/CompanySidebar";
-import JobPostingModal from "../components/JobPostingModal";
-import LogoUploadModal, { resolveLogoUrl } from "../components/LogoUploadModal";
 import { useToasts } from "../components/useToasts";
+import { resolveLogoUrl } from "../components/logoUrl";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const JobPostingModal = dynamic(() => import("../components/JobPostingModal"), {
+  ssr: false,
+});
+
+const LogoUploadModal = dynamic(() => import("../components/LogoUploadModal"), {
+  ssr: false,
+});
 
 type CompanyProfile = {
   name?: string;
@@ -85,7 +96,6 @@ const statusLabel: Record<string, string> = {
 
 
 function EmpresaPerfilContent() {
-  const searchParams = useSearchParams();
   const { token, loading, user } = useAuth("company");
   const [profile, setProfile] = useState<CompanyProfile>({});
   const [jobs, setJobs] = useState<CompanyJob[]>([]);
@@ -96,7 +106,6 @@ function EmpresaPerfilContent() {
   const [logoModalOpen, setLogoModalOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [logoMsg, setLogoMsg] = useState("");
-  const [fetchError, setFetchError] = useState("");
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamInvites, setTeamInvites] = useState<TeamInvite[]>([]);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
@@ -113,10 +122,11 @@ function EmpresaPerfilContent() {
   const { pushToast } = useToasts();
 
   useEffect(() => {
-    if (searchParams.get("createJob") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("createJob") === "1") {
       setJobModalOpen(true);
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -136,17 +146,10 @@ function EmpresaPerfilContent() {
         setTeamInvites(invitesData.invites || []);
       })
       .catch(() => {
-        setFetchError("Erro ao carregar dados da área da empresa.");
         pushToast("error", "Falha ao carregar dados da empresa.");
       })
       .finally(() => setFetchingData(false));
   }, [token, pushToast]);
-
-  useEffect(() => {
-    if (!fetchError) return;
-    pushToast("error", fetchError);
-    setFetchError("");
-  }, [fetchError, pushToast]);
 
   useEffect(() => {
     if (!token) return;
@@ -508,9 +511,5 @@ function EmpresaPerfilContent() {
 }
 
 export default function EmpresaPerfilPage() {
-  return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div>}>
-      <EmpresaPerfilContent />
-    </Suspense>
-  );
+  return <EmpresaPerfilContent />;
 }

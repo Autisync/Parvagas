@@ -35,6 +35,48 @@ function isConnectionIssueMessage(message: string) {
   );
 }
 
+function isIgnorableBrowserNoise(message: string) {
+  const m = String(message || "").toLowerCase();
+  return (
+    m.includes("hydration failed") ||
+    m.includes("didn't match the client") ||
+    m.includes("did not match the client") ||
+    m.includes("router action dispatched before initialization") ||
+    m.includes("resizeobserver loop completed") ||
+    m.includes("resizeobserver loop limit exceeded") ||
+    m.includes("securevoult") ||
+    m.includes("data-sv-") ||
+    m.includes("cz-shortcut-listen")
+  );
+}
+
+function isChunkLoadFailure(reason: unknown) {
+  const asError = reason as { message?: string; stack?: string; name?: string } | null;
+  const text = `${String(asError?.name || "")} ${String(asError?.message || "")} ${String(asError?.stack || "")}`.toLowerCase();
+  return (
+    text.includes("chunkloaderror") ||
+    text.includes("loading chunk") ||
+    text.includes("failed to load chunk") ||
+    text.includes("/_next/static/chunks")
+  );
+}
+
+function recoverFromChunkLoadError() {
+  if (typeof window === "undefined") return false;
+  const key = "parvagas:chunk-reload-at";
+  const now = Date.now();
+  const last = Number.parseInt(sessionStorage.getItem(key) || "0", 10);
+
+  // Reload once within a short window to recover from stale chunk references.
+  if (!Number.isFinite(last) || now - last > 60000) {
+    sessionStorage.setItem(key, String(now));
+    window.location.reload();
+    return true;
+  }
+
+  return false;
+}
+
 export type AppToastTone = "success" | "error" | "warning" | "info";
 
 type AppToast = {
@@ -62,7 +104,7 @@ type ModalState = {
 type AppNotifierContextValue = {
   notify: (message: string, tone?: AppToastTone, durationMs?: number, retry?: () => void) => void;
   dismiss: (id: number) => void;
-  showBanner: (message: string, actionLabel?: string, onAction?: () => void) => void;
+  showBanner: (message: string, actionLabel?: string, onAction?: () => void, title?: string) => void;
   clearBanner: () => void;
   showModalError: (title: string, message: string, supportCode?: string) => void;
   clearModalError: () => void;
@@ -129,12 +171,12 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
     [banner],
   );
 
-  const showBanner = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
+  const showBanner = useCallback((message: string, actionLabel?: string, onAction?: () => void, title = "Ligação indisponível") => {
     const normalized = normalizeErrorMessage(message) || "Não conseguimos contactar o servidor neste momento.";
     if (banner?.message === normalized) return;
 
     setBanner({
-      title: "Ligação indisponível",
+      title,
       message: normalized,
       actionLabel: actionLabel || "Tentar novamente",
       onAction,
@@ -151,6 +193,7 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
 
   const showModalError = useCallback((title: string, message: string, supportCode?: string) => {
     const normalized = normalizeErrorMessage(message) || "Falha inesperada.";
+    if (isIgnorableBrowserNoise(normalized)) return;
     if (modal?.title === title && modal?.message === normalized) return;
 
     setModal({ title, message: normalized, supportCode });
@@ -168,7 +211,12 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
+      if (isChunkLoadFailure(reason)) {
+        event.preventDefault();
+        if (recoverFromChunkLoadError()) return;
+      }
       const message = reason instanceof Error ? reason.message : "Falha crítica inesperada.";
+      if (isIgnorableBrowserNoise(message)) return;
       showModalError(
         "Não foi possível concluir esta operação",
         `${message} Verifique a ligação à internet e tente novamente.`,
@@ -176,6 +224,10 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
     };
 
     const onError = (event: ErrorEvent) => {
+      if (isChunkLoadFailure(event.error || event.message)) {
+        if (recoverFromChunkLoadError()) return;
+      }
+      if (isIgnorableBrowserNoise(event.message)) return;
       showModalError(
         "Ocorreu uma falha no sistema",
         event.message || "A aplicação encontrou um erro inesperado.",
@@ -210,7 +262,7 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
       }
 
       if (error.type === "permission") {
-        showBanner("Não tem permissão para esta ação.");
+        showBanner("Não tem permissão para esta ação.", undefined, undefined, "Acesso restrito");
         return;
       }
 

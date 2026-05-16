@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Logo from "/public/icon2.png";
+
+const Logo = "/icon2.png";
 import Reset from "@/app/components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import FormFieldError from "@/app/components/errors/FormFieldError";
@@ -63,8 +64,14 @@ function AdminLoginContent() {
   const [formFeedback, setFormFeedback] = useState<FormFeedback | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const feedbackHashRef = useRef("");
+  const submitInFlightRef = useRef(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (queryFirstLoginToken) {
@@ -129,22 +136,42 @@ function AdminLoginContent() {
     goToAdminPortal();
   };
 
+  const beginSubmit = () => {
+    if (submitInFlightRef.current) {
+      return false;
+    }
+    submitInFlightRef.current = true;
+    setLoading(true);
+    return true;
+  };
+
+  const endSubmit = () => {
+    submitInFlightRef.current = false;
+    setLoading(false);
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     showFeedback(null);
     setSubmitted(true);
 
+    if (submitInFlightRef.current) {
+      return;
+    }
+
     if (!email.trim() || !password.trim()) {
       return;
     }
 
-    setLoading(true);
+    if (!beginSubmit()) {
+      return;
+    }
     try {
       const res = await apiFetchRaw("/auth/login", {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, roleHint: "admin" }),
       });
 
       if (res.status === 428) {
@@ -187,7 +214,7 @@ function AdminLoginContent() {
         showFeedback({ variant: "error", message });
       }
     } finally {
-      setLoading(false);
+      endSubmit();
     }
   }
 
@@ -195,6 +222,10 @@ function AdminLoginContent() {
     e.preventDefault();
     showFeedback(null);
     setSubmitted(true);
+
+    if (submitInFlightRef.current) {
+      return;
+    }
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
@@ -211,7 +242,9 @@ function AdminLoginContent() {
       return;
     }
 
-    setLoading(true);
+    if (!beginSubmit()) {
+      return;
+    }
     try {
       const res = await apiFetchRaw("/auth/first-login-reset", {
         method: "POST",
@@ -235,7 +268,7 @@ function AdminLoginContent() {
     } catch (err: unknown) {
       showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
-      setLoading(false);
+      endSubmit();
     }
   }
 
@@ -243,6 +276,10 @@ function AdminLoginContent() {
     e.preventDefault();
     showFeedback(null);
     setSubmitted(true);
+
+    if (submitInFlightRef.current) {
+      return;
+    }
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
@@ -259,7 +296,9 @@ function AdminLoginContent() {
       return;
     }
 
-    setLoading(true);
+    if (!beginSubmit()) {
+      return;
+    }
     try {
       const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
@@ -281,7 +320,7 @@ function AdminLoginContent() {
     } catch (err: unknown) {
       showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
-      setLoading(false);
+      endSubmit();
     }
   }
 
@@ -317,6 +356,13 @@ function AdminLoginContent() {
             <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Entrar na consola</h2>
             <p className="mt-2 text-sm text-slate-600">Acesso reservado para contas administrativas criadas por super-admin.</p>
 
+            {!isMounted ? (
+              <div className="mt-6 space-y-4" aria-live="polite" aria-busy="true">
+                <div className="h-10 animate-pulse rounded-xl bg-slate-200" />
+                <div className="h-10 animate-pulse rounded-xl bg-slate-200" />
+                <div className="h-11 animate-pulse rounded-xl bg-slate-300" />
+              </div>
+            ) : (
             <form
               className="mt-6 space-y-4"
               onSubmit={passwordResetToken ? handlePasswordReset : firstLoginResetToken ? handleFirstLoginReset : handleSubmit}
@@ -339,7 +385,7 @@ function AdminLoginContent() {
                 <FormFieldError id="admin-email-error" message={shouldShowFieldError("email") ? fieldErrors.email : ""} />
               </div>
 
-              <div>
+              <div suppressHydrationWarning>
                 <div className="flex items-center justify-between">
                   <label htmlFor="password" className="block text-sm font-semibold text-slate-800">
                     {firstLoginResetToken || passwordResetToken ? "Nova password" : "Palavra-passe"}
@@ -350,6 +396,7 @@ function AdminLoginContent() {
                   id="password"
                   type="password"
                   required
+                  suppressHydrationWarning
                   value={firstLoginResetToken || passwordResetToken ? newPassword : password}
                   onChange={(e) => (firstLoginResetToken || passwordResetToken ? setNewPassword(e.target.value) : setPassword(e.target.value))}
                   onBlur={() => markTouched(firstLoginResetToken || passwordResetToken ? "newPassword" : "password")}
@@ -416,6 +463,7 @@ function AdminLoginContent() {
                 <Link href="/" className="font-semibold text-red-600 hover:text-red-700">Voltar ao site</Link>
               </div>
             </form>
+            )}
           </div>
         </section>
       </div>

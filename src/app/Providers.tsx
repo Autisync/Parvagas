@@ -1,25 +1,36 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { AppNotifierProvider } from "@/app/components/AppNotifier";
 import { GlobalErrorProvider } from "@/app/components/errors/GlobalErrorProvider";
 import LiveUpdateBridge from "@/app/components/LiveUpdateBridge";
 import SessionManager from "@/app/components/SessionManager";
-import { warnMissingSupabaseEnv } from "@/lib/supabaseBrowserClient";
+
+const RUNTIME_INTENSIVE_PREFIXES = [
+  "/Portal",
+  "/Admin",
+  "/Dashboard",
+  "/Submission",
+  "/Aplicar",
+];
+
+function shouldEnableRuntimeFeatures(pathname: string) {
+  return RUNTIME_INTENSIVE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => {
-    warnMissingSupabaseEnv();
-  }, []);
+  const pathname = usePathname();
+  const enableRuntimeFeatures = shouldEnableRuntimeFeatures(pathname || "");
 
   return (
     <QueryClientProvider client={queryClient}>
       <AppNotifierProvider>
-        <SessionManager />
+        {enableRuntimeFeatures ? <SessionManager /> : null}
         <GlobalErrorProvider>{children}</GlobalErrorProvider>
-        <LiveUpdateBridge />
+        {enableRuntimeFeatures ? <LiveUpdateBridge /> : null}
       </AppNotifierProvider>
     </QueryClientProvider>
   );

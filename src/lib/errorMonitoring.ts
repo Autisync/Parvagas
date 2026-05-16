@@ -6,7 +6,22 @@ type ErrorLogPayload = {
   timestamp: string;
 };
 
+function isIgnorableClientNoise(message: string) {
+  const m = String(message || "").toLowerCase();
+  const hydrationRegex = /hydration failed|didn['’]t match the client|did not match the client/i;
+  const extensionRegex = /securevoult|data-sv-|cz-shortcut-listen/i;
+  const resizeObserverRegex = /resizeobserver loop completed|resizeobserver loop limit exceeded/i;
+  return (
+    hydrationRegex.test(m) ||
+    m.includes("router action dispatched before initialization") ||
+    resizeObserverRegex.test(m) ||
+    extensionRegex.test(m)
+  );
+}
+
 export async function logErrorToMonitoring(payload: ErrorLogPayload) {
+  if (isIgnorableClientNoise(payload.message)) return;
+
   const endpoint = process.env.NEXT_PUBLIC_ERROR_LOG_ENDPOINT;
   try {
     if (endpoint) {

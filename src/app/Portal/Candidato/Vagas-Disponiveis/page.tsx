@@ -1,9 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
-import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
-import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
-import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useAuth } from "@/hooks/useAuth";
 import { usePublicJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -11,6 +9,20 @@ import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import Link from "next/link";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+
+const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/StickyPortalHeading"), {
+  ssr: false,
+});
+
+const DecisionDashboard = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
+  ssr: false,
+  loading: () => <div className="mb-6 h-40 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const InsightsToolbar = dynamic(() => import("@/app/Portal/components/InsightsToolbar"), {
+  ssr: false,
+  loading: () => <div className="mb-4 h-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 type Job = {
   _id: string;

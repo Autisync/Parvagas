@@ -15,20 +15,30 @@ import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
+import { applyParsedCvDraftToProfile } from "@/lib/cvProfile";
 
 const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
 
 type Profile = {
+  firstName?: string;
+  lastName?: string;
   fullName?: string;
   email?: string;
   phone?: string;
   location?: string;
+  postcode?: string;
+  jobTitle?: string;
   professionalTitle?: string;
   summary?: string;
   professionalSummary?: string;
   bio?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  yearsOfExperience?: number | null;
   skills?: string[];
   languages?: string[];
+  workExperience?: ExperienceItem[];
   experience?: ExperienceItem[];
   education?: EducationItem[];
   certifications?: string[];
@@ -170,7 +180,10 @@ export default function MeuPerfilPage() {
   const [summaryWarning, setSummaryWarning] = useState("Revise sempre o texto antes de guardar.");
   // AI autofill suggestion banner (populated from sessionStorage after CV parse)
   const [cvParseDraft, setCvParseDraft] = useState<Profile | null>(null);
+  const [cvLowConfidenceFields, setCvLowConfidenceFields] = useState<string[]>([]);
+  const [cvAppliedFields, setCvAppliedFields] = useState<string[]>([]);
   const [cvDraftDismissed, setCvDraftDismissed] = useState(false);
+  const cvDraftAppliedRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
   const { notify } = useAppNotifier();
 
@@ -179,7 +192,14 @@ export default function MeuPerfilPage() {
     if (typeof window === "undefined") return;
     try {
       const raw = sessionStorage.getItem(CV_DRAFT_SESSION_KEY);
-      if (raw) setCvParseDraft(JSON.parse(raw) as Profile);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Profile | { draft?: Profile; lowConfidenceFields?: string[] };
+      if (parsed && typeof parsed === "object" && "draft" in parsed) {
+        setCvParseDraft((parsed as { draft?: Profile }).draft || null);
+        setCvLowConfidenceFields(Array.isArray((parsed as { lowConfidenceFields?: string[] }).lowConfidenceFields) ? (parsed as { lowConfidenceFields?: string[] }).lowConfidenceFields || [] : []);
+      } else {
+        setCvParseDraft(parsed as Profile);
+      }
     } catch {
       /* ignore */
     }
@@ -194,10 +214,13 @@ export default function MeuPerfilPage() {
         const incomingProfile = d.profile || {};
         setProfile({
           ...incomingProfile,
+          firstName: String(incomingProfile.firstName || "").trim(),
+          lastName: String(incomingProfile.lastName || "").trim(),
           professionalSummary: String(incomingProfile.professionalSummary || incomingProfile.summary || "").trim(),
           summary: String(incomingProfile.summary || incomingProfile.professionalSummary || "").trim(),
           expectedSalaryAoa: parseExpectedSalary(incomingProfile.expectedSalaryAoa),
           experience: parseArray(incomingProfile.experience, normalizeExperience),
+          workExperience: parseArray(incomingProfile.workExperience, normalizeExperience),
           education: parseArray(incomingProfile.education, normalizeEducation),
           skills: Array.isArray(incomingProfile.skills) ? incomingProfile.skills : [],
           languages: Array.isArray(incomingProfile.languages) ? incomingProfile.languages : [],
@@ -344,31 +367,33 @@ export default function MeuPerfilPage() {
 
   const applyAiDraft = useCallback(() => {
     if (!cvParseDraft) return;
-    setProfile((prev) => ({
-      ...prev,
-      ...cvParseDraft,
-      // Never overwrite data the user has already set
-      fullName: prev.fullName || cvParseDraft.fullName,
-      email: prev.email || cvParseDraft.email,
-      phone: prev.phone || cvParseDraft.phone,
-      location: prev.location || cvParseDraft.location,
-      professionalTitle: prev.professionalTitle || cvParseDraft.professionalTitle,
-      summary: prev.summary || cvParseDraft.summary,
-      professionalSummary: prev.professionalSummary || cvParseDraft.professionalSummary || cvParseDraft.summary,
-      skills: (prev.skills || []).length > 0 ? prev.skills : cvParseDraft.skills,
-      languages: (prev.languages || []).length > 0 ? prev.languages : cvParseDraft.languages,
-      experience: (prev.experience || []).length > 0 ? prev.experience : cvParseDraft.experience,
-      education: (prev.education || []).length > 0 ? prev.education : cvParseDraft.education,
-      certifications: (prev.certifications || []).length > 0 ? prev.certifications : cvParseDraft.certifications,
-      preferredJobType: prev.preferredJobType || cvParseDraft.preferredJobType,
-      availability: prev.availability || cvParseDraft.availability,
-      expectedSalaryAoa: prev.expectedSalaryAoa ?? cvParseDraft.expectedSalaryAoa,
-    }));
-    if (cvParseDraft.expectedSalaryAoa) setSalaryInput(formatCurrencyInput(cvParseDraft.expectedSalaryAoa));
-    setCvDraftDismissed(true);
+
+    let nextProfile: Profile | null = null;
+    let appliedFields: string[] = [];
+
+    setProfile((prev) => {
+      const result = applyParsedCvDraftToProfile<Profile>(prev, cvParseDraft);
+      nextProfile = result.profile;
+      appliedFields = result.appliedFields;
+      return result.profile;
+    });
+
+    setCvAppliedFields(appliedFields);
+
+    const salaryValue = Number((nextProfile as Profile | null)?.expectedSalaryAoa || 0);
+    if (salaryValue > 0) {
+      setSalaryInput(formatCurrencyInput(salaryValue));
+    }
+
     sessionStorage.removeItem(CV_DRAFT_SESSION_KEY);
-    notify("Sugestões do CV aplicadas. Revise e guarde o perfil.", "success");
+    notify("We found information from your CV. Please review and confirm before saving.", "success");
   }, [cvParseDraft, notify]);
+
+  useEffect(() => {
+    if (fetching || !cvParseDraft || cvDraftDismissed || cvDraftAppliedRef.current) return;
+    cvDraftAppliedRef.current = true;
+    applyAiDraft();
+  }, [applyAiDraft, cvDraftDismissed, cvParseDraft, fetching]);
 
   const dismissAiDraft = () => {
     setCvDraftDismissed(true);
@@ -504,10 +529,13 @@ export default function MeuPerfilPage() {
       </label>
       <input
         type={type}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+        className={`w-full rounded-lg border px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100 ${
+          cvAppliedFields.includes(String(key)) ? "border-blue-300 bg-blue-50" : "border-slate-300 bg-white"
+        }`}
         value={(profile[key] as string) ?? ""}
         onChange={(e) => setProfile((p) => ({ ...p, [key]: key === "email" ? e.target.value.trim().toLowerCase() : e.target.value }))}
       />
+      {cvLowConfidenceFields.includes(String(key)) ? <p className="mt-1 text-xs text-amber-700">Please check this field.</p> : null}
       {fieldErrors[key] ? <p className="mt-1 text-xs text-red-600">{fieldErrors[key]}</p> : null}
     </div>
   );
@@ -534,10 +562,15 @@ export default function MeuPerfilPage() {
 
   const buildPayload = () => ({
     ...profile,
+    firstName: String(profile.firstName || "").trim(),
+    lastName: String(profile.lastName || "").trim(),
     email: String(profile.email || "").trim().toLowerCase(),
     summary: String(profile.summary || "").trim(),
+    professionalTitle: String(profile.professionalTitle || profile.jobTitle || "").trim(),
+    jobTitle: String(profile.jobTitle || profile.professionalTitle || "").trim(),
     professionalSummary: String(profile.summary || "").trim(),
     bio: String(profile.summary || "").trim(),
+    workExperience: profile.experience || [],
   });
 
   const performSave = async (): Promise<boolean> => {
@@ -615,10 +648,9 @@ export default function MeuPerfilPage() {
       {cvParseDraft && !cvDraftDismissed ? (
         <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-semibold text-blue-900">Sugestões do CV prontas para aplicar</p>
+            <p className="font-semibold text-blue-900">We found information from your CV. Please review and confirm before saving.</p>
             <p className="mt-1 text-sm text-blue-800">
-              O seu CV foi processado com IA. Clique em &ldquo;Aplicar sugestões&rdquo; para preencher
-              automaticamente os campos em branco — pode editar tudo antes de guardar.
+              Empty fields were filled automatically. Review the highlighted values, then save your profile when ready.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
@@ -627,7 +659,7 @@ export default function MeuPerfilPage() {
               onClick={applyAiDraft}
               className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
             >
-              Aplicar sugestões
+              Apply CV details
             </button>
             <button
               type="button"
@@ -738,11 +770,17 @@ export default function MeuPerfilPage() {
           onToggle={toggleSection}
         >
           <div className="grid gap-5 md:grid-cols-2">
+            {field("Primeiro nome", "firstName", "text", true)}
+            {field("Último nome", "lastName", "text", true)}
             {field("Nome completo", "fullName", "text", true)}
             {field("Email", "email", "email", true)}
             {field("Telefone", "phone", "tel", true)}
             {field("Localização", "location", "text", true)}
+            {field("Código postal", "postcode")}
             {field("Título profissional", "professionalTitle", "text", true)}
+            {field("LinkedIn", "linkedinUrl")}
+            {field("Portfólio", "portfolioUrl")}
+            {field("GitHub", "githubUrl")}
             {selectField("Tipo de trabalho preferido", "preferredJobType", PREFERRED_JOB_TYPE_OPTIONS)}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">

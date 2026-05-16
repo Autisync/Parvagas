@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useApplications } from "@/hooks/useQueries";
@@ -9,8 +10,12 @@ import Footer from "@/app/components/Footer";
 import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
-import CompanySidebar from "../components/CompanySidebar";
 import { useToasts } from "../components/useToasts";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 type Application = {
   _id: string;

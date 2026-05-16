@@ -9,7 +9,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { clearToken, getToken, getUser } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import { ENABLE_I18N } from "@/config/appConfig";
-import Logo from "/public/icon2.png";
+
+const Logo = "/icon2.png";
 
 const isCurrentPath = (pathname: string, href: string) => {
   if (href === "/") return pathname === "/";

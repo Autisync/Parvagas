@@ -3,8 +3,8 @@ import Footer from "../components/Footer";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
 
-export default function AccessPortalPage() {
-  const dict = getServerDictionary();
+export default async function AccessPortalPage() {
+  const dict = await getServerDictionary();
   const accessCards = [
     {
       role: dict.access.candidateRole,

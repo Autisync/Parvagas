@@ -8,19 +8,38 @@ import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
+import { normalizeParsedCvProfile } from "@/lib/cvProfile";
 
 const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
 
 type ParsedDraft = {
+  firstName?: string;
+  lastName?: string;
   fullName?: string;
   email?: string;
   phone?: string;
   location?: string;
+  postcode?: string;
   nationality?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  professionalSummary?: string;
   professionalTitle?: string;
+  jobTitle?: string;
+  yearsOfExperience?: number | null;
   summary?: string;
   skills?: string[];
   languages?: string[];
+  workExperience?: Array<{
+    jobTitle?: string;
+    company?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+    current?: boolean;
+    description?: string;
+  }>;
   experience?: Array<{
     jobTitle?: string;
     company?: string;
@@ -47,10 +66,24 @@ type ParsedDraft = {
 };
 
 type ParseResponse = {
+  success?: boolean;
   parseRunId?: string;
+  file?: {
+    id?: string | null;
+    filename?: string;
+    mimeType?: string;
+    size?: number;
+  };
+  parsedProfile?: ParsedDraft;
+  confidence?: Record<string, number>;
+  warnings?: string[];
   profileDraft?: ParsedDraft;
   missingFields?: string[];
   parserError?: string;
+  message?: string;
+  error?: {
+    message?: string;
+  } | string;
 };
 
 type CandidateDocument = {
@@ -140,6 +173,15 @@ const normalizeMoney = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const getApiErrorMessage = (payload: ParseResponse, fallback: string) => {
+  if (typeof payload?.error === "string" && payload.error.trim()) return payload.error;
+  if (payload?.error && typeof payload.error === "object" && typeof payload.error.message === "string") {
+    return payload.error.message;
+  }
+  if (typeof payload?.message === "string" && payload.message.trim()) return payload.message;
+  return fallback;
+};
+
 const reorderItem = <T,>(items: T[], from: number, to: number): T[] => {
   if (to < 0 || to >= items.length) return items;
   const next = [...items];
@@ -159,6 +201,8 @@ export default function CvDocumentosPage() {
   const [parseRunId, setParseRunId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [cvMappedFields, setCvMappedFields] = useState<string[]>([]);
+  const [lowConfidenceFields, setLowConfidenceFields] = useState<string[]>([]);
 
   const [documents, setDocuments] = useState<CandidateDocument[]>([]);
   const [profiles, setProfiles] = useState<GeneratedCvProfile[]>([]);
@@ -180,6 +224,19 @@ export default function CvDocumentosPage() {
   const [editingEduIndex, setEditingEduIndex] = useState<number | null>(null);
   const [expFormError, setExpFormError] = useState("");
   const [eduFormError, setEduFormError] = useState("");
+
+  const fieldClass = (fieldName: string) => {
+    const base = "w-full rounded-xl border px-3 py-2";
+    if (lowConfidenceFields.includes(fieldName)) {
+      return `${base} border-amber-300 bg-amber-50`;
+    }
+    if (cvMappedFields.includes(fieldName)) {
+      return `${base} border-blue-300 bg-blue-50`;
+    }
+    return `${base} border-gray-200`;
+  };
+
+  const showLowConfidence = (fieldName: string) => lowConfidenceFields.includes(fieldName);
 
   const latestCv = useMemo(() => documents.find((doc) => doc.type === "cv"), [documents]);
 
@@ -249,18 +306,52 @@ export default function CvDocumentosPage() {
         method: "POST",
         body: form,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao processar CV.");
+      const data = (await res.json().catch(() => ({}))) as ParseResponse;
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Erro ao processar CV."));
 
       const parsed = data as ParseResponse;
-      setDraft(parsed.profileDraft || {});
+      const nextDraft = normalizeParsedCvProfile((parsed.parsedProfile || parsed.profileDraft || {}) as Record<string, unknown>);
+      setDraft(nextDraft);
       setParseRunId(parsed.parseRunId || null);
       setMissingSections(parsed.missingFields || []);
       setParseWarning(parsed.parserError || "");
-      setMessage("CV processado com sucesso. Reveja e confirme os dados abaixo, ou vá ao perfil para aplicar as sugestões.");
+      const mappedFields = Object.entries(nextDraft)
+        .filter(([, value]) => {
+          if (Array.isArray(value)) return value.length > 0;
+          return value !== null && value !== undefined && String(value).trim() !== "";
+        })
+        .map(([key]) => key);
+      setCvMappedFields(mappedFields);
+
+      const nextLowConfidence = Object.entries(parsed.confidence || {})
+        .filter(([, score]) => Number(score) > 0 && Number(score) < 0.75)
+        .map(([key]) => key)
+        .flatMap((key) => {
+          if (key === "fullName") return ["fullName"];
+          if (key === "email") return ["email"];
+          if (key === "phone") return ["phone"];
+          if (key === "skills") return ["skills"];
+          return [key];
+        });
+      setLowConfidenceFields(Array.from(new Set(nextLowConfidence)));
+
+      if (process.env.NODE_ENV !== "production") {
+        console.info("[cv-parse] frontend received parsed fields", {
+          parseRunId: parsed.parseRunId,
+          mappedFields,
+        });
+      }
+
+      setMessage("We found information from your CV. Please review and confirm before saving.");
       // Persist draft in sessionStorage so Meu-Perfil can show the AI suggestion banner
       try {
-        sessionStorage.setItem(CV_DRAFT_SESSION_KEY, JSON.stringify(parsed.profileDraft || {}));
+        sessionStorage.setItem(
+          CV_DRAFT_SESSION_KEY,
+          JSON.stringify({
+            draft: nextDraft,
+            lowConfidenceFields: Array.from(new Set(nextLowConfidence)),
+          })
+        );
       } catch { /* ignore */ }
       await loadLists();
     } catch (err: unknown) {
@@ -306,10 +397,10 @@ export default function CvDocumentosPage() {
       const res = await authFetchRaw("/candidates/profile/approve", token!, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileDraft: draft, parseRunId, consentGiven: true }),
+        body: JSON.stringify({ profileDraft: draft, parseRunId, consentGiven: true, cvWarnings: lowConfidenceFields }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao guardar perfil.");
+      const data = (await res.json().catch(() => ({}))) as ParseResponse;
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Erro ao guardar perfil."));
       setDraft(null);
       setMissingSections([]);
       setParseWarning("");
@@ -559,27 +650,46 @@ export default function CvDocumentosPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Nome</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.fullName || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), fullName: e.target.value }))} />
+                <input className={fieldClass("fullName")} value={String(draft.fullName || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), fullName: e.target.value }))} />
+                {showLowConfidence("fullName") ? <p className="mt-1 text-xs text-amber-700">Please check this field.</p> : null}
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Email</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.email || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), email: e.target.value }))} />
+                <input className={fieldClass("email")} value={String(draft.email || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), email: e.target.value }))} />
+                {showLowConfidence("email") ? <p className="mt-1 text-xs text-amber-700">Please check this field.</p> : null}
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Telefone</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.phone || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), phone: e.target.value }))} />
+                <input className={fieldClass("phone")} value={String(draft.phone || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), phone: e.target.value }))} />
+                {showLowConfidence("phone") ? <p className="mt-1 text-xs text-amber-700">Please check this field.</p> : null}
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Título profissional</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.professionalTitle || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), professionalTitle: e.target.value }))} />
+                <input className={fieldClass("jobTitle")} value={String(draft.jobTitle || draft.professionalTitle || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), jobTitle: e.target.value, professionalTitle: e.target.value }))} />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Localização</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.location || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), location: e.target.value }))} />
+                <input className={fieldClass("location")} value={String(draft.location || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), location: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Código postal</span>
+                <input className={fieldClass("postcode")} value={String(draft.postcode || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), postcode: e.target.value }))} />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Nacionalidade</span>
-                <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={String(draft.nationality || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), nationality: e.target.value }))} />
+                <input className={fieldClass("nationality")} value={String(draft.nationality || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), nationality: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">LinkedIn</span>
+                <input className={fieldClass("linkedinUrl")} value={String(draft.linkedinUrl || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), linkedinUrl: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">Portfólio</span>
+                <input className={fieldClass("portfolioUrl")} value={String(draft.portfolioUrl || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), portfolioUrl: e.target.value }))} />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-gray-600">GitHub</span>
+                <input className={fieldClass("githubUrl")} value={String(draft.githubUrl || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), githubUrl: e.target.value }))} />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-gray-600">Tipo de trabalho preferido</span>
@@ -619,7 +729,7 @@ export default function CvDocumentosPage() {
             </div>
             <label className="mt-4 block text-sm">
               <span className="mb-1 block text-gray-600">Resumo</span>
-              <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2" rows={4} value={String(draft.summary || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), summary: e.target.value }))} />
+              <textarea className={fieldClass("professionalSummary")} rows={4} value={String(draft.professionalSummary || draft.summary || "")} onChange={(e) => setDraft((prev) => ({ ...(prev || {}), professionalSummary: e.target.value, summary: e.target.value }))} />
             </label>
 
             <div className="mt-4 space-y-4">

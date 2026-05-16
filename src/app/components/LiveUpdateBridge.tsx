@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { queryClient } from "@/lib/queryClient";
-import { apiUrl } from "@/lib/api";
+import { ApiError, apiUrl } from "@/lib/api";
 
 const ROUTE_REFRESH_DEBOUNCE_MS = 900;
 
@@ -43,7 +43,17 @@ export default function LiveUpdateBridge() {
 
   useEffect(() => {
     let isMounted = true;
-    const stream = new EventSource(apiUrl("/events/stream"));
+    let streamUrl = "";
+    try {
+      streamUrl = apiUrl("/events/stream");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        console.warn("[live-update] stream desativado: NEXT_PUBLIC_API_URL não configurada.");
+      }
+      return () => undefined;
+    }
+
+    const stream = new EventSource(streamUrl);
 
     const triggerRefresh = (payload: LiveUpdatePayload) => {
       if (!isMounted) return;

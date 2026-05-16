@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import CompanySidebar from "../components/CompanySidebar";
 import PageHeader from "@/app/components/PageHeader";
 import { AcademicCapIcon, BellIcon } from "@heroicons/react/24/outline";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 export default function EmpresaDefinicoesPage() {
   const { loading } = useAuth("company");

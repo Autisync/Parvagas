@@ -4,12 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Logo from "/public/icon2.png";
+
+const Logo = "/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
+import { EyeIcon, EyeSlashIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
 type LoginResponse = {
   token: string;
@@ -31,6 +33,11 @@ type LoginResponse = {
 type FirstLoginResetChallenge = {
   requiresPasswordReset: boolean;
   resetToken: string;
+};
+
+type ResendVerificationResponse = {
+  success?: boolean;
+  message?: string;
 };
 
 type AuthRole = "candidate" | "company";
@@ -84,6 +91,10 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const feedbackHashRef = useRef("");
   const { dict } = useClientLocale();
   const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
@@ -96,23 +107,19 @@ function LoginContent() {
   }, [rawRole, router]);
 
   useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (queryFirstLoginToken) {
       setFirstLoginResetToken(queryFirstLoginToken);
       setPasswordResetToken("");
-      setFormFeedback({
-        variant: "info",
-        message: "Defina uma nova password para ativar a sua conta.",
-      });
       return;
     }
 
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
-      setFormFeedback({
-        variant: "info",
-        message: "Defina uma nova password para concluir a recuperação de conta.",
-      });
     }
   }, [queryFirstLoginToken, queryResetToken]);
 
@@ -142,6 +149,14 @@ function LoginContent() {
 
   const shouldShowFieldError = (fieldName: string) => submitted || touched[fieldName];
 
+  const passwordRequirements = modeReset ? [
+    { met: newPassword.length >= 8, label: "8+ caracteres" },
+    { met: /[A-Z]/.test(newPassword), label: "Maiúscula" },
+    { met: /[a-z]/.test(newPassword), label: "Minúscula" },
+    { met: /[0-9]/.test(newPassword), label: "Número" },
+    { met: /[^A-Za-z0-9]/.test(newPassword), label: "Símbolo" },
+  ] : [];
+
   const markTouched = (fieldName: string) => {
     setTouched((current) => ({ ...current, [fieldName]: true }));
   };
@@ -161,7 +176,7 @@ function LoginContent() {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, roleHint: selectedRole }),
       });
 
       if (res.status === 428) {
@@ -177,10 +192,48 @@ function LoginContent() {
       }
 
       if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const apiCode = String((body as { code?: string }).code || "").trim();
+
+        if (res.status === 403 && apiCode === "EMAIL_NOT_VERIFIED") {
+          showFeedback({
+            variant: "warning",
+            message: "Please verify your email before signing in.",
+            actionLabel: resendingVerification ? "A reenviar..." : "Reenviar verificação",
+            onAction: () => {
+              if (!email.trim()) return;
+              setResendingVerification(true);
+              void apiFetchRaw("/auth/resend-verification-email", {
+                method: "POST",
+                suppressGlobalErrors: true,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: email.trim() }),
+              })
+                .then(async (response) => {
+                  const resendBody = (await response.json().catch(() => ({}))) as ResendVerificationResponse;
+                  if (!response.ok) {
+                    throw new Error(resendBody.message || "Não foi possível reenviar o email de verificação.");
+                  }
+                  showFeedback({
+                    variant: "success",
+                    message: resendBody.message || "Email de verificação reenviado.",
+                  });
+                })
+                .catch((err: unknown) => {
+                  showFeedback({
+                    variant: "error",
+                    message: err instanceof Error ? err.message : "Não foi possível reenviar o email de verificação.",
+                  });
+                })
+                .finally(() => setResendingVerification(false));
+            },
+          });
+          return;
+        }
+
         if (res.status === 401 || res.status === 403) {
           throw new Error("Email ou palavra-passe incorretos.");
         }
-        const body = await res.json().catch(() => ({}));
         throw new Error((body as { error?: string }).error || "Não foi possível iniciar sessão.");
       }
 
@@ -405,6 +458,21 @@ function LoginContent() {
               onSubmit={passwordResetToken ? handlePasswordReset : firstLoginResetToken ? handleFirstLoginReset : handleSubmit}
               noValidate
             >
+              {modeReset && (
+                <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3.5">
+                  <ShieldCheckIcon className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">
+                      {firstLoginResetToken ? "Primeiro acesso — defina a sua password" : "Recuperação de conta"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-blue-700">
+                      {firstLoginResetToken
+                        ? "Crie uma password segura para ativar a sua conta."
+                        : "Escolha uma nova password para retomar o acesso."}
+                    </p>
+                  </div>
+                </div>
+              )}
               <div>
                 <label htmlFor="email" className="block text-sm font-semibold text-slate-800">{dict.auth.login.email}</label>
                 <input
@@ -431,23 +499,39 @@ function LoginContent() {
                   </label>
                   {!firstLoginResetToken && !passwordResetToken && <div className="text-sm"><Reset /></div>}
                 </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete={firstLoginResetToken || passwordResetToken ? "new-password" : "current-password"}
-                  required
-                  value={firstLoginResetToken || passwordResetToken ? newPassword : password}
-                  onChange={(e) => (firstLoginResetToken || passwordResetToken ? setNewPassword(e.target.value) : setPassword(e.target.value))}
-                  onBlur={() => markTouched(firstLoginResetToken || passwordResetToken ? "newPassword" : "password")}
-                  aria-invalid={Boolean(
-                    firstLoginResetToken || passwordResetToken
-                      ? shouldShowFieldError("newPassword") && fieldErrors.newPassword
-                      : shouldShowFieldError("password") && fieldErrors.password,
-                  )}
-                  aria-describedby="login-password-error"
-                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
-                />
+                {!isHydrated ? (
+                  <div className="mt-2 h-[42px] w-full rounded-xl border border-slate-200 bg-slate-100" aria-hidden="true" />
+                ) : (
+                  <div className="relative mt-2">
+                    <input
+                      id="password"
+                      name="password"
+                      type={modeReset && showNewPass ? "text" : "password"}
+                      autoComplete={firstLoginResetToken || passwordResetToken ? "new-password" : "current-password"}
+                      required
+                      value={firstLoginResetToken || passwordResetToken ? newPassword : password}
+                      onChange={(e) => (firstLoginResetToken || passwordResetToken ? setNewPassword(e.target.value) : setPassword(e.target.value))}
+                      onBlur={() => markTouched(firstLoginResetToken || passwordResetToken ? "newPassword" : "password")}
+                      aria-invalid={Boolean(
+                        firstLoginResetToken || passwordResetToken
+                          ? shouldShowFieldError("newPassword") && fieldErrors.newPassword
+                          : shouldShowFieldError("password") && fieldErrors.password,
+                      )}
+                      aria-describedby="login-password-error"
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                    />
+                    {modeReset && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPass((v) => !v)}
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                        aria-label={showNewPass ? "Ocultar password" : "Mostrar password"}
+                      >
+                        {showNewPass ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <FormFieldError
                   id="login-password-error"
                   message={
@@ -460,24 +544,54 @@ function LoginContent() {
                         : ""
                   }
                 />
+                {modeReset && newPassword.length > 0 && (
+                  <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                    {passwordRequirements.map((req) => (
+                      <li key={req.label} className={`flex items-center gap-1.5 text-xs ${req.met ? "text-emerald-600" : "text-slate-400"}`}>
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${req.met ? "bg-emerald-500" : "bg-slate-300"}`} />
+                        {req.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {(firstLoginResetToken || passwordResetToken) && (
                 <div>
                   <label htmlFor="confirmNewPassword" className="block text-sm font-semibold text-slate-800">{dict.auth.login.confirmNewPassword}</label>
-                  <input
-                    id="confirmNewPassword"
-                    name="confirmNewPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    onBlur={() => markTouched("confirmNewPassword")}
-                    aria-invalid={Boolean(shouldShowFieldError("confirmNewPassword") && fieldErrors.confirmNewPassword)}
-                    aria-describedby="confirm-new-password-error"
-                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
-                  />
+                  {!isHydrated ? (
+                    <div className="mt-2 h-[42px] w-full rounded-xl border border-slate-200 bg-slate-100" aria-hidden="true" />
+                  ) : (
+                    <div className="relative mt-2">
+                      <input
+                        id="confirmNewPassword"
+                        name="confirmNewPassword"
+                        type={showConfirmPass ? "text" : "password"}
+                        autoComplete="new-password"
+                        required
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        onBlur={() => markTouched("confirmNewPassword")}
+                        aria-invalid={Boolean(shouldShowFieldError("confirmNewPassword") && fieldErrors.confirmNewPassword)}
+                        aria-describedby="confirm-new-password-error"
+                        className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPass((v) => !v)}
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                        aria-label={showConfirmPass ? "Ocultar confirmação" : "Mostrar confirmação"}
+                      >
+                        {showConfirmPass ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  )}
+                  {confirmNewPassword.length > 0 && (
+                    <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${newPassword === confirmNewPassword ? "text-emerald-600" : "text-rose-500"}`}>
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${newPassword === confirmNewPassword ? "bg-emerald-500" : "bg-rose-400"}`} />
+                      {newPassword === confirmNewPassword ? "As passwords coincidem" : "As passwords não coincidem"}
+                    </p>
+                  )}
                   <FormFieldError
                     id="confirm-new-password-error"
                     message={shouldShowFieldError("confirmNewPassword") ? fieldErrors.confirmNewPassword : ""}
