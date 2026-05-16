@@ -50,6 +50,15 @@ const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErro
   ssr: false,
 });
 
+const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
+  ssr: false,
+  loading: () => <div className="h-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
+  ssr: false,
+});
+
 function toInputDate(daysAgo: number) {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);

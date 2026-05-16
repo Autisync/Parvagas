@@ -25,6 +25,11 @@ const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
   loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
 });
 
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
 type CompanyStats = {
   totalJobs?: number;
   activeJobs?: number;
