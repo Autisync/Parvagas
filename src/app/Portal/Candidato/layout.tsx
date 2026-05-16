@@ -1,7 +1,11 @@
 import { ReactNode } from "react";
-import CandidateSidebar from "./components/CandidateSidebar";
+import dynamic from "next/dynamic";
 import OnboardingGuard from "./components/OnboardingGuard";
 import Footer from "@/app/components/Footer";
+
+const CandidateSidebar = dynamic(() => import("./components/CandidateSidebar"), {
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 export default function CandidatoLayout({ children }: { children: ReactNode }) {
   return (

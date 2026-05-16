@@ -1,0 +1,147 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - ./.env.docker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Python Backend (New)
+  backend-python:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend-python/.env
+      - ./.env.docker
+    environment:
+      - DATABASE_URL=postgresql+psycopg://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - python_uploads:/app/uploads
+      - python_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  # Celery Worker (Python)
+  celery-worker:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    restart: unless-stopped
+    env_file:
+      - ./backend-python/.env
+      - ./.env.docker
+    environment:
+      - DATABASE_URL=postgresql+psycopg://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - python_uploads:/app/uploads
+      - python_logs:/app/logs
+  # Celery Beat (Python) - Optional scheduler
+  celery-beat:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    restart: unless-stopped
+    env_file:
+      - ./backend-python/.env
+      - ./.env.docker
+    environment:
+      - DATABASE_URL=postgresql+psycopg://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    profiles:
+      - python-backend-beat
+
+  db-migrator:
+    image: postgres:16-alpine
+    profiles: ["migration"]
+    env_file:
+      - ./.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./scripts/migrate-old-db.sh:/migrate-old-db.sh:ro
+    entrypoint: ["/bin/sh", "/migrate-old-db.sh"]
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    restart: unless-stopped
+    profiles: ["admin"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@parvagas.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-50,=,ileCKiTChARYptiONcHIGENtENOlenTI}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  python_uploads:
+  python_logs:

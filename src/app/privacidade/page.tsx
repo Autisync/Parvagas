@@ -1,7 +1,7 @@
 import { getServerDictionary } from "@/lib/i18n/server";
 
-export default function PrivacidadePage() {
-  const dict = getServerDictionary();
+export default async function PrivacidadePage() {
+  const dict = await getServerDictionary();
   return (
     <main className="p-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold">{dict.legal.privacyTitle}</h1>

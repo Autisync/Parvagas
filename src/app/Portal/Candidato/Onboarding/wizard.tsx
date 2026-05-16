@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, setUser, getUser } from "@/lib/api";
+import { applyParsedCvDraftToProfile } from "@/lib/cvProfile";
 import {
   ArrowRightIcon,
   ArrowLeftIcon,
@@ -44,17 +45,26 @@ type WizardState = {
   cvParsed: boolean;
   parseRunId: string | null;
   // Step 2 – Personal
+  firstName: string;
+  lastName: string;
   fullName: string;
   email: string;
   phone: string;
   location: string;
+  postcode: string;
   nationality: string;
+  linkedinUrl: string;
+  portfolioUrl: string;
+  githubUrl: string;
   expectedSalaryAoa: string;
   preferredJobType: string;
   availability: string;
+  jobTitle: string;
   professionalTitle: string;
+  professionalSummary: string;
   // Step 3 – Experience
   experience: ExperienceItem[];
+  workExperience: ExperienceItem[];
   // Step 4 – Education
   education: EducationItem[];
   // Step 5 – Skills
@@ -68,16 +78,25 @@ type WizardState = {
 const INITIAL_STATE: WizardState = {
   cvParsed: false,
   parseRunId: null,
+  firstName: "",
+  lastName: "",
   fullName: "",
   email: "",
   phone: "",
   location: "",
+  postcode: "",
   nationality: "",
+  linkedinUrl: "",
+  portfolioUrl: "",
+  githubUrl: "",
   expectedSalaryAoa: "",
   preferredJobType: "",
   availability: "",
+  jobTitle: "",
   professionalTitle: "",
+  professionalSummary: "",
   experience: [],
+  workExperience: [],
   education: [],
   skills: [],
   languages: [],
@@ -251,21 +270,30 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
         if (!profile) return;
         setData((prev) => ({
           ...prev,
+          firstName: String(profile.firstName || ""),
+          lastName: String(profile.lastName || ""),
           fullName: String(profile.fullName || ""),
           email: String(profile.email || ""),
           phone: String(profile.phone || ""),
           location: String(profile.location || ""),
+          postcode: String(profile.postcode || ""),
           nationality: String(profile.nationality || ""),
+          linkedinUrl: String(profile.linkedinUrl || ""),
+          portfolioUrl: String(profile.portfolioUrl || ""),
+          githubUrl: String(profile.githubUrl || ""),
           expectedSalaryAoa: profile.expectedSalaryAoa ? String(profile.expectedSalaryAoa) : "",
           preferredJobType: String(profile.preferredJobType || ""),
           availability: String(profile.availability || ""),
-          professionalTitle: String(profile.professionalTitle || ""),
+          professionalTitle: String(profile.professionalTitle || profile.jobTitle || ""),
           skills: Array.isArray(profile.skills) ? (profile.skills as string[]) : [],
           languages: Array.isArray(profile.languages) ? (profile.languages as string[]) : [],
           certifications: Array.isArray(profile.certifications) ? (profile.certifications as string[]) : [],
           summary: String(profile.summary || profile.professionalSummary || ""),
           experience: Array.isArray(profile.experience)
             ? (profile.experience as ExperienceItem[]).map((e) => ({ ...e, id: e.id || uid() }))
+            : [],
+          workExperience: Array.isArray(profile.workExperience)
+            ? (profile.workExperience as ExperienceItem[]).map((e) => ({ ...e, id: e.id || uid() }))
             : [],
           education: Array.isArray(profile.education)
             ? (profile.education as EducationItem[]).map((e) => ({ ...e, id: e.id || uid() }))
@@ -335,6 +363,8 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
       form.append("cv", file);
       const result = await authFetch<{
         parseRunId?: string;
+        parsedProfile?: Record<string, unknown>;
+        confidence?: Record<string, number>;
         profileDraft?: Record<string, unknown>;
         parserError?: string;
       }>("/candidates/cv/parse", token, {
@@ -343,25 +373,45 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
         // Don't set Content-Type — browser will set multipart boundary
         headers: {} as HeadersInit,
       });
-      if (result.profileDraft) {
-        const p = result.profileDraft;
+      const p = result.parsedProfile || result.profileDraft;
+      if (p) {
+        if (process.env.NODE_ENV !== "production") {
+          console.info("[cv-parse] frontend received parsed fields", {
+            parseRunId: result.parseRunId,
+            fieldCount: Object.keys(p).length,
+          });
+        }
+
+        const nextDraft = applyParsedCvDraftToProfile(data, p as Record<string, unknown>);
         setData((prev) => ({
           ...prev,
+          ...nextDraft.profile,
           cvParsed: true,
           parseRunId: result.parseRunId || null,
-          fullName: String(p.fullName || prev.fullName),
-          email: String(p.email || prev.email),
-          phone: String(p.phone || prev.phone),
-          location: String(p.location || prev.location),
-          professionalTitle: String(p.professionalTitle || prev.professionalTitle),
-          skills: Array.isArray(p.skills) && (p.skills as string[]).length > 0 ? (p.skills as string[]) : prev.skills,
-          languages: Array.isArray(p.languages) && (p.languages as string[]).length > 0 ? (p.languages as string[]) : prev.languages,
-          summary: String(p.summary || p.professionalSummary || prev.summary),
-          experience: Array.isArray(p.experience) && (p.experience as ExperienceItem[]).length > 0
-            ? (p.experience as ExperienceItem[]).map((e) => ({ ...e, id: uid() }))
+          firstName: String(nextDraft.profile.firstName || prev.firstName || ""),
+          lastName: String(nextDraft.profile.lastName || prev.lastName || ""),
+          fullName: String(nextDraft.profile.fullName || prev.fullName || ""),
+          email: String(nextDraft.profile.email || prev.email || ""),
+          phone: String(nextDraft.profile.phone || prev.phone || ""),
+          location: String(nextDraft.profile.location || prev.location || ""),
+          postcode: String(nextDraft.profile.postcode || prev.postcode || ""),
+          nationality: String(nextDraft.profile.nationality || prev.nationality || ""),
+          linkedinUrl: String(nextDraft.profile.linkedinUrl || prev.linkedinUrl || ""),
+          portfolioUrl: String(nextDraft.profile.portfolioUrl || prev.portfolioUrl || ""),
+          githubUrl: String(nextDraft.profile.githubUrl || prev.githubUrl || ""),
+          professionalTitle: String(nextDraft.profile.professionalTitle || nextDraft.profile.jobTitle || prev.professionalTitle || ""),
+          skills: (nextDraft.profile.skills as string[]) || prev.skills,
+          languages: (nextDraft.profile.languages as string[]) || prev.languages,
+          certifications: (nextDraft.profile.certifications as string[]) || prev.certifications,
+          summary: String(nextDraft.profile.summary || nextDraft.profile.professionalSummary || prev.summary || ""),
+          experience: Array.isArray(nextDraft.profile.experience)
+            ? (nextDraft.profile.experience as ExperienceItem[]).map((e) => ({ ...e, id: e.id || uid() }))
             : prev.experience,
-          education: Array.isArray(p.education) && (p.education as EducationItem[]).length > 0
-            ? (p.education as EducationItem[]).map((e) => ({ ...e, id: uid() }))
+          workExperience: Array.isArray(nextDraft.profile.workExperience)
+            ? (nextDraft.profile.workExperience as ExperienceItem[]).map((e) => ({ ...e, id: e.id || uid() }))
+            : prev.workExperience,
+          education: Array.isArray(nextDraft.profile.education)
+            ? (nextDraft.profile.education as EducationItem[]).map((e) => ({ ...e, id: e.id || uid() }))
             : prev.education,
         }));
       }
@@ -543,11 +593,17 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
 
 function buildProfileSnapshot(data: WizardState): Record<string, unknown> {
   return {
+    firstName: data.firstName,
+    lastName: data.lastName,
     fullName: data.fullName,
     email: data.email,
     phone: data.phone,
     location: data.location,
+    postcode: data.postcode,
     nationality: data.nationality,
+    linkedinUrl: data.linkedinUrl,
+    portfolioUrl: data.portfolioUrl,
+    githubUrl: data.githubUrl,
     expectedSalaryAoa: data.expectedSalaryAoa ? parseInt(data.expectedSalaryAoa.replace(/\D/g, ""), 10) || null : null,
     preferredJobType: data.preferredJobType,
     availability: data.availability,
@@ -558,6 +614,7 @@ function buildProfileSnapshot(data: WizardState): Record<string, unknown> {
     summary: data.summary,
     professionalSummary: data.summary,
     experience: data.experience.map(({ id: _id, ...rest }) => rest),
+    workExperience: data.workExperience.map(({ id: _id, ...rest }) => rest),
     education: data.education.map(({ id: _id, ...rest }) => rest),
   };
 }
@@ -658,23 +715,41 @@ function StepPersonal({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Primeiro nome" required>
+          <input className={inputCls} value={data.firstName} onChange={s("firstName")} placeholder="Ana" />
+        </Field>
+        <Field label="Último nome" required>
+          <input className={inputCls} value={data.lastName} onChange={s("lastName")} placeholder="Ferreira" />
+        </Field>
         <Field label="Nome completo" required>
           <input className={inputCls} value={data.fullName} onChange={s("fullName")} placeholder="Ex: Ana Paula Ferreira" />
         </Field>
         <Field label="Email" required>
           <input type="email" className={inputCls} value={data.email} onChange={s("email")} placeholder="email@exemplo.com" />
         </Field>
-        <Field label="Telefone" hint="+244 9xx xxx xxx">
+        <Field label="Telefone">
           <input className={inputCls} value={data.phone} onChange={s("phone")} placeholder="+244 900 000 000" />
         </Field>
         <Field label="Localização" hint="Cidade, País">
           <input className={inputCls} value={data.location} onChange={s("location")} placeholder="Luanda, Angola" />
+        </Field>
+        <Field label="Código postal">
+          <input className={inputCls} value={data.postcode} onChange={s("postcode")} placeholder="0000-000" />
         </Field>
         <Field label="Nacionalidade">
           <input className={inputCls} value={data.nationality} onChange={s("nationality")} placeholder="Angolana" />
         </Field>
         <Field label="Título profissional" hint="Cargo/função desejado">
           <input className={inputCls} value={data.professionalTitle} onChange={s("professionalTitle")} placeholder="Engenheiro de Software" />
+        </Field>
+        <Field label="LinkedIn">
+          <input className={inputCls} value={data.linkedinUrl} onChange={s("linkedinUrl")} placeholder="https://linkedin.com/in/..." />
+        </Field>
+        <Field label="Portfólio">
+          <input className={inputCls} value={data.portfolioUrl} onChange={s("portfolioUrl")} placeholder="https://..." />
+        </Field>
+        <Field label="GitHub">
+          <input className={inputCls} value={data.githubUrl} onChange={s("githubUrl")} placeholder="https://github.com/..." />
         </Field>
         <Field label="Pretensão salarial (AOA)" hint="Valor bruto mensal em Kwanza">
           <input

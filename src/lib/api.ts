@@ -1,7 +1,8 @@
 import { getGlobalErrorDispatch } from "@/lib/errorBridge";
 import { normalizeErrorMessage } from "@/lib/errorMessage";
 
-const DEV_API_FALLBACK = "http://localhost:6001";
+const DEV_API_FALLBACK = "http://localhost:8000";
+const API_V1_PREFIX = "/api/v1";
 
 const DEFAULT_TIMEOUT_MS = 20000;
 const SESSION_TOKEN_KEY = "parvagas_token";
@@ -9,6 +10,7 @@ const SESSION_USER_KEY = "parvagas_user";
 const SESSION_ACTIVITY_KEY = "parvagas_last_activity_at";
 const SESSION_LOGOUT_KEY = "parvagas_logout_at";
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+let lastAuthExpiryHandledAt = 0;
 
 function notifySessionChange(event: "logout" | "activity") {
   if (typeof window === "undefined") return;
@@ -86,11 +88,23 @@ export function getErrorMessage(error: unknown, fallback = "Ocorreu um erro ines
 }
 
 export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
   const base = getApiBaseUrl();
   if (!base) {
     throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
   }
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseAlreadyHasApiPrefix = /\/api\/v1$/i.test(base);
+  const routePath =
+    baseAlreadyHasApiPrefix || normalizedPath.startsWith("/api/")
+      ? normalizedPath
+      : `${API_V1_PREFIX}${normalizedPath}`;
+
+  return `${base}${routePath}`;
 }
 
 export function getApiBaseUrl(): string {
@@ -98,9 +112,9 @@ export function getApiBaseUrl(): string {
   if (configured) return configured;
 
   if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") return DEV_API_FALLBACK;
-    return "";
+    const host = window.location.hostname || "localhost";
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    return `${protocol}://${host}:8000`;
   }
 
   return process.env.NODE_ENV === "production" ? "" : DEV_API_FALLBACK;
@@ -131,15 +145,34 @@ export async function apiFetch<T = unknown>(
   path: string,
   options?: ApiFetchOptions
 ): Promise<T> {
+  const isFormDataBody = typeof FormData !== "undefined" && options?.body instanceof FormData;
+  const headers = new Headers(options?.headers || undefined);
+  if (!isFormDataBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await apiFetchRaw(path, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+    headers,
   });
 
   if (!res.ok) {
     const body = await parseResponseBody(res);
     const requestId = res.headers.get("x-request-id") || undefined;
-    const messageFromBody = typeof (body as { error?: unknown })?.error === "string" ? String((body as { error?: string }).error) : "";
+    const responseBody = body as {
+      error?: unknown;
+      message?: unknown;
+    };
+    const nestedErrorMessage =
+      responseBody.error &&
+      typeof responseBody.error === "object" &&
+      typeof (responseBody.error as { message?: unknown }).message === "string"
+        ? String((responseBody.error as { message?: string }).message)
+        : "";
+    const messageFromBody =
+      (typeof responseBody.error === "string" ? String(responseBody.error) : "") ||
+      nestedErrorMessage ||
+      (typeof responseBody.message === "string" ? String(responseBody.message) : "");
     const message = normalizeErrorMessage(messageFromBody) || fallbackStatusMessage(res.status);
 
     if (res.status === 429) {
@@ -163,14 +196,18 @@ export async function apiFetch<T = unknown>(
           action: "retry",
         });
       } else if (res.status === 401) {
-        clearSessionData();
-        recordLogoutSignal();
-        notifySessionChange("logout");
-        getGlobalErrorDispatch()?.appError?.({
-          type: "auth",
-          message: "A sua sessão expirou. Faça login novamente.",
-          action: "login",
-        });
+        const now = Date.now();
+        if (now - lastAuthExpiryHandledAt > 1500) {
+          lastAuthExpiryHandledAt = now;
+          clearSessionData();
+          recordLogoutSignal();
+          notifySessionChange("logout");
+          getGlobalErrorDispatch()?.appError?.({
+            type: "auth",
+            message: "A sua sessão expirou. Faça login novamente.",
+            action: "login",
+          });
+        }
       } else if (res.status === 403) {
         getGlobalErrorDispatch()?.appError?.({
           type: "permission",

@@ -1,27 +1,8 @@
-// import type { Config } from "tailwindcss";
+import type { Config } from "tailwindcss";
+import withMT from "@material-tailwind/react/utils/withMT";
+import colors from "tailwindcss/colors";
 
-// const config: Config = {
-//   content: [
-//     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-//     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-//     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-//   ],
-//   theme: {
-//     extend: {
-//       backgroundImage: {
-//         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-//         "gradient-conic":
-//           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-//       },
-//     },
-//   },
-//   plugins: [],
-// };
-// export default config;
-const withMT = require("@material-tailwind/react/utils/withMT");
-const colors = require("tailwindcss/colors");
-
-module.exports = withMT({
+const config = withMT({
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -43,3 +24,5 @@ module.exports = withMT({
   },
   plugins: [],
 });
+
+export default config;

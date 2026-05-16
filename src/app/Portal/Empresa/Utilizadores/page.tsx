@@ -1,13 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Footer from "@/app/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
-import CompanySidebar from "../components/CompanySidebar";
 import { useToasts } from "../components/useToasts";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import BannerError from "@/app/components/errors/BannerError";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 type TeamMember = {
   _id: string;

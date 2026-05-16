@@ -15,8 +15,8 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="pt">
-      <body className="bg-slate-100 p-6">
+    <html lang="pt" suppressHydrationWarning>
+      <body className="bg-slate-100 p-6" suppressHydrationWarning>
         <main className="mx-auto mt-20 max-w-3xl rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-700">Falha crítica</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-900">Não foi possível renderizar a aplicação</h1>

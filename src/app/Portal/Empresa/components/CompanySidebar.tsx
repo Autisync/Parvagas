@@ -58,8 +58,13 @@ export default function CompanySidebar() {
 
     const tick = async () => {
       try {
-        await authFetch<{ onlineUsersCount: number; isDoubleLogged: boolean }>("/companies/presence/heartbeat", token, { method: "POST" });
-        const status = await authFetch<{ onlineUsersCount: number; isDoubleLogged: boolean }>("/companies/presence/status", token);
+        await authFetch<{ onlineUsersCount: number; isDoubleLogged: boolean }>("/companies/presence/heartbeat", token, {
+          method: "POST",
+          suppressGlobalErrors: true,
+        });
+        const status = await authFetch<{ onlineUsersCount: number; isDoubleLogged: boolean }>("/companies/presence/status", token, {
+          suppressGlobalErrors: true,
+        });
         if (!cancelled) setDoubleLogged(Boolean(status.isDoubleLogged));
       } catch {
         if (!cancelled) setDoubleLogged(false);

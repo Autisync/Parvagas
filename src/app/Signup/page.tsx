@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Logo from "/public/icon2.png";
+
+const Logo = "/icon2.png";
 import { apiFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
@@ -188,7 +189,8 @@ function SignUpContent() {
           ? dict.auth.signup.successInviteAccepted
           : dict.auth.signup.successAccountCreated,
       );
-      setTimeout(() => router.push(`/Login?role=${selectedRole}`), 800);
+      const encodedEmail = encodeURIComponent(email.trim());
+      setTimeout(() => router.push(`/Signup/success?role=${selectedRole}&email=${encodedEmail}`), 800);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (locale === "en" ? "Could not create account." : "Não foi possível criar a conta."));
     } finally {

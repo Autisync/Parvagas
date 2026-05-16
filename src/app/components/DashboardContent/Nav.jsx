@@ -33,8 +33,9 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
-import Logo from "/public/icon2.png";
 import Link from "next/link";
+
+const Logo = "/icon2.png";
 
 export default function SidebarWithBurgerMenu() {
   const [open, setOpen] = React.useState(0);

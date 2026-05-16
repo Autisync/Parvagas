@@ -138,66 +138,19 @@ Plataforma de recrutamento Angola-first com foco em:
 
 ## Estrutura backend (rotas)
 
-- `POST /auth/register`
-- `POST /auth/login`
-
-- `POST /candidates/cv/parse`
-- `POST /candidates/profile/approve`
-- `GET /candidates/profile`
-- `GET /candidates/jobs/recommended`
-- `POST /candidates/jobs/save`
-- `GET /candidates/jobs/saved`
-- `POST /candidates/jobs/apply`
-- `GET /candidates/applications`
-- `POST /candidates/alerts`
-- `GET /candidates/alerts`
-- `GET /candidates/notifications/preferences`
-- `PUT /candidates/notifications/preferences`
-
-- `POST /companies/register`
-- `GET /companies/me`
-- `POST /companies/jobs`
-- `PATCH /companies/jobs/:id`
-- `GET /companies/jobs`
-- `GET /companies/applications`
-- `PATCH /companies/:id/verification` (admin)
-- `POST /companies/:id/verification/preview-email` (admin)
-- `POST /companies/:id/verification/send-email` (admin)
-- `POST /companies/:id/deletion-request` (admin)
-- `GET /companies/deletion-requests` (admin)
-- `PATCH /companies/deletion-requests/:id/review` (super-admin)
-- `PATCH /companies/tutorial/seen`
-
-- `GET /notifications`
-- `PATCH /notifications/:id/read`
-- `PATCH /notifications/:id/unread`
-- `PATCH /notifications/:id/resolve`
-- `POST /notifications/company-admin-message`
-
-- `GET /jobs`
-- `GET /jobs/:id`
-- `GET /jobs/companies`
-
-- `GET /admin/overview`
-- `PATCH /admin/users/:id/suspend`
-- `PATCH /admin/jobs/:id/moderate`
-- `POST /admin/ads`
-- `GET /admin/ads`
-- `PUT /admin/ads/:id`
-- `PATCH /admin/ads/:id/status`
-- `PATCH /admin/ads/:id`
-- `DELETE /admin/ads/:id`
-- `POST /admin/scraped-jobs`
-- `PATCH /admin/scraped-jobs/:id`
-- `PATCH /admin/scraped-jobs/:id/review`
-- `DELETE /admin/scraped-jobs/:id`
-- `GET /admin/audit-logs`
-- `GET /admin/audit-logs/export.csv`
-
-- `GET /public/ads`
-- `POST /public/ads/:id/impression`
-- `POST /public/ads/:id/click`
-- `GET /public/sitemap-jobs`
+- `GET /health`
+- `GET /ready`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/verify-email`
+- `POST /api/v1/auth/resend-verification-email`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `GET /api/v1/candidates/profile`
+- `PUT /api/v1/candidates/profile`
+- `GET /api/v1/companies/profile`
+- `PUT /api/v1/companies/profile`
+- `POST /api/v1/cv/upload`
 
 ## Regras de validação operacional
 
@@ -224,6 +177,8 @@ TEMP_PASSWORD_TTL_MINUTES=60
 
 # Frontend
 NEXT_PUBLIC_SITE_URL=https://parvagas.co.ao
+FRONTEND_URL=https://parvagas.co.ao
+BACKEND_URL=https://api.parvagas.co.ao
 
 # Storage adapter
 STORAGE_PROVIDER=local
@@ -246,6 +201,14 @@ MEILISEARCH_API_KEY=
 SENTRY_DSN=https://<key>@o<org>.ingest.sentry.io/<project>
 
 # Email adapter (opcional)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=no-reply@parvagas.local
+
+# Backward-compatible aliases (optional)
 EMAIL_HOST=
 EMAIL_PORT=587
 EMAIL_USER=
@@ -271,7 +234,7 @@ PRIVACY_VERSION=2026-05
 
 ### RBAC de moderação (jobs e anúncios)
 
-- Migração SQL: `server/migrations/2026-05-07-rbac-permissions.sql`
+- Migração SQL: `backend-python/migrations/`
 - Permissões de moderação suportadas:
   - `job.review`, `job.approve`, `job.reject`
   - `ad.flag`, `ad.pause`, `ad.draft`, `ad.publish`
@@ -283,7 +246,7 @@ PRIVACY_VERSION=2026-05
 Crie também um `.env.local` (frontend) com:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:6001
+NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
@@ -302,11 +265,27 @@ O pipeline de parsing de CVs suporta múltiplos providers, selecionados via vari
 | `SKIMA_API_KEY` | chave API Skima AI | — |
 | `APYHUB_API_KEY` | chave API ApyHub | — |
 
+## Docker commands
+
+```bash
+docker compose up -d --build
+docker compose logs -f backend-python
+docker compose exec backend-python alembic upgrade head
+docker compose exec postgres psql -U parvagas_user -d parvagas
+```
+
+Quick validation helpers:
+
+```bash
+docker compose logs -f celery-worker
+Invoke-RestMethod -Uri 'http://localhost:8000/health' -Method Get
+```
+
 ### Providers
 
 **`skima`** (recomendado para desenvolvimento — tier gratuito disponível)
 - Registe-se em [skima.ai](https://skima.ai) para obter uma chave gratuita
-- Suporta PDF, DOCX, DOC, TXT e imagens
+- Endpoint do provider suporta múltiplos formatos, mas o upload do Parvagas aceita PDF e DOCX
 - Endpoint: `POST https://parser.skima.ai/api/parse-resume`
 
 **`apyhub`** (baseado em tokens — para produção)
@@ -347,11 +326,11 @@ npm run dev
 
 3. Iniciar backend (noutra aba)
 ```bash
-npm run server
+docker compose up -d
 ```
 
 4. Antes do primeiro arranque em ambiente novo, execute a migração SQL de bootstrap no SQL Editor do Supabase:
-  - `server/migrations/2026-04-26-supabase-document-store.sql`
+  - `docker compose exec backend-python alembic upgrade head`
 
 ## Tratamento de erros unificado
 
@@ -382,18 +361,23 @@ npm run server
 npm run lint
 npm run test
 npm run test:ui
-npm run test:load:gate
 npm run typecheck
 npm run build
 npm run db:migration:generate
-npm run reindex:jobs
 ```
 
 ## Migrações de base de dados
 
 Este projeto usa Supabase Postgres. Para checkpoint de migração foi adicionado:
 - `npm run db:migration:generate`
-- Gera artefacto em `server/migrations/`
+- Gera artefacto em `backend-python/migrations/versions/`
+
+Para copiar todos os dados da base antiga para a nova base:
+- Definir `OLD_DATABASE_URL` no `.env.docker`
+- Opcional: definir `NEW_DATABASE_URL` (se não definido, usa o Postgres do docker compose)
+- Executar `npm run db:copy:old-to-new`
+
+Este comando faz dump completo + restore completo e valida contagem de linhas por tabela no schema `public`.
 
 ## Permissões por role
 
@@ -410,9 +394,8 @@ Este projeto usa Supabase Postgres. Para checkpoint de migração foi adicionado
 2. Configurar variáveis de ambiente
 3. Build frontend: `npm run build`
 4. Start frontend: `npm run start`
-5. Start API server: `npm run server`
-6. Opcional: configurar MeiliSearch e executar `npm run reindex:jobs`
-7. Gate de carga (staging/CI): `npm run test:load:gate`
+5. Start API stack: `docker compose up -d --build`
+6. Aplicar migrations: `npm run db:migrate`
 
 ### Gate de carga e limites por rota
 

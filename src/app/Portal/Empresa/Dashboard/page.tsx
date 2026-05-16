@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
@@ -14,9 +15,13 @@ import {
   BuildingOfficeIcon,
   PlusCircleIcon,
 } from "@heroicons/react/24/outline";
-import CompanySidebar from "../components/CompanySidebar";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 type CompanyStats = {
   totalJobs?: number;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { authFetchRaw, getApiBaseUrl } from "@/lib/api";
+import { authFetchRaw } from "@/lib/api";
 import { useToasts } from "./useToasts";
+import { resolveLogoUrl } from "./logoUrl";
 
 const LOGO_ACCEPT = [
   "image/png",
@@ -36,14 +37,6 @@ function getFileMime(file: File): string {
   if (n.endsWith(".heic")) return "image/heic";
   if (n.endsWith(".heif")) return "image/heif";
   return "";
-}
-
-export function resolveLogoUrl(value?: string): string {
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:")) return value;
-  if (!value.startsWith("/")) return value;
-  const base = getApiBaseUrl();
-  return base ? `${base}${value}` : value;
 }
 
 type Props = {

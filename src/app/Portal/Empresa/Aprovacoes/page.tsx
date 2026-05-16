@@ -1,12 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
-import CompanySidebar from "../components/CompanySidebar";
 import Footer from "@/app/components/Footer";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
 
 type ApprovalItem = {
   _id: string;
@@ -45,16 +50,24 @@ export default function CompanyApprovalsPage() {
 
   const load = useCallback(async () => {
     if (!token) return;
+    if (!isApprover) {
+      setItems([]);
+      setPagination(null);
+      setError("");
+      return;
+    }
     setError("");
     try {
       const query = new URLSearchParams({ page: String(page), limit: "12", status: statusFilter }).toString();
-      const res = await authFetch<{ approvals: ApprovalItem[]; pagination: Pagination }>(`/companies/job-approvals?${query}`, token);
+      const res = await authFetch<{ approvals: ApprovalItem[]; pagination: Pagination }>(`/companies/job-approvals?${query}`, token, {
+        suppressGlobalErrors: true,
+      });
       setItems(res.approvals || []);
       setPagination(res.pagination || null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar aprovações.");
     }
-  }, [token, page, statusFilter]);
+  }, [token, isApprover, page, statusFilter]);
 
   useEffect(() => {
     load();

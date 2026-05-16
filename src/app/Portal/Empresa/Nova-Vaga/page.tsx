@@ -1,11 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Footer from "@/app/components/Footer";
-import CompanySidebar from "../components/CompanySidebar";
-import JobPostingModal from "../components/JobPostingModal";
 import Link from "next/link";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const JobPostingModal = dynamic(() => import("../components/JobPostingModal"), {
+  ssr: false,
+});
 
 export default function NovaVagaPage() {
   const { token, loading } = useAuth("company");

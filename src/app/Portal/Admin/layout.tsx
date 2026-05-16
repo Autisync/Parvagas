@@ -1,15 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { logoutCurrentSession } from "@/lib/api";
-import AdminSidebar from "./components/AdminSidebar";
 import { fetchAdminMe } from "./adminClient";
 import { useClientLocale } from "@/lib/i18n/client";
-import NotificationBell from "@/app/Portal/components/NotificationBell";
 import { ArrowRightOnRectangleIcon, Bars3Icon } from "@heroicons/react/24/outline";
+
+const AdminSidebar = dynamic(() => import("./components/AdminSidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const NotificationBell = dynamic(() => import("@/app/Portal/components/NotificationBell"), {
+  ssr: false,
+});
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();

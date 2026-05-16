@@ -28,7 +28,7 @@ async function getPost(slug: string): Promise<CareerPost | null> {
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
-  const dict = getServerDictionary();
+  const dict = await getServerDictionary();
   return {
     title: post ? `${post.title} | Parvagas` : dict.careerPost.fallbackTitle,
     description: post?.excerpt ?? dict.careerPost.fallbackDescription,
@@ -54,7 +54,7 @@ function BodyParagraph({ text }: { text: string }) {
 export default async function CareerPostPage({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
   if (!post) notFound();
-  const dict = getServerDictionary();
+  const dict = await getServerDictionary();
 
   return (
     <div className="bg-white min-h-screen">

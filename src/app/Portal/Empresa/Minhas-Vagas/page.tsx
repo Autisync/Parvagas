@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanyJobs } from "@/hooks/useQueries";
@@ -9,10 +10,20 @@ import Link from "next/link";
 import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
-import CompanySidebar from "../components/CompanySidebar";
-import JobPostingModal from "../components/JobPostingModal";
-import JobEditModal from "../components/JobEditModal";
 import { useToasts } from "../components/useToasts";
+
+const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
+  ssr: false,
+  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const JobPostingModal = dynamic(() => import("../components/JobPostingModal"), {
+  ssr: false,
+});
+
+const JobEditModal = dynamic(() => import("../components/JobEditModal"), {
+  ssr: false,
+});
 
 type Job = {
   _id: string;

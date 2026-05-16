@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authFetch, getErrorMessage } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,10 +28,17 @@ import {
   adminSecondaryButtonClass,
 } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
-import AdminAnalyticsCharts from "../components/AdminAnalyticsCharts";
-import AnalyticsErrorBoundary from "../components/AnalyticsErrorBoundary";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+
+const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
+  ssr: false,
+  loading: () => <div className="h-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+});
+
+const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
+  ssr: false,
+});
 
 function toInputDate(daysAgo: number) {
   const d = new Date();

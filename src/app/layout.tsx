@@ -37,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt">
+    <html lang="pt" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/icon2.ico" sizes="any" />
         <link
@@ -53,7 +53,7 @@ export default function RootLayout({
           sizes="57x57"
         /> */}
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <Providers>
           {/* <Header /> */}
           {children}

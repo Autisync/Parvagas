@@ -72,7 +72,7 @@ function salaryLabel(job: Job): string | null {
 
 export default async function Home() {
   const { featuredJobs, featuredCareerPosts } = await getHomepageData();
-  const dict = getServerDictionary();
+  const dict = await getServerDictionary();
 
   return (
     <div className="bg-white text-gray-900">
