@@ -51,7 +51,11 @@ export function GlobalErrorProvider({ children }: { children: ReactNode }) {
     if (normalizedError.type === "auth") {
       showBanner("A sua sessao expirou. Inicie sessao novamente.", "Iniciar sessao", () => {
         if (typeof window !== "undefined") {
-          window.location.assign("/Login");
+          const path = window.location.pathname || "";
+          const target = path.startsWith("/Portal/Admin") || path.startsWith("/Admin")
+            ? "/Admin/Login"
+            : "/Login";
+          window.location.assign(target);
         }
       });
       return;

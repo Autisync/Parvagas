@@ -12,13 +12,17 @@ import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
 
 type LoginResponse = {
-  token: string;
+  access_token?: string;
+  token?: string;
+  token_type?: string;
   user: {
     id?: string;
     _id?: string;
     email: string;
     role: string;
+    full_name?: string;
     fullName?: string;
+    admin_level?: "super-admin" | "moderator";
     adminLevel?: "super-admin" | "moderator";
   };
 };
@@ -48,6 +52,18 @@ function validatePasswordStrength(password: string): string {
 function isConnectionError(message: string) {
   const m = message.toLowerCase();
   return m.includes("servidor") || m.includes("ligacao") || m.includes("internet") || m.includes("network");
+}
+
+function normalizeAdminRole(role: string | undefined | null) {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "admin" || value === "super-admin" || value === "moderator") {
+    return "admin";
+  }
+  return value;
+}
+
+function isAdminRole(role: string | undefined | null) {
+  return normalizeAdminRole(role) === "admin";
 }
 
 function AdminLoginContent() {
@@ -120,18 +136,22 @@ function AdminLoginContent() {
 
   const goToAdminPortal = () => {
     // Full navigation avoids stale runtime chunk mismatches during route transitions.
-    window.location.assign("/Portal/Admin");
+    window.location.replace("/Portal/Admin");
   };
 
   const persistAdmin = (data: LoginResponse) => {
-    setToken(data.token);
+    const token = String(data.access_token || data.token || "").trim();
+    if (!token) {
+      throw new Error("Resposta de autenticação inválida: token em falta.");
+    }
+    setToken(token);
     const userId = String(data.user.id || data.user._id || "").trim();
     setUser({
       id: userId,
       email: data.user.email,
       role: data.user.role,
-      adminLevel: data.user.adminLevel,
-      name: data.user.fullName,
+      adminLevel: data.user.adminLevel || data.user.admin_level,
+      name: data.user.fullName || data.user.full_name,
     });
     goToAdminPortal();
   };
@@ -171,7 +191,7 @@ function AdminLoginContent() {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password, roleHint: "admin" }),
+        body: JSON.stringify({ email: email.trim(), password, role_hint: "admin" }),
       });
 
       if (res.status === 428) {
@@ -188,16 +208,17 @@ function AdminLoginContent() {
           throw new Error("Email ou palavra-passe incorretos.");
         }
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || "Não foi possível iniciar sessão.");
+        const payload = body as { error?: string; detail?: string; message?: string };
+        throw new Error(payload.error || payload.detail || payload.message || "Não foi possível iniciar sessão.");
       }
 
       const data = (await res.json()) as LoginResponse;
-      if (data.user.role !== "admin") {
+      if (!isAdminRole(data.user.role)) {
         showFeedback({ variant: "warning", message: "Este acesso é exclusivo para administradores." });
         return;
       }
-      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       persistAdmin(data);
+      return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Não foi possível iniciar sessão.";
       if (isConnectionError(message)) {
@@ -259,12 +280,12 @@ function AdminLoginContent() {
       }
 
       const data = (await res.json()) as LoginResponse;
-      if (data.user.role !== "admin") {
+      if (!isAdminRole(data.user.role)) {
         showFeedback({ variant: "warning", message: "Este acesso é exclusivo para administradores." });
         return;
       }
-      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
       persistAdmin(data);
+      return;
     } catch (err: unknown) {
       showFeedback({ variant: "error", message: err instanceof Error ? err.message : "Não foi possível redefinir password." });
     } finally {
@@ -304,12 +325,13 @@ function AdminLoginContent() {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resetToken: passwordResetToken, newPassword }),
+        body: JSON.stringify({ token: passwordResetToken, new_password: newPassword, confirm_password: newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
+        const payload = body as { error?: string; detail?: string; message?: string };
+        throw new Error(payload.error || payload.detail || payload.message || "Não foi possível redefinir password.");
       }
 
       setPasswordResetToken("");

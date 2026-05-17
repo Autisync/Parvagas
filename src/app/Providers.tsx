@@ -17,7 +17,10 @@ const RUNTIME_INTENSIVE_PREFIXES = [
   "/Aplicar",
 ];
 
+const AUTH_PAGES = new Set(["/Login", "/Admin/Login"]);
+
 function shouldEnableRuntimeFeatures(pathname: string) {
+  if (AUTH_PAGES.has(pathname)) return false;
   return RUNTIME_INTENSIVE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 

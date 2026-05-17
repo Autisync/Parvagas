@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import SponsoredAdSlot from "./components/SponsoredAdSlot";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
@@ -206,12 +207,12 @@ export default async function Home() {
             )}
           </div>
 
-          {/* Ad / info block */}
-          <article className="rounded-3xl p-8 bg-red-600 text-white self-start">
-            <h2 className="text-2xl font-bold">{dict.home.adsTitle}</h2>
-            <p className="mt-2">{dict.home.adsDesc}</p>
-            <p className="mt-4 text-sm text-red-100">{dict.home.adsNote}</p>
-          </article>
+          <SponsoredAdSlot
+            placement="homepage_banner"
+            className="self-start"
+            fallbackTitle={dict.home.adsTitle}
+            fallbackDescription={`${dict.home.adsDesc} ${dict.home.adsNote}`}
+          />
         </div>
       </section>
 

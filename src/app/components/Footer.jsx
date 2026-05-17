@@ -69,13 +69,13 @@ export default function Footer() {
             <Link href="/politica-retencao/" className="hover:text-red-500">{dict.footer.retention}</Link>
             <Link href="/termos-empregador/" className="hover:text-red-500">{dict.footer.employerTerms}</Link>
           </div>
-          <span className="text-xs">
+          <span className="mt-2 inline-flex items-center gap-1 text-xs text-gray-700">
             {dict.footer.designHostedBy}{" "}
             <Link
-              className="hover:text-red-500"
-              href={"https://www.enovtechnologies.com/"}
+              className="rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-600 transition-colors hover:bg-red-100 hover:text-red-700"
+              href={"https://www.autisync.com/"}
             >
-              ENOV Technologies
+              AutiSync
             </Link>
           </span>
         </div>

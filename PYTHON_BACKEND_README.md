@@ -49,6 +49,12 @@ Update frontend environment:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
+If frontend runs in Docker, use:
+
+```env
+NEXT_PUBLIC_API_URL=http://backend-python:8000
+```
+
 ## 📂 File Structure
 
 ```
@@ -90,7 +96,7 @@ backend-python/
 | **PYTHON_BACKEND_MIGRATION_SUMMARY.md** | Complete overview and getting started |
 | **BACKEND_PYTHON_MIGRATION.md** | Detailed migration guide and database schema |
 | **DOCKER_PYTHON_BACKEND.md** | Docker operations and deployment |
-| **API_COMPATIBILITY.md** | Node ↔ Python API endpoint mapping |
+| **API_COMPATIBILITY.md** | API endpoint mapping and integration notes |
 | **PYTHON_BACKEND_SETUP.md** | Setup checklist and production requirements |
 
 ## 🔌 Endpoints
@@ -250,8 +256,7 @@ This starts the Python API, Celery worker, PostgreSQL, and Redis.
 Legacy Node backend code and compose runtime were removed from this repository.
 
 ### Shared Database
-Both backends can use the same PostgreSQL database.
-Ensure Alembic migrations are run for Python backend.
+Ensure Alembic migrations are run for the Python backend database schema.
 
 ### JWT Configuration
 Python backend uses `JWT_SECRET` from `backend-python/.env`.

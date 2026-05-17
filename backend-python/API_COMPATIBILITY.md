@@ -97,10 +97,18 @@ Parsed CV response format:
 
 ### Base URL
 
-Update `NEXT_PUBLIC_API_URL` in frontend `.env`:
+Update `NEXT_PUBLIC_API_URL` in frontend `.env`.
+
+Local development:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Docker or remote development:
+
+```bash
+NEXT_PUBLIC_API_URL=http://backend-python:8000
 ```
 
 ### Request Paths

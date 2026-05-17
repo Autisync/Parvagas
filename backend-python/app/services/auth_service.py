@@ -202,8 +202,13 @@ class AuthService:
     @staticmethod
     def create_access_token(user: User) -> str:
         """Create JWT access token for user."""
-        return create_access_token({
+        payload = {
             "sub": str(user.id),
             "email": user.email,
             "role": user.role.value
-        })
+        }
+        admin_level = getattr(user, "admin_level", None)
+        if user.role == UserRole.admin and admin_level is not None:
+            payload["admin_level"] = admin_level.value if hasattr(admin_level, "value") else str(admin_level)
+
+        return create_access_token(payload)

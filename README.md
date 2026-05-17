@@ -9,7 +9,7 @@ Plataforma de recrutamento Angola-first com foco em:
 ## Stack atual do projeto
 
 - Next.js 14 + TypeScript + Tailwind CSS
-- Backend Express + Supabase Postgres (document-store compatibility layer)
+- Backend Python (FastAPI) + PostgreSQL
 - Adapters para IA, Storage, Notificações
 - MeiliSearch (opcional) para indexação de vagas públicas
 
@@ -249,6 +249,12 @@ Crie também um `.env.local` (frontend) com:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Para frontend a correr em Docker, use:
+
+```bash
+NEXT_PUBLIC_API_URL=http://backend-python:8000
 ```
 
 Se `NEXT_PUBLIC_SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY` não estiverem definidos, a aplicação mostra um aviso no console em desenvolvimento.

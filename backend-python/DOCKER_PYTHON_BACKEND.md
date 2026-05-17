@@ -200,19 +200,20 @@ For production:
 
 ## Switching Frontend to Python Backend
 
-To use the new Python backend from the frontend:
+To use the Python backend from the frontend:
+
+Local development:
 
 ```bash
-# In frontend .env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Or for Docker:
+Docker service name:
+
 ```bash
-# In .env.docker
 NEXT_PUBLIC_API_URL=http://backend-python:8000
 ```
 
-## Running Both Backends
+## Running The Python Backend Stack
 
-Node backend was removed from this repository and compose setup. The runtime stack is Python-only.
+The runtime stack is Python-only.

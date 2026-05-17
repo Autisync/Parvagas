@@ -26,6 +26,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    admin_level: Optional[str] = None
     email_verified: bool
     
     class Config:

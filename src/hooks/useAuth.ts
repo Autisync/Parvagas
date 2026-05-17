@@ -21,6 +21,18 @@ type UseAuthOptions = {
   allowAdmin?: boolean;
 };
 
+function getLoginRoute(requiredRole?: string) {
+  return requiredRole === "admin" ? "/Admin/Login" : "/Login";
+}
+
+function normalizeUserRole(role: string | undefined | null): string {
+  const value = String(role || "").trim().toLowerCase();
+  if (value === "admin" || value === "super-admin" || value === "moderator") {
+    return "admin";
+  }
+  return value;
+}
+
 export function useAuth(requiredRole?: string, options: UseAuthOptions = {}) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -35,17 +47,28 @@ export function useAuth(requiredRole?: string, options: UseAuthOptions = {}) {
       ? {
           ...raw,
           id: String(raw.id || raw._id || "").trim(),
+          role: normalizeUserRole(raw.role),
           name: String(raw.name || raw.fullName || "").trim(),
         }
       : null;
-    if (!t || !u) {
-      router.replace("/Login");
+
+    if (!t || !u || !u.role) {
+      setLoading(false);
+      router.replace(getLoginRoute(requiredRole));
       return;
     }
-    if (requiredRole && u.role !== requiredRole && !(allowAdmin && u.role === "admin")) {
+
+    const roleMatches = !requiredRole || u.role === requiredRole || (allowAdmin && u.role === "admin");
+    if (!roleMatches) {
+      setLoading(false);
+      if (requiredRole === "admin") {
+        router.replace("/Admin/Login");
+        return;
+      }
       router.replace("/Portal");
       return;
     }
+
     setToken(t);
     setUser(u);
     setLoading(false);

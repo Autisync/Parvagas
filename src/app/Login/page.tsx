@@ -14,13 +14,17 @@ import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/Fee
 import { EyeIcon, EyeSlashIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
 type LoginResponse = {
-  token: string;
+  access_token?: string;
+  token?: string;
+  token_type?: string;
   user: {
     id?: string;
     _id?: string;
     email: string;
     role: string;
+    full_name?: string;
     fullName?: string;
+    admin_level?: "super-admin" | "moderator";
     adminLevel?: "super-admin" | "moderator";
     companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
     hasCompletedOnboarding?: boolean;
@@ -176,7 +180,7 @@ function LoginContent() {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password, roleHint: selectedRole }),
+        body: JSON.stringify({ email: email.trim(), password, role_hint: selectedRole }),
       });
 
       if (res.status === 428) {
@@ -234,7 +238,8 @@ function LoginContent() {
         if (res.status === 401 || res.status === 403) {
           throw new Error("Email ou palavra-passe incorretos.");
         }
-        throw new Error((body as { error?: string }).error || "Não foi possível iniciar sessão.");
+        const payload = body as { error?: string; detail?: string; message?: string };
+        throw new Error(payload.error || payload.detail || payload.message || "Não foi possível iniciar sessão.");
       }
 
       const data = (await res.json()) as LoginResponse;
@@ -256,24 +261,26 @@ function LoginContent() {
         return;
       }
 
-      setToken(data.token);
+      const token = String(data.access_token || data.token || "").trim();
+      if (!token) {
+        throw new Error("Resposta de autenticação inválida: token em falta.");
+      }
+      setToken(token);
       const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
         id: userId,
         email: data.user.email,
         role: data.user.role,
-        adminLevel: data.user.adminLevel,
+        adminLevel: data.user.adminLevel || data.user.admin_level,
         companyTeamRole: data.user.companyTeamRole,
-        name: data.user.fullName,
+        name: data.user.fullName || data.user.full_name,
         hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
         hasSeenTutorial: data.user.hasSeenTutorial ?? false,
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
         companyStatus: data.user.companyStatus,
       });
-      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
-      window.setTimeout(() => {
-        router.push(portalRoute(data.user.role));
-      }, 250);
+      router.replace(portalRoute(data.user.role));
+      return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Não foi possível iniciar sessão.";
       if (isConnectionError(message)) {
@@ -325,7 +332,8 @@ function LoginContent() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
+        const payload = body as { error?: string; detail?: string; message?: string };
+        throw new Error(payload.error || payload.detail || payload.message || "Não foi possível redefinir password.");
       }
 
       const data = (await res.json()) as LoginResponse;
@@ -334,23 +342,25 @@ function LoginContent() {
         router.replace("/Admin/Login");
         return;
       }
-      setToken(data.token);
+      const token = String(data.access_token || data.token || "").trim();
+      if (!token) {
+        throw new Error("Resposta de autenticação inválida: token em falta.");
+      }
+      setToken(token);
       const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
         id: userId,
         email: data.user.email,
         role: data.user.role,
         companyTeamRole: data.user.companyTeamRole,
-        name: data.user.fullName,
+        name: data.user.fullName || data.user.full_name,
         hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
         hasSeenTutorial: data.user.hasSeenTutorial ?? false,
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
         companyStatus: data.user.companyStatus,
       });
-      showFeedback({ variant: "success", message: "Sessão iniciada com sucesso." });
-      window.setTimeout(() => {
-        router.push(portalRoute(data.user.role));
-      }, 250);
+      router.replace(portalRoute(data.user.role));
+      return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Não foi possível redefinir password.";
       showFeedback({ variant: "error", message });
@@ -385,12 +395,13 @@ function LoginContent() {
         method: "POST",
         suppressGlobalErrors: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resetToken: passwordResetToken, newPassword }),
+        body: JSON.stringify({ token: passwordResetToken, new_password: newPassword, confirm_password: newPassword }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error || "Não foi possível redefinir password.");
+        const payload = body as { error?: string; detail?: string; message?: string };
+        throw new Error(payload.error || payload.detail || payload.message || "Não foi possível redefinir password.");
       }
 
       setPasswordResetToken("");

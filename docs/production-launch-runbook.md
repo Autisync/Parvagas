@@ -10,14 +10,14 @@ Create or confirm these services before launch:
 - Private Supabase Storage bucket, recommended name: `parvagas-private`.
 - SMTP/email provider for transactional mail.
 - Production hosting for the Next.js frontend.
-- Production hosting for the Express API.
+- Production hosting for the Python API.
 - Optional MeiliSearch service for faster public job search.
 - Monitoring/error tracking service, such as Sentry or the hosting provider's runtime logs.
-- Domain and DNS access for `parvagas.co.ao` and API subdomain.
+- Domain and DNS access for the production frontend and API hostnames.
 
 ## 2. Required Environment Variables
 
-Set these in production:
+Set these in production. Use HTTPS domains here, not localhost.
 
 ```bash
 NODE_ENV=production
@@ -27,9 +27,9 @@ SUPABASE_STORAGE_BUCKET=parvagas-private
 JWT_SECRET=
 PORT=3001
 
-NEXT_PUBLIC_SITE_URL=https://parvagas.co.ao
-NEXT_PUBLIC_API_URL=https://api.parvagas.co.ao
-CORS_ORIGIN=https://parvagas.co.ao
+NEXT_PUBLIC_SITE_URL=https://YOUR_FRONTEND_DOMAIN
+NEXT_PUBLIC_API_URL=https://YOUR_API_DOMAIN
+CORS_ORIGIN=https://YOUR_FRONTEND_DOMAIN
 
 STORAGE_PROVIDER=supabase
 
@@ -136,7 +136,7 @@ The readiness script fails on unsafe live settings such as local storage, localh
 Suggested split:
 
 - Frontend: Next.js app.
-- API: Express server from `npm run server`.
+- API: Python backend service.
 - Database/storage: Supabase.
 - Optional search: MeiliSearch.
 
@@ -151,8 +151,8 @@ npm run start
 API:
 
 ```bash
-npm ci --omit=dev
-npm run server
+docker compose up -d --build backend-python celery-worker
+docker compose exec backend-python alembic upgrade head
 ```
 
 ## 9. Monitoring And Backups

@@ -3,6 +3,7 @@ import { normalizeErrorMessage } from "@/lib/errorMessage";
 
 const DEV_API_FALLBACK = "http://localhost:8000";
 const API_V1_PREFIX = "/api/v1";
+const DEV_API_FALLBACK_PORTS = [8000, 3001, 6001] as const;
 
 const DEFAULT_TIMEOUT_MS = 20000;
 const SESSION_TOKEN_KEY = "parvagas_token";
@@ -92,32 +93,82 @@ export function apiUrl(path: string): string {
     return path;
   }
 
-  const base = getApiBaseUrl();
+  const [base] = getApiBaseCandidates();
   if (!base) {
     throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
   }
 
+  return buildApiUrl(base, path);
+}
+
+function buildApiUrl(base: string, path: string): string {
+  const normalizedBase = String(base || "").trim().replace(/\/$/, "");
+  if (!normalizedBase) {
+    throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
+  }
+
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const baseAlreadyHasApiPrefix = /\/api\/v1$/i.test(base);
+  const baseAlreadyHasApiPrefix = /\/api\/v1$/i.test(normalizedBase);
   const routePath =
     baseAlreadyHasApiPrefix || normalizedPath.startsWith("/api/")
       ? normalizedPath
       : `${API_V1_PREFIX}${normalizedPath}`;
 
-  return `${base}${routePath}`;
+  return `${normalizedBase}${routePath}`;
+}
+
+function withLocalHostFallbacks(base: string): string[] {
+  const normalizedBase = String(base || "").trim().replace(/\/$/, "");
+  if (!normalizedBase) return [];
+
+  try {
+    const parsed = new URL(normalizedBase);
+    if (parsed.hostname === "localhost") {
+      const alt = new URL(parsed.toString());
+      alt.hostname = "127.0.0.1";
+      return [normalizedBase, alt.toString().replace(/\/$/, "")];
+    }
+    if (parsed.hostname === "127.0.0.1") {
+      const alt = new URL(parsed.toString());
+      alt.hostname = "localhost";
+      return [normalizedBase, alt.toString().replace(/\/$/, "")];
+    }
+  } catch {
+    // Ignore invalid URL input and keep original value only.
+  }
+
+  return [normalizedBase];
+}
+
+function getWindowLocalCandidates(): string[] {
+  if (typeof window === "undefined") return [];
+  const host = window.location.hostname || "localhost";
+  const protocol = window.location.protocol === "https:" ? "https" : "http";
+  const rawCandidates = DEV_API_FALLBACK_PORTS.flatMap((port) =>
+    withLocalHostFallbacks(`${protocol}://${host}:${port}`)
+  );
+  return Array.from(new Set(rawCandidates));
+}
+
+function getApiBaseCandidates(): string[] {
+  const configured = String(process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "");
+  if (configured) {
+    const configuredCandidates = withLocalHostFallbacks(configured);
+    // If NEXT_PUBLIC_API_URL is configured, keep requests deterministic and avoid
+    // probing extra dev ports that can introduce long timeouts during login.
+    return configuredCandidates;
+  }
+
+  if (typeof window !== "undefined") {
+    return getWindowLocalCandidates();
+  }
+
+  return process.env.NODE_ENV === "production" ? [] : [DEV_API_FALLBACK];
 }
 
 export function getApiBaseUrl(): string {
-  const configured = String(process.env.NEXT_PUBLIC_API_URL || "").trim().replace(/\/$/, "");
-  if (configured) return configured;
-
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname || "localhost";
-    const protocol = window.location.protocol === "https:" ? "https" : "http";
-    return `${protocol}://${host}:8000`;
-  }
-
-  return process.env.NODE_ENV === "production" ? "" : DEV_API_FALLBACK;
+  const [base] = getApiBaseCandidates();
+  return base || "";
 }
 
 async function parseResponseBody(res: Response) {
@@ -141,6 +192,42 @@ function fallbackStatusMessage(status: number) {
   return "Não foi possível concluir o pedido neste momento.";
 }
 
+function extractBearerToken(headers: HeadersInit | undefined): string {
+  if (!headers) return "";
+
+  const readFromValue = (value: unknown) => {
+    if (typeof value !== "string") return "";
+    const match = /^Bearer\s+(.+)$/i.exec(value.trim());
+    return match?.[1]?.trim() || "";
+  };
+
+  if (headers instanceof Headers) {
+    return readFromValue(headers.get("Authorization"));
+  }
+
+  if (Array.isArray(headers)) {
+    const found = headers.find(([key]) => String(key).toLowerCase() === "authorization");
+    return found ? readFromValue(found[1]) : "";
+  }
+
+  const recordHeaders = headers as Record<string, string>;
+  const value = recordHeaders.Authorization ?? recordHeaders.authorization;
+  return readFromValue(value);
+}
+
+function isAuthPath(path: string) {
+  const normalizedPath = String(path || "").toLowerCase();
+  return normalizedPath.includes("/auth/login") || normalizedPath.includes("/auth/first-login-reset");
+}
+
+function shouldHandleAuthExpiry(path: string, requestToken: string) {
+  if (isAuthPath(path)) return false;
+  if (!requestToken) return false;
+
+  const currentToken = getToken();
+  return Boolean(currentToken && currentToken === requestToken);
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options?: ApiFetchOptions
@@ -155,6 +242,7 @@ export async function apiFetch<T = unknown>(
     ...options,
     headers,
   });
+  const requestToken = extractBearerToken(headers);
 
   if (!res.ok) {
     const body = await parseResponseBody(res);
@@ -197,7 +285,7 @@ export async function apiFetch<T = unknown>(
         });
       } else if (res.status === 401) {
         const now = Date.now();
-        if (now - lastAuthExpiryHandledAt > 1500) {
+        if (shouldHandleAuthExpiry(path, requestToken) && now - lastAuthExpiryHandledAt > 1500) {
           lastAuthExpiryHandledAt = now;
           clearSessionData();
           recordLogoutSignal();
@@ -239,40 +327,73 @@ export async function apiFetch<T = unknown>(
 }
 
 export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeoutMs = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+  const effectiveTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+  const baseCandidates = getApiBaseCandidates();
+  const candidateUrls = baseCandidates.length > 0 ? baseCandidates.map((base) => buildApiUrl(base, path)) : [apiUrl(path)];
+  let lastError: unknown;
+  const startedAt = Date.now();
 
-  try {
-    const res = await fetch(apiUrl(path), {
-      ...options,
-      signal: options?.signal ?? controller.signal,
-    });
-    clearTimeout(timeout);
-    return res;
-  } catch (error: unknown) {
-    clearTimeout(timeout);
-    if (error instanceof Error && error.name === "AbortError") {
-      if (!options?.suppressGlobalErrors) {
-        getGlobalErrorDispatch()?.appError?.({
-          type: "network",
-          message: "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
-          action: "retry",
-        });
-      }
-      throw new ApiError("A ligação expirou. Verifique a rede e tente novamente.", { isNetworkError: true });
+  for (let index = 0; index < candidateUrls.length; index += 1) {
+    const url = candidateUrls[index];
+    const controller = new AbortController();
+    const elapsedMs = Date.now() - startedAt;
+    const remainingMs = Math.max(1, effectiveTimeoutMs - elapsedMs);
+    const timeout = setTimeout(() => controller.abort(), remainingMs);
+
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      console.info(`[apiFetchRaw] Attempt ${index + 1}/${candidateUrls.length}: ${url}`);
     }
+
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: options?.signal ?? controller.signal,
+      });
+      clearTimeout(timeout);
+      return res;
+    } catch (error: unknown) {
+      clearTimeout(timeout);
+      lastError = error;
+
+      // If fallback base ports are enabled in dev mode, try the next candidate on connection failures.
+      const shouldTryNext =
+        index < candidateUrls.length - 1 && !(options?.signal?.aborted === true);
+      if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        console.warn(`[apiFetchRaw] Failed ${url} -> ${reason}`);
+      }
+      if (shouldTryNext) {
+        continue;
+      }
+    }
+  }
+
+  if (lastError instanceof Error && lastError.name === "AbortError") {
     if (!options?.suppressGlobalErrors) {
       getGlobalErrorDispatch()?.appError?.({
         type: "network",
-        message: "Não foi possível ligar ao servidor.",
+        message: "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
         action: "retry",
       });
     }
-    throw new ApiError("Não foi possível ligar ao servidor. Verifique a sua ligação.", {
-      details: error,
-      isNetworkError: true,
+    throw new ApiError(
+      "A ligação expirou. Verifique se a API está ativa e confirme NEXT_PUBLIC_API_URL.",
+      { isNetworkError: true }
+    );
+  }
+
+  if (!options?.suppressGlobalErrors) {
+    getGlobalErrorDispatch()?.appError?.({
+      type: "network",
+      message: "Não foi possível ligar ao servidor.",
+      action: "retry",
     });
   }
+  throw new ApiError("Não foi possível ligar ao servidor. Confirme a API e NEXT_PUBLIC_API_URL.", {
+    details: lastError,
+    isNetworkError: true,
+  });
 }
 
 export function authFetch<T = unknown>(path: string, token: string, options?: ApiFetchOptions): Promise<T> {

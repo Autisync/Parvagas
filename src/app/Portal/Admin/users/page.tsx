@@ -322,9 +322,13 @@ export default function AdminUsersPage() {
               type="button"
               disabled={Boolean(busy) || !quickReason.trim()}
               onClick={submitQuickSuspend}
-              className={`rounded-xl px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${quickSuspend?.suspended ? "bg-rose-600" : "bg-emerald-600"}`}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                quickSuspend?.suspended
+                  ? "border-red-700 bg-red-600 text-white hover:bg-red-700"
+                  : "border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700"
+              } disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:opacity-100`}
             >
-              {busy ? "A processar..." : quickSuspend?.suspended ? "Suspender" : "Reativar"}
+              {busy ? "A processar..." : quickSuspend?.suspended ? "Eliminar" : "Confirmar reativação"}
             </button>
           </div>
         )}
@@ -337,13 +341,13 @@ export default function AdminUsersPage() {
                 : `Tem a certeza que pretende reativar ${quickSuspend.user.fullName || quickSuspend.user.email || "este utilizador"}?`}
             </p>
             <label className="grid gap-1 text-sm text-slate-700">
-              <span>Motivo <span className="text-rose-600">*</span></span>
+              <span>{quickSuspend.suspended ? "Eliminar" : "Motivo"} <span className={quickSuspend.suspended ? "text-red-600" : "text-rose-600"}>*</span></span>
               <textarea
                 value={quickReason}
                 onChange={(e) => setQuickReason(e.target.value)}
                 rows={3}
                 className={`${adminFieldClass} resize-y`}
-                placeholder={quickSuspend.suspended ? "Explique o motivo da suspensão" : "Explique o motivo da reativação"}
+                placeholder={quickSuspend.suspended ? "Explique o motivo da eliminação" : "Explique o motivo da reativação"}
                 autoFocus
               />
             </label>
