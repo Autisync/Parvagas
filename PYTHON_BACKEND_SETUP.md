@@ -148,11 +148,21 @@ docker compose --profile python-backend up -d --build
 # Run migrations
 docker compose exec backend-python alembic upgrade head
 
+# Bootstrap super admin from env (idempotent)
+docker compose exec backend-python python scripts/bootstrap_super_admin.py
+
 # Check logs
 docker compose logs -f backend-python
 
 # Test health endpoint
 curl http://localhost:8000/health
+```
+
+### Server Bootstrap (After Deployment)
+
+```bash
+cd backend-python
+bash scripts/prepare_server_super_admin.sh
 ```
 
 ### Testing Registration

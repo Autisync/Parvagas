@@ -5,18 +5,10 @@ from app.db.session import get_db
 from app.models import User, CandidateProfile, UserRole
 from app.schemas import CandidateProfileResponse, CandidateProfileUpdateRequest
 from app.core.logging import get_logger
+from app.api.deps import get_current_user
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/candidates", tags=["candidates"])
-
-
-def get_current_user(token: str = None, db: Session = Depends(get_db)) -> User:
-    """Get current authenticated user (placeholder)."""
-    # This would be implemented with JWT token verification
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    # TODO: Decode JWT and fetch user
-    return None
 
 
 @router.get("/profile", response_model=CandidateProfileResponse)

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
 
 type Job = {
   _id: string;
@@ -224,7 +225,7 @@ function VagasDisponiveisContent() {
         {!loading && !error && (
           <div className="mt-8 grid gap-4">
             {jobs.length === 0 && <p className="text-gray-500 text-center py-12">{dict.jobsList.empty}</p>}
-            {jobs.map(job => {
+            {jobs.map((job, index) => {
               const mode = job.workMode || job.mode || "";
               const name = companyName(job);
               const logo = companyLogo(job);
@@ -262,8 +263,16 @@ function VagasDisponiveisContent() {
                     </div>
                     <Link href={`/Vagas-Disponiveis/${job._id}`} className="app-btn-secondary text-sm px-4 py-1.5">{dict.jobsList.viewDetails}</Link>
                   </div>
-                </article>
-              );
+                </article>,
+                (index + 1) % 6 === 0 ? (
+                  <SponsoredAdSlot
+                    key={`ad-after-${index}`}
+                    placement="job_list"
+                    fallbackTitle=""
+                    fallbackDescription=""
+                  />
+                ) : null,
+              ];
             })}
           </div>
         )}

@@ -1,5 +1,6 @@
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
+import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
 import Link from "next/link";
 import Image from "next/image";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
@@ -198,6 +199,12 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </Link>
 
             <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
+
+            <SponsoredAdSlot
+              placement="sidebar"
+              fallbackTitle="Publicidade"
+              fallbackDescription="Espaço reservado para anúncio patrocinado."
+            />
           </aside>
         </div>
       </main>

@@ -6,6 +6,7 @@ const nextConfig = {
         '100.75.2.25'
     ],
     images: {
+        unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === '1',
         remotePatterns: [
             {
                 protocol: 'https',

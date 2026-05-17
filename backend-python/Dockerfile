@@ -37,6 +37,7 @@ COPY --from=base /usr/local/bin /usr/local/bin
 COPY app ./app
 COPY alembic.ini ./alembic.ini
 COPY migrations ./migrations
+COPY scripts ./scripts
 
 # Create uploads directory
 RUN mkdir -p /app/uploads && chmod 755 /app/uploads

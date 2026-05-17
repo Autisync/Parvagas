@@ -190,7 +190,8 @@ function SignUpContent() {
           : dict.auth.signup.successAccountCreated,
       );
       const encodedEmail = encodeURIComponent(email.trim());
-      setTimeout(() => router.push(`/Signup/success?role=${selectedRole}&email=${encodedEmail}`), 800);
+      router.replace(`/Signup/success?role=${selectedRole}&email=${encodedEmail}`);
+      return;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : (locale === "en" ? "Could not create account." : "Não foi possível criar a conta."));
     } finally {

@@ -22,8 +22,9 @@ case $choice in
     1)
         echo "🔵 Starting Python backend stack..."
         echo ""
-        echo "1. Update frontend environment:"
+        echo "1. Update frontend environment (local dev):"
         echo "   NEXT_PUBLIC_API_URL=http://localhost:8000"
+        echo "   For Dockerized frontend: NEXT_PUBLIC_API_URL=http://backend-python:8000"
         echo ""
         echo "2. Start services:"
         echo "   docker compose up -d --build"
@@ -34,8 +35,9 @@ case $choice in
     2)
         echo "🟡 Starting Python backend + beat scheduler..."
         echo ""
-        echo "1. Update frontend environment:"
+        echo "1. Update frontend environment (local dev):"
         echo "   NEXT_PUBLIC_API_URL=http://localhost:8000"
+        echo "   For Dockerized frontend: NEXT_PUBLIC_API_URL=http://backend-python:8000"
         echo ""
         echo "2. Start services:"
         echo "   docker compose --profile python-backend-beat up -d --build"

@@ -15,6 +15,12 @@ class UserRole(str, enum.Enum):
     admin = "admin"
 
 
+class AdminLevel(str, enum.Enum):
+    """Administrative privilege level enumeration."""
+    moderator = "moderator"
+    super_admin = "super-admin"
+
+
 class User(Base, TimestampMixin):
     """User account model."""
     __tablename__ = "users"
@@ -24,6 +30,7 @@ class User(Base, TimestampMixin):
     full_name = Column(String(255), nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.candidate)
+    admin_level = Column(String(32), nullable=False, default=AdminLevel.moderator.value)
     
     # Email verification
     email_verified = Column(Boolean, nullable=False, default=False)
@@ -136,6 +143,34 @@ class CVUpload(Base, TimestampMixin):
     
     # Relations
     candidate_profile = relationship("CandidateProfile", back_populates="cv_uploads")
+
+
+class AdCampaign(Base, TimestampMixin):
+    """Ad campaign model used by admin and public placements."""
+    __tablename__ = "ad_campaigns"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title = Column(String(255), nullable=False)
+    placement = Column(String(100), nullable=False, index=True)
+    link = Column(String(1000), nullable=True)
+    image_url = Column(Text, nullable=True)
+
+    # Lifecycle and moderation state
+    status = Column(String(50), nullable=False, default="draft")
+    active = Column(Boolean, nullable=False, default=True)
+    flagged = Column(Boolean, nullable=False, default=False)
+    flag_reason = Column(Text, nullable=True)
+    pause_reason = Column(Text, nullable=True)
+
+    # Budget/performance
+    budget = Column(Float, nullable=True)
+    clicks = Column(Integer, nullable=False, default=0)
+    impressions = Column(Integer, nullable=False, default=0)
+
+    # Delivery window
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    last_served_at = Column(DateTime, nullable=True)
 
 
 class EmailVerificationToken(Base, TimestampMixin):

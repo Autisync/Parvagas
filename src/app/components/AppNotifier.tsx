@@ -256,7 +256,13 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
 
       if (error.type === "auth") {
         showBanner("A sua sessão expirou. Faça login novamente.", "Iniciar sessão", () => {
-          if (typeof window !== "undefined") window.location.assign("/Login");
+          if (typeof window !== "undefined") {
+            const path = window.location.pathname || "";
+            const target = path.startsWith("/Portal/Admin") || path.startsWith("/Admin")
+              ? "/Admin/Login"
+              : "/Login";
+            window.location.assign(target);
+          }
         });
         return;
       }

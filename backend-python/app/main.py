@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 import time
 import uuid
 from app.core.config import get_settings
+from app.core.auth import extract_bearer_token, validate_token
 from app.core.logging import setup_logging, get_logger
 from app.api.v1.router import router as v1_router
 from app.db.session import engine
@@ -52,6 +53,24 @@ async def add_request_id(request: Request, call_next):
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time"] = str(process_time)
     
+    return response
+
+
+@app.middleware("http")
+async def attach_auth_context(request: Request, call_next):
+    """Attach token claims to request.state for protected endpoints."""
+    request.state.auth_claims = None
+    request.state.auth_error = None
+
+    authorization = request.headers.get("Authorization")
+    token = extract_bearer_token(authorization)
+
+    if token:
+        claims, auth_error = validate_token(token)
+        request.state.auth_claims = claims
+        request.state.auth_error = auth_error
+
+    response = await call_next(request)
     return response
 
 

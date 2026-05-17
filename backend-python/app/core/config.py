@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
+    # Auth provider
+    AUTH_PROVIDER: str = os.getenv("AUTH_PROVIDER", "local")
+    AUTH0_DOMAIN: str = os.getenv("AUTH0_DOMAIN", "")
+    AUTH0_AUDIENCE: str = os.getenv("AUTH0_AUDIENCE", "")
+    AUTH0_ISSUER: str = os.getenv("AUTH0_ISSUER", "")
+    AUTH0_ALGORITHMS: str = os.getenv("AUTH0_ALGORITHMS", "RS256")
+
     # URLs
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -61,6 +68,11 @@ class Settings(BaseSettings):
 
     # Admin key
     ADMIN_SIGNUP_KEY: str = os.getenv("ADMIN_SIGNUP_KEY", "")
+    SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@autisync.com")
+    SUPER_ADMIN_FULL_NAME: str = os.getenv("SUPER_ADMIN_FULL_NAME", "AutiSync Super Admin")
+    MODERATOR_EMAIL: str = os.getenv("MODERATOR_EMAIL", "")
+    MODERATOR_FULL_NAME: str = os.getenv("MODERATOR_FULL_NAME", "AutiSync Moderator")
+    MODERATOR_SIGNUP_KEY: str = os.getenv("MODERATOR_SIGNUP_KEY", "")
 
     class Config:
         """Pydantic config."""

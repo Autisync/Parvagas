@@ -8,20 +8,12 @@ from app.services.storage_service import StorageService
 from app.services.cv_parser_service import CVParserService
 from app.workers.tasks import parse_cv
 from app.core.logging import get_logger
+from app.api.deps import get_current_user
 import uuid
 from pathlib import Path
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/cv", tags=["cv"])
-
-
-def get_current_user(token: str = None, db: Session = Depends(get_db)) -> User:
-    """Get current authenticated user (placeholder)."""
-    # This would be implemented with JWT token verification
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    # TODO: Decode JWT and fetch user
-    return None
 
 
 @router.post("/upload", response_model=CVUploadResponse)

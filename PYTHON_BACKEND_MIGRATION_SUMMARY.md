@@ -90,19 +90,11 @@ nano backend-python/.env
 
 ### 2. Update Docker Compose
 
-The new backend requires Redis always enabled (not just in "cache" profile):
-
-```bash
-# Backup current docker-compose
-cp docker-compose.yml docker-compose-node-only.yml
-
-# Use the updated version with Python backend
-cp docker-compose-updated.yml docker-compose.yml
-```
+The runtime stack is Python-only and already configured in the current `docker-compose.yml`.
 
 ### 3. Build and Start Services
 
-**Option A: Start all services (Node + Python backends)**
+**Option A: Start Python backend stack**
 ```bash
 docker compose up -d --build
 ```

@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 3000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 NEXT_IMAGE_UNOPTIMIZED=1 next dev --hostname 0.0.0.0 --port 3000",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=6144 next build",
+    "start": "cross-env NODE_OPTIONS=--max-old-space-size=4096 next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

@@ -6,24 +6,24 @@ Canonical template file: .env.production.example
 
 ## 1. Required Variables (Hard Fail If Missing)
 
-- [ ] SUPABASE_URL=https://mhxykmgubdfbjbxqqgzb.supabase.co
-- [ ] SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oeHlrbWd1YmRmYmpieHFxZ3piIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzE0Nzk5NSwiZXhwIjoyMDkyNzIzOTk1fQ.P7VpR2cg1fc9Pt_6VUv4rwLFRyuc8xy0HuWIgv4FeTI
+- [ ] SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+- [ ] SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 - [ ] SUPABASE_STORAGE_BUCKET=parvagas-private
-- [ ] JWT_SECRET=0fda5e2e-4e77-4bb7-8eeb-703b75a639bc
+- [ ] JWT_SECRET=REPLACE_WITH_LONG_RANDOM_SECRET_MIN_32
   - Rule: at least 32 chars, non-placeholder, random.
 - [ ] AUTH_MAX_FAILED_LOGINS=8
 - [ ] AUTH_LOCK_MINUTES=15
 - [ ] TEMP_PASSWORD_TTL_MINUTES=60
-- [ ] NEXT_PUBLIC_SITE_URL=https://parvagas.vercel.app
-- [ ] NEXT_PUBLIC_API_URL=https://api.parvagas.vercel.app
-- [ ] CORS_ORIGIN=https://parvagas.vercel.app
+- [ ] NEXT_PUBLIC_SITE_URL=https://YOUR_FRONTEND_DOMAIN
+- [ ] NEXT_PUBLIC_API_URL=https://YOUR_API_DOMAIN
+- [ ] CORS_ORIGIN=https://YOUR_FRONTEND_DOMAIN
   - If multiple: comma-separated HTTPS origins only.
 - [ ] STORAGE_PROVIDER=supabase
-- [ ] EMAIL_HOST=mail.ehdesigntech.co.uk
+- [ ] EMAIL_HOST=mail.example.com
 - [ ] EMAIL_PORT=587
-- [ ] EMAIL_USER=parvagas@heliotheanalyst.co.uk
-- [ ] EMAIL_PASS=Parvagas@2026
-- [ ] EMAIL_FROM=parvagas@heliotheanalyst.co.uk
+- [ ] EMAIL_USER=noreply@example.com
+- [ ] EMAIL_PASS=YOUR_SMTP_PASSWORD
+- [ ] EMAIL_FROM=noreply@example.com
 - [ ] EMAIL_SECURE=false
 - [ ] EMAIL_REQUIRE_TLS=true
   - Rule: real email sender, ex. no-reply@parvagas.co.ao
@@ -59,7 +59,7 @@ Canonical template file: .env.production.example
 
 ## 5. Paste-Ready Production Block
 
-Use this template in your production env manager:
+Use this template in your production env manager. Replace the frontend and API domains with the real HTTPS domains used in production.
 
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
@@ -71,20 +71,20 @@ TEMP_PASSWORD_TTL_MINUTES=60
 PORT=3001
 NODE_ENV=production
 
-NEXT_PUBLIC_SITE_URL=https://parvagas.vercel.app
-NEXT_PUBLIC_API_URL=https://api.parvagas.vercel.app
-CORS_ORIGIN=https://parvagas.vercel.app
+NEXT_PUBLIC_SITE_URL=https://YOUR_FRONTEND_DOMAIN
+NEXT_PUBLIC_API_URL=https://YOUR_API_DOMAIN
+CORS_ORIGIN=https://YOUR_FRONTEND_DOMAIN
 
 STORAGE_PROVIDER=supabase
 
 AI_PROVIDER=
 AI_API_KEY=
 
-EMAIL_HOST=mail.ehdesigntech.co.uk
+EMAIL_HOST=mail.example.com
 EMAIL_PORT=587
-EMAIL_USER=parvagas@heliotheanalyst.co.uk
-EMAIL_PASS=Parvagas@2026
-EMAIL_FROM=parvagas@heliotheanalyst.co.uk
+EMAIL_USER=noreply@example.com
+EMAIL_PASS=YOUR_SMTP_PASSWORD
+EMAIL_FROM=noreply@example.com
 EMAIL_SECURE=false
 EMAIL_REQUIRE_TLS=true
 
