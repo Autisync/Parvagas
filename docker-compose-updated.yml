@@ -31,6 +31,7 @@ services:
       context: ./backend-python
       dockerfile: Dockerfile
     restart: unless-stopped
+    user: "0:0"
     env_file:
       - ./backend-python/.env
       - ./.env.docker
@@ -62,8 +63,9 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1
     restart: unless-stopped
+    user: "0:0"
     env_file:
       - ./backend-python/.env
       - ./.env.docker

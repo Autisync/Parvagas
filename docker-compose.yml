@@ -31,6 +31,7 @@ services:
       context: ./backend-python
       dockerfile: Dockerfile
     restart: unless-stopped
+    user: "0:0"
     env_file:
       - ./backend-python/.env
       - ./.env.docker
@@ -57,13 +58,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  ollama:
+    image: ollama/ollama:latest
+    mem_limit: 3g
+    cpus: "1.5"
+    environment:
+      - OLLAMA_MODELS=qwen2.5:3b,llama3.2:3b,phi3:mini
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
   # Celery Worker (Python)
   celery-worker:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1
     restart: unless-stopped
+    user: "0:0"
     env_file:
       - ./backend-python/.env
       - ./.env.docker
@@ -145,3 +158,5 @@ volumes:
   redis_data:
   python_uploads:
   python_logs:
+  ollama-data:
+

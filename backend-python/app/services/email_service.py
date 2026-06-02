@@ -138,6 +138,34 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send welcome email: {str(e)}")
             return False
+
+    @staticmethod
+    def send_application_received_email(email: str, full_name: str, job_id: str) -> bool:
+        """Send acknowledgement after a job application is submitted."""
+        try:
+            if not settings.SMTP_HOST:
+                logger.warning(f"SMTP not configured, skipping email to {email}")
+                return False
+
+            subject = f"{settings.BRAND_NAME} - Candidatura recebida"
+            body_html = f"""
+            <p>Olá {full_name},</p>
+            <p>Recebemos a sua candidatura para a vaga <strong>{job_id}</strong>.</p>
+            <p>A equipa de recrutamento irá analisar o seu perfil e entrar em contacto quando houver atualização.</p>
+            """
+
+            html_content = EmailService._build_email_html(
+                title="Candidatura recebida com sucesso",
+                body_html=body_html,
+                action_text="Ver vagas disponíveis",
+                action_url=f"{settings.FRONTEND_URL}/Vagas-Disponiveis",
+            )
+
+            return EmailService._send_email(email, subject, html_content)
+
+        except Exception as e:
+            logger.error(f"Failed to send application confirmation email: {str(e)}")
+            return False
     
     @staticmethod
     def _send_email(to_email: str, subject: str, html_content: str) -> bool:

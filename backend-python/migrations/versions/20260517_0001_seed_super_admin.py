@@ -32,6 +32,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     metadata = sa.MetaData()
     users = sa.Table("users", metadata, autoload_with=bind)
+    has_admin_level = "admin_level" in users.c
 
     admin_signup_key = (os.getenv("ADMIN_SIGNUP_KEY") or "").strip()
     super_admin_email = (os.getenv("SUPER_ADMIN_EMAIL") or "admin@autisync.com").strip().lower()
@@ -48,37 +49,45 @@ def upgrade() -> None:
     ).fetchone()
 
     if existing:
+        update_values = dict(
+            full_name=super_admin_full_name,
+            role="admin",
+            password_hash=password_hash,
+            email_verified=True,
+            email_verified_at=now,
+            suspended=False,
+            failed_login_attempts=0,
+            locked_until=None,
+            updated_at=now,
+        )
+        if has_admin_level:
+            update_values["admin_level"] = "super-admin"
+
         bind.execute(
             sa.update(users)
             .where(users.c.id == existing[0])
-            .values(
-                full_name=super_admin_full_name,
-                role="admin",
-                password_hash=password_hash,
-                email_verified=True,
-                email_verified_at=now,
-                suspended=False,
-                failed_login_attempts=0,
-                locked_until=None,
-                updated_at=now,
-            )
+            .values(**update_values)
         )
     else:
+        insert_values = dict(
+            id=str(uuid.uuid4()),
+            email=super_admin_email,
+            full_name=super_admin_full_name,
+            role="admin",
+            password_hash=password_hash,
+            email_verified=True,
+            email_verified_at=now,
+            suspended=False,
+            failed_login_attempts=0,
+            locked_until=None,
+            created_at=now,
+            updated_at=now,
+        )
+        if has_admin_level:
+            insert_values["admin_level"] = "super-admin"
+
         bind.execute(
-            sa.insert(users).values(
-                id=str(uuid.uuid4()),
-                email=super_admin_email,
-                full_name=super_admin_full_name,
-                role="admin",
-                password_hash=password_hash,
-                email_verified=True,
-                email_verified_at=now,
-                suspended=False,
-                failed_login_attempts=0,
-                locked_until=None,
-                created_at=now,
-                updated_at=now,
-            )
+            sa.insert(users).values(**insert_values)
         )
 
 

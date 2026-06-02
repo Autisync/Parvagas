@@ -1,5 +1,5 @@
 """Pydantic schemas for request/response validation."""
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -7,10 +7,15 @@ from datetime import datetime
 # Auth Schemas
 class UserRegisterRequest(BaseModel):
     """User registration request."""
+    model_config = ConfigDict(populate_by_name=True)
+
     email: EmailStr
     password: str = Field(..., min_length=8)
-    full_name: str
+    full_name: str = Field(validation_alias=AliasChoices("full_name", "fullName"))
     role: str = Field(default="candidate", pattern="^(candidate|company)$")
+    company_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("company_name", "companyName"))
+    company_legal_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("company_legal_name", "companyLegalName"))
+    nif: Optional[str] = None
 
 
 class UserLoginRequest(BaseModel):

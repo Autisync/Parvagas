@@ -63,6 +63,25 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/uploads")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", 10))
 
+    # Optional AI-assisted CV parsing
+    CV_PARSER_AI_ENABLED: bool = os.getenv("CV_PARSER_AI_ENABLED", "false").lower() == "true"
+    CV_PARSER_AI_PROVIDER: str = os.getenv("CV_PARSER_AI_PROVIDER", "openai")
+    CV_PARSER_AI_BASE_URL: str = os.getenv("CV_PARSER_AI_BASE_URL", "https://api.openai.com/v1")
+    CV_PARSER_AI_API_KEY: str = os.getenv("CV_PARSER_AI_API_KEY", "")
+    CV_PARSER_AI_MODEL: str = os.getenv("CV_PARSER_AI_MODEL", "gpt-4.1-mini")
+    CV_PARSER_AI_TIMEOUT_SECONDS: int = int(os.getenv("CV_PARSER_AI_TIMEOUT_SECONDS", 30))
+    CV_PARSER_AI_ORGANIZATION: str = os.getenv("CV_PARSER_AI_ORGANIZATION", "")
+    CV_PARSER_AI_PROJECT: str = os.getenv("CV_PARSER_AI_PROJECT", "")
+    CV_PARSER_AI_APP_NAME: str = os.getenv("CV_PARSER_AI_APP_NAME", "Parvagas CV Parser")
+    CV_PARSER_AI_SITE_URL: str = os.getenv("CV_PARSER_AI_SITE_URL", FRONTEND_URL)
+    CV_PARSER_AI_AZURE_API_VERSION: str = os.getenv("CV_PARSER_AI_AZURE_API_VERSION", "2024-10-21")
+
+    # CV parsing queue and guardrails
+    CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))
+    CV_PARSE_MAX_JOBS_PER_USER_PER_DAY: int = int(os.getenv("CV_PARSE_MAX_JOBS_PER_USER_PER_DAY", 10))
+    CV_PARSE_TASK_SOFT_TIMEOUT_SECONDS: int = int(os.getenv("CV_PARSE_TASK_SOFT_TIMEOUT_SECONDS", 90))
+    CV_PARSE_TASK_TIMEOUT_SECONDS: int = int(os.getenv("CV_PARSE_TASK_TIMEOUT_SECONDS", 120))
+
     # CORS
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", FRONTEND_URL)
 

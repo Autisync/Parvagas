@@ -68,6 +68,7 @@ type ParsedDraft = {
 type ParseResponse = {
   success?: boolean;
   parseRunId?: string;
+  status?: string;
   file?: {
     id?: string | null;
     filename?: string;
@@ -107,7 +108,9 @@ type GeneratedCvProfile = {
   updatedAt?: string;
 };
 
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const PARSE_POLL_INTERVAL_MS = 2500;
+const PARSE_POLL_TIMEOUT_MS = 120000;
 const TARGET_FIELDS = [
   "Customer Support",
   "IT Helpdesk",
@@ -281,7 +284,7 @@ export default function CvDocumentosPage() {
       return "Formato inválido. Use PDF, DOC ou DOCX.";
     }
     if (file.size > MAX_FILE_BYTES) {
-      return "Ficheiro excede o limite de 8MB.";
+      return "Ficheiro excede o limite de 5MB.";
     }
     return "";
   };
@@ -309,10 +312,28 @@ export default function CvDocumentosPage() {
       const data = (await res.json().catch(() => ({}))) as ParseResponse;
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Erro ao processar CV."));
 
-      const parsed = data as ParseResponse;
+      const parseRunId = data.parseRunId;
+      if (!parseRunId) throw new Error("Nao foi possivel iniciar o processamento do CV.");
+
+      let parsed = data;
+      const startedAt = Date.now();
+      while (!["completed", "failed"].includes(String(parsed.status || "").toLowerCase())) {
+        if (Date.now() - startedAt > PARSE_POLL_TIMEOUT_MS) {
+          throw new Error("O CV esta a ser processado em segundo plano. Recarregue em instantes para ver os dados.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, PARSE_POLL_INTERVAL_MS));
+        parsed = await authFetch<ParseResponse>(`/candidates/cv/parse/${parseRunId}`, token!, {
+          suppressGlobalErrors: true,
+        });
+      }
+
+      if (String(parsed.status || "").toLowerCase() === "failed") {
+        throw new Error(parsed.parserError || "Erro ao processar CV.");
+      }
+
       const nextDraft = normalizeParsedCvProfile((parsed.parsedProfile || parsed.profileDraft || {}) as Record<string, unknown>);
       setDraft(nextDraft);
-      setParseRunId(parsed.parseRunId || null);
+      setParseRunId(parseRunId);
       setMissingSections(parsed.missingFields || []);
       setParseWarning(parsed.parserError || "");
       const mappedFields = Object.entries(nextDraft)
@@ -595,7 +616,7 @@ export default function CvDocumentosPage() {
             <>
               <p className="mb-3 text-4xl">CV</p>
               <p className="font-semibold text-gray-700">Clique para carregar CV</p>
-              <p className="mt-1 text-sm text-gray-400">PDF/DOC/DOCX • max 8 MB</p>
+              <p className="mt-1 text-sm text-gray-400">PDF/DOC/DOCX • max 5 MB</p>
             </>
           )}
         </div>

@@ -124,7 +124,12 @@ function LoginContent() {
     if (queryResetToken) {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
+      return;
     }
+
+    // If there is no reset token in the URL, ensure reset mode is disabled.
+    setFirstLoginResetToken("");
+    setPasswordResetToken("");
   }, [queryFirstLoginToken, queryResetToken]);
 
   const showFeedback = (next: FormFeedback | null) => {

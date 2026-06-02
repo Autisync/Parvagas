@@ -38,6 +38,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_verification_email': {'queue': 'emails'},
     'app.workers.tasks.send_password_reset_email': {'queue': 'emails'},
     'app.workers.tasks.send_welcome_email': {'queue': 'emails'},
+    'app.workers.tasks.send_application_received_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
 }

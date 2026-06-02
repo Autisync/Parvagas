@@ -1,52 +1,531 @@
 """Candidate API endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.models import User, CandidateProfile, UserRole
-from app.schemas import CandidateProfileResponse, CandidateProfileUpdateRequest
-from app.core.logging import get_logger
+
 from app.api.deps import get_current_user
+from app.core.config import get_settings
+from app.core.logging import get_logger
+from app.db.session import get_db
+from app.models import CVUpload, CandidateProfile, User, UserRole
+from app.services.storage_service import StorageService
+from app.workers.tasks import parse_cv
 
 logger = get_logger(__name__)
+settings = get_settings()
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-
-@router.get("/profile", response_model=CandidateProfileResponse)
-async def get_candidate_profile(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get current candidate profile."""
-    profile = db.query(CandidateProfile).filter(
-        CandidateProfile.user_id == current_user.id
-    ).first()
-    
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-    
-    return profile
+_ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
+_ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+}
 
 
-@router.put("/profile", response_model=CandidateProfileResponse)
-async def update_candidate_profile(
-    request: CandidateProfileUpdateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update candidate profile."""
-    profile = db.query(CandidateProfile).filter(
-        CandidateProfile.user_id == current_user.id
-    ).first()
-    
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-    
-    # Update fields
-    update_data = request.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(profile, key, value)
-    
+def _ensure_candidate_user(current_user: User) -> None:
+    if current_user.role != UserRole.candidate:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate access required")
+
+
+def _ensure_candidate_profile(db: Session, current_user: User) -> CandidateProfile:
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    if profile:
+        return profile
+
+    profile = CandidateProfile(user_id=current_user.id)
+    db.add(profile)
     db.commit()
     db.refresh(profile)
-    
     return profile
+
+
+def _json_load(value: str | None, default: Any) -> Any:
+    if not value:
+        return default
+    try:
+        parsed = json.loads(value)
+        return parsed if parsed is not None else default
+    except Exception:
+        return default
+
+
+def _json_dump(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        return json.dumps(value, ensure_ascii=True)
+    except Exception:
+        return None
+
+
+def _coerce_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        parts = [item.strip() for item in value.split(",")]
+        return [item for item in parts if item]
+    return []
+
+
+def _profile_completion_score(profile_payload: dict[str, Any], has_cv: bool) -> int:
+    checks = [
+        bool(profile_payload.get("fullName") and profile_payload.get("email") and profile_payload.get("phone") and profile_payload.get("location")),
+        bool(profile_payload.get("professionalTitle")),
+        bool(profile_payload.get("summary")),
+        bool(profile_payload.get("skills")),
+        bool(profile_payload.get("languages")),
+        bool(profile_payload.get("experience")),
+        bool(profile_payload.get("education")),
+        bool(has_cv),
+    ]
+    done = len([item for item in checks if item])
+    return int(round((done / len(checks)) * 100))
+
+
+def _latest_cv_document(db: Session, profile: CandidateProfile) -> dict[str, Any] | None:
+    latest = (
+        db.query(CVUpload)
+        .filter(CVUpload.candidate_id == profile.id)
+        .order_by(CVUpload.created_at.desc())
+        .first()
+    )
+    if not latest:
+        return None
+
+    return {
+        "_id": latest.id,
+        "id": latest.id,
+        "fileName": latest.file_name,
+        "createdAt": latest.created_at.isoformat() if latest.created_at else None,
+        "type": "cv",
+    }
+
+
+def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfile) -> dict[str, Any]:
+    skills = _coerce_list(_json_load(profile.skills, []))
+    languages = _coerce_list(_json_load(profile.languages, []))
+    certifications = _coerce_list(_json_load(profile.certifications, []))
+    work_experience = _json_load(profile.work_experience, [])
+    education = _json_load(profile.education, [])
+
+    payload = {
+        "id": profile.id,
+        "userId": profile.user_id,
+        "firstName": profile.first_name or "",
+        "lastName": profile.last_name or "",
+        "fullName": current_user.full_name or "",
+        "email": current_user.email or "",
+        "phone": profile.phone or "",
+        "location": profile.location or "",
+        "postcode": profile.postcode or "",
+        "linkedinUrl": profile.linkedin_url or "",
+        "portfolioUrl": profile.portfolio_url or "",
+        "githubUrl": profile.github_url or "",
+        "professionalSummary": profile.professional_summary or "",
+        "jobTitle": profile.job_title or "",
+        "professionalTitle": profile.job_title or "",
+        "summary": profile.professional_summary or "",
+        "yearsOfExperience": profile.years_of_experience,
+        "skills": skills,
+        "languages": languages,
+        "certifications": certifications,
+        "experience": work_experience if isinstance(work_experience, list) else [],
+        "workExperience": work_experience if isinstance(work_experience, list) else [],
+        "education": education if isinstance(education, list) else [],
+        "hasCompletedOnboarding": bool(profile.has_completed_onboarding),
+        "hasSeenTutorial": bool(profile.has_seen_tutorial),
+    }
+
+    payload["completionScore"] = _profile_completion_score(payload, has_cv=_latest_cv_document(db, profile) is not None)
+    return payload
+
+
+def _apply_profile_payload(profile: CandidateProfile, current_user: User, payload: dict[str, Any]) -> None:
+    full_name = payload.get("fullName") or payload.get("full_name")
+    if str(full_name or "").strip():
+        current_user.full_name = str(full_name or "").strip()
+
+    if "firstName" in payload or "first_name" in payload:
+        profile.first_name = str(payload.get("firstName") or payload.get("first_name") or "").strip() or None
+    if "lastName" in payload or "last_name" in payload:
+        profile.last_name = str(payload.get("lastName") or payload.get("last_name") or "").strip() or None
+    if "phone" in payload:
+        profile.phone = str(payload.get("phone") or "").strip() or None
+    if "location" in payload:
+        profile.location = str(payload.get("location") or "").strip() or None
+    if "postcode" in payload:
+        profile.postcode = str(payload.get("postcode") or "").strip() or None
+    if "linkedinUrl" in payload or "linkedin_url" in payload:
+        profile.linkedin_url = str(payload.get("linkedinUrl") or payload.get("linkedin_url") or "").strip() or None
+    if "portfolioUrl" in payload or "portfolio_url" in payload:
+        profile.portfolio_url = str(payload.get("portfolioUrl") or payload.get("portfolio_url") or "").strip() or None
+    if "githubUrl" in payload or "github_url" in payload:
+        profile.github_url = str(payload.get("githubUrl") or payload.get("github_url") or "").strip() or None
+
+    if "professionalSummary" in payload or "summary" in payload or "professional_summary" in payload:
+        summary = payload.get("professionalSummary") or payload.get("professional_summary") or payload.get("summary")
+        profile.professional_summary = str(summary or "").strip() or None
+
+    if "professionalTitle" in payload or "jobTitle" in payload or "job_title" in payload:
+        title = payload.get("professionalTitle") or payload.get("jobTitle") or payload.get("job_title")
+        profile.job_title = str(title or "").strip() or None
+
+    if "yearsOfExperience" in payload or "years_of_experience" in payload:
+        years_raw = payload.get("yearsOfExperience") if "yearsOfExperience" in payload else payload.get("years_of_experience")
+        try:
+            profile.years_of_experience = int(years_raw) if years_raw is not None else None
+        except Exception:
+            profile.years_of_experience = None
+
+    if "skills" in payload:
+        profile.skills = _json_dump(_coerce_list(payload.get("skills")))
+    if "languages" in payload:
+        profile.languages = _json_dump(_coerce_list(payload.get("languages")))
+    if "certifications" in payload:
+        profile.certifications = _json_dump(_coerce_list(payload.get("certifications")))
+
+    if "experience" in payload:
+        experience = payload.get("experience")
+        profile.work_experience = _json_dump(experience if isinstance(experience, list) else [])
+    if "workExperience" in payload or "work_experience" in payload:
+        experience = payload.get("workExperience") if "workExperience" in payload else payload.get("work_experience")
+        profile.work_experience = _json_dump(experience if isinstance(experience, list) else [])
+    if "education" in payload:
+        education = payload.get("education")
+        profile.education = _json_dump(education if isinstance(education, list) else [])
+
+
+@router.get("/profile")
+async def get_candidate_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get current candidate profile using frontend-compatible payload shape."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    return {
+        "profile": _profile_to_payload(db, current_user, profile),
+        "latestCvDocument": _latest_cv_document(db, profile),
+    }
+
+
+@router.patch("/profile")
+async def patch_candidate_profile(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Patch candidate profile from onboarding/profile pages."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    _apply_profile_payload(profile, current_user, payload or {})
+    db.commit()
+    db.refresh(profile)
+    db.refresh(current_user)
+
+    return {
+        "profile": _profile_to_payload(db, current_user, profile),
+        "latestCvDocument": _latest_cv_document(db, profile),
+    }
+
+
+@router.put("/profile")
+async def update_candidate_profile(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Backward-compatible full update endpoint."""
+    return await patch_candidate_profile(payload=payload, db=db, current_user=current_user)
+
+
+@router.patch("/onboarding/complete")
+async def complete_onboarding(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark onboarding complete and persist the provided profile draft."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    _apply_profile_payload(profile, current_user, payload or {})
+    profile.has_completed_onboarding = True
+
+    db.commit()
+    db.refresh(profile)
+    db.refresh(current_user)
+
+    return {
+        "message": "Onboarding concluido com sucesso.",
+        "profile": _profile_to_payload(db, current_user, profile),
+    }
+
+
+@router.patch("/tutorial/seen")
+async def mark_candidate_tutorial_seen(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark tutorial as seen for candidate users to avoid onboarding shell 404s."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    profile.has_seen_tutorial = True
+    db.commit()
+    db.refresh(profile)
+
+    return {"message": "Tutorial marcado como visto.", "profile": _profile_to_payload(db, current_user, profile)}
+
+
+@router.post("/profile/summary-draft")
+async def generate_summary_draft(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a simple summary draft from provided profile data."""
+    _ensure_candidate_user(current_user)
+    profile_data = payload.get("profile") if isinstance(payload, dict) else None
+    profile = profile_data if isinstance(profile_data, dict) else {}
+
+    name = str(profile.get("fullName") or current_user.full_name or "Profissional").strip()
+    title = str(profile.get("professionalTitle") or profile.get("jobTitle") or "").strip()
+    location = str(profile.get("location") or "").strip()
+    skills = _coerce_list(profile.get("skills"))
+
+    parts: list[str] = []
+    parts.append(f"{name} e um profissional")
+    if title:
+        parts[-1] += f" focado em {title}"
+    if location:
+        parts[-1] += f", baseado em {location}"
+    parts[-1] += "."
+
+    if skills:
+        top_skills = ", ".join(skills[:5])
+        parts.append(f"Tem experiencia pratica em {top_skills}.")
+
+    parts.append("Procura contribuir com impacto, colaboracao e foco em resultados.")
+    summary = " ".join(parts)
+
+    return {"summary": summary, "draft": summary}
+
+
+@router.post("/cv/parse")
+async def parse_candidate_cv(
+    cv: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload CV and enqueue async parsing job."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    suffix = Path(cv.filename or "").suffix.lower()
+    if suffix not in _ALLOWED_EXTENSIONS and (cv.content_type or "") not in _ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Formato invalido. Use PDF, DOC ou DOCX.",
+        )
+
+    file_content = await cv.read()
+    if not file_content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ficheiro vazio.")
+
+    max_bytes = max(1, settings.CV_PARSE_MAX_UPLOAD_MB) * 1024 * 1024
+    if len(file_content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Ficheiro excede o limite de {settings.CV_PARSE_MAX_UPLOAD_MB}MB.",
+        )
+
+    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    jobs_today = (
+        db.query(CVUpload)
+        .filter(CVUpload.candidate_id == profile.id, CVUpload.created_at >= day_start)
+        .count()
+    )
+    if jobs_today >= settings.CV_PARSE_MAX_JOBS_PER_USER_PER_DAY:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Limite diario de processamentos de CV atingido. Tente novamente amanha.",
+        )
+
+    file_name = f"{uuid.uuid4()}_{cv.filename or 'cv'}"
+    file_path = StorageService.save_file(file_content, file_name)
+
+    cv_upload = CVUpload(
+        candidate_id=profile.id,
+        file_name=cv.filename or file_name,
+        file_path=file_path,
+        file_size=len(file_content),
+        mime_type=cv.content_type or "application/octet-stream",
+        parse_status="pending",
+    )
+    db.add(cv_upload)
+    db.commit()
+    db.refresh(cv_upload)
+
+    parse_cv.delay(str(cv_upload.id))
+
+    return {
+        "success": True,
+        "parseRunId": cv_upload.id,
+        "status": "pending",
+        "message": "CV recebido. Processamento em fila.",
+        "file": {
+            "id": cv_upload.id,
+            "filename": cv_upload.file_name,
+            "mimeType": cv_upload.mime_type,
+            "size": cv_upload.file_size,
+        },
+    }
+
+
+@router.get("/cv/parse/{parse_run_id}")
+async def get_candidate_cv_parse_status(
+    parse_run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get async CV parsing status and parsed draft when available."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    cv_upload = (
+        db.query(CVUpload)
+        .filter(CVUpload.id == parse_run_id, CVUpload.candidate_id == profile.id)
+        .first()
+    )
+    if not cv_upload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execucao de parse nao encontrada.")
+
+    if cv_upload.parse_status in {"pending", "processing"}:
+        return {
+            "success": True,
+            "parseRunId": cv_upload.id,
+            "status": cv_upload.parse_status,
+            "message": "CV ainda em processamento.",
+        }
+
+    if cv_upload.parse_status == "failed":
+        warnings = _json_load(cv_upload.parse_error, [])
+        if not isinstance(warnings, list):
+            warnings = [str(cv_upload.parse_error or "Falha no processamento do CV.")]
+        return {
+            "success": False,
+            "parseRunId": cv_upload.id,
+            "status": "failed",
+            "warnings": warnings,
+            "parserError": str(warnings[0]) if warnings else "Falha no processamento do CV.",
+        }
+
+    normalized_draft = _profile_to_payload(db, current_user, profile)
+    missing_fields = [
+        field
+        for field in ["fullName", "email", "phone", "skills", "experience", "education"]
+        if not normalized_draft.get(field)
+    ]
+
+    return {
+        "success": True,
+        "parseRunId": cv_upload.id,
+        "status": "completed",
+        "parsedProfile": normalized_draft,
+        "profileDraft": normalized_draft,
+        "confidence": {},
+        "warnings": [],
+        "missingFields": missing_fields,
+        "file": {
+            "id": cv_upload.id,
+            "filename": cv_upload.file_name,
+            "mimeType": cv_upload.mime_type,
+            "size": cv_upload.file_size,
+        },
+    }
+
+
+@router.get("/cv/documents")
+async def list_candidate_cv_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List uploaded candidate CV documents."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    docs = (
+        db.query(CVUpload)
+        .filter(CVUpload.candidate_id == profile.id)
+        .order_by(CVUpload.created_at.desc())
+        .all()
+    )
+    return {
+        "documents": [
+            {
+                "_id": item.id,
+                "id": item.id,
+                "fileName": item.file_name,
+                "type": "cv",
+                "createdAt": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in docs
+        ]
+    }
+
+
+@router.delete("/cv/documents/{document_id}")
+async def delete_candidate_cv_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete an uploaded candidate CV document."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    doc = db.query(CVUpload).filter(CVUpload.id == document_id, CVUpload.candidate_id == profile.id).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento nao encontrado.")
+
+    StorageService.delete_file(doc.file_path)
+    db.delete(doc)
+    db.commit()
+    return {"message": "Documento removido."}
+
+
+@router.post("/profile/approve")
+async def approve_profile_from_cv(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply a reviewed parsed profile draft to the candidate profile."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    profile_draft = payload.get("profileDraft") if isinstance(payload, dict) else None
+    if not isinstance(profile_draft, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Perfil para aprovacao invalido.")
+
+    _apply_profile_payload(profile, current_user, profile_draft)
+    db.commit()
+    db.refresh(profile)
+    db.refresh(current_user)
+
+    return {
+        "message": "Perfil atualizado com sucesso.",
+        "profile": _profile_to_payload(db, current_user, profile),
+    }

@@ -250,6 +250,7 @@ export async function apiFetch<T = unknown>(
     const responseBody = body as {
       error?: unknown;
       message?: unknown;
+      detail?: unknown;
     };
     const nestedErrorMessage =
       responseBody.error &&
@@ -260,6 +261,7 @@ export async function apiFetch<T = unknown>(
     const messageFromBody =
       (typeof responseBody.error === "string" ? String(responseBody.error) : "") ||
       nestedErrorMessage ||
+      (typeof responseBody.detail === "string" ? String(responseBody.detail) : "") ||
       (typeof responseBody.message === "string" ? String(responseBody.message) : "");
     const message = normalizeErrorMessage(messageFromBody) || fallbackStatusMessage(res.status);
 

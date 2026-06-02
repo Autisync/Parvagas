@@ -31,9 +31,11 @@ function VerifyEmailContent() {
     }
 
     setLoading(true);
-    void apiFetchRaw(`/auth/verify-email?token=${encodeURIComponent(token)}`, {
-      method: "GET",
+    void apiFetchRaw(`/auth/verify-email`, {
+      method: "POST",
       suppressGlobalErrors: true,
+      body: JSON.stringify({ token }),
+      headers: { "Content-Type": "application/json" },
     })
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as VerifyResponse;

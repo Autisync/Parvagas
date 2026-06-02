@@ -145,6 +145,28 @@ class CVUpload(Base, TimestampMixin):
     candidate_profile = relationship("CandidateProfile", back_populates="cv_uploads")
 
 
+class JobApplication(Base, TimestampMixin):
+    """Job application submitted by authenticated or guest candidates."""
+    __tablename__ = "applications"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(String(36), nullable=False, index=True)
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
+    candidate_user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+
+    applicant_full_name = Column(String(255), nullable=False)
+    applicant_email = Column(String(255), nullable=False, index=True)
+    applicant_phone = Column(String(20), nullable=True)
+    applicant_location = Column(String(255), nullable=True)
+
+    cover_letter = Column(Text, nullable=True)
+    profile_source = Column(String(50), nullable=False, default="manual")
+    status = Column(String(50), nullable=False, default="submitted")
+
+    cv_file_path = Column(String(500), nullable=True)
+    saved_cv_document_id = Column(String(36), nullable=True)
+
+
 class AdCampaign(Base, TimestampMixin):
     """Ad campaign model used by admin and public placements."""
     __tablename__ = "ad_campaigns"

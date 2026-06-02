@@ -18,13 +18,20 @@ class StorageService:
     def save_file(file_content: bytes, file_name: str) -> str:
         """Save file to disk and return path."""
         StorageService.ensure_upload_dir()
-        
-        file_path = Path(settings.UPLOAD_DIR) / file_name
-        
-        with open(file_path, "wb") as f:
-            f.write(file_content)
-        
-        return str(file_path)
+
+        primary_path = Path(settings.UPLOAD_DIR) / file_name
+        try:
+            with open(primary_path, "wb") as f:
+                f.write(file_content)
+            return str(primary_path)
+        except PermissionError:
+            # Some container volumes are mounted as root-only; fallback keeps upload flows working.
+            fallback_dir = Path("/tmp/parvagas-uploads")
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+            fallback_path = fallback_dir / file_name
+            with open(fallback_path, "wb") as f:
+                f.write(file_content)
+            return str(fallback_path)
     
     @staticmethod
     def delete_file(file_path: str) -> bool:

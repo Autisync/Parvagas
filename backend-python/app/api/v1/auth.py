@@ -14,11 +14,27 @@ from app.workers.tasks import (
     send_verification_email, send_password_reset_email, send_welcome_email
 )
 from app.core.config import get_settings
+from app.core.errors import ConflictError, ParavagasException, ValidationError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _friendly_auth_detail(detail: str) -> str:
+    message = str(detail or "").strip()
+    translations = {
+        "Email already registered": "Este email ja esta registado. Inicie sessao ou recupere a password.",
+        "Company identifier already registered": "Este NIF/identificador ja esta registado.",
+        "Company name is required": "O nome da empresa e obrigatorio.",
+        "Company identifier (NIF) must be 6-20 alphanumeric characters": "O NIF/identificador deve ter 6 a 20 caracteres alfanumericos.",
+        "Invalid password reset token": "Token de recuperacao invalido.",
+        "Password reset token expired": "O token de recuperacao expirou. Solicite um novo email.",
+        "Token already used": "Este token ja foi utilizado. Solicite um novo email.",
+        "Passwords do not match": "As passwords nao coincidem.",
+    }
+    return translations.get(message, message or "Nao foi possivel concluir a operacao.")
 
 
 @router.post("/register", response_model=MessageResponse)
@@ -34,7 +50,10 @@ async def register(
             email=request.email,
             password=request.password,
             full_name=request.full_name,
-            role=request.role
+            role=request.role,
+            company_name=request.company_name,
+            company_legal_name=request.company_legal_name,
+            nif=request.nif,
         )
         
         # Create verification token
@@ -43,14 +62,14 @@ async def register(
         # Send verification email async
         send_verification_email.delay(str(user.id), raw_token)
         
-        # Send welcome email async
-        send_welcome_email.delay(str(user.id))
-        
         return {"message": "Registration successful. Please check your email to verify your account."}
     
+    except (ConflictError, ValidationError, ParavagasException) as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=e.status_code, detail=_friendly_auth_detail(e.detail))
     except Exception as e:
         logger.error(f"Registration error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nao foi possivel criar a conta.")
 
 
 @router.post("/login", response_model=AuthTokenResponse)
@@ -88,6 +107,9 @@ async def verify_email(
     """Verify user email with token."""
     try:
         user = AuthService.verify_email(db, request.token)
+
+        # Send welcome email only after email is successfully verified.
+        send_welcome_email.delay(str(user.id))
         return {"message": "Email verified successfully. You can now log in."}
     
     except Exception as e:
@@ -166,6 +188,12 @@ async def reset_password(
         user = AuthService.reset_password(db, request.token, request.new_password)
         return {"message": "Password reset successfully. You can now log in with your new password."}
     
+    except (ValidationError, ParavagasException) as e:
+        logger.error(f"Reset password error: {str(e)}")
+        raise HTTPException(status_code=e.status_code, detail=_friendly_auth_detail(e.detail))
+    except HTTPException as e:
+        logger.error(f"Reset password error: {str(e)}")
+        raise HTTPException(status_code=e.status_code, detail=_friendly_auth_detail(str(e.detail)))
     except Exception as e:
         logger.error(f"Reset password error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nao foi possivel redefinir a password.")

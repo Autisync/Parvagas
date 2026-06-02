@@ -1,7 +1,9 @@
 """Authentication service."""
+import re
+
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.models import User, UserRole, EmailVerificationToken, PasswordResetToken
+from app.models import Company, User, UserRole, EmailVerificationToken, PasswordResetToken
 from app.core.security import (
     hash_password, verify_password, create_access_token, 
     create_verification_token, hash_token
@@ -21,24 +23,55 @@ class AuthService:
         email: str,
         password: str,
         full_name: str,
-        role: str = "candidate"
+        role: str = "candidate",
+        company_name: str | None = None,
+        company_legal_name: str | None = None,
+        nif: str | None = None,
     ) -> User:
         """Register a new user."""
         # Check if user already exists
         existing_user = db.query(User).filter(User.email == email.lower()).first()
         if existing_user:
             raise ConflictError("Email already registered")
+
+        normalized_role = UserRole(role)
+        if normalized_role == UserRole.company:
+            if not (company_name or "").strip():
+                raise ValidationError("Company name is required")
+
+            normalized_nif = re.sub(r"[^A-Za-z0-9]", "", (nif or "").strip()).upper()
+            if not normalized_nif or not re.fullmatch(r"[A-Z0-9]{6,20}", normalized_nif):
+                raise ValidationError("Company identifier (NIF) must be 6-20 alphanumeric characters")
+
+            existing_company = db.query(Company).filter(Company.nif == normalized_nif).first()
+            if existing_company:
+                raise ConflictError("Company identifier already registered")
+        else:
+            normalized_nif = ""
         
         # Create user
         user = User(
             email=email.lower(),
             full_name=full_name,
             password_hash=hash_password(password),
-            role=UserRole(role),
+            role=normalized_role,
             email_verified=False
         )
         
         db.add(user)
+        db.flush()
+
+        if normalized_role == UserRole.company:
+            company = Company(
+                owner_user_id=user.id,
+                name=(company_name or "").strip(),
+                legal_name=(company_legal_name or "").strip() or None,
+                nif=normalized_nif,
+                email=user.email,
+                status="pending_verification",
+            )
+            db.add(company)
+
         db.commit()
         db.refresh(user)
         

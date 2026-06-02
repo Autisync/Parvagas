@@ -229,7 +229,7 @@ function VagasDisponiveisContent() {
               const mode = job.workMode || job.mode || "";
               const name = companyName(job);
               const logo = companyLogo(job);
-              return (
+              return [
                 <article key={job._id} className="app-card p-5 hover:shadow-md transition-shadow">
                   <div className="flex items-start gap-3">
                     {logo ? (

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import User, Company, UserRole
+from app.api.v1.applications import list_company_applications
 from app.schemas import CompanyProfileResponse, CompanyProfileUpdateRequest
 from app.core.logging import get_logger
 from app.api.deps import get_current_user
@@ -62,6 +63,17 @@ async def update_company_profile(
     db.refresh(company)
     
     return company
+
+
+@router.get("/applications")
+async def get_company_applications(
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List applications associated with jobs owned by the current company account."""
+    return await list_company_applications(page=page, limit=limit, db=db, current_user=current_user)
 
 
 @router.patch("/{company_id}/verification")

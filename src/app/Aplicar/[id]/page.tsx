@@ -13,7 +13,7 @@ type JobDetail = {
   _id: string;
   title: string;
   location?: string;
-  companyId?: { name?: string } | string;
+  companyId?: { _id?: string; id?: string; name?: string } | string;
 };
 
 type ProfileResponse = {
@@ -121,6 +121,11 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     return job.companyId.name || "Empresa";
   }, [job?.companyId]);
 
+  const companyId = useMemo(() => {
+    if (!job?.companyId) return "";
+    if (typeof job.companyId === "string") return job.companyId;
+    return String(job.companyId._id || job.companyId.id || "");
+  }, [job?.companyId]);
   const submitCandidateApplication = async () => {
     if (!token) {
       notify("Sessão expirada. Inicie sessão novamente.", "error");
@@ -134,6 +139,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     try {
       const formData = new FormData();
       formData.append("jobId", job._id);
+      if (companyId) formData.append("companyId", companyId);
       formData.append("useLatestCv", candidateForm.useLatestCv ? "true" : "false");
       formData.append("coverLetter", candidateForm.coverLetter);
       if (candidateForm.useLatestCv && candidateForm.savedCvDocumentId) {
@@ -170,6 +176,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
 
     try {
       const formData = new FormData();
+      if (companyId) formData.append("companyId", companyId);
       formData.append("fullName", guestForm.fullName);
       formData.append("email", guestForm.email);
       formData.append("phone", guestForm.phone);

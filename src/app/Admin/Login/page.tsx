@@ -101,7 +101,12 @@ function AdminLoginContent() {
       setPasswordResetToken(queryResetToken);
       setFirstLoginResetToken("");
       setFormFeedback({ variant: "info", message: "Defina uma nova password para concluir a recuperação de conta." });
+      return;
     }
+
+    // If there is no reset token in the URL, ensure reset mode is disabled.
+    setFirstLoginResetToken("");
+    setPasswordResetToken("");
   }, [queryFirstLoginToken, queryResetToken]);
 
   const showFeedback = (next: FormFeedback | null) => {

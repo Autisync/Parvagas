@@ -75,6 +75,9 @@ type WizardState = {
   summary: string;
 };
 
+const PARSE_POLL_INTERVAL_MS = 2500;
+const PARSE_POLL_TIMEOUT_MS = 120000;
+
 const INITIAL_STATE: WizardState = {
   cvParsed: false,
   parseRunId: null,
@@ -363,9 +366,11 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
       form.append("cv", file);
       const result = await authFetch<{
         parseRunId?: string;
+        status?: string;
         parsedProfile?: Record<string, unknown>;
         confidence?: Record<string, number>;
         profileDraft?: Record<string, unknown>;
+        warnings?: string[];
         parserError?: string;
       }>("/candidates/cv/parse", token, {
         method: "POST",
@@ -373,11 +378,39 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
         // Don't set Content-Type — browser will set multipart boundary
         headers: {} as HeadersInit,
       });
-      const p = result.parsedProfile || result.profileDraft;
+
+      const parseRunId = result.parseRunId;
+      if (!parseRunId) {
+        throw new Error("Nao foi possivel iniciar o processamento do CV.");
+      }
+
+      let latest = result;
+      const startedAt = Date.now();
+      while (!["completed", "failed"].includes(String(latest.status || "").toLowerCase())) {
+        if (Date.now() - startedAt > PARSE_POLL_TIMEOUT_MS) {
+          throw new Error("O CV esta a ser processado em segundo plano. Recarregue em instantes para ver os dados.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, PARSE_POLL_INTERVAL_MS));
+        latest = await authFetch<{
+          parseRunId?: string;
+          status?: string;
+          parsedProfile?: Record<string, unknown>;
+          confidence?: Record<string, number>;
+          profileDraft?: Record<string, unknown>;
+          warnings?: string[];
+          parserError?: string;
+        }>(`/candidates/cv/parse/${parseRunId}`, token, { suppressGlobalErrors: true });
+      }
+
+      if (String(latest.status || "").toLowerCase() === "failed") {
+        throw new Error(latest.parserError || "Erro ao processar CV.");
+      }
+
+      const p = latest.parsedProfile || latest.profileDraft;
       if (p) {
         if (process.env.NODE_ENV !== "production") {
           console.info("[cv-parse] frontend received parsed fields", {
-            parseRunId: result.parseRunId,
+            parseRunId,
             fieldCount: Object.keys(p).length,
           });
         }
@@ -387,7 +420,7 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
           ...prev,
           ...nextDraft.profile,
           cvParsed: true,
-          parseRunId: result.parseRunId || null,
+          parseRunId,
           firstName: String(nextDraft.profile.firstName || prev.firstName || ""),
           lastName: String(nextDraft.profile.lastName || prev.lastName || ""),
           fullName: String(nextDraft.profile.fullName || prev.fullName || ""),
@@ -670,7 +703,7 @@ function StepCv({
           </div>
           <div>
             <p className="text-sm font-bold text-slate-900">{uploading ? "A processar…" : "Carregar o meu CV"}</p>
-            <p className="mt-0.5 text-xs text-slate-500">PDF ou DOCX, máx. 8 MB</p>
+            <p className="mt-0.5 text-xs text-slate-500">PDF ou DOCX, máx. 5 MB</p>
           </div>
         </button>
 
