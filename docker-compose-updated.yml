@@ -25,6 +25,24 @@ services:
       retries: 5
       start_period: 10s
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data
+    ports:
+      - "9000:9000"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   # Python Backend (New)
   backend-python:
     build:
@@ -41,10 +59,30 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - FRONTEND_URL=http://localhost:3000
       - BACKEND_URL=http://localhost:8000
+      - USE_MINIO_STORAGE=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_SECURE=false
+      - MINIO_BUCKET=parvagas
+      - MINIO_REGION=us-east-1
+      - RESUME_AI_ENABLED=false
+      - RESUME_AI_PROVIDER=openai
+      - RESUME_AI_BASE_URL=https://api.openai.com/v1
+      - RESUME_AI_API_KEY=
+      - RESUME_AI_MODEL=gpt-4.1-mini
+      - RESUME_AI_TIMEOUT_SECONDS=30
+      - RESUME_AI_ORGANIZATION=
+      - RESUME_AI_PROJECT=
+      - RESUME_AI_APP_NAME=Parvagas Resume AI
+      - RESUME_AI_SITE_URL=http://localhost:3000
+      - RESUME_AI_AZURE_API_VERSION=2024-10-21
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -74,10 +112,30 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - FRONTEND_URL=http://localhost:3000
       - BACKEND_URL=http://localhost:8000
+      - USE_MINIO_STORAGE=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_SECURE=false
+      - MINIO_BUCKET=parvagas
+      - MINIO_REGION=us-east-1
+      - RESUME_AI_ENABLED=false
+      - RESUME_AI_PROVIDER=openai
+      - RESUME_AI_BASE_URL=https://api.openai.com/v1
+      - RESUME_AI_API_KEY=
+      - RESUME_AI_MODEL=gpt-4.1-mini
+      - RESUME_AI_TIMEOUT_SECONDS=30
+      - RESUME_AI_ORGANIZATION=
+      - RESUME_AI_PROJECT=
+      - RESUME_AI_APP_NAME=Parvagas Resume AI
+      - RESUME_AI_SITE_URL=http://localhost:3000
+      - RESUME_AI_AZURE_API_VERSION=2024-10-21
     depends_on:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     volumes:
       - python_uploads:/app/uploads
@@ -98,10 +156,30 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - FRONTEND_URL=http://localhost:3000
       - BACKEND_URL=http://localhost:8000
+      - USE_MINIO_STORAGE=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_SECURE=false
+      - MINIO_BUCKET=parvagas
+      - MINIO_REGION=us-east-1
+      - RESUME_AI_ENABLED=false
+      - RESUME_AI_PROVIDER=openai
+      - RESUME_AI_BASE_URL=https://api.openai.com/v1
+      - RESUME_AI_API_KEY=
+      - RESUME_AI_MODEL=gpt-4.1-mini
+      - RESUME_AI_TIMEOUT_SECONDS=30
+      - RESUME_AI_ORGANIZATION=
+      - RESUME_AI_PROJECT=
+      - RESUME_AI_APP_NAME=Parvagas Resume AI
+      - RESUME_AI_SITE_URL=http://localhost:3000
+      - RESUME_AI_AZURE_API_VERSION=2024-10-21
     depends_on:
       redis:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     profiles:
       - python-backend-beat
@@ -135,4 +213,5 @@ volumes:
   postgres_data:
   redis_data:
   python_uploads:
+  minio_data:
   python_logs:

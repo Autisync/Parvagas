@@ -86,6 +86,16 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
     S3_REGION: str = os.getenv("S3_REGION", "us-east-1")
 
+    # MinIO / object storage
+    USE_MINIO_STORAGE: bool = os.getenv("USE_MINIO_STORAGE", "false").lower() == "true"
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+    MINIO_SECURE: bool = os.getenv("MINIO_SECURE", "false").lower() == "true"
+    MINIO_BUCKET: str = os.getenv("MINIO_BUCKET", "parvagas")
+    MINIO_REGION: str = os.getenv("MINIO_REGION", "us-east-1")
+    MINIO_URL: str = os.getenv("MINIO_URL", "")
+
     # Optional AI-assisted CV parsing
     CV_PARSER_AI_ENABLED: bool = os.getenv("CV_PARSER_AI_ENABLED", "false").lower() == "true"
     CV_PARSER_AI_PROVIDER: str = os.getenv("CV_PARSER_AI_PROVIDER", "openai")
@@ -126,6 +136,19 @@ class Settings(BaseSettings):
     # yet, so this ships as a free feature. Flip to true once a real plan
     # exists to start enforcing app.services.candidate_billing_service.
     CANDIDATE_PREMIUM_ENABLED: bool = os.getenv("CANDIDATE_PREMIUM_ENABLED", "false").lower() == "true"
+
+    # Optional AI-assisted resume scoring and rewrite
+    RESUME_AI_ENABLED: bool = os.getenv("RESUME_AI_ENABLED", "false").lower() == "true"
+    RESUME_AI_PROVIDER: str = os.getenv("RESUME_AI_PROVIDER", "openai")
+    RESUME_AI_BASE_URL: str = os.getenv("RESUME_AI_BASE_URL", "https://api.openai.com/v1")
+    RESUME_AI_API_KEY: str = os.getenv("RESUME_AI_API_KEY", "")
+    RESUME_AI_MODEL: str = os.getenv("RESUME_AI_MODEL", "gpt-4.1-mini")
+    RESUME_AI_TIMEOUT_SECONDS: int = int(os.getenv("RESUME_AI_TIMEOUT_SECONDS", 30))
+    RESUME_AI_ORGANIZATION: str = os.getenv("RESUME_AI_ORGANIZATION", "")
+    RESUME_AI_PROJECT: str = os.getenv("RESUME_AI_PROJECT", "")
+    RESUME_AI_APP_NAME: str = os.getenv("RESUME_AI_APP_NAME", "Parvagas Resume AI")
+    RESUME_AI_SITE_URL: str = os.getenv("RESUME_AI_SITE_URL", FRONTEND_URL)
+    RESUME_AI_AZURE_API_VERSION: str = os.getenv("RESUME_AI_AZURE_API_VERSION", "2024-10-21")
 
     # CV parsing queue and guardrails
     CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))

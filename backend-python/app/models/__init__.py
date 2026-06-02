@@ -12,7 +12,9 @@ class UserRole(str, enum.Enum):
     """User role enumeration."""
     candidate = "candidate"
     company = "company"
+    recruiter = "recruiter"
     admin = "admin"
+    super_admin = "super_admin"
 
 
 class AdminLevel(str, enum.Enum):
@@ -107,6 +109,7 @@ class CandidateProfile(Base, TimestampMixin):
     # Relations
     user = relationship("User", back_populates="candidate_profile")
     cv_uploads = relationship("CVUpload", back_populates="candidate_profile")
+    resumes = relationship("Resume", back_populates="candidate_profile")
 
 
 class Company(Base, TimestampMixin):
@@ -168,6 +171,164 @@ class CVUpload(Base, TimestampMixin):
     
     # Relations
     candidate_profile = relationship("CandidateProfile", back_populates="cv_uploads")
+
+
+class ResumeTemplate(Base, TimestampMixin):
+    """Resume template metadata for candidate resume building."""
+    __tablename__ = "resume_templates"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(255), nullable=False)
+    slug = Column(String(100), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    preview_url = Column(String(500), nullable=True)
+    schema = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    resumes = relationship("Resume", back_populates="template")
+
+
+class Resume(Base, TimestampMixin):
+    """Candidate resume model with version history and template metadata."""
+    __tablename__ = "resumes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    summary = Column(Text, nullable=True)
+    template_id = Column(String(36), ForeignKey("resume_templates.id"), nullable=True)
+    data = Column(Text, nullable=True)
+    is_draft = Column(Boolean, nullable=False, default=True)
+    is_published = Column(Boolean, nullable=False, default=False)
+    share_slug = Column(String(100), nullable=True, unique=True)
+
+    candidate_profile = relationship("CandidateProfile", back_populates="resumes")
+    template = relationship("ResumeTemplate", back_populates="resumes")
+    versions = relationship("ResumeVersion", back_populates="resume", cascade="all, delete-orphan")
+
+
+class ResumeVersion(Base, TimestampMixin):
+    """Stored resume version history."""
+    __tablename__ = "resume_versions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    resume_id = Column(String(36), ForeignKey("resumes.id"), nullable=False)
+    version_number = Column(Integer, nullable=False, default=1)
+    title = Column(String(255), nullable=False)
+    summary = Column(Text, nullable=True)
+    data = Column(Text, nullable=True)
+    change_summary = Column(Text, nullable=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+
+    resume = relationship("Resume", back_populates="versions")
+    created_by = relationship("User")
+
+
+class CoverLetter(Base, TimestampMixin):
+    """Cover letters generated or created by candidates."""
+    __tablename__ = "cover_letters"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
+    resume_id = Column(String(36), ForeignKey("resumes.id"), nullable=True)
+    job_id = Column(String(36), nullable=True)
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    language = Column(String(50), nullable=True)
+    is_draft = Column(Boolean, nullable=False, default=True)
+    is_published = Column(Boolean, nullable=False, default=False)
+
+    candidate_profile = relationship("CandidateProfile")
+    resume = relationship("Resume")
+
+
+class CandidateScore(Base, TimestampMixin):
+    """Resume scoring and ATS score records."""
+    __tablename__ = "candidate_scores"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
+    resume_id = Column(String(36), ForeignKey("resumes.id"), nullable=True)
+    overall_score = Column(Float, nullable=True)
+    skills_score = Column(Float, nullable=True)
+    experience_score = Column(Float, nullable=True)
+    formatting_score = Column(Float, nullable=True)
+    ats_score = Column(Float, nullable=True)
+    score_metadata = Column(Text, nullable=True)
+
+    candidate_profile = relationship("CandidateProfile")
+    resume = relationship("Resume")
+
+
+class JobMatch(Base, TimestampMixin):
+    """Job matching results for candidate/job recommendation flows."""
+    __tablename__ = "job_matches"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
+    job_id = Column(String(36), nullable=False)
+    match_percentage = Column(Float, nullable=True)
+    skills_gap = Column(Text, nullable=True)
+    recommendation = Column(Text, nullable=True)
+
+    candidate_profile = relationship("CandidateProfile")
+
+
+class ATSStage(Base, TimestampMixin):
+    """ATS pipeline stage definitions."""
+    __tablename__ = "ats_stages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    position = Column(Integer, nullable=False, default=0)
+    color = Column(String(50), nullable=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+
+    company = relationship("Company")
+    pipeline_items = relationship("ATSPipelineItem", back_populates="stage", cascade="all, delete-orphan")
+
+
+class ATSPipelineItem(Base, TimestampMixin):
+    """ATS pipeline item linking candidates/applications to stages."""
+    __tablename__ = "ats_pipeline_items"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    stage_id = Column(String(36), ForeignKey("ats_stages.id"), nullable=False)
+    application_id = Column(String(36), ForeignKey("applications.id"), nullable=True)
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=True)
+    status = Column(String(50), nullable=False, default="active")
+
+    stage = relationship("ATSStage", back_populates="pipeline_items")
+    candidate_profile = relationship("CandidateProfile")
+
+
+class RefreshToken(Base, TimestampMixin):
+    """Refresh token records for JWT token refresh flows."""
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(255), nullable=False, unique=True)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User")
+
+
+class AuditLog(Base, TimestampMixin):
+    """Audit trail records for RBAC and admin actions."""
+    __tablename__ = "audit_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    action = Column(String(150), nullable=False)
+    entity_type = Column(String(100), nullable=True)
+    entity_id = Column(String(36), nullable=True)
+    details = Column(Text, nullable=True)
+
+    user = relationship("User")
 
 
 class JobApplication(Base, TimestampMixin):

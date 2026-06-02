@@ -1,6 +1,6 @@
 """Pydantic schemas for request/response validation."""
 from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -187,6 +187,176 @@ class CVUploadResponse(BaseModel):
     parsed_profile: Optional[ParsedCVProfile] = None
     confidence: dict = {}
     warnings: List[str] = []
+
+
+class ResumeTemplateResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    description: Optional[str] = None
+    preview_url: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ResumeResponse(BaseModel):
+    id: str
+    candidate_profile_id: str
+    title: str
+    summary: Optional[str] = None
+    template_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    is_draft: bool
+    is_published: bool
+    share_slug: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ResumeCreateRequest(BaseModel):
+    title: str
+    summary: Optional[str] = None
+    template_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    is_draft: Optional[bool] = True
+
+
+class ResumeUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    template_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    is_draft: Optional[bool] = None
+    is_published: Optional[bool] = None
+
+
+class ResumeScoreResponse(BaseModel):
+    overall_score: Optional[float] = None
+    skills_score: Optional[float] = None
+    experience_score: Optional[float] = None
+    formatting_score: Optional[float] = None
+    ats_score: Optional[float] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ResumeRewriteResponse(BaseModel):
+    id: str
+    candidate_profile_id: str
+    title: str
+    summary: Optional[str] = None
+    template_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    is_draft: bool
+    is_published: bool
+    share_slug: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    notes: Optional[str] = None
+    source: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ResumeRewriteRequest(BaseModel):
+    resume_id: str
+    tone: Optional[str] = Field(default="professional")
+    instructions: Optional[str] = None
+
+
+class CoverLetterCreateRequest(BaseModel):
+    resume_id: Optional[str] = None
+    job_id: Optional[str] = None
+    title: str
+    content: str
+    language: Optional[str] = None
+    is_draft: Optional[bool] = True
+
+
+class CoverLetterResponse(BaseModel):
+    id: str
+    candidate_profile_id: str
+    resume_id: Optional[str] = None
+    job_id: Optional[str] = None
+    title: str
+    content: str
+    language: Optional[str] = None
+    is_draft: bool
+    is_published: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class JobMatchResponse(BaseModel):
+    id: str
+    candidate_profile_id: str
+    job_id: str
+    match_percentage: Optional[float] = None
+    skills_gap: Optional[str] = None
+    recommendation: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ATSStageCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    sort_order: Optional[int] = 0
+
+
+class ATSStageUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class ATSStageResponse(BaseModel):
+    id: str
+    company_id: str
+    name: str
+    description: Optional[str] = None
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ATSPipelineItemCreateRequest(BaseModel):
+    candidate_profile_id: str
+    job_match_id: Optional[str] = None
+    stage_id: str
+    notes: Optional[str] = None
+
+
+class ATSPipelineItemMoveRequest(BaseModel):
+    stage_id: str
+
+
+class ATSPipelineItemResponse(BaseModel):
+    id: str
+    company_id: str
+    candidate_profile_id: str
+    job_match_id: Optional[str] = None
+    stage_id: str
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # Generic Responses

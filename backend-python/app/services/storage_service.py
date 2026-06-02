@@ -4,20 +4,24 @@ import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Optional
+
 from app.core.config import get_settings
+from app.core.logging import get_logger
+from app.services.minio_service import MinIOService
 
 settings = get_settings()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class StorageService:
     """Storage service for managing file uploads."""
-    
+
     @staticmethod
     def ensure_upload_dir() -> None:
         """Ensure upload directory exists."""
         Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
-    
+
     @staticmethod
     def scan_clean(file_content: bytes) -> bool:
         """Antivirus hook. No-op (clean) unless ANTIVIRUS_ENABLED + a scanner is
@@ -191,14 +195,15 @@ class StorageService:
         try:
             with open(primary_path, "wb") as f:
                 f.write(file_content)
+            logger.info(f"Saved file to local storage: {primary_path}")
             return str(primary_path)
         except PermissionError:
-            # Some container volumes are mounted as root-only; fallback keeps upload flows working.
             fallback_dir = Path("/tmp/parvagas-uploads")
             fallback_dir.mkdir(parents=True, exist_ok=True)
             fallback_path = fallback_dir / file_name
             with open(fallback_path, "wb") as f:
                 f.write(file_content)
+            logger.warning(f"Saved file to fallback local storage: {fallback_path}")
             return str(fallback_path)
 
     @staticmethod
@@ -227,6 +232,7 @@ class StorageService:
                 return True
             return False
         except Exception:
+            logger.exception("Failed to delete file from local storage")
             return False
 
     @staticmethod

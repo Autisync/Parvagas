@@ -287,6 +287,60 @@ docker compose logs -f celery-worker
 Invoke-RestMethod -Uri 'http://localhost:8000/health' -Method Get
 ```
 
+### Resume AI local test
+
+1. Enable AI locally in `backend-python/.env`:
+
+```bash
+RESUME_AI_ENABLED=true
+RESUME_AI_PROVIDER=openai
+RESUME_AI_BASE_URL=https://api.openai.com/v1
+RESUME_AI_API_KEY=your-openai-key
+RESUME_AI_MODEL=gpt-4.1-mini
+RESUME_AI_TIMEOUT_SECONDS=30
+RESUME_AI_SITE_URL=http://localhost:3000
+RESUME_AI_APP_NAME="Parvagas Resume AI"
+```
+
+2. Start services:
+
+```bash
+docker compose up -d --build postgres redis minio backend-python celery-worker
+```
+
+3. Apply migrations:
+
+```bash
+docker compose exec backend-python alembic upgrade head
+```
+
+4. Test score endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/resumes/score \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"resume_id":"<resume_id>"}'
+```
+
+5. Test rewrite endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/resumes/rewrite \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"resume_id":"<resume_id>","tone":"professional","instructions":"Polish the experience section and improve impact language."}'
+```
+
+6. Test export stub endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/resumes/export \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"resume_id":"<resume_id>"}'
+```
+
 ### Providers
 
 **`skima`** (recomendado para desenvolvimento — tier gratuito disponível)
