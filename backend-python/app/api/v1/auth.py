@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.core.observability import limiter
-from app.core.security import hash_token
+from app.core.security import hash_token, hash_password
 from app.services.notification_service import send_sms
-from app.models import User, UserRole, OtpCode
+from app.models import User, UserRole, OtpCode, CompanyInvite, CompanyMember
 from app.schemas import (
     UserRegisterRequest, UserLoginRequest, AuthTokenResponse,
     UserResponse, EmailVerificationRequest, ResendVerificationRequest,
@@ -214,6 +214,63 @@ async def reset_password(
     except Exception as e:
         logger.error(f"Reset password error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nao foi possivel redefinir a password.")
+
+
+@router.post("/company-invite/accept", response_model=AuthTokenResponse)
+async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
+    """Accept a company team invite: create/attach the user as a company member."""
+    token_raw = str(payload.get("inviteToken", "")).strip()
+    if not token_raw:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Convite em falta")
+    invite = (
+        db.query(CompanyInvite)
+        .filter(CompanyInvite.token_hash == hash_token(token_raw), CompanyInvite.status == "pending")
+        .first()
+    )
+    if not invite or invite.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Convite inválido ou expirado")
+
+    user = db.query(User).filter(User.email == invite.email.lower()).first()
+    if not user:
+        password = str(payload.get("password", "")).strip()
+        if len(password) < 8:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password deve ter pelo menos 8 caracteres")
+        user = User(
+            email=invite.email.lower(),
+            full_name=str(payload.get("fullName", "")).strip() or invite.email.split("@")[0],
+            password_hash=hash_password(password),
+            role=UserRole.company, email_verified=True, email_verified_at=datetime.utcnow(),
+        )
+        db.add(user)
+        db.flush()
+
+    existing = (
+        db.query(CompanyMember)
+        .filter(CompanyMember.company_id == invite.company_id, CompanyMember.user_id == user.id)
+        .first()
+    )
+    if not existing:
+        db.add(CompanyMember(company_id=invite.company_id, user_id=user.id, role=invite.role))
+    invite.status = "accepted"
+    db.commit()
+    db.refresh(user)
+    token = AuthService.create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+
+
+@router.post("/first-login-reset", response_model=AuthTokenResponse)
+async def first_login_reset(payload: dict, db: Session = Depends(get_db)):
+    """Force-reset a password on first login using a reset token, then sign in."""
+    reset_token = str(payload.get("resetToken", "")).strip()
+    new_password = str(payload.get("newPassword", "")).strip()
+    if not reset_token or len(new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token ou password inválidos")
+    try:
+        user = AuthService.reset_password(db, reset_token, new_password)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_friendly_auth_detail(str(getattr(e, "detail", e))))
+    token = AuthService.create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
 
 
 @router.get("/me", response_model=UserResponse)
