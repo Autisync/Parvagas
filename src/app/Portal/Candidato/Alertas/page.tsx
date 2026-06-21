@@ -171,27 +171,27 @@ export default function AlertasPage() {
             <input className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-400" value={form.keyword} onChange={(e) => setForm((p) => ({ ...p, keyword: e.target.value }))} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-700">Category</span>
+              <span className="mb-1 block text-gray-700">Categoria</span>
               <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-700">Location</span>
+              <span className="mb-1 block text-gray-700">Localização</span>
               <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={form.location} onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-700">Job type</span>
+              <span className="mb-1 block text-gray-700">Tipo de trabalho</span>
               <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={form.jobType} onChange={(e) => setForm((p) => ({ ...p, jobType: e.target.value }))} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-700">Salary range</span>
+              <span className="mb-1 block text-gray-700">Faixa salarial</span>
               <input className="w-full rounded-xl border border-gray-200 px-3 py-2" value={form.salaryRange} onChange={(e) => setForm((p) => ({ ...p, salaryRange: e.target.value }))} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-700">Frequency</span>
+              <span className="mb-1 block text-gray-700">Frequência</span>
               <select className="w-full rounded-xl border border-gray-200 px-3 py-2" value={form.frequency} onChange={(e) => setForm((p) => ({ ...p, frequency: e.target.value as AlertForm["frequency"] }))}>
-                <option value="immediate">Immediate</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
+                <option value="immediate">Imediato</option>
+                <option value="daily">Diário</option>
+                <option value="weekly">Semanal</option>
               </select>
             </label>
           </div>
