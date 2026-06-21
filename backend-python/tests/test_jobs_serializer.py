@@ -9,7 +9,7 @@ from app.api.v1.jobs import serialize_job, _json_list, PUBLIC_JOB_STATUSES
 def _fake_company():
     return SimpleNamespace(
         id="co-1", name="Acme Lda", website="https://acme.pt",
-        description="We build", logo_url="/logo.png",
+        description="We build", logo_url="/logo.png", status="active",
     )
 
 

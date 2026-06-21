@@ -38,7 +38,15 @@ def _json_list_safe(value):
     except Exception:
         return []
 
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 _ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx"}
+
+
+def _check_bytes(data: bytes) -> None:
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ficheiro demasiado grande (máx. 5 MB)")
+    if not StorageService.scan_clean(data):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ficheiro rejeitado pela verificação de segurança")
 _ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -109,6 +117,7 @@ async def submit_candidate_application(
     if customCv is not None:
         _validate_upload(customCv)
         file_bytes = await customCv.read()
+        _check_bytes(file_bytes)
         file_ext = Path(customCv.filename or "").suffix.lower() or ".pdf"
         file_name = f"application-{uuid.uuid4()}{file_ext}"
         cv_file_path = StorageService.save_file(file_bytes, file_name)
@@ -159,6 +168,7 @@ async def submit_quick_apply(
 
     _validate_upload(cv)
     file_bytes = await cv.read()
+    _check_bytes(file_bytes)
     file_ext = Path(cv.filename or "").suffix.lower() or ".pdf"
     file_name = f"quick-apply-{uuid.uuid4()}{file_ext}"
     cv_file_path = StorageService.save_file(file_bytes, file_name)

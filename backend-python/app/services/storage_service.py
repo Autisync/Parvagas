@@ -15,6 +15,26 @@ class StorageService:
         Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     
     @staticmethod
+    def scan_clean(file_content: bytes) -> bool:
+        """Antivirus hook. No-op (clean) unless ANTIVIRUS_ENABLED + a scanner is
+        wired (e.g. ClamAV via clamd). Returns True when the file is safe."""
+        if os.getenv("ANTIVIRUS_ENABLED", "false").lower() != "true":
+            return True
+        try:
+            import clamd  # type: ignore
+
+            cd = clamd.ClamdNetworkSocket(
+                host=os.getenv("CLAMAV_HOST", "clamav"),
+                port=int(os.getenv("CLAMAV_PORT", "3310")),
+            )
+            result = cd.instream(__import__("io").BytesIO(file_content))
+            return result.get("stream", ["", ""])[0] == "OK"
+        except Exception:
+            # Fail-closed only if explicitly required; default fail-open to avoid
+            # blocking uploads when the scanner is misconfigured.
+            return os.getenv("ANTIVIRUS_FAIL_OPEN", "true").lower() == "true"
+
+    @staticmethod
     def save_file(file_content: bytes, file_name: str) -> str:
         """Save file to disk and return path."""
         StorageService.ensure_upload_dir()

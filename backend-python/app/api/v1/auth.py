@@ -52,6 +52,9 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """Register a new user."""
+    from app.core.captcha import verify_captcha, captcha_required
+    if captcha_required() and not verify_captcha(getattr(payload, "captchaToken", None) or (request.headers.get("x-captcha-token"))):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         # Register user
         user = AuthService.register_user(
