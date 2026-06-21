@@ -453,7 +453,7 @@ export default function AdminCompaniesPage() {
                     </div>
                     <p className="mt-1 text-sm text-slate-600">{company.industry || "Setor"} · {company.location || "Local"}</p>
                     <p className="mt-1 text-sm text-slate-500">{company.contactEmail || "Sem email de contacto"}</p>
-                    <p className="mt-2 text-xs text-slate-400">Registada em {toDateLabel(company.createdAt)}</p>
+                    <p className="mt-2 text-xs text-slate-500">Registada em {toDateLabel(company.createdAt)}</p>
                   </div>
                 </div>
                 <button

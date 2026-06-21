@@ -184,7 +184,7 @@ function EmpresaPerfilContent() {
       <input
         type={type}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400"
+        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
         value={(profile[key] as string) ?? ""}
         onChange={e => set(key, e.target.value)}
       />
@@ -346,7 +346,7 @@ function EmpresaPerfilContent() {
                 <label className="mb-1 block text-sm font-medium text-gray-700">Descrição da empresa</label>
                 <textarea
                   rows={5}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-400"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
                   placeholder="Descreva a missão, valores e cultura da empresa…"
                   value={profile.description ?? ""}
                   onChange={(e) => set("description", e.target.value)}

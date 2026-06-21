@@ -72,7 +72,7 @@ export default async function CareerPostPage({ params }: { params: { slug: strin
 
         <h1 className="mt-3 text-3xl sm:text-4xl font-bold leading-tight">{post.title}</h1>
 
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-400">
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
           {post.author && <span>{dict.careerPost.by(post.author)}</span>}
           {post.readTime && <span>⏱ {post.readTime}</span>}
           {post.publishedAt && (

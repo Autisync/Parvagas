@@ -93,7 +93,7 @@ export default function FileUpload({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center px-6 py-8">
-            <PhotoIcon className="h-10 w-10 text-slate-400" />
+            <PhotoIcon className="h-10 w-10 text-slate-500" />
             <p className="mt-2 text-sm font-medium text-slate-700">{loading ? "Enviando..." : "Arraste ou clique"}</p>
           </div>
         )}

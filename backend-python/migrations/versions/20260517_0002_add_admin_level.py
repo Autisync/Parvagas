@@ -33,7 +33,10 @@ def upgrade() -> None:
                 server_default="moderator",
             ),
         )
-        op.alter_column("users", "admin_level", server_default=None)
+        # SQLite cannot ALTER COLUMN ... DROP DEFAULT; the server_default is
+        # harmless there and only matters for Postgres in production.
+        if bind.dialect.name != "sqlite":
+            op.alter_column("users", "admin_level", server_default=None)
         users = sa.Table("users", sa.MetaData(), autoload_with=bind)
 
     super_admin_email = (os.getenv("SUPER_ADMIN_EMAIL") or "admin@autisync.com").strip().lower()

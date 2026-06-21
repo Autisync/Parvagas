@@ -35,7 +35,7 @@ export default function DashboardCard({
   const content = (
     <div className="flex items-start justify-between gap-4">
       <div className="flex items-start gap-4">
-        {icon && <div className="mt-1 text-slate-400">{icon}</div>}
+        {icon && <div className="mt-1 text-slate-500">{icon}</div>}
         <div>
           <h3 className="font-semibold text-slate-900">{title}</h3>
           {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}

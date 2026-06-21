@@ -540,7 +540,7 @@ function LoginContent() {
                       <button
                         type="button"
                         onClick={() => setShowNewPass((v) => !v)}
-                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-500 transition hover:text-slate-600"
                         aria-label={showNewPass ? "Ocultar password" : "Mostrar password"}
                       >
                         {showNewPass ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
@@ -563,7 +563,7 @@ function LoginContent() {
                 {modeReset && newPassword.length > 0 && (
                   <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                     {passwordRequirements.map((req) => (
-                      <li key={req.label} className={`flex items-center gap-1.5 text-xs ${req.met ? "text-emerald-600" : "text-slate-400"}`}>
+                      <li key={req.label} className={`flex items-center gap-1.5 text-xs ${req.met ? "text-emerald-600" : "text-slate-500"}`}>
                         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${req.met ? "bg-emerald-500" : "bg-slate-300"}`} />
                         {req.label}
                       </li>
@@ -595,7 +595,7 @@ function LoginContent() {
                       <button
                         type="button"
                         onClick={() => setShowConfirmPass((v) => !v)}
-                        className="absolute inset-y-0 right-3 flex items-center text-slate-400 transition hover:text-slate-600"
+                        className="absolute inset-y-0 right-3 flex items-center text-slate-500 transition hover:text-slate-600"
                         aria-label={showConfirmPass ? "Ocultar confirmação" : "Mostrar confirmação"}
                       >
                         {showConfirmPass ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}

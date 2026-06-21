@@ -199,7 +199,7 @@ export default async function Home() {
                       <p className="text-sm text-gray-500 mt-1 line-clamp-2">{post.excerpt}</p>
                     )}
                     {post.readTime && (
-                      <p className="text-xs text-gray-400 mt-2">⏱ {post.readTime}</p>
+                      <p className="text-xs text-gray-500 mt-2">⏱ {post.readTime}</p>
                     )}
                   </Link>
                 ))}

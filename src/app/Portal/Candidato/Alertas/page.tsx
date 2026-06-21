@@ -216,7 +216,7 @@ export default function AlertasPage() {
                   <p className="mt-1 text-xs text-gray-500">
                     {[alert.category, alert.location, alert.jobType, alert.salaryRange, alert.frequency].filter(Boolean).join(" • ")}
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-gray-500">
                     Criado em {alert.createdAt ? new Date(alert.createdAt).toLocaleDateString("pt-AO") : "-"}
                   </p>
                 </div>

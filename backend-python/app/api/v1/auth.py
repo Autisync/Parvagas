@@ -1,7 +1,9 @@
 """Authentication API endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.api.deps import get_current_user
+from app.core.observability import limiter
 from app.models import User
 from app.schemas import (
     UserRegisterRequest, UserLoginRequest, AuthTokenResponse,
@@ -38,8 +40,10 @@ def _friendly_auth_detail(detail: str) -> str:
 
 
 @router.post("/register", response_model=MessageResponse)
+@limiter.limit("10/hour")
 async def register(
-    request: UserRegisterRequest,
+    request: Request,
+    payload: UserRegisterRequest,
     db: Session = Depends(get_db)
 ):
     """Register a new user."""
@@ -47,13 +51,13 @@ async def register(
         # Register user
         user = AuthService.register_user(
             db=db,
-            email=request.email,
-            password=request.password,
-            full_name=request.full_name,
-            role=request.role,
-            company_name=request.company_name,
-            company_legal_name=request.company_legal_name,
-            nif=request.nif,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            role=payload.role,
+            company_name=payload.company_name,
+            company_legal_name=payload.company_legal_name,
+            nif=payload.nif,
         )
         
         # Create verification token
@@ -73,17 +77,19 @@ async def register(
 
 
 @router.post("/login", response_model=AuthTokenResponse)
+@limiter.limit("10/minute")
 async def login(
-    request: UserLoginRequest,
+    request: Request,
+    payload: UserLoginRequest,
     db: Session = Depends(get_db)
 ):
     """Authenticate user and return access token."""
     try:
         user = AuthService.authenticate_user(
             db=db,
-            email=request.email,
-            password=request.password,
-            role_hint=request.role_hint
+            email=payload.email,
+            password=payload.password,
+            role_hint=payload.role_hint
         )
         
         token = AuthService.create_access_token(user)
@@ -118,13 +124,15 @@ async def verify_email(
 
 
 @router.post("/resend-verification-email", response_model=MessageResponse)
+@limiter.limit("5/hour")
 async def resend_verification_email(
-    request: ResendVerificationRequest,
+    request: Request,
+    payload: ResendVerificationRequest,
     db: Session = Depends(get_db)
 ):
     """Resend verification email to user."""
     try:
-        user = db.query(User).filter(User.email == request.email.lower()).first()
+        user = db.query(User).filter(User.email == payload.email.lower()).first()
         
         if not user:
             # Don't reveal if email exists
@@ -147,13 +155,15 @@ async def resend_verification_email(
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("5/hour")
 async def forgot_password(
-    request: ForgotPasswordRequest,
+    request: Request,
+    payload: ForgotPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """Initiate password reset process."""
     try:
-        user = db.query(User).filter(User.email == request.email.lower()).first()
+        user = db.query(User).filter(User.email == payload.email.lower()).first()
         
         if not user:
             # Don't reveal if email exists
@@ -173,19 +183,21 @@ async def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit("10/hour")
 async def reset_password(
-    request: ResetPasswordRequest,
+    request: Request,
+    payload: ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """Reset password with token."""
     try:
-        if request.new_password != request.confirm_password:
+        if payload.new_password != payload.confirm_password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Passwords do not match"
             )
-        
-        user = AuthService.reset_password(db, request.token, request.new_password)
+
+        user = AuthService.reset_password(db, payload.token, payload.new_password)
         return {"message": "Password reset successfully. You can now log in with your new password."}
     
     except (ValidationError, ParavagasException) as e:
@@ -197,3 +209,15 @@ async def reset_password(
     except Exception as e:
         logger.error(f"Reset password error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nao foi possivel redefinir a password.")
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Return the authenticated user's profile."""
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout(current_user: User = Depends(get_current_user)):
+    """Stateless logout — the client discards the token."""
+    return {"message": "Logged out successfully."}

@@ -69,7 +69,7 @@ export default function DefinicoesPage() {
     <div className="flex items-center justify-between border-b border-gray-50 py-4">
       <div>
         <p className="text-sm font-medium">{label}</p>
-        <p className="mt-0.5 text-xs text-gray-400">{desc}</p>
+        <p className="mt-0.5 text-xs text-gray-500">{desc}</p>
       </div>
       <button
         type="button"

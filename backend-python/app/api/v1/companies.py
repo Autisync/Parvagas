@@ -1,13 +1,15 @@
 """Company API endpoints."""
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
+import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models import User, Company, UserRole
+from app.models import User, Company, UserRole, Job
 from app.api.v1.applications import list_company_applications
+from app.api.v1.jobs import serialize_job
 from app.schemas import CompanyProfileResponse, CompanyProfileUpdateRequest
 from app.core.logging import get_logger
 from app.api.deps import get_current_user
@@ -22,6 +24,55 @@ def _ensure_admin(current_user: User) -> User:
     if current_user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
+
+
+def _require_company(db: Session, current_user: User) -> Company:
+    """Resolve the company owned by the current user, or 404."""
+    company = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    return company
+
+
+def _to_text_list(value: Any) -> Optional[str]:
+    """Normalize incoming list/multiline-string job fields to a JSON list string."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value if str(v).strip()]
+    else:
+        items = [line.strip() for line in str(value).splitlines() if line.strip()]
+    return json.dumps(items, ensure_ascii=True) if items else None
+
+
+def _apply_job_payload(job: Job, payload: dict[str, Any]) -> None:
+    """Apply create/update payload (frontend camelCase) onto a Job row."""
+    simple = {
+        "title": "title",
+        "description": "description",
+        "category": "category",
+        "location": "location",
+        "workMode": "work_mode",
+        "contractType": "contract_type",
+        "jobType": "job_type",
+        "salaryRange": "salary_range",
+        "experienceLevel": "experience_level",
+        "requiredExperienceYears": "required_experience_years",
+        "visibility": "visibility",
+    }
+    for key, attr in simple.items():
+        if key in payload and payload[key] is not None:
+            setattr(job, attr, payload[key])
+
+    for key, attr in (
+        ("responsibilities", "responsibilities"),
+        ("requirements", "requirements"),
+        ("requiredSkills", "required_skills"),
+        ("preferredSkills", "preferred_skills"),
+        ("languages", "languages"),
+    ):
+        if key in payload:
+            setattr(job, attr, _to_text_list(payload[key]))
 
 
 @router.get("/profile", response_model=CompanyProfileResponse)
@@ -261,3 +312,89 @@ async def send_verification_email(
         "subject": str(payload.get("subject", "")),
         "sentAt": datetime.utcnow().isoformat(),
     }
+
+
+# ── Company job postings ────────────────────────────────────────────────────
+
+@router.get("/jobs")
+async def list_company_jobs(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List jobs posted by the current user's company."""
+    company = _require_company(db, current_user)
+    query = db.query(Job).filter(Job.company_id == company.id)
+    if status_filter and status_filter != "all":
+        query = query.filter(Job.status == status_filter)
+
+    total = query.count()
+    rows = (
+        query.order_by(Job.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    pagination = {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "totalPages": max(1, (total + limit - 1) // limit),
+    }
+    return {"jobs": [serialize_job(j, detail=True) for j in rows], **pagination, "pagination": pagination}
+
+
+@router.post("/jobs")
+async def create_company_job(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a job posting (enters the moderation queue)."""
+    company = _require_company(db, current_user)
+    if not str(payload.get("title", "")).strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Job title is required")
+
+    job = Job(company_id=company.id, status="pending_platform_review", visibility="public")
+    _apply_job_payload(job, payload)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return {"job": serialize_job(job, detail=True)}
+
+
+@router.patch("/jobs/{job_id}")
+async def update_company_job(
+    job_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update a job owned by the current user's company."""
+    company = _require_company(db, current_user)
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    _apply_job_payload(job, payload)
+    db.commit()
+    db.refresh(job)
+    return {"job": serialize_job(job, detail=True)}
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_company_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Archive (soft delete) a job owned by the current user's company."""
+    company = _require_company(db, current_user)
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    job.status = "archived"
+    db.commit()
+    return {"deleted": True, "jobId": job_id}

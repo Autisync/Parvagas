@@ -213,7 +213,53 @@ class PasswordResetToken(Base, TimestampMixin):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    
+
     token_hash = Column(String(255), nullable=False, unique=True)
     expires_at = Column(DateTime, nullable=False)
     used_at = Column(DateTime, nullable=True)
+
+
+class Job(Base, TimestampMixin):
+    """Job posting created by a company and browsed publicly."""
+    __tablename__ = "jobs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # List/array fields stored as JSON strings (see candidates pattern).
+    responsibilities = Column(Text, nullable=True)
+    requirements = Column(Text, nullable=True)
+    required_skills = Column(Text, nullable=True)
+    preferred_skills = Column(Text, nullable=True)
+    languages = Column(Text, nullable=True)
+
+    location = Column(String(255), nullable=True, index=True)
+    work_mode = Column(String(50), nullable=True)        # Presencial | Remoto | Híbrido | Rotativo
+    category = Column(String(100), nullable=True, index=True)
+    contract_type = Column(String(50), nullable=True)
+    job_type = Column(String(50), nullable=True)
+    salary_range = Column(String(255), nullable=True)
+    experience_level = Column(String(50), nullable=True)
+    required_experience_years = Column(Integer, nullable=True)
+
+    # Moderation / visibility
+    status = Column(String(50), nullable=False, default="pending_platform_review", index=True)
+    visibility = Column(String(50), nullable=False, default="public")
+    moderation_reason = Column(Text, nullable=True)
+
+    expires_at = Column(DateTime, nullable=True)
+    published_at = Column(DateTime, nullable=True)
+
+    company = relationship("Company", foreign_keys=[company_id])
+
+
+class SavedJob(Base, TimestampMixin):
+    """A job bookmarked by a candidate."""
+    __tablename__ = "saved_jobs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)

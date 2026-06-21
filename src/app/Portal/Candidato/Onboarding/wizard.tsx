@@ -223,7 +223,7 @@ function TagInput({
           }}
           onBlur={() => { if (input.trim()) add(input); }}
           placeholder="Escreva e pressione Enter…"
-          className="min-w-[160px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-400"
+          className="min-w-[160px] flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-slate-500"
         />
       </div>
     </div>
@@ -611,7 +611,7 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
                 } catch { /* silently skip */ }
                 router.replace("/Portal/Candidato/Dashboard");
               }}
-              className="text-xs text-slate-400 underline hover:text-slate-600"
+              className="text-xs text-slate-500 underline hover:text-slate-600"
             >
               Pular configuração por agora
             </button>
@@ -722,7 +722,7 @@ function StepCv({
         </a>
       </div>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-500">
         Pode avançar sem carregar o CV e preencher os dados manualmente.
       </p>
     </div>
@@ -844,7 +844,7 @@ function StepExperience({
         <div key={exp.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700">Experiência {i + 1}</p>
-            <button type="button" onClick={() => remove(exp.id)} className="text-slate-400 hover:text-red-600">
+            <button type="button" onClick={() => remove(exp.id)} className="text-slate-500 hover:text-red-600">
               <TrashIcon className="h-4 w-4" />
             </button>
           </div>
@@ -933,7 +933,7 @@ function StepEducation({
         <div key={edu.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700">Formação {i + 1}</p>
-            <button type="button" onClick={() => remove(edu.id)} className="text-slate-400 hover:text-red-600">
+            <button type="button" onClick={() => remove(edu.id)} className="text-slate-500 hover:text-red-600">
               <TrashIcon className="h-4 w-4" />
             </button>
           </div>
@@ -1050,7 +1050,7 @@ function StepSummary({
       </button>
 
       {data.summary && (
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500">
           ✓ Reveja o texto gerado e edite antes de avançar — o conteúdo reflecte os dados inseridos.
         </p>
       )}
@@ -1096,7 +1096,7 @@ function StepConfirm({
 
   const Tags = ({ items }: { items: string[] }) =>
     items.length === 0 ? (
-      <p className="text-xs text-slate-400 italic">Nenhum</p>
+      <p className="text-xs text-slate-500 italic">Nenhum</p>
     ) : (
       <div className="flex flex-wrap gap-1.5">
         {items.map((t) => (
@@ -1130,7 +1130,7 @@ function StepConfirm({
 
       <Section title="Experiência" step={3}>
         {data.experience.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">Nenhuma experiência adicionada.</p>
+          <p className="text-xs text-slate-500 italic">Nenhuma experiência adicionada.</p>
         ) : (
           <ul className="space-y-2">
             {data.experience.map((e, i) => (
@@ -1146,7 +1146,7 @@ function StepConfirm({
 
       <Section title="Educação" step={4}>
         {data.education.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">Nenhuma formação adicionada.</p>
+          <p className="text-xs text-slate-500 italic">Nenhuma formação adicionada.</p>
         ) : (
           <ul className="space-y-2">
             {data.education.map((e) => (
@@ -1171,7 +1171,7 @@ function StepConfirm({
         {data.summary ? (
           <p className="text-sm text-slate-700 leading-relaxed">{data.summary}</p>
         ) : (
-          <p className="text-xs text-slate-400 italic">Nenhum resumo adicionado.</p>
+          <p className="text-xs text-slate-500 italic">Nenhum resumo adicionado.</p>
         )}
       </Section>
     </div>

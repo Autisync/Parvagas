@@ -45,7 +45,7 @@ export default function EmpresaSocialProof() {
           {stats.map((s) => (
             <div key={s.value} className="text-center">
               <p className="text-5xl font-extrabold text-white">{s.value}</p>
-              <p className="mt-2 text-sm leading-6 text-gray-400">{s.label}</p>
+              <p className="mt-2 text-sm leading-6 text-gray-500">{s.label}</p>
             </div>
           ))}
         </div>
@@ -63,7 +63,7 @@ export default function EmpresaSocialProof() {
             </div>
             <div>
               <p className="text-sm font-semibold text-white">{cp.proofTestimonialAuthor}</p>
-              <p className="text-xs text-gray-400">{cp.proofTestimonialRole}</p>
+              <p className="text-xs text-gray-500">{cp.proofTestimonialRole}</p>
             </div>
           </figcaption>
         </figure>

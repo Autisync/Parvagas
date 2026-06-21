@@ -619,7 +619,7 @@ export default function CvDocumentosPage() {
             <>
               <p className="mb-3 text-4xl">CV</p>
               <p className="font-semibold text-gray-700">Clique para carregar CV</p>
-              <p className="mt-1 text-sm text-gray-400">PDF/DOC/DOCX • max 5 MB</p>
+              <p className="mt-1 text-sm text-gray-500">PDF/DOC/DOCX • max 5 MB</p>
             </>
           )}
         </div>

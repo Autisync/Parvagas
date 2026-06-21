@@ -1,7 +1,16 @@
 """Application configuration."""
 import os
 from functools import lru_cache
-from pydantic_settings import BaseSettings
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Environments where insecure defaults are tolerated (local/CI only).
+_NON_PROD_ENVS = {"development", "dev", "local", "test", "testing", "ci"}
+
+# Known-insecure default values that must never reach production.
+_INSECURE_JWT_SECRET = "your-secret-key-change-in-production"
+_INSECURE_DB_MARKERS = ("change_me", ":change_me@", "change-me")
 
 
 class Settings(BaseSettings):
@@ -93,10 +102,43 @@ class Settings(BaseSettings):
     MODERATOR_FULL_NAME: str = os.getenv("MODERATOR_FULL_NAME", "AutiSync Moderator")
     MODERATOR_SIGNUP_KEY: str = os.getenv("MODERATOR_SIGNUP_KEY", "")
 
-    class Config:
-        """Pydantic config."""
-        env_file = ".env"
-        case_sensitive = True
+    # Observability
+    SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+    SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0"))
+
+    # Trusted hosts (comma-separated). "*" disables the check (dev only).
+    TRUSTED_HOSTS: str = os.getenv("TRUSTED_HOSTS", "*")
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() not in _NON_PROD_ENVS
+
+    @model_validator(mode="after")
+    def _enforce_production_secrets(self) -> "Settings":
+        """Refuse to boot in production with insecure default secrets."""
+        if not self.is_production:
+            return self
+
+        problems: list[str] = []
+        if self.JWT_SECRET == _INSECURE_JWT_SECRET or len(self.JWT_SECRET) < 32:
+            problems.append("JWT_SECRET must be set to a strong value (>= 32 chars)")
+        if any(marker in self.DATABASE_URL for marker in _INSECURE_DB_MARKERS):
+            problems.append("DATABASE_URL still contains an insecure placeholder password")
+        if not self.ADMIN_SIGNUP_KEY:
+            problems.append("ADMIN_SIGNUP_KEY must be set in production")
+
+        if problems:
+            joined = "; ".join(problems)
+            raise ValueError(
+                f"Refusing to start in APP_ENV='{self.APP_ENV}' with insecure config: {joined}"
+            )
+        return self
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
 
 @lru_cache()

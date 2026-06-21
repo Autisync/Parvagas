@@ -1,5 +1,7 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+sentry-sdk[fastapi]==1.45.0
 sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg[binary]==3.3.4

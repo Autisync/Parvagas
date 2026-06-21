@@ -292,7 +292,7 @@ export default function AdminJobsPage() {
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">{job.visibility || "private"}</span>
                     </div>
                     <p className="mt-1 text-sm text-slate-600">{summaryLine(job)}</p>
-                    <p className="mt-2 text-xs text-slate-400">Criada em {toDateLabel(job.createdAt)}</p>
+                    <p className="mt-2 text-xs text-slate-500">Criada em {toDateLabel(job.createdAt)}</p>
                   </div>
                 </div>
                 <button

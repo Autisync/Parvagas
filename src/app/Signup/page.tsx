@@ -423,7 +423,7 @@ function SignUpContent() {
                     className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-red-600 focus:ring-2 focus:ring-red-400"
                   />
                   <span className="text-sm leading-snug text-slate-500">
-                    Desejo receber e-mails com notícias, vagas e ofertas da Parvagas. <span className="text-slate-400">(opcional)</span>
+                    Desejo receber e-mails com notícias, vagas e ofertas da Parvagas. <span className="text-slate-500">(opcional)</span>
                   </span>
                 </label>
               </div>

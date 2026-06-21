@@ -374,13 +374,13 @@ export default function LogoUploadModal({ token, open, currentLogo, onClose, onU
                 onChange={(e) => setZoom(Number(e.target.value))}
                 className="mt-2 w-full"
               />
-              <p className="mt-2 text-xs text-slate-400">Use a roda do rato na pré-visualização para zoom rápido.</p>
+              <p className="mt-2 text-xs text-slate-500">Use a roda do rato na pré-visualização para zoom rápido.</p>
             </div>
 
             {draftImage && (
               <button
                 type="button"
-                className="text-left text-xs text-slate-400 underline-offset-2 hover:underline"
+                className="text-left text-xs text-slate-500 underline-offset-2 hover:underline"
                 onClick={() => { setZoom(1); setOffsetX(0); setOffsetY(0); }}
               >
                 Repor posição e zoom

@@ -16,7 +16,7 @@ from passlib.context import CryptContext
 
 # revision identifiers, used by Alembic.
 revision: str = "20260517_0001"
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = "20260516_0000"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

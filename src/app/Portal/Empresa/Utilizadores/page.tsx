@@ -442,7 +442,7 @@ export default function EmpresaUtilizadoresPage() {
                     placeholder="REMOVER"
                     aria-invalid={removeConfirmationText.trim() !== "REMOVER"}
                     aria-describedby="remove-confirm-error"
-                    className="mt-2 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
+                    className="mt-2 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500"
                   />
                   <FormFieldError id="remove-confirm-error" message={removeConfirmationText.trim() !== "REMOVER" ? "Digite exatamente REMOVER para confirmar a ação." : ""} />
                 </div>

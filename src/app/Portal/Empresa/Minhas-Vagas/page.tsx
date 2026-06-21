@@ -245,7 +245,7 @@ export default function MinhasVagasPage() {
                       <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${statusColor[job.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{statusLabel[job.status ?? ""] ?? job.status}</span>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">{[job.location, job.workMode, job.category].filter(Boolean).join(" · ")}</p>
-                    {job.createdAt && <p className="text-xs text-gray-400 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}
+                    {job.createdAt && <p className="text-xs text-gray-500 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button

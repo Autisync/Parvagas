@@ -336,7 +336,7 @@ export default function AdminAdsPage() {
               <div>
                 <p className="font-semibold text-slate-900">{ad.title || "Campanha"}</p>
                 <p className="text-xs text-slate-500">{ad.placement || "placement"} · {ad.link || "sem link"}</p>
-                <p className="text-xs text-slate-400">{toDateLabel(ad.startDate)} até {toDateLabel(ad.endDate)}</p>
+                <p className="text-xs text-slate-500">{toDateLabel(ad.startDate)} até {toDateLabel(ad.endDate)}</p>
                 <p className="text-xs text-slate-500">Impressões: {ad.impressions || 0} · Cliques: {ad.clicks || 0}</p>
               </div>
               <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(ad.active ? "active" : "archived")}`}>

@@ -248,7 +248,7 @@ export default function EmpresaCandidaturasPage() {
                           <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-sm shrink-0">{name.slice(0, 2).toUpperCase()}</div>
                           <div>
                             <p className="font-bold">{name}</p>
-                            <p className="text-xs text-gray-400">{email}</p>
+                            <p className="text-xs text-gray-500">{email}</p>
                           </div>
                         </div>
                         {jobTitle && <p className="text-sm text-gray-500 mt-2">Para: <strong>{jobTitle}</strong></p>}
@@ -279,7 +279,7 @@ export default function EmpresaCandidaturasPage() {
                           {a.status === "submitted" && <option value="submitted">Submetida</option>}
                           {a.status === "withdrawn" && <option value="withdrawn">Retirada</option>}
                         </select>
-                        {a.createdAt && <p className="text-xs text-gray-400 mt-1">{new Date(a.createdAt).toLocaleDateString("pt-AO")}</p>}
+                        {a.createdAt && <p className="text-xs text-gray-500 mt-1">{new Date(a.createdAt).toLocaleDateString("pt-AO")}</p>}
                       </div>
                     </div>
                   </div>
@@ -358,7 +358,7 @@ export default function EmpresaCandidaturasPage() {
                               Abrir
                             </a>
                           ) : (
-                            <span className="text-xs text-slate-400">Indisponível</span>
+                            <span className="text-xs text-slate-500">Indisponível</span>
                           )}
                         </div>
                       ))

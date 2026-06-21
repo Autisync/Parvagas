@@ -75,7 +75,7 @@ export default function CarreiraArticlesClient({ posts }: Props) {
                 {post.excerpt && (
                   <p className="mt-2 flex-1 text-sm text-gray-500 line-clamp-3">{post.excerpt}</p>
                 )}
-                <div className="mt-4 flex items-center gap-3 text-xs text-gray-400">
+                <div className="mt-4 flex items-center gap-3 text-xs text-gray-500">
                   {post.readTime && <span>⏱ {post.readTime}</span>}
                   {post.publishedAt && (
                     <span>

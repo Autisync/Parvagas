@@ -8,14 +8,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, User, UserRole
+from app.models import CVUpload, CandidateProfile, Job, SavedJob, User, UserRole
 from app.services.storage_service import StorageService
 from app.workers.tasks import parse_cv
 
@@ -529,3 +530,141 @@ async def approve_profile_from_cv(
         "message": "Perfil atualizado com sucesso.",
         "profile": _profile_to_payload(db, current_user, profile),
     }
+
+
+# ── Candidate job discovery & bookmarks ─────────────────────────────────────
+
+def _live_jobs_query(db: Session):
+    return (
+        db.query(Job)
+        .filter(Job.status.in_(PUBLIC_JOB_STATUSES))
+        .filter(Job.visibility == "public")
+    )
+
+
+@router.get("/jobs/recommended")
+async def recommended_jobs(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Recommend live jobs for the candidate.
+
+    Heuristic v1: rank by overlap between the job category/skills and the
+    candidate's skills, falling back to most-recent. (No external AI dependency.)
+    """
+    if current_user.role != UserRole.candidate:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate access required")
+
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    skills = set()
+    if profile and profile.skills:
+        skills = {str(s).strip().lower() for s in _json_load(profile.skills, []) if str(s).strip()}
+
+    rows = _live_jobs_query(db).order_by(Job.created_at.desc()).limit(200).all()
+
+    def _score(job: Job) -> int:
+        if not skills:
+            return 0
+        haystack = " ".join(
+            filter(None, [job.title or "", job.category or "", job.required_skills or ""])
+        ).lower()
+        return sum(1 for skill in skills if skill and skill in haystack)
+
+    ranked = sorted(rows, key=_score, reverse=True)
+    total = len(ranked)
+    start = (page - 1) * limit
+    page_rows = ranked[start : start + limit]
+
+    pagination = {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "totalPages": max(1, (total + limit - 1) // limit),
+    }
+    return {"jobs": [serialize_job(j) for j in page_rows], "pagination": pagination}
+
+
+@router.get("/jobs/saved")
+async def list_saved_jobs(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List the candidate's saved jobs (newest first)."""
+    query = (
+        db.query(SavedJob, Job)
+        .join(Job, Job.id == SavedJob.job_id)
+        .filter(SavedJob.candidate_user_id == current_user.id)
+        .order_by(SavedJob.created_at.desc())
+    )
+    total = query.count()
+    rows = query.offset((page - 1) * limit).limit(limit).all()
+
+    items = [
+        {
+            "_id": saved.id,
+            "status": "saved",
+            "savedAt": saved.created_at.isoformat() if saved.created_at else None,
+            "job": serialize_job(job),
+        }
+        for saved, job in rows
+    ]
+    pagination = {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "totalPages": max(1, (total + limit - 1) // limit),
+    }
+    return {"jobs": items, "savedJobs": items, "pagination": pagination}
+
+
+@router.post("/jobs/save")
+async def save_job(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Bookmark a job for the candidate (idempotent)."""
+    job_id = str(payload.get("jobId", "")).strip()
+    if not job_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="jobId is required")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    existing = (
+        db.query(SavedJob)
+        .filter(SavedJob.candidate_user_id == current_user.id, SavedJob.job_id == job_id)
+        .first()
+    )
+    if existing:
+        return {"message": "Already saved", "savedJobId": existing.id}
+
+    saved = SavedJob(candidate_user_id=current_user.id, job_id=job_id)
+    db.add(saved)
+    db.commit()
+    db.refresh(saved)
+    return {"message": "Job saved", "savedJobId": saved.id}
+
+
+@router.delete("/jobs/saved/{job_id}")
+async def unsave_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove a saved job by job id."""
+    saved = (
+        db.query(SavedJob)
+        .filter(SavedJob.candidate_user_id == current_user.id, SavedJob.job_id == job_id)
+        .first()
+    )
+    if not saved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Saved job not found")
+    db.delete(saved)
+    db.commit()
+    return {"deleted": True, "jobId": job_id}

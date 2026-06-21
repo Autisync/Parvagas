@@ -44,7 +44,7 @@ export default function Error({
       >
         <label htmlFor="error-search" className="sr-only">Pesquisar vagas</label>
         <div className="relative flex-1">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
           <input
             id="error-search"
             type="text"

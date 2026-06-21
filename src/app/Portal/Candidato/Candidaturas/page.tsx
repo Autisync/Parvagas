@@ -240,7 +240,7 @@ export default function CandidaturasPage() {
                   <div>
                     <h2 className="font-bold text-lg">{title}</h2>
                     <p className="text-sm text-gray-500">{company}</p>
-                    {a.profileSource ? <p className="mt-1 text-xs text-gray-400">Perfil usado: {a.profileSource}</p> : null}
+                    {a.profileSource ? <p className="mt-1 text-xs text-gray-500">Perfil usado: {a.profileSource}</p> : null}
                   </div>
                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${statusColor[a.status] ?? "bg-gray-100 text-gray-600"}`}>
                     {statusLabel[a.status] ?? a.status}
@@ -250,7 +250,7 @@ export default function CandidaturasPage() {
                 {/* Timeline */}
                 {a.statusHistory && a.statusHistory.length > 0 && (
                   <div className="mt-4 border-t border-gray-50 pt-3">
-                    <p className="text-xs text-gray-400 mb-2">Histórico</p>
+                    <p className="text-xs text-gray-500 mb-2">Histórico</p>
                     <div className="flex flex-col gap-1">
                       {a.statusHistory.map((h, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
@@ -258,7 +258,7 @@ export default function CandidaturasPage() {
                           <span className="font-medium">{statusLabel[h.status] ?? h.status}</span>
                           <span>·</span>
                           <span>{new Date(h.changedAt).toLocaleDateString("pt-AO")}</span>
-                          {h.note && <span className="text-gray-400">— {h.note}</span>}
+                          {h.note && <span className="text-gray-500">— {h.note}</span>}
                         </div>
                       ))}
                     </div>

@@ -407,7 +407,7 @@ function AdminLoginContent() {
                   onBlur={() => markTouched("email")}
                   aria-invalid={Boolean(shouldShowFieldError("email") && fieldErrors.email)}
                   aria-describedby="admin-email-error"
-                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
                 />
                 <FormFieldError id="admin-email-error" message={shouldShowFieldError("email") ? fieldErrors.email : ""} />
               </div>
@@ -433,7 +433,7 @@ function AdminLoginContent() {
                       : shouldShowFieldError("password") && fieldErrors.password,
                   )}
                   aria-describedby="admin-password-error"
-                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
                 />
                 <FormFieldError
                   id="admin-password-error"
@@ -461,7 +461,7 @@ function AdminLoginContent() {
                     onBlur={() => markTouched("confirmNewPassword")}
                     aria-invalid={Boolean(shouldShowFieldError("confirmNewPassword") && fieldErrors.confirmNewPassword)}
                     aria-describedby="admin-confirm-password-error"
-                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-500 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
                   />
                   <FormFieldError id="admin-confirm-password-error" message={shouldShowFieldError("confirmNewPassword") ? fieldErrors.confirmNewPassword : ""} />
                 </div>

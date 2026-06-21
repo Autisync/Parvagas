@@ -2,6 +2,30 @@
 
 This runbook turns the remaining live-system requirements into executable checks and account-level handoff steps.
 
+## 0. Database Schema Cutover (Python API)
+
+Schema is now owned by Alembic migrations, not `create_all()` (see
+`backend-python/docs/adr/ADR-001`). The container entrypoint runs
+`alembic upgrade head` automatically on boot.
+
+- **Fresh database:** nothing to do — the entrypoint creates all tables and
+  seeds the super-admin (requires `ADMIN_SIGNUP_KEY` and `SUPER_ADMIN_EMAIL`).
+- **Database that predates ADR-001** (tables were created by the old
+  `create_all` path and have no `alembic_version` row): mark it as migrated once
+  so the idempotent root migration no-ops, then upgrade:
+
+  ```bash
+  # one-time, against the existing DB
+  alembic stamp 20260516_0000   # base schema already present
+  alembic upgrade head          # applies seed + admin_level + applications
+  ```
+
+- **Verify after deploy:** `GET /ready` must return 200 with
+  `{"checks":{"database":"ok","redis":"ok"}}`. A 503 means a dependency is
+  unreachable — do not route traffic.
+- The API refuses to start in a production `APP_ENV` if `JWT_SECRET`,
+  `DATABASE_URL`, or `ADMIN_SIGNUP_KEY` are missing or still placeholders.
+
 ## 1. Required Accounts And Services
 
 Create or confirm these services before launch:

@@ -269,7 +269,7 @@ export default function AdminAuditPage() {
                 <div>
                   <p className="font-semibold text-slate-900">{log.action || "Ação"}</p>
                   <p className="text-xs text-slate-500">{log.resourceType || "Resource"} · {log.resourceId || "sem recurso"} · actor {log.actorUserId || "system"}</p>
-                  <p className="text-xs text-slate-400">{toDateLabel(log.createdAt)}</p>
+                  <p className="text-xs text-slate-500">{toDateLabel(log.createdAt)}</p>
                 </div>
               </div>
               <details className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 lg:max-w-xl">
@@ -291,7 +291,7 @@ export default function AdminAuditPage() {
                 <div>
                   <p className="font-semibold text-slate-900">{entry.action || "Admin action"}</p>
                   <p className="text-xs text-slate-500">{entry.targetType || "Target"} · {entry.targetId || "sem alvo"} · admin {entry.adminUserId || "system"}</p>
-                  <p className="text-xs text-slate-400">{toDateLabel(entry.createdAt)}</p>
+                  <p className="text-xs text-slate-500">{toDateLabel(entry.createdAt)}</p>
                 </div>
               </div>
               <details className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 lg:max-w-xl">

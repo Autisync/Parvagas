@@ -14,8 +14,9 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.v1.jobs import serialize_job
 from app.db.session import get_db
-from app.models import AdCampaign, Company, User, UserRole
+from app.models import AdCampaign, Company, Job, User, UserRole
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -440,21 +441,54 @@ async def admin_create_admin(
 async def admin_jobs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=15, ge=1, le=200),
+    keyword: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {"jobs": [], "pagination": _pagination(page, limit, 0)}
+    query = db.query(Job)
+    if keyword and keyword.strip():
+        query = query.filter(Job.title.ilike(f"%{keyword.strip()}%"))
+    if status_filter and status_filter != "all":
+        query = query.filter(Job.status == status_filter)
+
+    total = query.count()
+    rows = (
+        query.order_by(Job.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "jobs": [serialize_job(j, detail=True) for j in rows],
+        "pagination": _pagination(page, limit, total),
+    }
 
 
 @router.patch("/jobs/{job_id}/moderate")
 async def admin_moderate_job(
     job_id: str,
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
     next_status = payload.get("status", "approved")
     next_visibility = payload.get("visibility", "public")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    job.status = next_status
+    job.visibility = next_visibility
+    job.moderation_reason = payload.get("reason", "") or None
+    if next_status in ("approved", "published", "active") and job.published_at is None:
+        job.published_at = datetime.utcnow()
+    db.commit()
+    db.refresh(job)
+
     _record_admin_event(
         actor=admin,
         action="job.moderate",
@@ -462,14 +496,7 @@ async def admin_moderate_job(
         resource_id=job_id,
         details={"status": next_status, "visibility": next_visibility, "reason": payload.get("reason", "")},
     )
-    return {
-        "job": {
-            "_id": job_id,
-            "status": next_status,
-            "visibility": next_visibility,
-            "updatedAt": datetime.utcnow().isoformat(),
-        }
-    }
+    return {"job": serialize_job(job, detail=True)}
 
 
 @router.get("/applications")

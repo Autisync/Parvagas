@@ -150,7 +150,7 @@ export default function CompanyApprovalsPage() {
                         <p className="text-xs text-slate-500">
                           Solicitante: {item.requester?.fullName || "Desconhecido"} ({item.requester?.email || "sem email"})
                         </p>
-                        <p className="text-xs text-slate-400">Criado em {item.createdAt ? new Date(item.createdAt).toLocaleString("pt-AO") : "--"}</p>
+                        <p className="text-xs text-slate-500">Criado em {item.createdAt ? new Date(item.createdAt).toLocaleString("pt-AO") : "--"}</p>
                       </div>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${badgeClass[status] || "bg-slate-100 text-slate-700"}`}>
                         {status}

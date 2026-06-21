@@ -785,7 +785,7 @@ export default function MeuPerfilPage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Expectativa salarial
-                <span className="ml-1 text-xs font-normal text-slate-400">(opcional)</span>
+                <span className="ml-1 text-xs font-normal text-slate-500">(opcional)</span>
               </label>
               <div className="flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus-within:border-red-300 focus-within:ring-4 focus-within:ring-red-100">
                 <span className="mr-2 text-slate-500">AOA</span>

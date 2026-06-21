@@ -318,7 +318,7 @@ export default function TutorialModal({ token, onDone, forceReplay = false, lang
             type="button"
             onClick={handleClose}
             aria-label={pt("Fechar tutorial", "Close tutorial")}
-            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-400"
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-400"
           >
             <XMarkIcon className="h-5 w-5" />
           </button>
@@ -394,7 +394,7 @@ export default function TutorialModal({ token, onDone, forceReplay = false, lang
             <button
               type="button"
               onClick={handleClose}
-              className="text-xs font-semibold text-slate-400 transition hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-300 rounded"
+              className="text-xs font-semibold text-slate-500 transition hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-red-300 rounded"
             >
               {pt("Saltar tutorial", "Skip tutorial")}
             </button>
