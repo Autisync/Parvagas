@@ -60,6 +60,37 @@ export default function EmpresaCandidaturasPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [cvLoadingFor, setCvLoadingFor] = useState<string | null>(null);
   const [selectedCv, setSelectedCv] = useState<CandidateCvPayload | null>(null);
+  const [notesFor, setNotesFor] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Array<{ _id: string; body?: string; rating?: number | null; createdAt?: string }>>([]);
+  const [noteBody, setNoteBody] = useState("");
+  const [noteRating, setNoteRating] = useState(0);
+  const [notesLoading, setNotesLoading] = useState(false);
+
+  const toggleNotes = async (id: string) => {
+    if (notesFor === id) { setNotesFor(null); return; }
+    setNotesFor(id);
+    setNotes([]);
+    setNoteBody("");
+    setNoteRating(0);
+    setNotesLoading(true);
+    try {
+      const data = await authFetch<{ notes: typeof notes }>(`/applications/${id}/notes`, token!, { suppressGlobalErrors: true });
+      setNotes(data.notes || []);
+    } catch { /* ignore */ } finally { setNotesLoading(false); }
+  };
+
+  const addNote = async (id: string) => {
+    if (!noteBody.trim() && !noteRating) return;
+    try {
+      const data = await authFetch<{ note: { _id: string; body?: string; rating?: number | null; createdAt?: string } }>(
+        `/applications/${id}/notes`, token!,
+        { method: "POST", body: JSON.stringify({ body: noteBody.trim(), rating: noteRating || null }), suppressGlobalErrors: true }
+      );
+      setNotes((prev) => [data.note, ...prev]);
+      setNoteBody("");
+      setNoteRating(0);
+    } catch { /* ignore */ }
+  };
   const { pushToast } = useToasts();
 
   // Debounce search query to avoid API calls on every keystroke
@@ -257,14 +288,21 @@ export default function EmpresaCandidaturasPage() {
                             {a.profileSnapshot.skills.slice(0, 4).map(s => <span key={s} className="text-xs border rounded px-2 py-0.5 text-gray-600">{s}</span>)}
                           </div>
                         )}
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => viewCandidateCv(a._id)}
                             disabled={cvLoadingFor === a._id}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                            className="app-action app-action-neutral disabled:opacity-50"
                           >
                             {cvLoadingFor === a._id ? "A abrir CV..." : "Ver CV"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleNotes(a._id)}
+                            className="app-action app-action-neutral"
+                          >
+                            {notesFor === a._id ? "Ocultar notas" : "Notas & avaliação"}
                           </button>
                         </div>
                       </div>
@@ -282,6 +320,42 @@ export default function EmpresaCandidaturasPage() {
                         {a.createdAt && <p className="text-xs text-gray-500 mt-1">{new Date(a.createdAt).toLocaleDateString("pt-AO")}</p>}
                       </div>
                     </div>
+
+                    {notesFor === a._id && (
+                      <div className="mt-4 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-muted)] p-4 pv-animate-fade">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-1" role="radiogroup" aria-label="Avaliação">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button key={n} type="button" onClick={() => setNoteRating(n)} aria-label={`${n} estrelas`}
+                                className={`text-lg leading-none ${n <= noteRating ? "text-amber-500" : "text-slate-300"}`}>★</button>
+                            ))}
+                          </div>
+                          <input
+                            className="app-input flex-1 min-w-[180px]"
+                            placeholder="Adicionar nota interna sobre o candidato..."
+                            value={noteBody}
+                            onChange={(e) => setNoteBody(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") addNote(a._id); }}
+                          />
+                          <button type="button" onClick={() => addNote(a._id)} className="app-btn-primary px-4 py-2 text-sm">Guardar</button>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {notesLoading ? (
+                            <p className="text-xs text-[var(--text-subtle)]">A carregar notas...</p>
+                          ) : notes.length === 0 ? (
+                            <p className="text-xs text-[var(--text-subtle)]">Ainda sem notas para este candidato.</p>
+                          ) : notes.map((n) => (
+                            <div key={n._id} className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-amber-500 text-sm">{n.rating ? "★".repeat(n.rating) : ""}</span>
+                                <span className="text-xs text-[var(--text-subtle)]">{n.createdAt ? new Date(n.createdAt).toLocaleDateString("pt-PT") : ""}</span>
+                              </div>
+                              {n.body && <p className="mt-0.5 text-sm text-[var(--text-muted)]">{n.body}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -69,7 +69,14 @@ function VagasDisponiveisContent() {
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
   const [workMode, setWorkMode] = useState("");
-  const [applied, setApplied] = useState({ keyword: "", location: "", category: "", workMode: "" });
+  const [contractType, setContractType] = useState("");
+  const [seniority, setSeniority] = useState("");
+  const [salaryMin, setSalaryMin] = useState("");
+  const [datePosted, setDatePosted] = useState("");
+  const [sort, setSort] = useState("recent");
+  const [showFilters, setShowFilters] = useState(false);
+  const emptyFilters = { keyword: "", location: "", category: "", workMode: "", contractType: "", seniority: "", salaryMin: "", datePosted: "", sort: "recent" };
+  const [applied, setApplied] = useState(emptyFilters);
   const { dict, locale } = useClientLocale();
   const categoryLabels: Record<string, string> =
     locale === "en"
@@ -108,7 +115,7 @@ function VagasDisponiveisContent() {
 
   const fetchJobs = useCallback(async (
     page = 1,
-    filters = { keyword: "", location: "", category: "", workMode: "" },
+    filters: Record<string, string> = emptyFilters,
     updateUrl = true
   ) => {
     setLoading(true);
@@ -119,6 +126,11 @@ function VagasDisponiveisContent() {
       if (filters.location) params.set("provinceCity", filters.location);
       if (filters.category) params.set("category", filters.category);
       if (filters.workMode) params.set("workMode", filters.workMode);
+      if (filters.contractType) params.set("contractType", filters.contractType);
+      if (filters.seniority) params.set("seniority", filters.seniority);
+      if (filters.salaryMin) params.set("salaryMin", filters.salaryMin);
+      if (filters.datePosted) params.set("datePostedDays", filters.datePosted);
+      if (filters.sort && filters.sort !== "recent") params.set("sort", filters.sort);
       if (updateUrl) router.push(`/Vagas-Disponiveis?${params.toString()}`);
       const data = await apiFetch<{
         jobs?: Job[];
@@ -149,19 +161,32 @@ function VagasDisponiveisContent() {
       location: searchParams.get("provinceCity") || "",
       category: searchParams.get("category") || "",
       workMode: searchParams.get("workMode") || "",
+      contractType: searchParams.get("contractType") || "",
+      seniority: searchParams.get("seniority") || "",
+      salaryMin: searchParams.get("salaryMin") || "",
+      datePosted: searchParams.get("datePostedDays") || "",
+      sort: searchParams.get("sort") || "recent",
     };
     const initialPage = Number(searchParams.get("page") || "1") || 1;
     setKeyword(initialFilters.keyword);
     setLocation(initialFilters.location);
     setCategory(initialFilters.category);
     setWorkMode(initialFilters.workMode);
+    setContractType(initialFilters.contractType);
+    setSeniority(initialFilters.seniority);
+    setSalaryMin(initialFilters.salaryMin);
+    setDatePosted(initialFilters.datePosted);
+    setSort(initialFilters.sort);
+    if (initialFilters.contractType || initialFilters.seniority || initialFilters.salaryMin || initialFilters.datePosted) {
+      setShowFilters(true);
+    }
     setApplied(initialFilters);
     fetchJobs(initialPage, initialFilters, false);
   }, [fetchJobs, searchParams]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const f = { keyword, location, category, workMode };
+    const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort };
     setApplied(f);
     fetchJobs(1, f);
   };
@@ -206,6 +231,46 @@ function VagasDisponiveisContent() {
                 <option value="Rotativo">{modeLabels.Rotativo}</option>
               </select>
               <button type="submit" className="app-btn-primary px-4 text-sm">{dict.jobsList.searchButton}</button>
+            </div>
+
+            {showFilters && (
+              <div className="md:col-span-4 grid gap-3 pv-animate-fade sm:grid-cols-2 lg:grid-cols-4">
+                <select className="app-input" value={contractType} onChange={e => setContractType(e.target.value)} aria-label="Tipo de contrato">
+                  <option value="">Tipo de contrato</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Contrato">Contrato</option>
+                  <option value="Estagio">Estágio</option>
+                  <option value="Temporario">Temporário</option>
+                </select>
+                <select className="app-input" value={seniority} onChange={e => setSeniority(e.target.value)} aria-label="Senioridade">
+                  <option value="">Senioridade</option>
+                  <option value="Junior">Júnior</option>
+                  <option value="Mid">Intermédio</option>
+                  <option value="Senior">Sénior</option>
+                  <option value="Lead">Lead / Gestão</option>
+                </select>
+                <input className="app-input" type="number" min="0" step="50000" placeholder="Salário mínimo (Kz)" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} />
+                <select className="app-input" value={datePosted} onChange={e => setDatePosted(e.target.value)} aria-label="Data de publicação">
+                  <option value="">Qualquer data</option>
+                  <option value="1">Últimas 24h</option>
+                  <option value="7">Últimos 7 dias</option>
+                  <option value="30">Últimos 30 dias</option>
+                </select>
+              </div>
+            )}
+
+            <div className="md:col-span-4 flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onClick={() => setShowFilters(v => !v)} className="text-sm font-semibold text-red-700 hover:underline">
+                {showFilters ? "− Menos filtros" : "+ Mais filtros"}
+              </button>
+              <label className="flex items-center gap-2 text-sm text-gray-600">
+                Ordenar:
+                <select className="app-input w-auto py-1.5" value={sort} onChange={e => { setSort(e.target.value); const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort: e.target.value }; setApplied(f); fetchJobs(1, f); }} aria-label="Ordenar resultados">
+                  <option value="recent">Mais recentes</option>
+                  <option value="salary">Maior salário</option>
+                  <option value="relevance">Relevância</option>
+                </select>
+              </label>
             </div>
           </div>
         </form>

@@ -723,6 +723,8 @@ async def create_alert(
 ):
     _ensure_candidate_user(current_user)
     freq = str(payload.get("frequency", "daily")).strip().lower()
+    if freq == "immediate":
+        freq = "instant"
     if freq not in {"instant", "daily", "weekly"}:
         freq = "daily"
     alert = JobAlert(

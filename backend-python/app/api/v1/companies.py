@@ -559,6 +559,44 @@ async def company_team_invite(
             "emailDelivery": {"status": "queued"}}
 
 
+@router.patch("/team/members/{member_id}/role")
+async def company_team_member_role(
+    member_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_company(db, current_user)
+    new_role = str(payload.get("teamRole") or payload.get("role") or "").strip().lower()
+    if new_role not in {"recruiter", "viewer", "owner"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role inválida")
+    m = db.query(CompanyMember).filter(CompanyMember.id == member_id, CompanyMember.company_id == company.id).first()
+    if not m:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    m.role = new_role
+    db.commit()
+    db.refresh(m)
+    u = db.query(User).filter(User.id == m.user_id).first()
+    return {"member": _serialize_member(m, u)}
+
+
+@router.post("/team/invites/{invite_id}/resend")
+async def company_team_invite_resend(
+    invite_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_company(db, current_user)
+    invite = db.query(CompanyInvite).filter(CompanyInvite.id == invite_id, CompanyInvite.company_id == company.id).first()
+    if not invite:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
+    invite.status = "pending"
+    invite.expires_at = datetime.utcnow() + timedelta(days=7)
+    db.commit()
+    return {"invite": {"_id": invite.id, "email": invite.email, "role": invite.role, "status": invite.status},
+            "emailDelivery": {"status": "queued"}}
+
+
 @router.post("/team/invites/{invite_id}/revoke")
 async def company_team_invite_revoke(
     invite_id: str,

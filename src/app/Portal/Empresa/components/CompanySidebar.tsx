@@ -17,6 +17,7 @@ import {
   UserGroupIcon,
   PlusCircleIcon,
   Cog6ToothIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline";
 
 export default function CompanySidebar() {
@@ -35,6 +36,7 @@ export default function CompanySidebar() {
     { href: "/Portal/Empresa/Nova-Vaga", label: dict.portal.company.newJob, icon: <PlusCircleIcon className="h-5 w-5" /> },
     { href: "/Portal/Empresa/Minhas-Vagas", label: dict.portal.company.jobs, icon: <BriefcaseIcon className="h-5 w-5" /> },
     { href: "/Portal/Empresa/Candidaturas", label: dict.portal.company.applications, icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
+    { href: "/Portal/Empresa/Planos", label: "Planos", icon: <CreditCardIcon className="h-5 w-5" /> },
     { href: "/Portal/Empresa/Definicoes", label: dict.portal.company.settings, icon: <Cog6ToothIcon className="h-5 w-5" /> },
   ];
 

@@ -73,6 +73,7 @@ export default function EmpresaDashboard() {
   const { token, loading, user } = useAuth("company");
   const { dict } = useClientLocale();
   const [stats, setStats] = useState<CompanyStats>({});
+  const [reach, setReach] = useState<{ views: number; applyRatePct: number; topJobs: Array<{ _id: string; title: string; views: number }> }>({ views: 0, applyRatePct: 0, topJobs: [] });
   const [profile, setProfile] = useState<CompanyProfile>({});
   const [fetching, setFetching] = useState(true);
   const [pageError, setPageError] = useState(false);
@@ -95,11 +96,21 @@ export default function EmpresaDashboard() {
       try {
         setFetching(true);
         setPageError(false);
-        const [profileRes, jobsRes, appsRes] = await Promise.allSettled([
+        const [profileRes, jobsRes, appsRes, analyticsRes] = await Promise.allSettled([
           authFetch("/companies/profile", token, { suppressGlobalErrors: true }),
           authFetch("/companies/jobs?page=1&limit=1", token, { suppressGlobalErrors: true }),
           authFetch("/applications?page=1&limit=100", token, { suppressGlobalErrors: true }),
+          authFetch("/companies/analytics", token, { suppressGlobalErrors: true }),
         ]);
+
+        if (analyticsRes.status === "fulfilled") {
+          const a = analyticsRes.value as any;
+          setReach({
+            views: a?.totals?.views ?? 0,
+            applyRatePct: a?.applyRatePct ?? 0,
+            topJobs: Array.isArray(a?.topJobs) ? a.topJobs : [],
+          });
+        }
 
         const failedCount = [profileRes, jobsRes, appsRes].filter((r) => r.status === "rejected").length;
         if (failedCount > 0) {
@@ -234,6 +245,36 @@ export default function EmpresaDashboard() {
                   <p className="mt-0.5 text-xs text-[var(--text-subtle)]">{metric.sub}</p>
                 </div>
               ))}
+            </div>
+
+            {/* Reach & performance */}
+            <div className="grid gap-4 lg:grid-cols-[1fr,1.4fr]">
+              <div className="app-card p-5">
+                <p className="text-sm font-medium text-[var(--text-muted)]">Alcance &amp; desempenho</p>
+                <div className="mt-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.views} /></p>
+                    <p className="text-xs text-[var(--text-subtle)]">Visualizações de vagas</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.applyRatePct} decimals={1} suffix="%" /></p>
+                    <p className="text-xs text-[var(--text-subtle)]">Taxa de candidatura</p>
+                  </div>
+                </div>
+              </div>
+              <div className="app-card p-5">
+                <p className="text-sm font-medium text-[var(--text-muted)]">Vagas com mais visualizações</p>
+                <ul className="mt-3 space-y-2">
+                  {reach.topJobs.length === 0 ? (
+                    <li className="text-xs text-[var(--text-subtle)]">Sem dados de visualizações ainda.</li>
+                  ) : reach.topJobs.map((j) => (
+                    <li key={j._id} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="truncate text-[var(--text-muted)]">{j.title}</span>
+                      <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} 👁</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
             {/* Quick Actions */}
