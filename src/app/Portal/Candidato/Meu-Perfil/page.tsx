@@ -620,7 +620,7 @@ export default function MeuPerfilPage() {
   if (loading || fetching) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="app-spinner h-8 w-8" />
       </div>
     );
   }

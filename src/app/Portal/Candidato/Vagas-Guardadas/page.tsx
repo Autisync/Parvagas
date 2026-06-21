@@ -50,8 +50,17 @@ export default function VagasGuardadasPage() {
 
   if (loading || fetching) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
+      <div className="p-6 sm:p-8">
+        <div className="app-skeleton h-9 w-56" />
+        <div className="mt-6 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="app-card p-5">
+              <div className="app-skeleton h-5 w-1/2" />
+              <div className="app-skeleton mt-2 h-3.5 w-1/3" />
+              <div className="app-skeleton mt-4 h-8 w-32 rounded-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -73,12 +82,12 @@ export default function VagasGuardadasPage() {
           </Link>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 pv-stagger">
             {items.map((item) => {
               const job = item.job;
               const company = job?.companyId && typeof job.companyId === "object" ? job.companyId.name : "Empresa";
               return (
-                <article key={item._id} className="rounded-2xl border border-gray-100 p-5">
+                <article key={item._id} className="app-card app-card-interactive p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-bold">{job?.title || "Vaga"}</h2>
@@ -87,7 +96,7 @@ export default function VagasGuardadasPage() {
                         {job?.location || "Local não informado"} • Guardada em {item.dateSaved ? new Date(item.dateSaved).toLocaleDateString("pt-AO") : "-"}
                       </p>
                     </div>
-                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600">{item.status || "saved"}</span>
+                    <span className="app-badge app-badge-neutral">{item.status && item.status !== "saved" ? item.status : "Guardada"}</span>
                   </div>
                   <div className="mt-4 flex gap-2">
                     {job?._id ? (
