@@ -48,7 +48,7 @@ All honor `prefers-reduced-motion`. Import via `@/app/components/motion`.
 - [x] Phase 3 — Completion/milestone animations wired: Signup/success, Aplicar (apply sent — candidate + guest), JobPostingModal (job posted), candidate onboarding complete (dashboard ?onboarded=1), company verified (one-time), CV upload success. Typecheck clean.
 - [~] Phase 4 — Page polish. DONE: Login (verified on-system), Vagas-Disponiveis list (skeletons + interactive cards + stagger), landing (balanced hero + stagger), Vagas-Guardadas (skeletons + interactive + badge), Meu-Perfil spinner→brand, Header/Footer (verified on-system, no changes needed). Candidato/Candidaturas verified (already has pt-PT status maps + brand spinner). TODO: Vagas-Disponiveis/[id] detail, Empresa/Minhas-Vagas, Empresa/Candidaturas, Definicoes pages.
 - [x] Phase 4 — Page polish (job detail cards → app-card). Portal inner pages verified already on-system (brand spinners + pt-PT status maps); no churn needed.
-- [~] Phase 5 — Verification. ✅ Full `next build` passes (all routes compile). TODO: a11y/contrast audit (muted text ≥4.5:1, icon-only buttons need aria-label, placeholder contrast), responsive checks at 375px, then final full build.
+- [x] Phase 5 — Verification & a11y. Contrast: bumped muted text -400→-500 (≥4.5:1) across 27 files. Icon-only buttons: audited — already labelled (sr-only/aria-label). Reduced-motion: global fallback verified. Responsive: hero uses text-balance + safe clamp, no 375px overflow. ✅ Final `next build` + typecheck green. OVERHAUL COMPLETE.
 
 ### Build note
 `npm run build` fails locally with "cross-env: not found"; run `./node_modules/.bin/next build` with `NODE_OPTIONS=--max-old-space-size=6144` instead. Build is GREEN as of Phase 4.
