@@ -11,7 +11,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
@@ -447,7 +447,7 @@ async def admin_jobs(
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    query = db.query(Job)
+    query = db.query(Job).options(joinedload(Job.company))
     if keyword and keyword.strip():
         query = query.filter(Job.title.ilike(f"%{keyword.strip()}%"))
     if status_filter and status_filter != "all":

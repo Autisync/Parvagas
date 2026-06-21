@@ -7,7 +7,7 @@ import json
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.models import Job, Company
@@ -90,6 +90,7 @@ async def list_public_jobs(
     """Public, paginated, filterable list of live job postings."""
     query = (
         db.query(Job)
+        .options(joinedload(Job.company))  # eager-load company to avoid N+1 in serialize_job
         .filter(Job.status.in_(PUBLIC_JOB_STATUSES))
         .filter(Job.visibility == "public")
     )

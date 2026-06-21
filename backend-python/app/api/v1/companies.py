@@ -5,7 +5,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.models import User, Company, UserRole, Job
 from app.api.v1.applications import list_company_applications
@@ -340,7 +340,7 @@ async def list_company_jobs(
 ):
     """List jobs posted by the current user's company."""
     company = _require_company(db, current_user)
-    query = db.query(Job).filter(Job.company_id == company.id)
+    query = db.query(Job).options(joinedload(Job.company)).filter(Job.company_id == company.id)
     if status_filter and status_filter != "all":
         query = query.filter(Job.status == status_filter)
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
@@ -537,6 +537,7 @@ async def approve_profile_from_cv(
 def _live_jobs_query(db: Session):
     return (
         db.query(Job)
+        .options(joinedload(Job.company))  # avoid N+1 when serializing
         .filter(Job.status.in_(PUBLIC_JOB_STATUSES))
         .filter(Job.visibility == "public")
     )
