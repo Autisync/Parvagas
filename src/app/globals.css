@@ -2,34 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================================
+   Parvagas design system — tokens
+   Brand identity preserved: red (#dc2626). Light theme.
+   ========================================================================= */
 :root {
   --foreground-rgb: 15, 23, 42;
   --background-start-rgb: 248, 250, 252;
   --background-end-rgb: 255, 255, 255;
+
+  /* Brand ramp (red) */
   --brand-50: #fef2f2;
   --brand-100: #fee2e2;
+  --brand-200: #fecaca;
+  --brand-300: #fca5a5;
+  --brand-400: #f87171;
+  --brand-500: #ef4444;
   --brand-600: #dc2626;
   --brand-700: #b91c1c;
+  --brand-800: #991b1b;
+  --brand-900: #7f1d1d;
+
+  /* Surfaces & ink */
   --surface: #ffffff;
   --surface-muted: #f8fafc;
+  --surface-sunken: #f1f5f9;
   --border-soft: #e2e8f0;
+  --border-strong: #cbd5e1;
   --text-strong: #0f172a;
   --text-muted: #475569;
+  --text-subtle: #64748b;
+
+  /* Semantic */
+  --success-50: #ecfdf5;
+  --success-500: #10b981;
+  --success-600: #059669;
+  --success-700: #047857;
+  --warning-50: #fffbeb;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+  --danger-50: #fef2f2;
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+  --info-50: #eff6ff;
+  --info-500: #3b82f6;
+  --info-600: #2563eb;
+
+  /* Radii */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+
+  /* Elevation — soft, layered, never harsh */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 6px 12px -6px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.18), 0 12px 24px -12px rgba(15, 23, 42, 0.10);
+  --shadow-brand: 0 8px 24px -6px rgba(220, 38, 38, 0.35);
+  --ring-brand: 0 0 0 4px rgba(252, 165, 165, 0.35);
+
+  /* Motion — exponential ease-outs, no bounce */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.45, 0, 0.55, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+  --dur-slower: 560ms;
+
+  /* Z-index scale — semantic, never arbitrary */
+  --z-base: 1;
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-modal-backdrop: 1200;
+  --z-modal: 1300;
+  --z-toast: 1400;
+  --z-tooltip: 1500;
+  --z-celebration: 1600;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  /* background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb)); */
   background: radial-gradient(circle at top, var(--brand-50) 0%, #ffffff 45%);
   color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 input:-webkit-autofill,
@@ -40,18 +102,87 @@ textarea:-webkit-autofill {
   transition: background-color 5000s ease-in-out 0s;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Visible, on-brand focus for keyboard users across the app */
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
 
+::selection {
+  background: var(--brand-200);
+  color: var(--brand-900);
+}
+
+/* =========================================================================
+   Keyframes
+   ========================================================================= */
+@keyframes pv-fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes pv-fade-in-up {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) }
+  to { opacity: 1; transform: translate3d(0, 0, 0) }
+}
+@keyframes pv-fade-in-down {
+  from { opacity: 0; transform: translate3d(0, -14px, 0) }
+  to { opacity: 1; transform: translate3d(0, 0, 0) }
+}
+@keyframes pv-scale-in {
+  from { opacity: 0; transform: scale(0.96) }
+  to { opacity: 1; transform: scale(1) }
+}
+@keyframes pv-pop {
+  0% { transform: scale(0.8); opacity: 0 }
+  60% { transform: scale(1.04) }
+  100% { transform: scale(1); opacity: 1 }
+}
+@keyframes pv-shimmer {
+  0% { background-position: -200% 0 }
+  100% { background-position: 200% 0 }
+}
+@keyframes pv-spin { to { transform: rotate(360deg) } }
+@keyframes pv-check-draw { to { stroke-dashoffset: 0 } }
+@keyframes pv-ring-pulse {
+  0% { transform: scale(0.6); opacity: 0.6 }
+  100% { transform: scale(1.5); opacity: 0 }
+}
+@keyframes pv-float {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-6px) }
+}
+@keyframes pv-toast-in {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.98) }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1) }
+}
+
+/* =========================================================================
+   Components / utilities
+   ========================================================================= */
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* ---- Surfaces ---- */
   .app-card {
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-2xl);
     background: var(--surface);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--dur-base) var(--ease-out-quart),
+                transform var(--dur-base) var(--ease-out-quart),
+                border-color var(--dur-base) var(--ease-out-quart);
   }
+  .app-card-interactive { cursor: pointer; }
+  .app-card-interactive:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-3px);
+    border-color: var(--border-strong);
+  }
+  .app-card-interactive:active { transform: translateY(-1px); }
 
+  .app-surface-muted { background: var(--surface-muted); }
+  .app-divider { height: 1px; background: var(--border-soft); border: 0; }
+
+  /* ---- Inputs ---- */
   .app-input {
     width: 100%;
     border: 1px solid var(--border-soft);
@@ -61,38 +192,116 @@ textarea:-webkit-autofill {
     font-size: 0.875rem;
     line-height: 1.25rem;
     color: var(--text-strong);
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+                box-shadow var(--dur-fast) var(--ease-out-quart);
   }
-
-  .app-input:focus {
+  .app-input::placeholder { color: var(--text-subtle); }
+  .app-input:focus,
+  .app-input:focus-visible {
     outline: none;
-    border-color: #fca5a5;
-    box-shadow: 0 0 0 4px rgba(252, 165, 165, 0.25);
+    border-color: var(--brand-300);
+    box-shadow: var(--ring-brand);
   }
 
+  /* ---- Buttons ---- */
   .app-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     border-radius: 9999px;
     background: var(--brand-600);
     color: #ffffff;
     font-weight: 600;
-    transition: background-color 180ms ease;
+    box-shadow: var(--shadow-xs);
+    transition: background-color var(--dur-fast) var(--ease-out-quart),
+                box-shadow var(--dur-base) var(--ease-out-quart),
+                transform var(--dur-fast) var(--ease-out-quart);
   }
-
-  .app-btn-primary:hover {
-    background: var(--brand-700);
-  }
+  .app-btn-primary:hover { background: var(--brand-700); box-shadow: var(--shadow-brand); }
+  .app-btn-primary:active { transform: translateY(1px) scale(0.99); }
+  .app-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 
   .app-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     border: 1px solid var(--border-soft);
     border-radius: 9999px;
     background: #ffffff;
     color: var(--text-strong);
     font-weight: 600;
-    transition: all 180ms ease;
+    transition: border-color var(--dur-fast) var(--ease-out-quart),
+                color var(--dur-fast) var(--ease-out-quart),
+                background-color var(--dur-fast) var(--ease-out-quart),
+                transform var(--dur-fast) var(--ease-out-quart);
+  }
+  .app-btn-secondary:hover { border-color: var(--brand-200); color: var(--brand-700); background: var(--brand-50); }
+  .app-btn-secondary:active { transform: translateY(1px) scale(0.99); }
+
+  /* ---- Badges ---- */
+  .app-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 9999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .app-badge-success { background: var(--success-50); color: var(--success-700); border-color: #a7f3d0; }
+  .app-badge-warning { background: var(--warning-50); color: var(--warning-600); border-color: #fde68a; }
+  .app-badge-danger  { background: var(--danger-50);  color: var(--danger-600);  border-color: #fecaca; }
+  .app-badge-info    { background: var(--info-50);    color: var(--info-600);    border-color: #bfdbfe; }
+  .app-badge-neutral { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border-soft); }
+
+  /* ---- Skeleton loaders ---- */
+  .app-skeleton {
+    border-radius: var(--radius-md);
+    background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
+    background-size: 200% 100%;
+    animation: pv-shimmer 1.4s ease-in-out infinite;
   }
 
-  .app-btn-secondary:hover {
-    border-color: #fecaca;
-    color: var(--brand-700);
-    background: var(--brand-50);
+  /* ---- Spinner ---- */
+  .app-spinner {
+    border-radius: 9999px;
+    border: 2px solid var(--brand-100);
+    border-top-color: var(--brand-600);
+    animation: pv-spin 0.7s linear infinite;
   }
+
+  /* ---- Reveal-on-mount (visible by default; opacity handled via animation) ---- */
+  .pv-animate-in { animation: pv-fade-in-up var(--dur-slow) var(--ease-out-quint) both; }
+  .pv-animate-fade { animation: pv-fade-in var(--dur-base) var(--ease-out-quart) both; }
+  .pv-animate-scale { animation: pv-scale-in var(--dur-base) var(--ease-out-quint) both; }
+  .pv-animate-pop { animation: pv-pop var(--dur-slow) var(--ease-out-quint) both; }
+
+  /* Stagger helpers (apply to a container; children fade up in sequence) */
+  .pv-stagger > * { animation: pv-fade-in-up var(--dur-slow) var(--ease-out-quint) both; }
+  .pv-stagger > *:nth-child(1) { animation-delay: 40ms; }
+  .pv-stagger > *:nth-child(2) { animation-delay: 90ms; }
+  .pv-stagger > *:nth-child(3) { animation-delay: 140ms; }
+  .pv-stagger > *:nth-child(4) { animation-delay: 190ms; }
+  .pv-stagger > *:nth-child(5) { animation-delay: 240ms; }
+  .pv-stagger > *:nth-child(6) { animation-delay: 290ms; }
+  .pv-stagger > *:nth-child(7) { animation-delay: 340ms; }
+  .pv-stagger > *:nth-child(8) { animation-delay: 390ms; }
+}
+
+/* =========================================================================
+   Reduced motion — non-negotiable
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .app-skeleton { animation: none; }
 }
