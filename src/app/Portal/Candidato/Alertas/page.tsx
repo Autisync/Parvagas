@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
+import { track } from "@/lib/analytics";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
@@ -107,6 +108,7 @@ export default function AlertasPage() {
         });
         setAlerts((prev) => [res.alert, ...prev]);
         setMessage("Alerta criado.");
+        track("alert_created");
       }
       resetForm();
     } catch (err: unknown) {

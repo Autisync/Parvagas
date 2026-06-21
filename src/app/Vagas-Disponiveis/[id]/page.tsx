@@ -7,6 +7,7 @@ import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
 import ReportJobButton from "./ReportJobButton";
+import TrackOnMount from "@/app/components/TrackOnMount";
 
 type Job = {
   _id: string;
@@ -87,6 +88,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
   return (
     <div className="bg-white min-h-screen">
+      <TrackOnMount event="job_view" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobLd) }} />
       <Header />
       <main className="px-6 py-8 max-w-5xl mx-auto">

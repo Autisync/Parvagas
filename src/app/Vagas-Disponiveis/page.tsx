@@ -11,6 +11,7 @@ import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import { track } from "@/lib/analytics";
 
 type Job = {
   _id: string;
@@ -196,6 +197,7 @@ function VagasDisponiveisContent() {
     e.preventDefault();
     const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort };
     setApplied(f);
+    track("job_search", { province: location || "all", category: category || "all" });
     fetchJobs(1, f);
   };
 

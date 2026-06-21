@@ -4,6 +4,7 @@ import { useState } from "react";
 import { authFetch } from "@/lib/api";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
+import { track } from "@/lib/analytics";
 
 type CreatedJob = { _id: string; title?: string; status?: string; location?: string; createdAt?: string };
 
@@ -138,6 +139,7 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
 
       setPostedJob(response.job);
       setCelebrate(true);
+      track("company_job_posted");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao submeter vaga.");
     } finally {

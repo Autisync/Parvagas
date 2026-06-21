@@ -7,6 +7,7 @@ import { authFetch, apiFetch, getErrorMessage } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { SuccessCheck } from "@/app/components/motion";
+import { track } from "@/lib/analytics";
 
 const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
   ssr: false,
@@ -73,6 +74,7 @@ export default function EmpresaPlanosPage() {
   const subscribe = async (plan: Plan) => {
     if (!token) return;
     setSubscribing(plan.code);
+    track("subscribe_start", { plan: plan.code });
     setInstructions(null);
     try {
       const res = await authFetch<{ activated?: boolean; instructions?: Instructions }>(

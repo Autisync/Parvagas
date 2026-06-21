@@ -190,6 +190,7 @@ function SignUpContent() {
           : dict.auth.signup.successAccountCreated,
       );
       const encodedEmail = encodeURIComponent(email.trim());
+      track("register_success", { role: selectedRole });
       router.replace(`/Signup/success?role=${selectedRole}&email=${encodedEmail}`);
       return;
     } catch (err: unknown) {
@@ -462,6 +463,7 @@ function SignUpContent() {
   );
 }
 
+import { track } from "@/lib/analytics";
 export default function SignUpPage() {
   return (
     <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white"><div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div>}>
