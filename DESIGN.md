@@ -46,8 +46,11 @@ All honor `prefers-reduced-motion`. Import via `@/app/components/motion`.
 - [x] Phase 1 — Foundation: tokens + motion system in globals.css; motion component library; DESIGN.md. Typecheck clean.
 - [x] Phase 2 — Reporting UI: admin analytics KPIs → StatCard (icons/trend/animated); operational cards w/ progress bars; candidate dashboard skeletons + stagger; company dashboard animated pipeline metrics + brand spinner + stagger. Typecheck clean.
 - [x] Phase 3 — Completion/milestone animations wired: Signup/success, Aplicar (apply sent — candidate + guest), JobPostingModal (job posted), candidate onboarding complete (dashboard ?onboarded=1), company verified (one-time), CV upload success. Typecheck clean.
-- [ ] Phase 4 — Page polish: Login/Signup, Header/Footer, landing, Vagas-Disponiveis (list+detail), candidate & company portals.
-- [ ] Phase 5 — Pass: a11y/contrast audit, responsive checks, final polish.
+- [~] Phase 4 — Page polish. DONE: Login (already on-system, verified), Vagas-Disponiveis list (skeletons + interactive cards + stagger), landing page (balanced hero + stagger, CSS-only for SSR). TODO: Vagas-Disponiveis detail, Header/Footer, portal inner pages (Candidaturas, Minhas-Vagas, Vagas-Guardadas, Definicoes).
+- [~] Phase 5 — Verification. ✅ Full `next build` passes (all routes compile). TODO: a11y/contrast audit, responsive checks.
+
+### Build note
+`npm run build` fails locally with "cross-env: not found"; run `./node_modules/.bin/next build` with `NODE_OPTIONS=--max-old-space-size=6144` instead. Build is GREEN as of Phase 4.
 
 ## Verification per phase
 `npm run typecheck` (fast) after each batch; periodic `npm run build`. Commit per phase on branch `feat/ui-ux-premium-overhaul`.
