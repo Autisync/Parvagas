@@ -1,21 +1,20 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   BarChart,
   Bar,
+  Cell,
   PieChart,
   Pie,
-  Cell,
-  AreaChart,
-  Area,
-  Legend,
 } from "recharts";
 
 type Point = { label: string; value: number };
@@ -30,7 +29,55 @@ type Props = {
   revenueEnabled: boolean;
 };
 
-const PIE_COLORS = ["#0ea5e9", "#22c55e", "#f59e0b", "#ef4444", "#6366f1", "#14b8a6"];
+// Cohesive, brand-forward palette (red primary + harmonized accents).
+const SERIES = {
+  brand: "#dc2626",
+  ink: "#0f172a",
+  sky: "#2563eb",
+  emerald: "#059669",
+  amber: "#d97706",
+};
+const DONUT = ["#dc2626", "#2563eb", "#059669", "#d97706", "#7c3aed", "#0891b2", "#64748b"];
+
+const AXIS = { stroke: "#94a3b8", fontSize: 12 };
+const GRID = "#eef2f7";
+
+function PremiumTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+      {label != null && <p className="mb-1 text-xs font-medium text-[var(--text-subtle)]">{label}</p>}
+      {payload.map((p: any) => (
+        <p key={p.dataKey ?? p.name} className="flex items-center gap-2 text-sm font-semibold text-[var(--text-strong)]">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: p.color || p.payload?.fill }} />
+          {p.name}: {Number(p.value).toLocaleString("pt-PT")}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <article className={`app-card p-5 ${className}`}>
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <h3 className="text-base font-bold text-[var(--text-strong)]">{title}</h3>
+      </div>
+      {subtitle && <p className="mb-3 text-xs text-[var(--text-muted)]">{subtitle}</p>}
+      {children}
+    </article>
+  );
+}
 
 export default function AdminAnalyticsCharts({
   jobsPosted,
@@ -41,92 +88,130 @@ export default function AdminAnalyticsCharts({
   jobsByStatus,
   revenueEnabled,
 }: Props) {
+  const trend = jobsPosted.map((item, idx) => ({
+    label: item.label,
+    vagas: item.value,
+    inscricoes: userSignups[idx]?.value || 0,
+  }));
+  const totalApps = applicationStatus.reduce((s, p) => s + p.value, 0);
+
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Evolução mensal</p>
-        <h3 className="mt-1 text-sm font-semibold text-slate-900">Vagas publicadas vs inscrições</h3>
-        <div className="mt-3 h-72" role="img" aria-label="Gráfico de linhas com evolução mensal de vagas e inscrições">
+      {/* Trend — area (jobs) + line (signups) with gradient fill */}
+      <ChartCard title="Vagas publicadas vs inscrições" subtitle="Evolução nos últimos períodos">
+        <div className="h-72" role="img" aria-label="Evolução de vagas e inscrições">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={jobsPosted.map((item, idx) => ({ label: item.label, vagas: item.value, inscricoes: userSignups[idx]?.value || 0 }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="label" stroke="#475569" />
-              <YAxis stroke="#475569" />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="vagas" name="Vagas" stroke="#dc2626" strokeWidth={2.4} dot={false} />
-              <Line type="monotone" dataKey="inscricoes" name="Inscrições" stroke="#0369a1" strokeWidth={2.4} dot={false} />
-            </LineChart>
+            <ComposedChart data={trend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradVagas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={SERIES.brand} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={SERIES.brand} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} />
+              <YAxis tick={AXIS} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+              <Tooltip content={<PremiumTooltip />} cursor={{ stroke: "#cbd5e1", strokeDasharray: "4 4" }} />
+              <Area type="monotone" dataKey="vagas" name="Vagas" stroke={SERIES.brand} strokeWidth={2.5} fill="url(#gradVagas)" />
+              <Line type="monotone" dataKey="inscricoes" name="Inscrições" stroke={SERIES.sky} strokeWidth={2.5} dot={false} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
-      </article>
+      </ChartCard>
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fluxo de candidaturas</p>
-        <h3 className="mt-1 text-sm font-semibold text-slate-900">Submissões por período</h3>
-        <div className="mt-3 h-72" role="img" aria-label="Gráfico de barras com submissões de candidaturas por período">
+      {/* Applications per period — rounded gradient bars */}
+      <ChartCard title="Submissões de candidaturas" subtitle="Volume por período">
+        <div className="h-72" role="img" aria-label="Submissões de candidaturas por período">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={applications}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="label" stroke="#475569" />
-              <YAxis stroke="#475569" />
-              <Tooltip />
-              <Bar dataKey="value" name="Candidaturas" fill="#0284c7" radius={[6, 6, 0, 0]} />
+            <BarChart data={applications} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradApps" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={SERIES.sky} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={SERIES.sky} stopOpacity={0.55} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} />
+              <YAxis tick={AXIS} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+              <Tooltip content={<PremiumTooltip />} cursor={{ fill: "rgba(37,99,235,0.06)" }} />
+              <Bar dataKey="value" name="Candidaturas" fill="url(#gradApps)" radius={[6, 6, 0, 0]} maxBarSize={42} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </article>
+      </ChartCard>
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Qualidade operacional</p>
-        <h3 className="mt-1 text-sm font-semibold text-slate-900">Distribuição por estado da candidatura</h3>
-        <div className="mt-3 h-72" role="img" aria-label="Gráfico de pizza com distribuição por estado da candidatura">
+      {/* Application status — donut with centered total + custom legend */}
+      <ChartCard title="Distribuição por estado" subtitle="Candidaturas por fase do funil">
+        <div className="flex items-center gap-4">
+          <div className="relative h-64 w-1/2 min-w-[180px]" role="img" aria-label="Distribuição de candidaturas por estado">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={applicationStatus} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
+                  {applicationStatus.map((entry, idx) => (
+                    <Cell key={`${entry.label}-${idx}`} fill={DONUT[idx % DONUT.length]} />
+                  ))}
+                </Pie>
+                <Tooltip content={<PremiumTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-bold text-[var(--text-strong)]">{totalApps.toLocaleString("pt-PT")}</span>
+              <span className="text-xs text-[var(--text-muted)]">total</span>
+            </div>
+          </div>
+          <ul className="flex-1 space-y-2">
+            {applicationStatus.map((entry, idx) => (
+              <li key={entry.label} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2 text-[var(--text-muted)]">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: DONUT[idx % DONUT.length] }} />
+                  {entry.label}
+                </span>
+                <span className="font-semibold text-[var(--text-strong)]">{entry.value}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </ChartCard>
+
+      {/* Jobs by workflow status — horizontal rounded bars */}
+      <ChartCard title="Vagas por estado de workflow" subtitle="Saúde da fila de moderação">
+        <div className="h-64" role="img" aria-label="Vagas por estado de workflow">
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={applicationStatus} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius={95} label>
-                {applicationStatus.map((entry, idx) => (
-                  <Cell key={`${entry.label}-${idx}`} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+            <BarChart data={jobsByStatus} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
+              <XAxis type="number" tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="label" tick={AXIS} axisLine={false} tickLine={false} width={120} />
+              <Tooltip content={<PremiumTooltip />} cursor={{ fill: "rgba(220,38,38,0.06)" }} />
+              <Bar dataKey="value" name="Vagas" radius={[0, 6, 6, 0]} maxBarSize={26}>
+                {jobsByStatus.map((entry, idx) => (
+                  <Cell key={entry.label} fill={DONUT[idx % DONUT.length]} />
                 ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </div>
-      </article>
-
-      <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Saúde da moderação</p>
-        <h3 className="mt-1 text-sm font-semibold text-slate-900">Vagas por estado de workflow</h3>
-        <div className="mt-3 h-72" role="img" aria-label="Gráfico de área com vagas por estado de workflow">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={jobsByStatus}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="label" stroke="#475569" />
-              <YAxis stroke="#475569" />
-              <Tooltip />
-              <Area type="monotone" dataKey="value" name="Vagas" stroke="#dc2626" fill="#fecaca" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </article>
+      </ChartCard>
 
       {revenueEnabled && (
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monetização</p>
-          <h3 className="mt-1 text-sm font-semibold text-slate-900">Receita de campanhas por período</h3>
-          <div className="mt-3 h-72" role="img" aria-label="Gráfico de receita de campanhas por período">
+        <ChartCard title="Receita de campanhas" subtitle="Monetização por período" className="xl:col-span-2">
+          <div className="h-72" role="img" aria-label="Receita de campanhas por período">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenue}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="label" stroke="#475569" />
-                <YAxis stroke="#475569" />
-                <Tooltip />
-                <Bar dataKey="value" name="Receita" fill="#16a34a" radius={[6, 6, 0, 0]} />
+              <BarChart data={revenue} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={SERIES.emerald} stopOpacity={0.95} />
+                    <stop offset="100%" stopColor={SERIES.emerald} stopOpacity={0.55} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+                <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS} axisLine={false} tickLine={false} width={48} />
+                <Tooltip content={<PremiumTooltip />} cursor={{ fill: "rgba(5,150,105,0.06)" }} />
+                <Bar dataKey="value" name="Receita" fill="url(#gradRev)" radius={[6, 6, 0, 0]} maxBarSize={48} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </article>
+        </ChartCard>
       )}
     </div>
   );

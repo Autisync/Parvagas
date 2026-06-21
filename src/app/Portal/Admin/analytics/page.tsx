@@ -259,32 +259,45 @@ export default function AdminAnalyticsPage() {
 
       {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Intervalo rápido</span>
-            <select value={quickRange} onChange={(e) => setRangeDays(Number(e.target.value))} className={adminFieldClass}>
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 90 dias</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Data inicial</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={adminFieldClass} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Data final</span>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={adminFieldClass} />
-          </label>
-          <div className="grid gap-2 sm:grid-cols-2 sm:items-end xl:col-span-2">
-            <button onClick={load} disabled={loading} className={adminButtonClass}>
-              <AdminLoadingLabel loading={loading} idle="Atualizar analytics" busy="A calcular..." />
-            </button>
-            <button onClick={loadTables} disabled={tableLoading} className={adminSecondaryButtonClass}>
-              <AdminLoadingLabel loading={tableLoading} idle="Atualizar tabelas" busy="A atualizar..." />
-            </button>
+      <section className="app-card mt-5 flex flex-wrap items-end justify-between gap-4 p-4">
+        <div className="flex flex-wrap items-end gap-4">
+          {/* Segmented quick-range */}
+          <div>
+            <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Intervalo</span>
+            <div className="inline-flex rounded-full border border-[var(--border-soft)] bg-[var(--surface-sunken)] p-1">
+              {[{ d: 7, l: "7 dias" }, { d: 30, l: "30 dias" }, { d: 90, l: "90 dias" }].map((r) => {
+                const active = quickRange === String(r.d);
+                return (
+                  <button
+                    key={r.d}
+                    onClick={() => setRangeDays(r.d)}
+                    aria-pressed={active}
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
+                      active ? "bg-white text-[var(--brand-700)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    }`}
+                  >
+                    {r.l}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+          <label className="grid gap-1 text-sm">
+            <span className="text-xs font-medium text-[var(--text-muted)]">De</span>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="app-input w-auto" />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-xs font-medium text-[var(--text-muted)]">Até</span>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="app-input w-auto" />
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={load} disabled={loading} className="app-btn-primary px-4 py-2 text-sm">
+            <AdminLoadingLabel loading={loading} idle="Atualizar analytics" busy="A calcular..." />
+          </button>
+          <button onClick={loadTables} disabled={tableLoading} className="app-btn-secondary px-4 py-2 text-sm">
+            <AdminLoadingLabel loading={tableLoading} idle="Atualizar tabelas" busy="A atualizar..." />
+          </button>
         </div>
       </section>
 
@@ -338,7 +351,7 @@ export default function AdminAnalyticsPage() {
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Anomalias</p>
+          <p className="text-xs font-medium text-slate-500">Anomalias</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Sinais fora do padrão</h3>
           <div className="mt-3 grid gap-2">
             {(analytics?.insights?.anomalies || []).length ? (
@@ -357,7 +370,7 @@ export default function AdminAnalyticsPage() {
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Previsões leves</p>
+          <p className="text-xs font-medium text-slate-500">Previsões leves</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Próximo período (estimado)</h3>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {[
@@ -389,7 +402,7 @@ export default function AdminAnalyticsPage() {
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mapa de densidade</p>
+          <p className="text-xs font-medium text-slate-500">Mapa de densidade</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Vagas por localização</h3>
           <div className="mt-3 grid gap-2">
             {(analytics?.distributions?.jobLocationDensity || []).slice(0, 8).map((item) => {
@@ -408,7 +421,7 @@ export default function AdminAnalyticsPage() {
         </article>
 
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mapa de densidade</p>
+          <p className="text-xs font-medium text-slate-500">Mapa de densidade</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Utilizadores por localização</h3>
           <div className="mt-3 grid gap-2">
             {(analytics?.distributions?.userLocationDensity || []).slice(0, 8).map((item) => {
