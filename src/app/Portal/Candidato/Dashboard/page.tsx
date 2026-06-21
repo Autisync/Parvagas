@@ -100,8 +100,14 @@ export default function CandidatoDashboard() {
 
   if (loading || fetching) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+      <div className="space-y-8">
+        <div className="app-skeleton h-9 w-64" />
+        <div className="app-card h-28 p-5" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="app-skeleton h-32 rounded-2xl" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -119,7 +125,7 @@ export default function CandidatoDashboard() {
       <ProfileCompletionCard completion={stats.profileCompletion || 0} />
 
       {/* Main Actions Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 pv-stagger md:grid-cols-2 lg:grid-cols-3">
         <DashboardCard
           href="/Portal/Candidato/Vagas-Recomendadas"
           icon={<SparklesIcon className="h-6 w-6" />}

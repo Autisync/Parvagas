@@ -30,6 +30,15 @@ import {
 import PaginationControls from "../components/PaginationControls";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { StatCard, AnimatedCounter } from "@/app/components/motion";
+import {
+  UsersIcon,
+  BuildingOffice2Icon,
+  BriefcaseIcon,
+  DocumentTextIcon,
+  BoltIcon,
+  BanknotesIcon,
+} from "@heroicons/react/24/outline";
 
 const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
   ssr: false,
@@ -286,39 +295,43 @@ export default function AdminAnalyticsPage() {
         }}
       >
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        {[
-          { label: "Utilizadores", value: analytics?.totals?.users ?? 0, trend: analytics?.trends?.usersPct ?? 0, help: "Novos registos de utilizadores no período." },
-          { label: "Empresas", value: analytics?.totals?.companies ?? 0, trend: analytics?.trends?.companiesPct ?? 0, help: "Novas empresas registadas no período." },
-          { label: "Vagas", value: analytics?.totals?.jobs ?? 0, trend: analytics?.trends?.jobsPct ?? 0, help: "Vagas criadas pelas empresas no período." },
-          { label: "Candidaturas", value: analytics?.totals?.applications ?? 0, trend: analytics?.trends?.applicationsPct ?? 0, help: "Candidaturas submetidas no período." },
-          { label: "Ativas", value: analytics?.operational?.activeApplications ?? 0, trend: 0, help: "Candidaturas em funil ativo (sem rejeição/retirada)." },
-          { label: "Receita", value: analytics?.business?.revenueInRange ?? 0, trend: analytics?.trends?.revenuePct ?? 0, help: "Receita de campanhas no período. Super-admin apenas." },
-        ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500" title={card.help}>{card.label}</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{isSuperAdmin || card.label !== "Receita" ? card.value : "--"}</p>
-            {card.label !== "Ativas" && (
-              <p className={`mt-1 text-xs font-semibold ${(card.trend || 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {(card.trend || 0) >= 0 ? "▲" : "▼"} {Math.abs(card.trend || 0)}% vs período anterior
-              </p>
-            )}
+      <section className="mt-6 grid gap-4 pv-stagger sm:grid-cols-2 xl:grid-cols-6">
+        <StatCard label="Utilizadores" value={analytics?.totals?.users ?? 0} trendPct={analytics?.trends?.usersPct ?? null} tone="brand" icon={<UsersIcon className="h-5 w-5" />} />
+        <StatCard label="Empresas" value={analytics?.totals?.companies ?? 0} trendPct={analytics?.trends?.companiesPct ?? null} tone="info" icon={<BuildingOffice2Icon className="h-5 w-5" />} />
+        <StatCard label="Vagas" value={analytics?.totals?.jobs ?? 0} trendPct={analytics?.trends?.jobsPct ?? null} tone="brand" icon={<BriefcaseIcon className="h-5 w-5" />} />
+        <StatCard label="Candidaturas" value={analytics?.totals?.applications ?? 0} trendPct={analytics?.trends?.applicationsPct ?? null} tone="success" icon={<DocumentTextIcon className="h-5 w-5" />} />
+        <StatCard label="Ativas" value={analytics?.operational?.activeApplications ?? 0} trendPct={null} tone="warning" icon={<BoltIcon className="h-5 w-5" />} />
+        {isSuperAdmin ? (
+          <StatCard label="Receita" value={analytics?.business?.revenueInRange ?? 0} trendPct={analytics?.trends?.revenuePct ?? null} tone="success" icon={<BanknotesIcon className="h-5 w-5" />} />
+        ) : (
+          <div className="app-card p-5" title="Receita de campanhas no período. Super-admin apenas.">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-medium text-[var(--text-muted)]">Receita</p>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "var(--success-50)", color: "var(--success-600)" }} aria-hidden>
+                <BanknotesIcon className="h-5 w-5" />
+              </span>
+            </div>
+            <p className="mt-3 text-3xl font-bold tracking-tight text-[var(--text-subtle)]">--</p>
+            <p className="mt-2 text-xs text-[var(--text-subtle)]">Super-admin apenas</p>
           </div>
-        ))}
+        )}
       </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-6 grid gap-4 pv-stagger md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Vagas pendentes", value: analytics?.operational?.pendingJobs ?? 0, ratio: percentages.pendingJobs, tip: "Reveja e publique/rejeite para reduzir backlog." },
           { label: "Empresas pendentes", value: analytics?.operational?.pendingCompanies ?? 0, ratio: percentages.pendingCompanies, tip: "Priorize empresas com documentação completa." },
           { label: "Utilizadores suspensos", value: analytics?.operational?.suspendedUsers ?? 0, ratio: percentages.suspendedUsers, tip: "Monitore reincidência e motivos de suspensão." },
           { label: "Scraped pendente", value: analytics?.operational?.pendingScraped ?? 0, ratio: percentages.pendingScraped, tip: "Curadoria rápida melhora qualidade do feed." },
         ].map((item) => (
-          <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p>
-            <p className="mt-1 text-xs text-slate-500">{item.ratio}% no intervalo selecionado</p>
-            <p className="mt-1 text-xs text-slate-400">{item.tip}</p>
+          <div key={item.label} className="app-card p-5">
+            <p className="text-sm font-medium text-[var(--text-muted)]">{item.label}</p>
+            <p className="mt-2 text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={item.value} /></p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-sunken)]">
+              <div className="h-full rounded-full bg-[var(--brand-500)]" style={{ width: `${Math.min(100, Math.max(4, item.ratio))}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-[var(--text-subtle)]">{item.ratio}% no intervalo selecionado</p>
+            <p className="mt-1 text-xs text-[var(--text-subtle)]">{item.tip}</p>
           </div>
         ))}
       </section>

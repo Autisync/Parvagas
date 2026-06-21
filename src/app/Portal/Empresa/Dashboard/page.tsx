@@ -17,6 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { AnimatedCounter } from "@/app/components/motion";
 
 const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
   ssr: false,
@@ -136,7 +137,7 @@ export default function EmpresaDashboard() {
           <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
             <CompanySidebar />
             <div className="flex items-center justify-center py-24">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
+              <div className="app-spinner h-8 w-8" />
             </div>
           </div>
         </main>
@@ -182,7 +183,7 @@ export default function EmpresaDashboard() {
             <CompanyCompletionCard completion={profile.completionScore ?? 0} />
 
             {/* Pipeline Metrics */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 pv-stagger sm:grid-cols-2 lg:grid-cols-4">
               {[
                 {
                   label: "Vagas Publicadas",
@@ -213,18 +214,20 @@ export default function EmpresaDashboard() {
                   bg: "bg-green-50",
                 },
               ].map((metric) => (
-                <div key={metric.label} className={`rounded-2xl border border-slate-200 ${metric.bg} p-5`}>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{metric.label}</p>
-                  <p className={`mt-2 text-3xl font-bold ${metric.color}`}>{metric.value}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{metric.sub}</p>
+                <div key={metric.label} className="app-card p-5">
+                  <p className="text-sm font-medium text-[var(--text-muted)]">{metric.label}</p>
+                  <p className={`mt-2 text-3xl font-bold tracking-tight ${metric.color}`}>
+                    <AnimatedCounter value={metric.value} />
+                  </p>
+                  <p className="mt-0.5 text-xs text-[var(--text-subtle)]">{metric.sub}</p>
                 </div>
               ))}
             </div>
 
             {/* Quick Actions */}
             <div>
-              <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-slate-500">Ações rápidas</p>
-              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <p className="mb-4 text-sm font-semibold text-[var(--text-muted)]">Ações rápidas</p>
+              <div className="grid gap-5 pv-stagger md:grid-cols-2 lg:grid-cols-3">
                 <DashboardCard
                   href="/Portal/Empresa/Minhas-Vagas"
                   icon={<BriefcaseIcon className="h-6 w-6" />}
