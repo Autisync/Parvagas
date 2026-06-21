@@ -144,7 +144,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
           {/* Right sidebar */}
           <aside className="space-y-6">
-            <div className="rounded-2xl border border-gray-100 p-5">
+            <div className="app-card p-5">
               <h3 className="font-bold text-lg mb-4">{dict.jobDetail.summary}</h3>
               <dl className="space-y-3 text-sm">
                 {job.salaryRange && (
@@ -181,7 +181,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </div>
 
             {company && (company.description || company.size || company.website) && (
-              <div className="rounded-2xl border border-gray-100 p-5">
+              <div className="app-card p-5">
                 <h3 className="font-bold text-lg mb-3">{dict.jobDetail.company}</h3>
                 {company.description && <p className="text-sm text-gray-600 mb-3 leading-relaxed">{company.description}</p>}
                 {company.size && <p className="text-sm text-gray-500">{dict.jobDetail.companySize}: <strong>{company.size}</strong></p>}
