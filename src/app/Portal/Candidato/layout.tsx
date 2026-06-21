@@ -12,7 +12,7 @@ export default function CandidatoLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-white">
       <OnboardingGuard>
         <main className="mx-auto max-w-7xl px-6 pb-16 pt-8">
-          <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
+          <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
             <CandidateSidebar />
             <section>{children}</section>
           </div>

@@ -68,7 +68,7 @@ export default function CandidateSidebar() {
         {token && <NotificationBell token={token} role="candidate" />}
       </div>
       <div className="flex items-center gap-2 px-2 py-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-sm font-bold text-red-700 ring-1 ring-red-100">
           {candidateName[0]?.toUpperCase() || "C"}
         </div>
         <div className="min-w-0">
@@ -88,11 +88,11 @@ export default function CandidateSidebar() {
               className={[
                 "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition",
                 active
-                  ? "border-blue-200 bg-blue-50 text-blue-800 shadow-sm"
+                  ? "border-red-200 bg-red-50 text-red-800 shadow-sm"
                   : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900",
               ].join(" ")}
             >
-              <span className={active ? "text-blue-700" : "text-slate-500"}>{item.icon}</span>
+              <span className={active ? "text-red-700" : "text-slate-500"}>{item.icon}</span>
               <span className="flex-1">{item.label}</span>
               {item.href === "/Portal/Candidato/Meu-Perfil" &&
                profileCompletion !== null &&
@@ -115,7 +115,7 @@ export default function CandidateSidebar() {
         <button
           type="button"
           onClick={handleSignout}
-          className="inline-flex w-full items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+          className="inline-flex w-full items-center justify-center rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100"
         >
           {dict.portal.candidate.logout}
         </button>

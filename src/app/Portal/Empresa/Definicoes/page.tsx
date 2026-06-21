@@ -25,7 +25,7 @@ export default function EmpresaDefinicoesPage() {
     return (
       <div className="min-h-screen bg-white">
         <main className="mx-auto max-w-7xl px-6 pb-16 pt-8">
-          <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
+          <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
             <CompanySidebar />
             <div className="flex items-center justify-center py-24">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
@@ -39,7 +39,7 @@ export default function EmpresaDefinicoesPage() {
   return (
     <div className="min-h-screen bg-white">
       <main className="mx-auto max-w-7xl px-6 pb-16 pt-8">
-        <div className="grid gap-6 lg:grid-cols-[260px,1fr]">
+        <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
           <CompanySidebar />
 
           <div className="space-y-6">
