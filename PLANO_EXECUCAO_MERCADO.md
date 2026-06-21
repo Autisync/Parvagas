@@ -79,7 +79,7 @@ Objetivo: provar que o que já existe funciona ponta-a-ponta antes de construir 
 A auditoria está certa em HTTPS e deploy: é aqui que se ganha/perde confiança no mercado angolano (onde o receio de fraude digital é real).
 
 - [ ] **Deploy**: frontend (Next 16) e backend (container FastAPI + Celery + Redis) num host com região próxima/latência aceitável para AO. Postgres gerido + backups automáticos.
-- [ ] **Domínio + HTTPS**: `parvagas.co.ao` e `api.parvagas.co.ao` com TLS válido e auto-renovação. Redirect http→https. HSTS.
+- [ ] **Domínio + HTTPS**: `parvagas.pt` e `api.parvagas.pt` com TLS válido e auto-renovação. Redirect http→https. HSTS.
 - [ ] **Storage de CVs em cloud**: substituir storage local por Supabase Storage / Cloudflare R2 (o adapter já existe por interface). Validação de tipo/tamanho + verificação antivírus.
 - [ ] **Email transacional**: garantir entregabilidade do domínio (SPF, DKIM, DMARC para `parvagas.pt`/`.co.ao`). Testar confirmação de candidatura, verificação, reset, alertas.
 - [ ] **Monitorização**: Sentry (backend já preparado), uptime/health checks, alertas de erro e de `429` por classe de rota (já emitidos).

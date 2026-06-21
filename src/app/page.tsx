@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     title: "ParVaga | Início",
     description:
       "Parvagas é um site de recrutamento em Angola que recolhe CV's para Partilhar com Empresas procurando Talentos Profissionais.",
-    url: "https://parVagas.co.ao",
+    url: "https://parvagas.pt",
     siteName: "parVagas",
     images: [
       {

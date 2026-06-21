@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ParVaga | Dasboard",
     description: "Plataforma útil para agerir talento Profissional submetido.",
-    url: "https://parVagas.co.ao",
+    url: "https://parvagas.pt",
     siteName: "parVagas",
     images: [
       {

@@ -73,7 +73,7 @@ export default function EmpresaFaq() {
         {/* Support link */}
         <div className="mt-12 text-center">
           <Link
-            href="mailto:suporte@parvagas.co.ao"
+            href="mailto:suporte@parvagas.pt"
             className="inline-flex items-center gap-2 rounded-full border border-red-200 px-6 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50"
           >
             {cp.faqSupportLink}

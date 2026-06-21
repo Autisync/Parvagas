@@ -355,7 +355,7 @@ export function AppNotifierProvider({ children }: { children: ReactNode }) {
           if (typeof window !== "undefined") window.history.back();
         }}
         onSecondary={() => {
-          if (typeof window !== "undefined") window.open("mailto:suporte@parvagas.co.ao", "_blank");
+          if (typeof window !== "undefined") window.open("mailto:suporte@parvagas.pt", "_blank");
         }}
       />
     </AppNotifierContext.Provider>

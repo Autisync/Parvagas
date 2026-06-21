@@ -20,7 +20,7 @@ import { Analytics } from "@vercel/analytics/react";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.co.ao"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt"),
   title: {
     default: "Parvagas",
     template: "%s | Parvagas",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Parvagas",
     description: "Plataforma de recrutamento Angola-first para candidatos e empresas.",
-    url: "https://parvagas.co.ao",
+    url: "https://parvagas.pt",
     siteName: "Parvagas",
     locale: "pt_AO",
     type: "website",

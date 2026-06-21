@@ -37,7 +37,7 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
-          NEXT_PUBLIC_SITE_URL: https://parvagas.co.ao
+          NEXT_PUBLIC_SITE_URL: https://parvagas.pt
 
   backend:
     name: Backend · Pytest · Migrations

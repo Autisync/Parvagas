@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     title: "ParVaga | Empresas",
     description:
       "Uma plataforma útil para quem procura talento Profissional para seus Projetos em Angola.",
-    url: "https://parVagas.co.ao",
+    url: "https://parvagas.pt",
     siteName: "parVagas",
     images: [
       {

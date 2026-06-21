@@ -20,7 +20,7 @@ export default function TooltipCustomStyles() {
               Estamos sempre disponiveis para ouvir o seu feedback. Para
               partilhar envie e-mail para{" "}
               <span className="text-white text-sm font-normal">
-                feedback@parvagas.co.ao{" "}
+                feedback@parvagas.pt{" "}
               </span>
             </Typography>
           </div>

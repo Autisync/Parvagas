@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.co.ao";
+  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
   const staticRoutes = [
     "",
     "/Vagas-Disponiveis/",

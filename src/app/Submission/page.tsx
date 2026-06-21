@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     title: "ParVaga | CV",
     description:
       "Temos uma base de dados para ajudar transformar o seu futuro profissional hoje!",
-    url: "https://parVagas.co.ao",
+    url: "https://parvagas.pt",
     siteName: "parVagas",
     images: [
       {

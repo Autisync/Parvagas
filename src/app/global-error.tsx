@@ -39,7 +39,7 @@ export default function GlobalError({
             <Link href="/" className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Voltar ao início
             </Link>
-            <a href="mailto:suporte@parvagas.co.ao" className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <a href="mailto:suporte@parvagas.pt" className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Contactar o suporte
             </a>
           </div>

@@ -176,9 +176,9 @@ AUTH_LOCK_MINUTES=15
 TEMP_PASSWORD_TTL_MINUTES=60
 
 # Frontend
-NEXT_PUBLIC_SITE_URL=https://parvagas.co.ao
-FRONTEND_URL=https://parvagas.co.ao
-BACKEND_URL=https://api.parvagas.co.ao
+NEXT_PUBLIC_SITE_URL=https://parvagas.pt
+FRONTEND_URL=https://parvagas.pt
+BACKEND_URL=https://api.parvagas.pt
 
 # Storage adapter
 STORAGE_PROVIDER=local

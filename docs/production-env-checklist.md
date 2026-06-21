@@ -26,7 +26,7 @@ Canonical template file: .env.production.example
 - [ ] EMAIL_FROM=noreply@example.com
 - [ ] EMAIL_SECURE=false
 - [ ] EMAIL_REQUIRE_TLS=true
-  - Rule: real email sender, ex. no-reply@parvagas.co.ao
+  - Rule: real email sender, ex. no-reply@parvagas.pt
   - Confirmed SMTP profile: `SMTP / STARTTLS / mail.ehdesigntech.co.uk / 587`.
   - Alternative supported by provider: `SMTPS / SSL / 465`.
 
