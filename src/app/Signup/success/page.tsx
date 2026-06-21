@@ -2,37 +2,64 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
+import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
 
 function SignupSuccessContent() {
   const searchParams = useSearchParams();
   const role = searchParams.get("role") === "company" ? "company" : "candidate";
   const email = String(searchParams.get("email") || "").trim();
+  const [celebrate, setCelebrate] = useState(true);
 
   return (
-    <main className="mx-auto max-w-xl px-4 py-20">
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">Check your email to verify your account.</h1>
-        <p className="mt-2 text-sm text-slate-700">
-          We sent a verification link to {email || "your email address"}. Confirm your email before signing in.
+    <main className="mx-auto flex max-w-xl flex-col items-center px-4 py-20">
+      <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
+
+      <div className="app-card pv-animate-pop w-full p-8 text-center">
+        <div className="flex justify-center">
+          <SuccessCheck size={84} tone="brand" />
+        </div>
+
+        <h1 className="mt-6 text-balance text-2xl font-bold text-[var(--text-strong)]">
+          Conta criada com sucesso!
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-[var(--text-muted)]">
+          Enviámos um link de verificação para{" "}
+          <span className="font-semibold text-[var(--text-strong)]">
+            {email || "o seu email"}
+          </span>
+          . Confirme o seu email para começar a usar a Parvagas.
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link href={`/Login?role=${role}`} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
-            Go to sign in
+        <div className="mt-7 flex flex-wrap justify-center gap-3">
+          <Link href={`/Login?role=${role}`} className="app-btn-primary px-5 py-2.5 text-sm">
+            Ir para o início de sessão
           </Link>
-          <Link href="/resend-verification" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            Resend verification email
+          <Link href="/resend-verification" className="app-btn-secondary px-5 py-2.5 text-sm">
+            Reenviar email de verificação
           </Link>
         </div>
       </div>
+
+      <p className="mt-5 text-xs text-[var(--text-subtle)]">
+        Não recebeu o email? Verifique a pasta de spam ou reenvie acima.
+      </p>
     </main>
   );
 }
 
 export default function SignupSuccessPage() {
   return (
-    <Suspense fallback={<main className="mx-auto max-w-xl px-4 py-20"><div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">Loading...</div></main>}>
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-xl px-4 py-20">
+          <div className="app-card p-8">
+            <div className="app-skeleton h-7 w-2/3" />
+            <div className="app-skeleton mt-3 h-4 w-full" />
+          </div>
+        </main>
+      }
+    >
       <SignupSuccessContent />
     </Suspense>
   );
