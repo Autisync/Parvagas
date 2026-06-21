@@ -9,6 +9,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import { normalizeParsedCvProfile } from "@/lib/cvProfile";
+import { SuccessCheck } from "@/app/components/motion";
 
 const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
 
@@ -197,6 +198,7 @@ export default function CvDocumentosPage() {
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
   const [approving, setApproving] = useState(false);
   const [draft, setDraft] = useState<ParsedDraft | null>(null);
   const [missingSections, setMissingSections] = useState<string[]>([]);
@@ -363,7 +365,8 @@ export default function CvDocumentosPage() {
         });
       }
 
-      setMessage("We found information from your CV. Please review and confirm before saving.");
+      setMessage("Encontrámos informação no seu CV. Reveja e confirme antes de guardar.");
+      setUploadDone(true);
       // Persist draft in sessionStorage so Meu-Perfil can show the AI suggestion banner
       try {
         sessionStorage.setItem(
@@ -633,7 +636,12 @@ export default function CvDocumentosPage() {
             />
           </div>
         ) : null}
-        {message ? <p className="mt-4 text-green-600">{message}</p> : null}
+        {message ? (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-[var(--success-50)] px-3 py-2.5">
+            {uploadDone ? <SuccessCheck size={28} tone="success" /> : null}
+            <p className="text-sm font-medium text-[var(--success-700)]">{message}</p>
+          </div>
+        ) : null}
 
         {/* CV template download */}
         <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">

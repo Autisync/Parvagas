@@ -17,7 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
-import { AnimatedCounter } from "@/app/components/motion";
+import { AnimatedCounter, MilestoneCelebration } from "@/app/components/motion";
 
 const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
   ssr: false,
@@ -76,6 +76,17 @@ export default function EmpresaDashboard() {
   const [profile, setProfile] = useState<CompanyProfile>({});
   const [fetching, setFetching] = useState(true);
   const [pageError, setPageError] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
+
+  // Celebrate the first time the company is verified (status becomes active).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (profile.status !== "active") return;
+    const key = "pv_company_verified_celebrated";
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    setCelebrate(true);
+  }, [profile.status]);
 
   useEffect(() => {
     if (!token) return;
@@ -152,6 +163,7 @@ export default function EmpresaDashboard() {
           <CompanySidebar />
 
           <div className="space-y-8">
+            <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
             <PageHeader
               title={dict.portal.company.welcome(companyName || undefined)}
               description={dict.portal.company.welcomeDescription}

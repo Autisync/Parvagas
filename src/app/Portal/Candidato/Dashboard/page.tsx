@@ -10,6 +10,7 @@ import EmptyState from "@/app/components/EmptyState";
 import ProfileCompletionCard from "@/app/components/ProfileCompletionCard";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { MilestoneCelebration } from "@/app/components/motion";
 import {
   SparklesIcon,
   BriefcaseIcon,
@@ -48,6 +49,17 @@ export default function CandidatoDashboard() {
   const [profile, setProfile] = useState<Profile>({});
   const [fetching, setFetching] = useState(true);
   const [pageError, setPageError] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("onboarded") === "1") {
+      setCelebrate(true);
+      // Clean the URL so the celebration doesn't replay on refresh.
+      window.history.replaceState({}, "", "/Portal/Candidato/Dashboard");
+    }
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -114,6 +126,7 @@ export default function CandidatoDashboard() {
 
   return (
     <div className="space-y-8">
+      <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
       <PageHeader
         title={dict.portal.candidate.welcome(profile.fullName ? profile.fullName.split(" ")[0] : undefined)}
         description={dict.portal.candidate.welcomeDescription}
