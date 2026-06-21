@@ -16,7 +16,7 @@ from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, Job, SavedJob, User, UserRole
+from app.models import CVUpload, CandidateProfile, Job, JobAlert, SavedJob, User, UserRole
 from app.services.storage_service import StorageService
 from app.workers.tasks import parse_cv
 
@@ -669,3 +669,108 @@ async def unsave_job(
     db.delete(saved)
     db.commit()
     return {"deleted": True, "jobId": job_id}
+
+
+# ── Job alerts (saved searches) ─────────────────────────────────────────────
+
+def _serialize_alert(a: JobAlert) -> dict[str, Any]:
+    return {
+        "_id": a.id,
+        "keyword": a.keyword,
+        "location": a.location,
+        "category": a.category,
+        "workMode": a.work_mode,
+        "frequency": a.frequency,
+        "active": bool(a.active),
+        "lastNotifiedAt": a.last_notified_at.isoformat() if a.last_notified_at else None,
+        "createdAt": a.created_at.isoformat() if a.created_at else None,
+    }
+
+
+def _alert_match_count(db: Session, a: JobAlert) -> int:
+    q = _live_jobs_query(db)
+    if a.keyword:
+        q = q.filter(Job.title.ilike(f"%{a.keyword}%"))
+    if a.location:
+        q = q.filter(Job.location.ilike(f"%{a.location}%"))
+    if a.category:
+        q = q.filter(Job.category == a.category)
+    if a.work_mode:
+        q = q.filter(Job.work_mode == a.work_mode)
+    return q.count()
+
+
+@router.get("/alerts")
+async def list_alerts(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = db.query(JobAlert).filter(JobAlert.candidate_user_id == current_user.id).order_by(JobAlert.created_at.desc())
+    total = query.count()
+    rows = query.offset((page - 1) * limit).limit(limit).all()
+    alerts = [{**_serialize_alert(a), "matchCount": _alert_match_count(db, a)} for a in rows]
+    pagination = {"page": page, "limit": limit, "total": total, "totalPages": max(1, (total + limit - 1) // limit)}
+    return {"alerts": alerts, "pagination": pagination}
+
+
+@router.post("/alerts")
+async def create_alert(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_candidate_user(current_user)
+    freq = str(payload.get("frequency", "daily")).strip().lower()
+    if freq not in {"instant", "daily", "weekly"}:
+        freq = "daily"
+    alert = JobAlert(
+        candidate_user_id=current_user.id,
+        keyword=str(payload.get("keyword", "")).strip() or None,
+        location=str(payload.get("location", "")).strip() or None,
+        category=str(payload.get("category", "")).strip() or None,
+        work_mode=str(payload.get("workMode", "")).strip() or None,
+        frequency=freq,
+        active=bool(payload.get("active", True)),
+    )
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return {"alert": {**_serialize_alert(alert), "matchCount": _alert_match_count(db, alert)}}
+
+
+@router.patch("/alerts/{alert_id}")
+async def update_alert(
+    alert_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    alert = db.query(JobAlert).filter(JobAlert.id == alert_id, JobAlert.candidate_user_id == current_user.id).first()
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    for key, attr in (("keyword", "keyword"), ("location", "location"), ("category", "category"), ("workMode", "work_mode")):
+        if key in payload:
+            setattr(alert, attr, str(payload[key] or "").strip() or None)
+    if "frequency" in payload and str(payload["frequency"]).lower() in {"instant", "daily", "weekly"}:
+        alert.frequency = str(payload["frequency"]).lower()
+    if "active" in payload:
+        alert.active = bool(payload["active"])
+    db.commit()
+    db.refresh(alert)
+    return {"alert": _serialize_alert(alert)}
+
+
+@router.delete("/alerts/{alert_id}")
+async def delete_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    alert = db.query(JobAlert).filter(JobAlert.id == alert_id, JobAlert.candidate_user_id == current_user.id).first()
+    if not alert:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    db.delete(alert)
+    db.commit()
+    return {"deleted": True, "alertId": alert_id}

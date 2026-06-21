@@ -9,11 +9,24 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import CandidateProfile, Company, JobApplication, User, UserRole
+from app.models import (
+    CandidateProfile, Company, JobApplication, ApplicationNote, User, UserRole,
+)
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email
+import json as _json
 
 router = APIRouter(tags=["applications"])
+
+
+def _json_list_safe(value):
+    if not value:
+        return []
+    try:
+        out = _json.loads(value)
+        return out if isinstance(out, list) else []
+    except Exception:
+        return []
 
 _ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx"}
 _ALLOWED_MIME_TYPES = {
@@ -253,3 +266,88 @@ async def list_applications(
         **pagination,
         "pagination": pagination,
     }
+
+
+# ── Application notes / ratings (mini-ATS) ──────────────────────────────────
+
+def _company_owns_application(db: Session, user: User, application: JobApplication) -> bool:
+    if user.role == UserRole.admin:
+        return True
+    co = db.query(Company).filter(Company.owner_user_id == user.id).first()
+    return bool(co and application.company_id == co.id)
+
+
+@router.get("/applications/{application_id}/notes")
+async def list_application_notes(
+    application_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not app_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    if not _company_owns_application(db, current_user, app_row):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+    rows = (
+        db.query(ApplicationNote)
+        .filter(ApplicationNote.application_id == application_id)
+        .order_by(ApplicationNote.created_at.desc())
+        .all()
+    )
+    return {"notes": [
+        {"_id": n.id, "body": n.body, "rating": n.rating, "authorUserId": n.author_user_id,
+         "createdAt": n.created_at.isoformat() if n.created_at else None}
+        for n in rows
+    ]}
+
+
+@router.post("/applications/{application_id}/notes")
+async def add_application_note(
+    application_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not app_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    if not _company_owns_application(db, current_user, app_row):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+    rating = payload.get("rating")
+    try:
+        rating = int(rating) if rating is not None else None
+    except (TypeError, ValueError):
+        rating = None
+    note = ApplicationNote(
+        application_id=application_id, author_user_id=current_user.id,
+        body=str(payload.get("body", "")).strip() or None, rating=rating,
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return {"note": {"_id": note.id, "body": note.body, "rating": note.rating,
+                     "createdAt": note.created_at.isoformat() if note.created_at else None}}
+
+
+@router.get("/public/candidates/{user_id}")
+async def public_candidate_profile(user_id: str, db: Session = Depends(get_db)):
+    """Public, read-only candidate profile (shareable)."""
+    user = db.query(User).filter(User.id == user_id, User.role == UserRole.candidate).first()
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+    if not user or not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+    return {"profile": {
+        "id": user.id,
+        "fullName": user.full_name,
+        "jobTitle": profile.job_title,
+        "location": profile.location,
+        "professionalSummary": profile.professional_summary,
+        "yearsOfExperience": profile.years_of_experience,
+        "skills": _json_list_safe(profile.skills),
+        "languages": _json_list_safe(profile.languages),
+        "experience": _json_list_safe(profile.work_experience),
+        "education": _json_list_safe(profile.education),
+        "linkedinUrl": profile.linkedin_url,
+        "portfolioUrl": profile.portfolio_url,
+        "githubUrl": profile.github_url,
+    }}

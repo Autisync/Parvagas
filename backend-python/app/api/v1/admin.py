@@ -16,8 +16,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
-from app.db.session import get_db
-from app.models import AdCampaign, CandidateProfile, Company, Job, JobApplication, User, UserRole
+from app.db.session import get_db, SessionLocal
+from app.models import (
+    AdCampaign, AuditLog, CandidateProfile, Company, Job, JobApplication,
+    ScrapedJob, User, UserRole,
+)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -168,6 +171,24 @@ def _record_admin_event(
     _ADMIN_ACTIONS.insert(0, admin_action_entry)
     del _AUDIT_LOGS[1000:]
     del _ADMIN_ACTIONS[1000:]
+
+    # Durable persistence (best-effort; never break the triggering action).
+    try:
+        session = SessionLocal()
+        try:
+            session.add(AuditLog(
+                actor_user_id=actor.id,
+                actor_email=getattr(actor, "email", None),
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                details=json.dumps(detail_payload, default=str),
+            ))
+            session.commit()
+        finally:
+            session.close()
+    except Exception:  # pragma: no cover - defensive
+        pass
 
 
 def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
@@ -596,77 +617,153 @@ async def admin_companies(
     }
 
 
+def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
+    return {
+        "_id": s.id,
+        "title": s.title,
+        "company": s.company_name,
+        "location": s.location,
+        "category": s.category,
+        "source": s.source,
+        "sourceUrl": s.source_url,
+        "status": s.status,
+        "duplicateOf": s.duplicate_of,
+        "publishedJobId": s.published_job_id,
+        "createdAt": s.created_at.isoformat() if s.created_at else None,
+    }
+
+
+def _aggregator_company(db: Session, admin: User) -> Company:
+    """Synthetic company that owns published scraped jobs."""
+    co = db.query(Company).filter(Company.name == "Parvagas Aggregator").first()
+    if not co:
+        co = Company(owner_user_id=admin.id, name="Parvagas Aggregator", status="active",
+                     description="Vagas agregadas de fontes externas.")
+        db.add(co)
+        db.flush()
+    return co
+
+
 @router.get("/scraped-jobs")
 async def admin_scraped_jobs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=15, ge=1, le=200),
+    keyword: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {"scrapedJobs": [], "pagination": _pagination(page, limit, 0)}
+    query = db.query(ScrapedJob)
+    if status_filter and status_filter != "all":
+        query = query.filter(ScrapedJob.status == status_filter)
+    if keyword and keyword.strip():
+        query = query.filter(ScrapedJob.title.ilike(f"%{keyword.strip()}%"))
+    total = query.count()
+    rows = query.order_by(ScrapedJob.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {"scrapedJobs": [_to_scraped_record(r) for r in rows], "pagination": _pagination(page, limit, total)}
 
 
 @router.post("/scraped-jobs")
 async def admin_create_scraped(
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {
-        "scraped": {
-            "_id": f"scraped-{int(datetime.utcnow().timestamp())}",
-            "title": payload.get("title"),
-            "company": payload.get("company"),
-            "location": payload.get("location"),
-            "sourceUrl": payload.get("sourceUrl"),
-            "status": "pending",
-            "createdAt": datetime.utcnow().isoformat(),
-        }
-    }
+    title = str(payload.get("title", "")).strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title is required")
+    company_name = str(payload.get("company", "") or payload.get("companyName", "")).strip() or None
+    # Dedupe heuristic: same title + company already ingested.
+    dup = (
+        db.query(ScrapedJob)
+        .filter(ScrapedJob.title == title, ScrapedJob.company_name == company_name)
+        .first()
+    )
+    s = ScrapedJob(
+        title=title, company_name=company_name,
+        location=str(payload.get("location", "")).strip() or None,
+        category=str(payload.get("category", "")).strip() or None,
+        source=str(payload.get("source", "")).strip() or None,
+        source_url=str(payload.get("sourceUrl", "")).strip() or None,
+        description=str(payload.get("description", "")).strip() or None,
+        status="duplicate" if dup else "pending",
+        duplicate_of=dup.id if dup else None,
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return {"scraped": _to_scraped_record(s)}
 
 
 @router.patch("/scraped-jobs/{scraped_id}")
 async def admin_update_scraped(
     scraped_id: str,
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {
-        "scraped": {
-            "_id": scraped_id,
-            "title": payload.get("title"),
-            "company": payload.get("company"),
-            "location": payload.get("location"),
-            "sourceUrl": payload.get("sourceUrl"),
-            "updatedAt": datetime.utcnow().isoformat(),
-        }
-    }
+    s = db.query(ScrapedJob).filter(ScrapedJob.id == scraped_id).first()
+    if not s:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped job not found")
+    for key, attr in (("title", "title"), ("company", "company_name"), ("location", "location"),
+                      ("category", "category"), ("sourceUrl", "source_url"), ("description", "description")):
+        if key in payload:
+            setattr(s, attr, str(payload[key] or "").strip() or None)
+    db.commit()
+    db.refresh(s)
+    return {"scraped": _to_scraped_record(s)}
 
 
 @router.patch("/scraped-jobs/{scraped_id}/review")
 async def admin_review_scraped(
     scraped_id: str,
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_admin(current_user)
-    return {
-        "scraped": {
-            "_id": scraped_id,
-            "status": payload.get("status", "approved"),
-            "reviewNote": payload.get("reviewNote", ""),
-            "updatedAt": datetime.utcnow().isoformat(),
-        }
-    }
+    admin = _ensure_admin(current_user)
+    s = db.query(ScrapedJob).filter(ScrapedJob.id == scraped_id).first()
+    if not s:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped job not found")
+    decision = str(payload.get("status", "approved")).strip().lower()
+    if decision in {"approve", "approved", "publish", "published"}:
+        s.status = "approved"
+        if not s.published_job_id:
+            co = _aggregator_company(db, admin)
+            job = Job(
+                company_id=co.id, title=s.title, description=s.description,
+                location=s.location, category=s.category,
+                status="approved", visibility="public",
+                published_at=datetime.utcnow(),
+            )
+            db.add(job)
+            db.flush()
+            s.published_job_id = job.id
+    elif decision in {"reject", "rejected"}:
+        s.status = "rejected"
+    elif decision == "duplicate":
+        s.status = "duplicate"
+    db.commit()
+    db.refresh(s)
+    _record_admin_event(actor=admin, action="scraped.review", resource_type="scraped_job",
+                        resource_id=scraped_id, details={"status": s.status})
+    return {"scraped": _to_scraped_record(s)}
 
 
 @router.delete("/scraped-jobs/{scraped_id}")
 async def admin_delete_scraped(
     scraped_id: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
+    s = db.query(ScrapedJob).filter(ScrapedJob.id == scraped_id).first()
+    if s:
+        db.delete(s)
+        db.commit()
     return {"deleted": True, "id": scraped_id}
 
 
@@ -680,43 +777,36 @@ async def admin_audit_logs(
     actorUserId: str | None = None,
     from_date: str | None = Query(default=None, alias="from"),
     to_date: str | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    entries = list(_AUDIT_LOGS)
-    keyword_norm = (keyword or "").strip().lower()
-    action_norm = (action or "").strip().lower()
-    resource_norm = (resourceType or "").strip().lower()
-    actor_norm = (actorUserId or "").strip().lower()
-
-    filtered: list[dict[str, Any]] = []
-    for entry in entries:
-        if action_norm and action_norm not in str(entry.get("action", "")).lower():
-            continue
-        if resource_norm and resource_norm not in str(entry.get("resourceType", "")).lower():
-            continue
-        if actor_norm and actor_norm not in str(entry.get("actorUserId", "")).lower():
-            continue
-        if not _is_in_range(entry.get("createdAt"), from_date, to_date):
-            continue
-        if keyword_norm:
-            haystack = " ".join(
-                [
-                    str(entry.get("action", "")),
-                    str(entry.get("resourceType", "")),
-                    str(entry.get("resourceId", "")),
-                    str(entry.get("actorUserId", "")),
-                    json.dumps(entry.get("details", {}), ensure_ascii=True, default=_json_default),
-                ]
-            ).lower()
-            if keyword_norm not in haystack:
-                continue
-        filtered.append(entry)
-
-    total = len(filtered)
-    start = (page - 1) * limit
-    end = start + limit
-    return {"auditLogs": filtered[start:end], "pagination": _pagination(page, limit, total)}
+    query = db.query(AuditLog)
+    if action and action.strip():
+        query = query.filter(AuditLog.action.ilike(f"%{action.strip()}%"))
+    if resourceType and resourceType.strip():
+        query = query.filter(AuditLog.resource_type.ilike(f"%{resourceType.strip()}%"))
+    if actorUserId and actorUserId.strip():
+        query = query.filter(AuditLog.actor_user_id == actorUserId.strip())
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = query.filter(AuditLog.action.ilike(like) | AuditLog.details.ilike(like) | AuditLog.resource_id.ilike(like))
+    total = query.count()
+    rows = query.order_by(AuditLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    audit_logs = [
+        {
+            "_id": r.id,
+            "actorUserId": r.actor_user_id,
+            "actorEmail": r.actor_email,
+            "action": r.action,
+            "resourceType": r.resource_type,
+            "resourceId": r.resource_id,
+            "details": json.loads(r.details) if r.details else {},
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+    return {"auditLogs": audit_logs, "pagination": _pagination(page, limit, total)}
 
 
 @router.get("/audit-logs/export.csv")
