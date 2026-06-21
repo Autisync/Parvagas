@@ -116,6 +116,20 @@ async def update_company_profile(
     return company
 
 
+@router.patch("/tutorial/seen")
+async def mark_company_tutorial_seen(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark the company onboarding guide as seen for the current user's company."""
+    company = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+    if company:
+        company.has_seen_tutorial = True
+        db.commit()
+    # Idempotent success even if no company yet (e.g. mid-onboarding).
+    return {"hasSeenTutorial": True}
+
+
 @router.get("/applications")
 async def get_company_applications(
     page: int = 1,

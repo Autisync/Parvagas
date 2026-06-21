@@ -27,6 +27,21 @@ type TutorialStep = {
 };
 
 const REPLAY_FLAG = "parvagas_company_tutorial_replay";
+// Per-session dismissal: once the user closes/skips the guide, don't auto-reopen
+// it on every in-portal navigation (the sidebar remounts on each page).
+const SESSION_DISMISS_KEY = "parvagas_company_tutorial_dismissed_session";
+
+/** Persist "tutorial seen" locally (durable) and best-effort to the backend. */
+function markCompanyTutorialSeen(token: string) {
+  try {
+    const previous = JSON.parse(localStorage.getItem("parvagas_user") || "null") || {};
+    setUser({ ...previous, hasSeenEmpresaTutorial: true });
+  } catch {
+    /* ignore */
+  }
+  // Fire-and-forget; tolerate a missing/failing endpoint so local state still sticks.
+  void authFetch("/companies/tutorial/seen", token, { method: "PATCH", suppressGlobalErrors: true }).catch(() => {});
+}
 
 const steps: TutorialStep[] = [
   {
@@ -92,7 +107,10 @@ export default function CompanyTutorialModal({ token, userId, hasSeenTutorial, o
       return;
     }
 
-    if (!hasSeenTutorial) {
+    // Don't auto-reopen if already seen, or dismissed earlier this session.
+    const dismissedThisSession =
+      typeof window !== "undefined" && sessionStorage.getItem(SESSION_DISMISS_KEY) === "1";
+    if (!hasSeenTutorial && !dismissedThisSession) {
       const savedStep = Number(localStorage.getItem(stepStorageKey) || 0);
       setStepIndex(Number.isFinite(savedStep) ? Math.min(Math.max(savedStep, 0), steps.length - 1) : 0);
       setOpen(true);
@@ -133,6 +151,13 @@ export default function CompanyTutorialModal({ token, userId, hasSeenTutorial, o
 
   const handleCloseAndSaveProgress = () => {
     persistStep(stepIndex);
+    // Remember dismissal for this session so it doesn't reopen on every
+    // in-portal navigation; progress is still saved to resume later.
+    try {
+      sessionStorage.setItem(SESSION_DISMISS_KEY, "1");
+    } catch {
+      /* ignore */
+    }
     setOpen(false);
   };
 
@@ -149,20 +174,20 @@ export default function CompanyTutorialModal({ token, userId, hasSeenTutorial, o
     persistStep(previous);
   };
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
+    setSaving(true);
+    // Persist "seen" locally first (optimistic) so completion always sticks even
+    // if the backend endpoint is unavailable; the PATCH is best-effort.
+    markCompanyTutorialSeen(token);
     try {
-      setSaving(true);
-      await authFetch("/companies/tutorial/seen", token, { method: "PATCH" });
-      const previous = JSON.parse(localStorage.getItem("parvagas_user") || "null") || {};
-      setUser({ ...previous, hasSeenEmpresaTutorial: true });
-      localStorage.removeItem(stepStorageKey);
-      setOpen(false);
-      onComplete?.();
+      sessionStorage.setItem(SESSION_DISMISS_KEY, "1");
     } catch {
-      setOpen(false);
-    } finally {
-      setSaving(false);
+      /* ignore */
     }
+    localStorage.removeItem(stepStorageKey);
+    setOpen(false);
+    setSaving(false);
+    onComplete?.();
   };
 
   if (!open) return null;

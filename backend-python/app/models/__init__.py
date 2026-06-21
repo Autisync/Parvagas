@@ -113,7 +113,10 @@ class Company(Base, TimestampMixin):
     # Description
     description = Column(Text, nullable=True)
     logo_url = Column(String(500), nullable=True)
-    
+
+    # Onboarding
+    has_seen_tutorial = Column(Boolean, nullable=False, default=False)
+
     # Relations
     owner = relationship("User", back_populates="company", foreign_keys=[owner_user_id])
 
