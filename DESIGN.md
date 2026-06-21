@@ -45,7 +45,7 @@ All honor `prefers-reduced-motion`. Import via `@/app/components/motion`.
 ## Progress log (append each loop iteration)
 - [x] Phase 1 — Foundation: tokens + motion system in globals.css; motion component library; DESIGN.md. Typecheck clean.
 - [x] Phase 2 — Reporting UI: admin analytics KPIs → StatCard (icons/trend/animated); operational cards w/ progress bars; candidate dashboard skeletons + stagger; company dashboard animated pipeline metrics + brand spinner + stagger. Typecheck clean.
-- [~] Phase 3 — Completion/milestone animations. DONE: Signup/success. TODO: Aplicar (apply), CV upload, job posted (JobPostingModal), onboarding complete, company verification.
+- [x] Phase 3 — Completion/milestone animations wired: Signup/success, Aplicar (apply sent — candidate + guest), JobPostingModal (job posted), candidate onboarding complete (dashboard ?onboarded=1), company verified (one-time), CV upload success. Typecheck clean.
 - [ ] Phase 4 — Page polish: Login/Signup, Header/Footer, landing, Vagas-Disponiveis (list+detail), candidate & company portals.
 - [ ] Phase 5 — Pass: a11y/contrast audit, responsive checks, final polish.
 
