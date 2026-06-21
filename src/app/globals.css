@@ -227,7 +227,7 @@ textarea:-webkit-autofill {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border: 1px solid var(--border-soft);
+    border: 1px solid var(--border-strong);
     border-radius: 9999px;
     background: #ffffff;
     color: var(--text-strong);
@@ -278,7 +278,7 @@ textarea:-webkit-autofill {
   .app-action-approve:hover { background: var(--success-700); }
   .app-action-reject { background: var(--danger-600); color: #fff; }
   .app-action-reject:hover { background: var(--brand-700); }
-  .app-action-neutral { border: 1px solid var(--border-soft); background: #fff; color: var(--text-strong); }
+  .app-action-neutral { border: 1px solid var(--border-strong); background: #fff; color: var(--text-strong); }
   .app-action-neutral:hover { border-color: var(--brand-200); color: var(--brand-700); background: var(--brand-50); }
 
   /* ---- Badges ---- */
