@@ -6,6 +6,7 @@ import Image from "next/image";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
+import ReportJobButton from "./ReportJobButton";
 
 type Job = {
   _id: string;
@@ -33,6 +34,7 @@ type Job = {
     website?: string;
     description?: string;
     logo?: string;
+    verified?: boolean;
   } | string;
 };
 
@@ -63,8 +65,29 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const companyName = company?.name ?? dict.jobDetail.companyFallback;
   const mode = job.workMode || "";
 
+  const jobLd = {
+    "@context": "https://schema.org/",
+    "@type": "JobPosting",
+    title: job.title,
+    description: job.description || job.title,
+    datePosted: job.createdAt,
+    employmentType: job.contractType || job.jobType || undefined,
+    hiringOrganization: {
+      "@type": "Organization",
+      name: companyName,
+      ...(company?.website ? { sameAs: company.website } : {}),
+      ...(company?.logo ? { logo: company.logo } : {}),
+    },
+    jobLocation: {
+      "@type": "Place",
+      address: { "@type": "PostalAddress", addressLocality: job.location || "Angola", addressCountry: "AO" },
+    },
+    ...(job.salaryRange ? { baseSalary: { "@type": "MonetaryAmount", currency: "AOA", value: { "@type": "QuantitativeValue", value: job.salaryRange } } } : {}),
+  };
+
   return (
     <div className="bg-white min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobLd) }} />
       <Header />
       <main className="px-6 py-8 max-w-5xl mx-auto">
         <Breadcrumbs
@@ -90,7 +113,12 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 )}
                 <div>
                   <h1 className="text-3xl font-bold">{job.title}</h1>
-                  <p className="text-gray-500 mt-0.5">{companyName}{company?.industry ? ` · ${company.industry}` : ""}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-2 text-gray-500">
+                    <span>{companyName}{company?.industry ? ` · ${company.industry}` : ""}</span>
+                    {company?.verified && (
+                      <span className="app-badge app-badge-success" title="Empresa verificada pela Parvagas">✓ Empresa verificada</span>
+                    )}
+                  </p>
                 </div>
               </div>
 
@@ -199,6 +227,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </Link>
 
             <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
+
+            <div className="pt-1 text-center">
+              <ReportJobButton jobId={job._id} />
+            </div>
 
             <SponsoredAdSlot
               placement="sidebar"

@@ -9,6 +9,7 @@ import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { apiFetch, authFetch, getToken, getUser } from "@/lib/api";
 import { uploadWithProgress } from "@/lib/uploadClient";
 import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
+import { track } from "@/lib/analytics";
 
 type JobDetail = {
   _id: string;
@@ -161,6 +162,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       notify("Candidatura submetida com sucesso.", "success");
       setSubmitted(true);
       setCelebrate(true);
+      track("apply_success");
     } catch (error: unknown) {
       notify(error instanceof Error ? error.message : "Erro ao submeter candidatura.", "error");
     } finally {
@@ -198,6 +200,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       setGuestForm((prev) => ({ ...prev, cv: null, coverLetter: "" }));
       setSubmitted(true);
       setCelebrate(true);
+      track("apply_success");
     } catch (error: unknown) {
       notify(error instanceof Error ? error.message : "Erro ao submeter Quick Apply.", "error");
     } finally {

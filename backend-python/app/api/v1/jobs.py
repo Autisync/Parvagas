@@ -39,6 +39,8 @@ def _company_payload(company: Optional[Company]) -> Optional[dict[str, Any]]:
         "website": company.website,
         "description": company.description,
         "logo": company.logo_url,
+        "status": company.status,
+        "verified": company.status == "active",  # drives the "empresa verificada" badge
     }
 
 
@@ -167,6 +169,24 @@ async def get_public_job(job_id: str, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
     return {"job": serialize_job(job, detail=True)}
+
+
+@router.post("/jobs/{job_id}/report")
+async def report_job(job_id: str, payload: dict[str, Any] | None = None, db: Session = Depends(get_db)):
+    """Public anti-fraud report — flags a job for admin review (no account needed)."""
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    reason = str((payload or {}).get("reason", "")).strip()[:200] or "denúncia de utilizador"
+    flags = _json_list(job.spam_flags)
+    flags.append(reason)
+    job.spam_flags = json.dumps(flags, ensure_ascii=True)
+    job.spam_score = min(100, (job.spam_score or 0) + 30)
+    # Auto-pull from public view once it crosses the threshold, pending re-review.
+    if job.spam_score >= 60 and job.status in PUBLIC_JOB_STATUSES:
+        job.status = "pending_platform_review"
+    db.commit()
+    return {"reported": True, "jobId": job_id}
 
 
 @router.get("/public/homepage")

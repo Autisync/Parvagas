@@ -52,6 +52,13 @@ export default function RootLayout({
           type="image/png"
           sizes="57x57"
         /> */}
+        {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
+          <script
+            defer
+            data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
+            src={`${process.env.NEXT_PUBLIC_PLAUSIBLE_SRC || "https://plausible.io"}/js/script.tagged-events.js`}
+          />
+        ) : null}
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <Providers>

@@ -10,11 +10,12 @@ import { apiFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
+import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 
 type Job = {
   _id: string;
   title: string;
-  companyId?: { name?: string; industry?: string; logo?: string } | string;
+  companyId?: { name?: string; industry?: string; logo?: string; verified?: boolean } | string;
   location?: string;
   workMode?: string;
   mode?: string;
@@ -27,6 +28,13 @@ type Job = {
   requiredExperienceYears?: number;
   expiresAt?: string;
 };
+
+// 18 províncias de Angola (filtro de pesquisa)
+const ANGOLA_PROVINCES = [
+  "Bengo", "Benguela", "Bié", "Cabinda", "Cuando Cubango", "Cuanza Norte",
+  "Cuanza Sul", "Cunene", "Huambo", "Huíla", "Luanda", "Lunda Norte",
+  "Lunda Sul", "Malanje", "Moxico", "Namibe", "Uíge", "Zaire",
+] as const;
 
 type PaginationMeta = { page: number; limit: number; total: number; totalPages: number; };
 
@@ -211,7 +219,10 @@ function VagasDisponiveisContent() {
         <form onSubmit={handleSearch}>
           <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4 grid gap-3 md:grid-cols-4">
             <input className="app-input" placeholder={dict.jobsList.searchKeyword} value={keyword} onChange={e => setKeyword(e.target.value)} />
-            <input className="app-input" placeholder={dict.jobsList.searchLocation} value={location} onChange={e => setLocation(e.target.value)} />
+            <select className="app-input" value={location} onChange={e => setLocation(e.target.value)} aria-label="Província">
+              <option value="">{dict.jobsList.searchLocation}</option>
+              {ANGOLA_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
             <select className="app-input" value={category} onChange={e => setCategory(e.target.value)}>
               <option value="">{dict.jobsList.allCategories}</option>
               <option value="Tecnologia">{categoryLabels.Tecnologia}</option>
@@ -325,7 +336,14 @@ function VagasDisponiveisContent() {
                     )}
                     <div>
                       <h2 className="text-lg font-bold leading-snug">{job.title}</h2>
-                      <p className="text-sm text-gray-500">{name}</p>
+                      <p className="flex items-center gap-1.5 text-sm text-gray-500">
+                        {name}
+                        {job.companyId && typeof job.companyId === "object" && job.companyId.verified && (
+                          <span className="app-badge app-badge-success" title="Empresa verificada">
+                            <CheckBadgeIcon className="h-3.5 w-3.5" /> Verificada
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
