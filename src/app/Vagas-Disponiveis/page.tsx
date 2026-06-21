@@ -220,17 +220,36 @@ function VagasDisponiveisContent() {
             />
           </div>
         )}
-        {loading && <div className="mt-12 flex justify-center"><div className="w-8 h-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" /></div>}
+        {loading && (
+          <div className="mt-8 grid gap-4" aria-hidden>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="app-card p-5">
+                <div className="flex items-start gap-3">
+                  <div className="app-skeleton h-11 w-11 rounded-xl" />
+                  <div className="flex-1">
+                    <div className="app-skeleton h-5 w-1/2" />
+                    <div className="app-skeleton mt-2 h-3.5 w-1/3" />
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <div className="app-skeleton h-5 w-20 rounded-full" />
+                  <div className="app-skeleton h-5 w-24 rounded-full" />
+                  <div className="app-skeleton h-5 w-16 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {!loading && !error && (
-          <div className="mt-8 grid gap-4">
+          <div className="mt-8 grid gap-4 pv-stagger">
             {jobs.length === 0 && <p className="text-gray-500 text-center py-12">{dict.jobsList.empty}</p>}
             {jobs.map((job, index) => {
               const mode = job.workMode || job.mode || "";
               const name = companyName(job);
               const logo = companyLogo(job);
               return [
-                <article key={job._id} className="app-card p-5 hover:shadow-md transition-shadow">
+                <article key={job._id} className="app-card app-card-interactive p-5">
                   <div className="flex items-start gap-3">
                     {logo ? (
                       <Image src={logo} alt={`Logo ${name}`} width={44} height={44} className="shrink-0 h-11 w-11 rounded-xl border border-gray-200 object-cover" unoptimized />
