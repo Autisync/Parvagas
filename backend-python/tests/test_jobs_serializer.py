@@ -22,8 +22,10 @@ def _fake_job(**over):
         preferred_skills=None, languages=None,
         location="Luanda", work_mode="Remoto", category="Tecnologia",
         contract_type="Efectivo", job_type="full_time", salary_range="200k",
+        salary_min=200000, salary_max=400000,
         experience_level="Mid", required_experience_years=3,
-        status="approved", visibility="public",
+        status="approved", visibility="public", views=42,
+        spam_score=0, spam_flags=None,
         expires_at=None, published_at=None, created_at=datetime(2026, 1, 1),
         company=_fake_company(),
     )

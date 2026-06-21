@@ -54,11 +54,14 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
         "contractType": job.contract_type,
         "jobType": job.job_type,
         "salaryRange": job.salary_range,
+        "salaryMin": job.salary_min,
+        "salaryMax": job.salary_max,
         "experienceLevel": job.experience_level,
         "requiredExperienceYears": job.required_experience_years,
         "requiredSkills": _json_list(job.required_skills),
         "status": job.status,
         "visibility": job.visibility,
+        "views": job.views or 0,
         "expiresAt": job.expires_at.isoformat() if job.expires_at else None,
         "createdAt": job.created_at.isoformat() if job.created_at else None,
         "companyId": _company_payload(getattr(job, "company", None)),
@@ -72,6 +75,8 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
                 "preferredSkills": _json_list(job.preferred_skills),
                 "languages": _json_list(job.languages),
                 "publishedAt": job.published_at.isoformat() if job.published_at else None,
+                "spamScore": job.spam_score or 0,
+                "spamFlags": _json_list(job.spam_flags),
             }
         )
     return payload
@@ -85,9 +90,16 @@ async def list_public_jobs(
     provinceCity: Optional[str] = None,
     category: Optional[str] = None,
     workMode: Optional[str] = None,
+    contractType: Optional[str] = None,
+    seniority: Optional[str] = None,
+    salaryMin: Optional[int] = None,
+    datePostedDays: Optional[int] = None,
+    sort: str = "recent",
     db: Session = Depends(get_db),
 ):
     """Public, paginated, filterable list of live job postings."""
+    from datetime import datetime, timedelta
+
     query = (
         db.query(Job)
         .options(joinedload(Job.company))  # eager-load company to avoid N+1 in serialize_job
@@ -97,17 +109,35 @@ async def list_public_jobs(
 
     if keyword and keyword.strip():
         like = f"%{keyword.strip()}%"
-        query = query.filter(Job.title.ilike(like))
+        # Title OR description OR skills match (broader than title-only).
+        query = query.filter(
+            Job.title.ilike(like) | Job.description.ilike(like) | Job.required_skills.ilike(like)
+        )
     if provinceCity and provinceCity.strip():
         query = query.filter(Job.location.ilike(f"%{provinceCity.strip()}%"))
     if category and category.strip() and category != "all":
         query = query.filter(Job.category == category.strip())
     if workMode and workMode.strip() and workMode != "all":
         query = query.filter(Job.work_mode == workMode.strip())
+    if contractType and contractType.strip() and contractType != "all":
+        query = query.filter(Job.contract_type == contractType.strip())
+    if seniority and seniority.strip() and seniority != "all":
+        query = query.filter(Job.experience_level == seniority.strip())
+    if salaryMin:
+        query = query.filter(Job.salary_max >= salaryMin)
+    if datePostedDays:
+        cutoff = datetime.utcnow() - timedelta(days=int(datePostedDays))
+        query = query.filter(Job.created_at >= cutoff)
 
     total = query.count()
+    if sort == "salary":
+        order = Job.salary_max.desc()
+    elif sort == "relevance" and keyword:
+        order = Job.views.desc()  # proxy for relevance/popularity
+    else:
+        order = Job.created_at.desc()
     rows = (
-        query.order_by(Job.created_at.desc())
+        query.order_by(order)
         .offset((page - 1) * limit)
         .limit(limit)
         .all()
@@ -125,7 +155,15 @@ async def list_public_jobs(
 @router.get("/jobs/{job_id}")
 async def get_public_job(job_id: str, db: Session = Depends(get_db)):
     """Public detail for a single live job."""
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = (
+        db.query(Job).options(joinedload(Job.company)).filter(Job.id == job_id).first()
+    )
     if not job or job.status not in PUBLIC_JOB_STATUSES or job.visibility != "public":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    # Best-effort view tracking for employer analytics.
+    try:
+        job.views = (job.views or 0) + 1
+        db.commit()
+    except Exception:
+        db.rollback()
     return {"job": serialize_job(job, detail=True)}

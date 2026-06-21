@@ -32,6 +32,10 @@ class User(Base, TimestampMixin):
     role = Column(Enum(UserRole), nullable=False, default=UserRole.candidate)
     admin_level = Column(String(32), nullable=False, default=AdminLevel.moderator.value)
     
+    # Phone (mobile-first market: phone/OTP login)
+    phone = Column(String(20), nullable=True, index=True)
+    phone_verified = Column(Boolean, nullable=False, default=False)
+
     # Email verification
     email_verified = Column(Boolean, nullable=False, default=False)
     email_verified_at = Column(DateTime, nullable=True)
@@ -256,6 +260,13 @@ class Job(Base, TimestampMixin):
     expires_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
 
+    # Search facets / analytics / trust
+    salary_min = Column(Integer, nullable=True)
+    salary_max = Column(Integer, nullable=True)
+    views = Column(Integer, nullable=False, default=0)
+    spam_score = Column(Integer, nullable=False, default=0)
+    spam_flags = Column(Text, nullable=True)  # JSON array of reasons
+
     company = relationship("Company", foreign_keys=[company_id])
 
 
@@ -266,3 +277,135 @@ class SavedJob(Base, TimestampMixin):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     candidate_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
+
+
+class JobAlert(Base, TimestampMixin):
+    """Saved search that notifies a candidate of new matching jobs."""
+    __tablename__ = "job_alerts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    keyword = Column(String(255), nullable=True)
+    location = Column(String(255), nullable=True)
+    category = Column(String(100), nullable=True)
+    work_mode = Column(String(50), nullable=True)
+    frequency = Column(String(20), nullable=False, default="daily")  # instant | daily | weekly
+    active = Column(Boolean, nullable=False, default=True)
+    last_notified_at = Column(DateTime, nullable=True)
+
+
+class CompanyMember(Base, TimestampMixin):
+    """A user with a seat on a company (mini-ATS collaboration)."""
+    __tablename__ = "company_members"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(30), nullable=False, default="recruiter")  # owner | recruiter | viewer
+
+
+class CompanyInvite(Base, TimestampMixin):
+    """Pending invitation for a user to join a company."""
+    __tablename__ = "company_invites"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(30), nullable=False, default="recruiter")
+    token_hash = Column(String(255), nullable=False, unique=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending | accepted | revoked
+    expires_at = Column(DateTime, nullable=False)
+
+
+class ApplicationNote(Base, TimestampMixin):
+    """Recruiter note / rating on an application (ATS)."""
+    __tablename__ = "application_notes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    application_id = Column(String(36), ForeignKey("applications.id"), nullable=False, index=True)
+    author_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=True)
+    rating = Column(Integer, nullable=True)  # 1..5
+
+
+class AuditLog(Base, TimestampMixin):
+    """Durable record of privileged/admin actions."""
+    __tablename__ = "audit_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    actor_user_id = Column(String(36), nullable=True, index=True)
+    actor_email = Column(String(255), nullable=True)
+    action = Column(String(100), nullable=False, index=True)
+    resource_type = Column(String(50), nullable=True)
+    resource_id = Column(String(64), nullable=True)
+    details = Column(Text, nullable=True)  # JSON
+
+
+class ScrapedJob(Base, TimestampMixin):
+    """External job listing ingested for curation into the public board."""
+    __tablename__ = "scraped_jobs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source = Column(String(100), nullable=True, index=True)
+    source_url = Column(String(1000), nullable=True)
+    title = Column(String(255), nullable=False)
+    company_name = Column(String(255), nullable=True)
+    location = Column(String(255), nullable=True)
+    category = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    status = Column(String(30), nullable=False, default="pending", index=True)  # pending|approved|rejected|duplicate
+    duplicate_of = Column(String(36), nullable=True)
+    published_job_id = Column(String(36), nullable=True)
+
+
+class Plan(Base, TimestampMixin):
+    """Employer subscription / pay-per-post plan."""
+    __tablename__ = "plans"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    code = Column(String(50), nullable=False, unique=True)
+    name = Column(String(120), nullable=False)
+    price = Column(Float, nullable=False, default=0)
+    currency = Column(String(8), nullable=False, default="AOA")
+    interval = Column(String(20), nullable=False, default="month")  # month | one_time
+    features = Column(Text, nullable=True)  # JSON array
+    active = Column(Boolean, nullable=False, default=True)
+
+
+class Subscription(Base, TimestampMixin):
+    """A company's active plan."""
+    __tablename__ = "subscriptions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending|active|expired|cancelled
+    current_period_end = Column(DateTime, nullable=True)
+
+
+class Transaction(Base, TimestampMixin):
+    """Payment record (local rails: Multicaixa Express, Unitel Money, bank reference)."""
+    __tablename__ = "transactions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=True, index=True)
+    plan_id = Column(String(36), nullable=True)
+    amount = Column(Float, nullable=False, default=0)
+    currency = Column(String(8), nullable=False, default="AOA")
+    provider = Column(String(40), nullable=False, default="manual")  # manual|multicaixa|unitel_money|bank
+    reference = Column(String(64), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending|paid|failed|cancelled
+    kind = Column(String(30), nullable=False, default="subscription")  # subscription|featured|post
+
+
+class OtpCode(Base, TimestampMixin):
+    """One-time code for phone login / verification."""
+    __tablename__ = "otp_codes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    phone = Column(String(20), nullable=False, index=True)
+    code_hash = Column(String(255), nullable=False)
+    purpose = Column(String(30), nullable=False, default="login")  # login | verify
+    expires_at = Column(DateTime, nullable=False)
+    consumed_at = Column(DateTime, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
