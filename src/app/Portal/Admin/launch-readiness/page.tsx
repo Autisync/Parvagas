@@ -93,7 +93,7 @@ export default function AdminLaunchReadinessPage() {
       {report && (
         <>
           <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="app-card p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Total checks</p>
               <p className="mt-2 text-3xl font-bold text-slate-900">{report.summary.total}</p>
             </div>

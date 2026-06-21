@@ -136,7 +136,7 @@ export default function AdminLevelsPage() {
 
       {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
-      <form onSubmit={createAdmin} className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <form onSubmit={createAdmin} className="mt-5 app-card p-5">
         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Criar acesso admin</h2>
@@ -211,7 +211,7 @@ export default function AdminLevelsPage() {
         {admins.map((admin) => {
           const current = admin.adminLevel === "moderator" ? "moderator" : "super-admin";
           return (
-            <div key={admin._id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={admin._id} className="app-card p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold text-slate-900">{admin.fullName || "Admin"}</p>

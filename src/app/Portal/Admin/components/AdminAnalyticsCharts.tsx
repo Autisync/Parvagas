@@ -142,8 +142,8 @@ export default function AdminAnalyticsCharts({
 
       {/* Application status — donut with centered total + custom legend */}
       <ChartCard title="Distribuição por estado" subtitle="Candidaturas por fase do funil">
-        <div className="flex items-center gap-4">
-          <div className="relative h-64 w-1/2 min-w-[180px]" role="img" aria-label="Distribuição de candidaturas por estado">
+        <div className="flex flex-col items-center gap-4 sm:flex-row">
+          <div className="relative h-56 w-full sm:h-64 sm:w-1/2" role="img" aria-label="Distribuição de candidaturas por estado">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={applicationStatus} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
@@ -159,7 +159,7 @@ export default function AdminAnalyticsCharts({
               <span className="text-xs text-[var(--text-muted)]">total</span>
             </div>
           </div>
-          <ul className="flex-1 space-y-2">
+          <ul className="w-full flex-1 space-y-2">
             {applicationStatus.map((entry, idx) => (
               <li key={entry.label} className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2 text-[var(--text-muted)]">

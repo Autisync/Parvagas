@@ -62,7 +62,7 @@ export default function AdminExportsPage() {
 
       {error ? <div className="mt-5"><InlineErrorState /></div> : null}
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="mt-5 app-card p-4">
         <div className="grid gap-3 md:grid-cols-3">
           <label className="grid gap-1 text-sm">
             <span className="text-slate-600">Data inicial</span>

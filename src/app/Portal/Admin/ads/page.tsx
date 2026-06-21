@@ -247,7 +247,7 @@ export default function AdminAdsPage() {
       {error ? <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       {canCreate && (
-        <form onSubmit={submit} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form onSubmit={submit} className="mt-5 app-card p-4">
           <div className="grid gap-3 md:grid-cols-2">
             <input
               required
@@ -331,7 +331,7 @@ export default function AdminAdsPage() {
 
       <div className="mt-5 grid gap-3">
         {ads.map((ad) => (
-          <article key={ad._id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <article key={ad._id} className="app-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-semibold text-slate-900">{ad.title || "Campanha"}</p>

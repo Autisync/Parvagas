@@ -12,7 +12,7 @@ import { ArrowRightOnRectangleIcon, Bars3Icon } from "@heroicons/react/24/outlin
 
 const AdminSidebar = dynamic(() => import("./components/AdminSidebar"), {
   ssr: false,
-  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+  loading: () => <div className="h-80 app-card p-4" />,
 });
 
 const NotificationBell = dynamic(() => import("@/app/Portal/components/NotificationBell"), {

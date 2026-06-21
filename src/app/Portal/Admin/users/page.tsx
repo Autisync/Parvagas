@@ -194,7 +194,7 @@ export default function AdminUsersPage() {
       </AdminFilterBar>
 
       {list.length > 0 && level === "super-admin" ? (
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="mt-5 app-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={toggleVisible} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">

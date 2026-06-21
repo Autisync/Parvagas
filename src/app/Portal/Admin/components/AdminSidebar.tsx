@@ -122,7 +122,7 @@ export default function AdminSidebar({
     <aside
       id="admin-sidebar"
       className={[
-        "h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm",
+        "h-fit app-card p-4",
         open ? "block" : "hidden",
         "lg:sticky lg:top-4 lg:block",
       ].join(" ")}

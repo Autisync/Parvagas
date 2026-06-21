@@ -205,7 +205,7 @@ export default function AdminScrapedPage() {
 
       {error ? <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div> : null}
 
-      <form onSubmit={createScraped} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form onSubmit={createScraped} className="mt-5 app-card p-4">
         <div className="grid gap-3 md:grid-cols-2">
           <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Título" required className={adminFieldClass} />
           <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Empresa/Fonte" required className={adminFieldClass} />
@@ -226,7 +226,7 @@ export default function AdminScrapedPage() {
       </AdminFilterBar>
 
       {jobs.length > 0 ? (
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="mt-5 app-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={toggleVisible} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
@@ -258,7 +258,7 @@ export default function AdminScrapedPage() {
         </section>
       ) : null}
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-5 overflow-x-auto app-card">
         {loading ? (
           <div className="inline-flex items-center gap-2 p-6 text-sm text-slate-600">
             <AdminSpinner />

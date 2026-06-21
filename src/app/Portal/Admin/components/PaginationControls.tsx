@@ -18,7 +18,7 @@ export default function PaginationControls({
   if (!pagination) return null;
 
   return (
-    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 app-card px-4 py-3">
       <p className="text-sm text-slate-600">
         Página {pagination.page} de {pagination.totalPages} · {pagination.total} registos
       </p>

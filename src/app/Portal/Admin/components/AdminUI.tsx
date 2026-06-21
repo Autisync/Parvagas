@@ -44,12 +44,19 @@ export function AdminPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <section className="app-card relative overflow-hidden p-6 sm:p-7">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-60"
+        style={{ background: "radial-gradient(circle, var(--brand-50), transparent 70%)" }}
+      />
+      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">{eyebrow}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{title}</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+          <span className="inline-flex items-center rounded-full border border-[var(--brand-100)] bg-[var(--brand-50)] px-2.5 py-0.5 text-xs font-semibold text-[var(--brand-700)]">
+            {eyebrow}
+          </span>
+          <h1 className="mt-3 text-balance text-2xl font-bold tracking-tight text-[var(--text-strong)] sm:text-3xl">{title}</h1>
+          <p className="mt-2 text-pretty text-sm leading-6 text-[var(--text-muted)]">{description}</p>
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
@@ -59,8 +66,8 @@ export function AdminPageHeader({
 
 export function AdminFilterBar({ children }: { children: ReactNode }) {
   return (
-    <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-3 md:grid-cols-3">{children}</div>
+    <section className="app-card mt-5 p-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </section>
   );
 }
@@ -93,9 +100,9 @@ export function AdminRestricted({ title, children }: { title: string; children: 
 
 export function AdminEmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-sm text-slate-500">{description}</p>
+    <div className="rounded-2xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-muted)] p-8 text-center">
+      <p className="text-sm font-semibold text-[var(--text-strong)]">{title}</p>
+      <p className="mt-1 text-sm text-[var(--text-muted)]">{description}</p>
     </div>
   );
 }

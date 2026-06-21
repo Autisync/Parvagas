@@ -42,7 +42,7 @@ import {
 
 const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsCharts"), {
   ssr: false,
-  loading: () => <div className="h-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
+  loading: () => <div className="h-64 app-card p-4" />,
 });
 
 const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
@@ -291,11 +291,11 @@ export default function AdminAnalyticsPage() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="app-input w-auto" />
           </label>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} disabled={loading} className="app-btn-primary px-4 py-2 text-sm">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <button onClick={load} disabled={loading} className="app-btn-primary flex-1 px-4 py-2 text-sm sm:flex-none">
             <AdminLoadingLabel loading={loading} idle="Atualizar analytics" busy="A calcular..." />
           </button>
-          <button onClick={loadTables} disabled={tableLoading} className="app-btn-secondary px-4 py-2 text-sm">
+          <button onClick={loadTables} disabled={tableLoading} className="app-btn-secondary flex-1 px-4 py-2 text-sm sm:flex-none">
             <AdminLoadingLabel loading={tableLoading} idle="Atualizar tabelas" busy="A atualizar..." />
           </button>
         </div>
@@ -350,7 +350,7 @@ export default function AdminAnalyticsPage() {
       </section>
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <p className="text-xs font-medium text-slate-500">Anomalias</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Sinais fora do padrão</h3>
           <div className="mt-3 grid gap-2">
@@ -369,7 +369,7 @@ export default function AdminAnalyticsPage() {
           </div>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <p className="text-xs font-medium text-slate-500">Previsões leves</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Próximo período (estimado)</h3>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -401,7 +401,7 @@ export default function AdminAnalyticsPage() {
       </section>
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <p className="text-xs font-medium text-slate-500">Mapa de densidade</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Vagas por localização</h3>
           <div className="mt-3 grid gap-2">
@@ -420,7 +420,7 @@ export default function AdminAnalyticsPage() {
           </div>
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <p className="text-xs font-medium text-slate-500">Mapa de densidade</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">Utilizadores por localização</h3>
           <div className="mt-3 grid gap-2">
@@ -440,7 +440,7 @@ export default function AdminAnalyticsPage() {
         </article>
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="mt-6 app-card p-4">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <input
             value={jobSearch}
@@ -511,7 +511,7 @@ export default function AdminAnalyticsPage() {
       </section>
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <div className="grid gap-2 sm:grid-cols-2">
             <select value={companyStatus} onChange={(e) => { setCompanyStatus(e.target.value); setPageCompanies(1); }} className={adminFieldClass}>
               <option value="pending_verification">Empresas pendentes</option>
@@ -549,7 +549,7 @@ export default function AdminAnalyticsPage() {
           />
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <article className="app-card p-4">
           <div className="grid gap-2 sm:grid-cols-2">
             <select value={applicationStatus} onChange={(e) => { setApplicationStatus(e.target.value); setPageApplications(1); }} className={adminFieldClass}>
               <option value="all">Candidaturas (todas)</option>
