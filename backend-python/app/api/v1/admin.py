@@ -11,12 +11,13 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
 from app.db.session import get_db
-from app.models import AdCampaign, Company, Job, User, UserRole
+from app.models import AdCampaign, CandidateProfile, Company, Job, JobApplication, User, UserRole
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -238,59 +239,96 @@ async def admin_overview(
     return {
         "users": db.query(User).count(),
         "companies": db.query(Company).count(),
-        "jobs": 0,
-        "scraped": 0,
-        "ads": 0,
+        "jobs": db.query(Job).count(),
+        "scraped": 0,  # scraped-jobs feature not yet modelled
+        "ads": db.query(AdCampaign).count(),
     }
+
+
+def _distribution(db: Session, column) -> list[dict[str, Any]]:
+    rows = (
+        db.query(column, func.count())
+        .filter(column.isnot(None))
+        .group_by(column)
+        .order_by(func.count().desc())
+        .all()
+    )
+    return [{"label": str(label), "value": int(count)} for label, count in rows if str(label).strip()]
+
+
+def _daily_series(db: Session, model, since: datetime) -> list[dict[str, Any]]:
+    rows = (
+        db.query(func.date(model.created_at), func.count())
+        .filter(model.created_at >= since)
+        .group_by(func.date(model.created_at))
+        .order_by(func.date(model.created_at))
+        .all()
+    )
+    return [{"label": str(d), "value": int(c)} for d, c in rows]
+
+
+def _pct_change(db: Session, model, now: datetime, window_days: int = 30) -> float:
+    cur_start = now - timedelta(days=window_days)
+    prev_start = now - timedelta(days=2 * window_days)
+    current = db.query(model).filter(model.created_at >= cur_start).count()
+    previous = db.query(model).filter(model.created_at >= prev_start, model.created_at < cur_start).count()
+    if previous == 0:
+        return 100.0 if current else 0.0
+    return round((current - previous) / previous * 100, 1)
 
 
 @router.get("/analytics")
 async def admin_analytics(
     from_date: str | None = Query(default=None, alias="from"),
     to_date: str | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
+    now = datetime.utcnow()
+    since14 = now - timedelta(days=14)
+    active_app_statuses = ("submitted", "under_review", "shortlisted", "interview")
+
     return {
         "range": {"from": from_date, "to": to_date},
         "totals": {
-            "users": 0,
-            "companies": 0,
-            "jobs": 0,
+            "users": db.query(User).count(),
+            "companies": db.query(Company).count(),
+            "jobs": db.query(Job).count(),
             "scraped": 0,
-            "ads": 0,
-            "applications": 0,
+            "ads": db.query(AdCampaign).count(),
+            "applications": db.query(JobApplication).count(),
         },
         "operational": {
-            "pendingJobs": 0,
-            "pendingCompanies": 0,
-            "suspendedUsers": 0,
+            "pendingJobs": db.query(Job).filter(Job.status == "pending_platform_review").count(),
+            "pendingCompanies": db.query(Company).filter(Company.status == "pending_verification").count(),
+            "suspendedUsers": db.query(User).filter(User.suspended.is_(True)).count(),
             "pendingScraped": 0,
-            "activeApplications": 0,
+            "activeApplications": db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(),
         },
         "trends": {
-            "usersPct": 0,
-            "companiesPct": 0,
-            "jobsPct": 0,
-            "applicationsPct": 0,
+            "usersPct": _pct_change(db, User, now),
+            "companiesPct": _pct_change(db, Company, now),
+            "jobsPct": _pct_change(db, Job, now),
+            "applicationsPct": _pct_change(db, JobApplication, now),
             "revenuePct": 0,
         },
         "series": {
-            "jobsPosted": [],
-            "userSignups": [],
-            "applications": [],
+            "jobsPosted": _daily_series(db, Job, since14),
+            "userSignups": _daily_series(db, User, since14),
+            "applications": _daily_series(db, JobApplication, since14),
             "revenue": [],
         },
         "distributions": {
-            "applicationStatus": [],
-            "jobsByStatus": [],
-            "companyVerification": [],
-            "jobLocationDensity": [],
-            "userLocationDensity": [],
+            "applicationStatus": _distribution(db, JobApplication.status),
+            "jobsByStatus": _distribution(db, Job.status),
+            "companyVerification": _distribution(db, Company.status),
+            "jobLocationDensity": _distribution(db, Job.location)[:8],
+            "userLocationDensity": _distribution(db, CandidateProfile.location)[:8],
         },
         "business": {
             "revenueInRange": 0,
-            "adCountInRange": 0,
+            "adCountInRange": db.query(AdCampaign).count(),
         },
         "insights": {
             "anomalies": [],
