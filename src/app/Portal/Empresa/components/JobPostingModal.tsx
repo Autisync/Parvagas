@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { authFetch } from "@/lib/api";
 import FormFieldError from "@/app/components/errors/FormFieldError";
+import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
+
+type CreatedJob = { _id: string; title?: string; status?: string; location?: string; createdAt?: string };
 
 type Props = {
   token: string;
@@ -44,8 +47,20 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [skillsInput, setSkillsInput] = useState("");
+  const [postedJob, setPostedJob] = useState<CreatedJob | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
 
   if (!open) return null;
+
+  const finish = () => {
+    if (postedJob) onCreated?.(postedJob);
+    setForm(initialForm);
+    setSkillsInput("");
+    setSubmitted(false);
+    setPostedJob(null);
+    setCelebrate(false);
+    onClose();
+  };
 
   const setField = (k: keyof JobForm, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }));
@@ -121,16 +136,35 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
         }
       );
 
-      onCreated?.(response.job);
-      setForm(initialForm);
-      setSkillsInput("");
-      onClose();
+      setPostedJob(response.job);
+      setCelebrate(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao submeter vaga.");
     } finally {
       setSaving(false);
     }
   };
+
+  if (postedJob) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4">
+        <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
+        <div className="app-card pv-animate-pop w-full max-w-md p-8 text-center">
+          <div className="flex justify-center">
+            <SuccessCheck size={84} tone="brand" />
+          </div>
+          <h2 className="mt-6 text-balance text-xl font-bold text-[var(--text-strong)]">Vaga submetida!</h2>
+          <p className="mx-auto mt-2 max-w-sm text-pretty text-sm leading-relaxed text-[var(--text-muted)]">
+            {postedJob.title ? `“${postedJob.title}” foi criada` : "A vaga foi criada"} e segue para aprovação
+            interna antes de ficar visível publicamente.
+          </p>
+          <button type="button" onClick={finish} className="app-btn-primary mt-7 px-6 py-2.5 text-sm">
+            Concluir
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4">

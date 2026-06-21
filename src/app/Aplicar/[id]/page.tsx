@@ -8,6 +8,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { apiFetch, authFetch, getToken, getUser } from "@/lib/api";
 import { uploadWithProgress } from "@/lib/uploadClient";
+import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
 
 type JobDetail = {
   _id: string;
@@ -43,6 +44,8 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
   const [loadingJob, setLoadingJob] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   const [token, setToken] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("guest");
@@ -156,6 +159,8 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
         onProgress: setUploadProgress,
       });
       notify("Candidatura submetida com sucesso.", "success");
+      setSubmitted(true);
+      setCelebrate(true);
     } catch (error: unknown) {
       notify(error instanceof Error ? error.message : "Erro ao submeter candidatura.", "error");
     } finally {
@@ -191,6 +196,8 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       });
       notify("Candidatura rápida submetida. Enviámos instruções para o seu email.", "success");
       setGuestForm((prev) => ({ ...prev, cv: null, coverLetter: "" }));
+      setSubmitted(true);
+      setCelebrate(true);
     } catch (error: unknown) {
       notify(error instanceof Error ? error.message : "Erro ao submeter Quick Apply.", "error");
     } finally {
@@ -212,8 +219,39 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
           ]}
         />
 
-        {loadingJob ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6">A carregar vaga...</div>
+        {submitted ? (
+          <>
+            <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
+            <div className="app-card pv-animate-pop mx-auto max-w-xl p-8 text-center">
+              <div className="flex justify-center">
+                <SuccessCheck size={84} tone="brand" />
+              </div>
+              <h1 className="mt-6 text-balance text-2xl font-bold text-[var(--text-strong)]">
+                Candidatura enviada!
+              </h1>
+              <p className="mx-auto mt-2 max-w-md text-pretty text-sm leading-relaxed text-[var(--text-muted)]">
+                {job?.title
+                  ? `A sua candidatura para ${job.title} foi submetida com sucesso. A empresa será notificada.`
+                  : "A sua candidatura foi submetida com sucesso. A empresa será notificada."}
+              </p>
+              <div className="mt-7 flex flex-wrap justify-center gap-3">
+                {mode === "candidate" ? (
+                  <Link href="/Portal/Candidato/Candidaturas" className="app-btn-primary px-5 py-2.5 text-sm">
+                    Ver as minhas candidaturas
+                  </Link>
+                ) : null}
+                <Link href="/Vagas-Disponiveis" className="app-btn-secondary px-5 py-2.5 text-sm">
+                  Explorar mais vagas
+                </Link>
+              </div>
+            </div>
+          </>
+        ) : loadingJob ? (
+          <div className="app-card p-6">
+            <div className="app-skeleton h-6 w-1/2" />
+            <div className="app-skeleton mt-3 h-4 w-full" />
+            <div className="app-skeleton mt-2 h-4 w-2/3" />
+          </div>
         ) : !job ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700">Vaga não encontrada.</div>
         ) : (
