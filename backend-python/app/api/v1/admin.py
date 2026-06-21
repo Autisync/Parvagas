@@ -541,10 +541,34 @@ async def admin_moderate_job(
 async def admin_applications(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=15, ge=1, le=200),
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {"applications": [], "pagination": _pagination(page, limit, 0)}
+    query = db.query(JobApplication)
+    if status_filter and status_filter != "all":
+        query = query.filter(JobApplication.status == status_filter)
+    total = query.count()
+    rows = (
+        query.order_by(JobApplication.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    applications = [
+        {
+            "_id": a.id,
+            "status": a.status,
+            "jobId": a.job_id,
+            "companyId": a.company_id,
+            "candidateUserId": a.candidate_user_id,
+            "applicantEmail": a.applicant_email,
+            "createdAt": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in rows
+    ]
+    return {"applications": applications, "pagination": _pagination(page, limit, total)}
 
 
 @router.get("/companies")
