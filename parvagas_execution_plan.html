@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parvagas — Plano de Execução para o Mercado</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --black: #0D0D0D; --white: #F5F4F0; --red: #C93B3B; --amber: #E07A25;
+    --green: #2E8B57; --blue: #1E5FA8; --surface: #161616; --surface2: #1E1E1E;
+    --border: #2A2A2A; --muted: #666; --text: #D8D6CF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--black); color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 15px; line-height: 1.6; }
+
+  .header { padding: 48px 48px 36px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .header-left { max-width: 640px; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: var(--amber); text-transform: uppercase; margin-bottom: 12px; }
+  h1 { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; line-height: 1.1; color: var(--white); margin-bottom: 12px; }
+  h1 span { color: var(--green); }
+  .subtitle { color: var(--muted); font-size: 14px; }
+  .header-meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); line-height: 2; }
+
+  .score-strip { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--border); }
+  .score-cell { padding: 28px 32px; border-right: 1px solid var(--border); }
+  .score-cell:last-child { border-right: none; }
+  .score-label { font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px; }
+  .score-value { font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 800; line-height: 1; }
+  .score-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .red { color: var(--red); } .amber { color: var(--amber); } .green { color: var(--green); } .blue { color: var(--blue); }
+
+  .callout { padding: 20px 48px; background: rgba(46,139,87,0.07); border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .callout strong { color: var(--white); }
+  .callout .tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .section-head { padding: 32px 48px 8px; }
+  .section-head .panel-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--white); }
+  .section-head .panel-desc { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  /* phases */
+  .phases { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .phase { padding: 22px 20px; border-right: 1px solid var(--border); }
+  .phase:last-child { border-right: none; }
+  .phase-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--amber); letter-spacing: 0.1em; }
+  .phase-name { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--white); font-size: 15px; margin: 6px 0; }
+  .phase-dur { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .phase-out { font-size: 12px; color: var(--muted); }
+
+  .main { display: grid; grid-template-columns: 1fr 1fr; }
+  .panel { padding: 32px 40px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .panel:nth-child(even) { border-right: none; }
+  .panel-wide { grid-column: span 2; padding: 32px 40px; border-bottom: 1px solid var(--border); }
+  .panel-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+  .panel-desc { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+
+  .task { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .task:last-child { border-bottom: none; }
+  .task-badge { min-width: 30px; height: 20px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .b-p0 { background: rgba(201,59,59,0.15); color: var(--red); border: 1px solid rgba(201,59,59,0.3); }
+  .b-p1 { background: rgba(224,122,37,0.15); color: var(--amber); border: 1px solid rgba(224,122,37,0.3); }
+  .b-p2 { background: rgba(46,139,87,0.15); color: var(--green); border: 1px solid rgba(46,139,87,0.3); }
+  .task-text strong { color: var(--white); display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .task-text p { font-size: 12.5px; color: var(--muted); }
+
+  table.cmp { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  table.cmp th { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table.cmp td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 12.5px; vertical-align: top; }
+  table.cmp tr:last-child td { border-bottom: none; }
+  table.cmp tr:hover td { background: var(--surface); }
+  .strike { color: var(--muted); text-decoration: line-through; }
+
+  /* readiness bars */
+  .legend-item { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .legend-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; position: relative; }
+  .legend-bar { height: 100%; border-radius: 3px; }
+  .legend-bar.ghost { position:absolute; top:0; left:0; opacity:0.35; }
+  .legend-label { font-size: 12px; min-width: 150px; }
+  .legend-score { font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 64px; text-align: right; }
+
+  .prio-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .prio-table th { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .prio-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  .prio-table tr:last-child td { border-bottom: none; }
+  .prio-table tr:hover td { background: var(--surface); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; }
+  .pill-f0 { background: rgba(201,59,59,0.15); color: var(--red); }
+  .pill-f1 { background: rgba(224,122,37,0.15); color: var(--amber); }
+  .pill-f2 { background: rgba(46,139,87,0.15); color: var(--green); }
+  .pill-f3 { background: rgba(30,95,168,0.18); color: #5B9EE8; }
+
+  .footer { padding: 24px 48px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+  .footer span { color: var(--amber); }
+
+  @media (max-width: 880px) {
+    .score-strip, .phases, .main { grid-template-columns: 1fr; }
+    .panel, .panel:nth-child(even) { border-right: none; }
+    .score-cell { border-right: none; }
+    .header { padding: 32px 24px; } .panel, .panel-wide { padding: 24px; } .callout, .section-head { padding-left: 24px; padding-right: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="eyebrow">⬡ Autisync / Parvagas — Plano de Execução</div>
+    <h1>Caminho para <span>Market-Ready</span><br>no Mercado Angolano</h1>
+    <p class="subtitle">Plataforma de recrutamento · Plano faseado · Junho 2026</p>
+  </div>
+  <div class="header-meta">
+    <div>Âmbito: Market-ready completo</div>
+    <div>Mercado: Angola (AO) · PT</div>
+    <div>Base: revisão de código real</div>
+    <div>Horizonte: <span style="color:var(--green)">~9–12 semanas</span></div>
+  </div>
+</div>
+
+<!-- SCORE STRIP (revisto) -->
+<div class="score-strip">
+  <div class="score-cell">
+    <div class="score-label">Prontidão (revista)</div>
+    <div class="score-value amber">~62<span style="font-size:20px">/100</span></div>
+    <div class="score-sub">Em integração, não 38</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Blockers reais</div>
+    <div class="score-value red">3</div>
+    <div class="score-sub">Segredos · Deploy/HTTPS · Verificação E2E</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Já construído</div>
+    <div class="score-value green">Auth·DB·Vagas</div>
+    <div class="score-sub">~22 modelos · 8 migrações</div>
+  </div>
+  <div class="score-cell">
+    <div class="score-label">Oportunidade</div>
+    <div class="score-value amber">ALTA</div>
+    <div class="score-sub">43,6% desemprego jovem AO</div>
+  </div>
+</div>
+
+<!-- CALLOUT: correction -->
+<div class="callout">
+  <span class="tag">⚑ Correção à auditoria externa</span><br>
+  A auditoria (38/100) foi feita <strong>sem acesso ao repositório</strong>. O código real <strong>já tem</strong> autenticação (JWT + OTP/telefone + middleware), base de dados (Postgres + ~22 modelos + 8 migrações), fluxo de candidatura, portal de empresa, moderação admin, páginas 404/erro, SEO (JobPosting/sitemap/robots) e upload de CV. O trabalho restante é <strong>integração, infraestrutura e diferenciação</strong> — não construir o básico de raiz.
+</div>
+
+<!-- PHASES -->
+<div class="section-head">
+  <div class="panel-title">As 5 Fases</div>
+  <div class="panel-desc">Beta fechada possível no fim da F2; lançamento público após F3 + F4.</div>
+</div>
+<div class="phases">
+  <div class="phase"><div class="phase-id">F0</div><div class="phase-name">Estabilizar & Verificar</div><div class="phase-dur">1–2 semanas</div><div class="phase-out">Stack a correr, contratos validados, CI verde, segredos rodados.</div></div>
+  <div class="phase"><div class="phase-id">F1</div><div class="phase-name">Infra & Confiança</div><div class="phase-dur">1–2 semanas</div><div class="phase-out">Deploy + HTTPS, storage cloud de CVs, email, backups, Sentry.</div></div>
+  <div class="phase"><div class="phase-id">F2</div><div class="phase-name">Endurecer Marketplace</div><div class="phase-dur">2–3 semanas</div><div class="phase-out">Loops sólidos, mobile 360px, pesquisa por província, SEO, analytics.</div></div>
+  <div class="phase"><div class="phase-id">F3</div><div class="phase-name">Diferenciadores Angola</div><div class="phase-dur">2–3 semanas</div><div class="phase-out">WhatsApp, Biscato/gig, OTP telefone, Angolanização, baixa-banda.</div></div>
+  <div class="phase"><div class="phase-id">F4</div><div class="phase-name">Lançamento</div><div class="phase-dur">1 semana</div><div class="phase-out">Beta fechada, teste de carga, legal, go-live checklist.</div></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- F0 tasks -->
+  <div class="panel">
+    <div class="panel-title">F0 · Estabilizar & Verificar</div>
+    <div class="panel-desc">Provar que o que existe funciona ponta-a-ponta antes de construir mais.</div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Rotação de segredos vazados</strong><p>Email, JWT, Postgres, admin key, Skima. Limpar histórico Git. Ver SECRET_ROTATION_REQUIRED.md.</p></div></div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Alinhar deps frontend (npm ci)</strong><p>node_modules tem Next 14; projeto pede Next 16. Confirmar lint/typecheck/test/build.</p></div></div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Subir stack + migrações</strong><p>docker compose up + alembic upgrade head; /health e /ready OK.</p></div></div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Validar contratos frontend↔backend</strong><p>Cada chamada da UI contra os routers reais (admin/jobs/applications/...). Corrigir shapes.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Smoke tests + seed de dados</strong><p>3 loops core manualmente; dados demo de empresas/vagas/candidatos.</p></div></div>
+  </div>
+
+  <!-- F1 tasks -->
+  <div class="panel">
+    <div class="panel-title">F1 · Infraestrutura & Confiança</div>
+    <div class="panel-desc">Onde se ganha confiança no mercado AO (receio de fraude é real).</div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Deploy frontend + backend + Postgres gerido</strong><p>Região de baixa latência para AO; backups automáticos.</p></div></div>
+    <div class="task"><div class="task-badge b-p0">P0</div><div class="task-text"><strong>Domínio + HTTPS/TLS</strong><p>parvagas.co.ao + api.parvagas.co.ao; redirect http→https; HSTS.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Storage cloud de CVs</strong><p>Supabase/R2 (adapter já existe); validação tipo/tamanho + antivírus.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Email transacional (SPF/DKIM/DMARC)</strong><p>Entregabilidade; testar confirmação, verificação, alertas.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Sentry + uptime + CAPTCHA</strong><p>Monitorização e anti-abuso (rate limiting já existe) em registo/candidatura.</p></div></div>
+  </div>
+
+  <!-- F2 tasks -->
+  <div class="panel">
+    <div class="panel-title">F2 · Endurecer o Marketplace</div>
+    <div class="panel-desc">Os loops existem — torná-los sólidos, rápidos e mobile-first.</div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>QA mobile a 360px (Android low-end)</strong><p>85% do tráfego AO é mobile; testar em 3G simulado.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Pesquisa & filtro por província</strong><p>Luanda, Benguela, Huambo, Cabinda… MeiliSearch (reindex:jobs) ou FTS.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Anti-fraude: denúncia + verificação</strong><p>Moderação antes de publicar; badge "empresa verificada".</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>SEO real + Analytics/funil</strong><p>Indexação no Search Console; PostHog/Plausible com eventos de funil.</p></div></div>
+    <div class="task"><div class="task-badge b-p2">P2</div><div class="task-text"><strong>Acessibilidade & copy PT-Angola</strong><p>Estados vazios, mensagens de erro amigáveis (sistema já existe).</p></div></div>
+  </div>
+
+  <!-- F3 tasks -->
+  <div class="panel">
+    <div class="panel-title">F3 · Diferenciadores Angola</div>
+    <div class="panel-desc">O fosso competitivo — nenhum concorrente tem isto.</div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Login por telefone/OTP</strong><p>Modelo OtpCode já existe; integrar SMS com cobertura AO. Email tem baixa adoção.</p></div></div>
+    <div class="task"><div class="task-badge b-p1">P1</div><div class="task-text"><strong>Candidatar via WhatsApp + cartões partilháveis</strong><p>Maior canal de conversão em AO.</p></div></div>
+    <div class="task"><div class="task-badge b-p2">P2</div><div class="task-text"><strong>Categoria "Biscato" (gig/informal)</strong><p>Endereça 43,6% de desemprego jovem — mercado por servir.</p></div></div>
+    <div class="task"><div class="task-badge b-p2">P2</div><div class="task-text"><strong>Badge/Guia de Angolanização</strong><p>Conformidade 70% nacionais; único no mercado, atrai empresas internacionais.</p></div></div>
+    <div class="task"><div class="task-badge b-p2">P2</div><div class="task-text"><strong>Modo baixa-banda / PWA offline</strong><p>Service Worker + fallback só-texto para uso fora de Luanda.</p></div></div>
+  </div>
+
+  <!-- READINESS BARS -->
+  <div class="panel-wide">
+    <div class="panel-title">Prontidão por Dimensão — Auditoria vs Real</div>
+    <div class="panel-desc">Barra cheia = estado real estimado (revisão de código); barra fantasma = pontuação da auditoria externa.</div>
+    <div style="margin-top:14px">
+      <div class="legend-item"><div class="legend-label">Auth & Segurança</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:10%;background:var(--muted)"></div><div class="legend-bar" style="width:60%;background:var(--amber)"></div></div><div class="legend-score amber">6 <span style="color:var(--muted)">·1</span></div></div>
+      <div class="legend-item"><div class="legend-label">Dados / Backend</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:20%;background:var(--muted)"></div><div class="legend-bar" style="width:70%;background:var(--green)"></div></div><div class="legend-score green">7 <span style="color:var(--muted)">·2</span></div></div>
+      <div class="legend-item"><div class="legend-label">Fluxo core de vagas</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:30%;background:var(--muted)"></div><div class="legend-bar" style="width:60%;background:var(--amber)"></div></div><div class="legend-score amber">6 <span style="color:var(--muted)">·3</span></div></div>
+      <div class="legend-item"><div class="legend-label">Mobile / Responsivo</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:40%;background:var(--muted)"></div><div class="legend-bar" style="width:40%;background:var(--amber)"></div></div><div class="legend-score amber">4 <span style="color:var(--muted)">·4</span></div></div>
+      <div class="legend-item"><div class="legend-label">SEO / Descoberta</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:20%;background:var(--muted)"></div><div class="legend-bar" style="width:60%;background:var(--amber)"></div></div><div class="legend-score amber">6 <span style="color:var(--muted)">·2</span></div></div>
+      <div class="legend-item"><div class="legend-label">DevOps / CI-CD</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:40%;background:var(--muted)"></div><div class="legend-bar" style="width:60%;background:var(--amber)"></div></div><div class="legend-score amber">6 <span style="color:var(--muted)">·4</span></div></div>
+      <div class="legend-item"><div class="legend-label">Moderação / Confiança</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:10%;background:var(--muted)"></div><div class="legend-bar" style="width:60%;background:var(--amber)"></div></div><div class="legend-score amber">6 <span style="color:var(--muted)">·1</span></div></div>
+      <div class="legend-item"><div class="legend-label">Localização Angola</div><div class="legend-bar-wrap"><div class="legend-bar ghost" style="width:30%;background:var(--muted)"></div><div class="legend-bar" style="width:40%;background:var(--amber)"></div></div><div class="legend-score amber">4 <span style="color:var(--muted)">·3</span></div></div>
+      <div class="legend-item"><div class="legend-label">Posicionamento</div><div class="legend-bar-wrap"><div class="legend-bar" style="width:70%;background:var(--green)"></div></div><div class="legend-score green">7</div></div>
+    </div>
+  </div>
+
+  <!-- CORRECTION TABLE -->
+  <div class="panel-wide">
+    <div class="panel-title">Reconciliação: Auditoria vs Repositório</div>
+    <div class="panel-desc">Vários "blockers" já estão resolvidos no código.</div>
+    <table class="cmp">
+      <tr><th>Afirmação da auditoria</th><th>Estado real</th></tr>
+      <tr><td class="strike">No Authentication System</td><td class="green">✅ JWT, verificação email, reset, OTP/telefone, middleware</td></tr>
+      <tr><td class="strike">No Database / Persistence</td><td class="green">✅ Postgres + SQLAlchemy · ~22 modelos · 8 migrações Alembic</td></tr>
+      <tr><td class="strike">No Job Application Flow</td><td class="green">✅ applications.py (~419 LOC), estados draft→hired</td></tr>
+      <tr><td class="strike">No Employer Portal / Posting</td><td class="green">✅ companies.py (~730 LOC) + jobs.py, verificação de empresa</td></tr>
+      <tr><td class="strike">No Error Handling / 404</td><td class="green">✅ error.tsx · global-error.tsx · not-found.tsx</td></tr>
+      <tr><td class="strike">No SEO / Meta Tags</td><td class="green">✅ JobPosting schema · sitemap.xml · robots.txt · OG</td></tr>
+      <tr><td class="strike">No CV Upload</td><td class="green">✅ Pipeline PDF/DOCX com parser + fallback</td></tr>
+      <tr><td class="strike">No Admin/Moderation</td><td class="green">✅ admin.py (~1195 LOC): moderação, verificação, scraping, ads</td></tr>
+      <tr><td class="amber">HTTPS / Deploy</td><td class="amber">⚠ Válido — falta deploy real + TLS (F1)</td></tr>
+      <tr><td class="amber">Mobile a 360px</td><td class="amber">⚠ Válido — falta QA mobile (F2)</td></tr>
+    </table>
+  </div>
+
+  <!-- ROADMAP -->
+  <div class="panel-wide">
+    <div class="panel-title">Roadmap Priorizado</div>
+    <div class="panel-desc">Ordenado por caminho crítico até market-ready completo.</div>
+    <table class="prio-table">
+      <tr><th style="width:40px">#</th><th>Ação</th><th>Fase</th><th>Porque importa em Angola</th><th>Esforço</th></tr>
+      <tr><td>1</td><td style="color:var(--white)">Rodar segredos vazados + limpar histórico</td><td><span class="pill pill-f0">F0</span></td><td>Risco de segurança imediato</td><td style="color:var(--muted)">1 dia</td></tr>
+      <tr><td>2</td><td style="color:var(--white)">npm ci + CI verde (front + back)</td><td><span class="pill pill-f0">F0</span></td><td>Nada avança sem build limpo</td><td style="color:var(--muted)">1–2 dias</td></tr>
+      <tr><td>3</td><td style="color:var(--white)">Validar contratos frontend↔backend a correr</td><td><span class="pill pill-f0">F0</span></td><td>Endpoints existem; faltam testar juntos</td><td style="color:var(--muted)">3–5 dias</td></tr>
+      <tr><td>4</td><td style="color:var(--white)">Deploy + domínio + HTTPS</td><td><span class="pill pill-f1">F1</span></td><td>Confiança; Google marca http como inseguro</td><td style="color:var(--muted)">3–5 dias</td></tr>
+      <tr><td>5</td><td style="color:var(--white)">Storage cloud de CVs + email transacional</td><td><span class="pill pill-f1">F1</span></td><td>Backups + entregabilidade = confiança</td><td style="color:var(--muted)">3–4 dias</td></tr>
+      <tr><td>6</td><td style="color:var(--white)">QA mobile-first a 360px</td><td><span class="pill pill-f2">F2</span></td><td>85% do tráfego AO é mobile</td><td style="color:var(--muted)">3 dias</td></tr>
+      <tr><td>7</td><td style="color:var(--white)">Pesquisa + filtro por província</td><td><span class="pill pill-f2">F2</span></td><td>Granularidade que nenhum concorrente tem</td><td style="color:var(--muted)">3–5 dias</td></tr>
+      <tr><td>8</td><td style="color:var(--white)">SEO real + analytics/funil</td><td><span class="pill pill-f2">F2</span></td><td>Tráfego orgânico = aquisição grátis</td><td style="color:var(--muted)">3 dias</td></tr>
+      <tr><td>9</td><td style="color:var(--white)">Login por telefone/OTP (SMS AO)</td><td><span class="pill pill-f3">F3</span></td><td>Baixa adoção de email em AO</td><td style="color:var(--muted)">3–5 dias</td></tr>
+      <tr><td>10</td><td style="color:var(--white)">Candidatar via WhatsApp + cartões partilháveis</td><td><span class="pill pill-f3">F3</span></td><td>Canal primário de comunicação em AO</td><td style="color:var(--muted)">2 dias</td></tr>
+      <tr><td>11</td><td style="color:var(--white)">Categoria "Biscato" (gig/informal)</td><td><span class="pill pill-f3">F3</span></td><td>43,6% desemprego jovem — gap de mercado</td><td style="color:var(--muted)">3 dias</td></tr>
+      <tr><td>12</td><td style="color:var(--white)">Badge/Guia de Angolanização</td><td><span class="pill pill-f3">F3</span></td><td>Único; atrai empresas internacionais</td><td style="color:var(--muted)">2 dias</td></tr>
+      <tr><td>13</td><td style="color:var(--white)">Beta fechada + teste de carga + go-live</td><td><span class="pill pill-f1">F4</span></td><td>Resolver cold-start da oferta</td><td style="color:var(--muted)">1 semana</td></tr>
+    </table>
+  </div>
+
+  <!-- RISKS -->
+  <div class="panel-wide" style="border-bottom:none;">
+    <div class="panel-title">Riscos Principais & Mitigação</div>
+    <div class="panel-desc">O que pode descarrilar o lançamento</div>
+    <table class="cmp">
+      <tr><th>Risco</th><th>Mitigação</th></tr>
+      <tr><td class="red">Cold-start da oferta (sem vagas → sem candidatos)</td><td>Scraping com revisão admin (já existe) + outreach + beta com empresas-âncora</td></tr>
+      <tr><td class="red">Segredos vazados no histórico Git</td><td>Rotação imediata (F0) + git filter-repo</td></tr>
+      <tr><td class="amber">Entregabilidade de email/SMS em AO</td><td>Testar cedo; orçamentar custo de SMS; SPF/DKIM/DMARC</td></tr>
+      <tr><td class="amber">Conectividade fora de Luanda</td><td>Modo baixa-banda / PWA offline (F3)</td></tr>
+      <tr><td class="amber">Fraude/scam de vagas</td><td>Moderação + verificação de empresa + fluxo de denúncia</td></tr>
+      <tr><td class="blue">Âmbito de pagamentos</td><td>Manter confirmação manual (sem Stripe) ou adiar módulo; decisão de produto</td></tr>
+    </table>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div>Parvagas · <span>Autisync</span> · Plano de Execução · Junho 2026</div>
+  <div>Base: revisão de código real + inteligência de mercado AO</div>
+  <div>~9–12 semanas para market-ready · beta fechada no fim da F2</div>
+</div>
+
+</body>
+</html>

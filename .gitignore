@@ -76,3 +76,7 @@ Thumbs.db
 
 # Docker env (contains secrets)
 .env.docker
+
+# Python build artifacts
+__pycache__/
+*.pyc
