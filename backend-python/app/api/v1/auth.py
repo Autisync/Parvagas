@@ -1,10 +1,15 @@
 """Authentication API endpoints."""
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
+import os
+import secrets
+from datetime import datetime, timedelta
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.core.observability import limiter
-from app.models import User
+from app.core.security import hash_token
+from app.services.notification_service import send_sms
+from app.models import User, UserRole, OtpCode
 from app.schemas import (
     UserRegisterRequest, UserLoginRequest, AuthTokenResponse,
     UserResponse, EmailVerificationRequest, ResendVerificationRequest,
@@ -221,3 +226,100 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def logout(current_user: User = Depends(get_current_user)):
     """Stateless logout — the client discards the token."""
     return {"message": "Logged out successfully."}
+
+
+# ── Phone / OTP login (mobile-first market) ─────────────────────────────────
+
+def _normalize_phone(raw: str) -> str:
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit() or ch == "+")
+    return digits
+
+
+@router.post("/otp/request", response_model=None)
+@limiter.limit("5/hour")
+async def otp_request(request: Request, payload: dict, db: Session = Depends(get_db)):
+    """Generate and send a one-time login code to a phone number."""
+    phone = _normalize_phone(payload.get("phone", ""))
+    if len(phone) < 9:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Número de telefone inválido")
+    code = f"{secrets.randbelow(900000) + 100000}"  # 6 digits
+    db.add(OtpCode(
+        phone=phone, code_hash=hash_token(code), purpose="login",
+        expires_at=datetime.utcnow() + timedelta(minutes=10),
+    ))
+    db.commit()
+    delivery = send_sms(phone, f"O seu código Parvagas é {code} (válido 10 min).")
+    body = {"sent": True, "delivery": delivery.get("status")}
+    # In non-production, surface the code so the flow is testable without an SMS provider.
+    if os.getenv("APP_ENV", "development").lower() not in ("production", "prod") or delivery.get("status") == "logged":
+        body["devCode"] = code
+    return body
+
+
+@router.post("/otp/verify", response_model=AuthTokenResponse)
+@limiter.limit("10/hour")
+async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_db)):
+    """Verify an OTP and issue a session token (creates a candidate on first login)."""
+    phone = _normalize_phone(payload.get("phone", ""))
+    code = str(payload.get("code", "")).strip()
+    rec = (
+        db.query(OtpCode)
+        .filter(OtpCode.phone == phone, OtpCode.consumed_at.is_(None))
+        .order_by(OtpCode.created_at.desc())
+        .first()
+    )
+    if not rec or rec.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código inválido ou expirado")
+    rec.attempts = (rec.attempts or 0) + 1
+    if rec.attempts > 5:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiadas tentativas")
+    if rec.code_hash != hash_token(code):
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código incorreto")
+
+    rec.consumed_at = datetime.utcnow()
+    user = db.query(User).filter(User.phone == phone).first()
+    if not user:
+        user = User(
+            email=f"{phone}@phone.parvagas", full_name="Novo Utilizador",
+            password_hash="!", role=UserRole.candidate, phone=phone, phone_verified=True,
+            email_verified=False,
+        )
+        db.add(user)
+    else:
+        user.phone_verified = True
+    db.commit()
+    db.refresh(user)
+    token = AuthService.create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+
+
+@router.post("/google", response_model=AuthTokenResponse)
+async def google_login(payload: dict, db: Session = Depends(get_db)):
+    """Sign in with a Google ID token. Requires GOOGLE_CLIENT_ID + network verify."""
+    id_token = str(payload.get("idToken", "")).strip()
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+    if not client_id:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Login Google não configurado (GOOGLE_CLIENT_ID).")
+    if not id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="idToken em falta")
+    try:
+        import httpx
+        resp = httpx.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": id_token}, timeout=8)
+        info = resp.json() if resp.status_code == 200 else {}
+    except Exception:
+        info = {}
+    if not info or info.get("aud") != client_id or not info.get("email"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido")
+    email = str(info["email"]).lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(email=email, full_name=info.get("name", "Utilizador Google"),
+                    password_hash="!", role=UserRole.candidate, email_verified=True,
+                    email_verified_at=datetime.utcnow())
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    token = AuthService.create_access_token(user)
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
