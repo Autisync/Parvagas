@@ -47,7 +47,8 @@ All honor `prefers-reduced-motion`. Import via `@/app/components/motion`.
 - [x] Phase 2 — Reporting UI: admin analytics KPIs → StatCard (icons/trend/animated); operational cards w/ progress bars; candidate dashboard skeletons + stagger; company dashboard animated pipeline metrics + brand spinner + stagger. Typecheck clean.
 - [x] Phase 3 — Completion/milestone animations wired: Signup/success, Aplicar (apply sent — candidate + guest), JobPostingModal (job posted), candidate onboarding complete (dashboard ?onboarded=1), company verified (one-time), CV upload success. Typecheck clean.
 - [~] Phase 4 — Page polish. DONE: Login (verified on-system), Vagas-Disponiveis list (skeletons + interactive cards + stagger), landing (balanced hero + stagger), Vagas-Guardadas (skeletons + interactive + badge), Meu-Perfil spinner→brand, Header/Footer (verified on-system, no changes needed). Candidato/Candidaturas verified (already has pt-PT status maps + brand spinner). TODO: Vagas-Disponiveis/[id] detail, Empresa/Minhas-Vagas, Empresa/Candidaturas, Definicoes pages.
-- [~] Phase 5 — Verification. ✅ Full `next build` passes (all routes compile). TODO: a11y/contrast audit, responsive checks.
+- [x] Phase 4 — Page polish (job detail cards → app-card). Portal inner pages verified already on-system (brand spinners + pt-PT status maps); no churn needed.
+- [~] Phase 5 — Verification. ✅ Full `next build` passes (all routes compile). TODO: a11y/contrast audit (muted text ≥4.5:1, icon-only buttons need aria-label, placeholder contrast), responsive checks at 375px, then final full build.
 
 ### Build note
 `npm run build` fails locally with "cross-env: not found"; run `./node_modules/.bin/next build` with `NODE_OPTIONS=--max-old-space-size=6144` instead. Build is GREEN as of Phase 4.
