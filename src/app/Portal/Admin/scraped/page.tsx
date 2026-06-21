@@ -269,9 +269,9 @@ export default function AdminScrapedPage() {
             <AdminEmptyState title="Sem vagas raspadas" description="Nenhum anúncio de vaga raspado disponível." />
           </div>
         ) : (
-          <table className="min-w-full text-sm">
+          <table className="app-table min-w-full">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
                 <th className="px-3 py-3">Título</th>
                 <th className="px-3 py-3">Empresa</th>
                 <th className="px-3 py-3">Local</th>

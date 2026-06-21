@@ -464,10 +464,10 @@ export default function AdminAnalyticsPage() {
             <option value="title_desc">Título Z-A</option>
           </select>
         </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="mt-4 max-h-[520px] overflow-auto rounded-xl border border-[var(--border-soft)]">
+          <table className="app-table min-w-full">
             <thead>
-              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
                 <th className="px-2 py-2">Vaga</th>
                 <th className="px-2 py-2">Estado</th>
                 <th className="px-2 py-2">Criada</th>
@@ -483,10 +483,10 @@ export default function AdminAnalyticsPage() {
                   <td className="px-2 py-2">
                     <div className="flex flex-wrap gap-2">
                       {canPublishJob(job.status) ? (
-                        <button onClick={() => moderateJob(job._id, "published")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Publicar</button>
+                        <button onClick={() => moderateJob(job._id, "published")} className="app-action app-action-approve">Publicar</button>
                       ) : null}
                       {canRejectJob(job.status) ? (
-                        <button onClick={() => moderateJob(job._id, "platform_rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
+                        <button onClick={() => moderateJob(job._id, "platform_rejected")} className="app-action app-action-reject">Rejeitar</button>
                       ) : null}
                       {!canPublishJob(job.status) && !canRejectJob(job.status) ? (
                         <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600">Aguarda fluxo interno</span>
@@ -527,12 +527,12 @@ export default function AdminAnalyticsPage() {
           </div>
           <div className="mt-4 grid gap-2">
             {companies.map((company) => (
-              <div key={company._id} className="rounded-xl border border-slate-200 p-3">
+              <div key={company._id} className="rounded-xl border border-[var(--border-soft)] p-3 transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]">
                 <p className="font-semibold text-slate-900">{company.name || "Empresa"}</p>
                 <p className="text-xs text-slate-500">{company.location || "--"} · {toDateLabel(company.createdAt)}</p>
                 <div className="mt-2 flex gap-2">
-                  <button onClick={() => verifyCompany(company._id, "active")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Verificar</button>
-                  <button onClick={() => verifyCompany(company._id, "rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
+                  <button onClick={() => verifyCompany(company._id, "active")} className="app-action app-action-approve">Verificar</button>
+                  <button onClick={() => verifyCompany(company._id, "rejected")} className="app-action app-action-reject">Rejeitar</button>
                 </div>
               </div>
             ))}
@@ -566,15 +566,15 @@ export default function AdminAnalyticsPage() {
           </div>
           <div className="mt-4 grid gap-2">
             {applications.map((application) => (
-              <div key={application._id} className="rounded-xl border border-slate-200 p-3">
+              <div key={application._id} className="rounded-xl border border-[var(--border-soft)] p-3 transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-slate-700">#{application._id.slice(0, 8)} · {toDateLabel(application.createdAt)}</p>
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(String(application.status || "submitted"))}`}>{application.status || "submitted"}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button onClick={() => setApplicationStatusInline(application._id, "under_review")} className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">Em análise</button>
-                  <button onClick={() => setApplicationStatusInline(application._id, "shortlisted")} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">Shortlist</button>
-                  <button onClick={() => setApplicationStatusInline(application._id, "rejected")} className="rounded-lg bg-rose-600 px-2 py-1 text-xs font-semibold text-white">Rejeitar</button>
+                  <button onClick={() => setApplicationStatusInline(application._id, "under_review")} className="app-action app-action-neutral">Em análise</button>
+                  <button onClick={() => setApplicationStatusInline(application._id, "shortlisted")} className="app-action app-action-approve">Shortlist</button>
+                  <button onClick={() => setApplicationStatusInline(application._id, "rejected")} className="app-action app-action-reject">Rejeitar</button>
                 </div>
               </div>
             ))}

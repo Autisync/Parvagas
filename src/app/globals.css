@@ -240,6 +240,47 @@ textarea:-webkit-autofill {
   .app-btn-secondary:hover { border-color: var(--brand-200); color: var(--brand-700); background: var(--brand-50); }
   .app-btn-secondary:active { transform: translateY(1px) scale(0.99); }
 
+  /* ---- Data tables ---- */
+  .app-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
+  .app-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-muted);
+    color: var(--text-subtle);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border-soft);
+    white-space: nowrap;
+  }
+  .app-table tbody td { padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); vertical-align: middle; }
+  .app-table tbody tr { transition: background-color var(--dur-fast) var(--ease-out-quart); }
+  .app-table tbody tr:hover { background: var(--brand-50); }
+  .app-table tbody tr:last-child td { border-bottom: 0; }
+
+  /* Small inline action buttons used in admin rows/tables */
+  .app-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 0.6rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: transform var(--dur-fast) var(--ease-out-quart), filter var(--dur-fast) var(--ease-out-quart), background-color var(--dur-fast) var(--ease-out-quart);
+  }
+  .app-action:active { transform: translateY(1px); }
+  .app-action-approve { background: var(--success-600); color: #fff; }
+  .app-action-approve:hover { background: var(--success-700); }
+  .app-action-reject { background: var(--danger-600); color: #fff; }
+  .app-action-reject:hover { background: var(--brand-700); }
+  .app-action-neutral { border: 1px solid var(--border-soft); background: #fff; color: var(--text-strong); }
+  .app-action-neutral:hover { border-color: var(--brand-200); color: var(--brand-700); background: var(--brand-50); }
+
   /* ---- Badges ---- */
   .app-badge {
     display: inline-flex;
