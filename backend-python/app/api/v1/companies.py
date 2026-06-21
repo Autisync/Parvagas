@@ -5,12 +5,14 @@ import json
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.models import (
     User, Company, UserRole, Job, JobApplication, CompanyMember, CompanyInvite,
 )
+from app.services.storage_service import StorageService
+from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
 from app.api.v1.jobs import serialize_job
 from app.schemas import CompanyProfileResponse, CompanyProfileUpdateRequest
@@ -625,3 +627,104 @@ async def company_team_remove_member(
     db.delete(m)
     db.commit()
     return {"deleted": True, "memberId": member_id}
+
+
+# ── Activity timeline, logo, approvals, presence ────────────────────────────
+
+@router.get("/audit-timeline")
+async def company_audit_timeline(
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lightweight activity timeline derived from the company's jobs & applications."""
+    company = _require_company(db, current_user)
+    entries: list[dict[str, Any]] = []
+    for j in db.query(Job).filter(Job.company_id == company.id).order_by(Job.created_at.desc()).limit(30).all():
+        entries.append({
+            "_id": f"job-{j.id}", "action": "job.created", "resourceType": "job",
+            "resourceId": j.id, "details": {"title": j.title, "status": j.status},
+            "createdAt": j.created_at.isoformat() if j.created_at else None,
+        })
+    for a in db.query(JobApplication).filter(JobApplication.company_id == company.id).order_by(JobApplication.created_at.desc()).limit(30).all():
+        entries.append({
+            "_id": f"app-{a.id}", "action": "application.received", "resourceType": "application",
+            "resourceId": a.id, "details": {"candidate": a.applicant_full_name, "status": a.status},
+            "createdAt": a.created_at.isoformat() if a.created_at else None,
+        })
+    entries.sort(key=lambda e: e["createdAt"] or "", reverse=True)
+    total = len(entries)
+    start = (page - 1) * limit
+    return {"entries": entries[start:start + limit],
+            "pagination": {"page": page, "limit": limit, "total": total, "totalPages": max(1, (total + limit - 1) // limit)}}
+
+
+@router.post("/profile/logo")
+async def upload_company_logo(
+    logo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload/replace the company logo."""
+    company = _require_company(db, current_user)
+    ext = _Path(logo.filename or "").suffix.lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de imagem não suportado")
+    data = await logo.read()
+    path = StorageService.save_file(data, f"company-logo-{company.id}{ext}")
+    company.logo_url = path
+    db.commit()
+    return {"company": {"_id": company.id, "logoUrl": company.logo_url}, "logoUrl": company.logo_url}
+
+
+@router.get("/job-approvals")
+async def company_job_approvals(
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Internal approval queue: company jobs awaiting platform review."""
+    company = _require_company(db, current_user)
+    q = db.query(Job).filter(Job.company_id == company.id, Job.status == "pending_platform_review")
+    total = q.count()
+    rows = q.order_by(Job.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    approvals = [
+        {"_id": j.id, "jobId": j.id, "title": j.title, "status": j.status,
+         "createdAt": j.created_at.isoformat() if j.created_at else None}
+        for j in rows
+    ]
+    return {"approvals": approvals,
+            "pagination": {"page": page, "limit": limit, "total": total, "totalPages": max(1, (total + limit - 1) // limit)}}
+
+
+@router.patch("/job-approvals/{job_id}/review")
+async def company_job_approval_review(
+    job_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_company(db, current_user)
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    decision = str(payload.get("decision") or payload.get("status") or "").strip().lower()
+    if decision in {"approve", "approved"}:
+        job.status = "approved"
+        job.published_at = job.published_at or datetime.utcnow()
+    elif decision in {"reject", "rejected"}:
+        job.status = "rejected"
+    db.commit()
+    return {"approval": {"_id": job.id, "status": job.status}}
+
+
+@router.post("/presence/heartbeat")
+async def company_presence_heartbeat(current_user: User = Depends(get_current_user)):
+    return {"onlineUsersCount": 1, "isDoubleLogged": False}
+
+
+@router.get("/presence/status")
+async def company_presence_status(current_user: User = Depends(get_current_user)):
+    return {"onlineUsersCount": 1, "isDoubleLogged": False}

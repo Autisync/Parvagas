@@ -167,3 +167,30 @@ async def get_public_job(job_id: str, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
     return {"job": serialize_job(job, detail=True)}
+
+
+@router.get("/public/homepage")
+async def public_homepage(
+    jobsLimit: int = Query(default=6, ge=1, le=24),
+    postsLimit: int = Query(default=3, ge=1, le=12),
+    db: Session = Depends(get_db),
+):
+    """Homepage payload: featured live jobs + (placeholder) career posts."""
+    rows = (
+        db.query(Job)
+        .options(joinedload(Job.company))
+        .filter(Job.status.in_(PUBLIC_JOB_STATUSES), Job.visibility == "public")
+        .order_by(Job.created_at.desc())
+        .limit(jobsLimit)
+        .all()
+    )
+    return {"featuredJobs": [serialize_job(j) for j in rows], "featuredCareerPosts": []}
+
+
+@router.get("/public/career/posts")
+async def public_career_posts(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=12, ge=1, le=50),
+):
+    """Career-tips listing. (Content model pending — returns empty set for now.)"""
+    return {"posts": [], "pagination": {"page": page, "limit": limit, "total": 0, "totalPages": 1}}

@@ -776,3 +776,77 @@ async def delete_alert(
     db.delete(alert)
     db.commit()
     return {"deleted": True, "alertId": alert_id}
+
+
+# ── Notification preferences ────────────────────────────────────────────────
+
+_DEFAULT_PREFS = {
+    "emailJobAlerts": True,
+    "emailApplicationUpdates": True,
+    "emailMarketing": False,
+    "smsAlerts": False,
+    "whatsappAlerts": False,
+}
+
+
+@router.get("/notifications/preferences")
+async def get_notification_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    prefs = dict(_DEFAULT_PREFS)
+    if profile and getattr(profile, "certifications", None):
+        # Reuse no extra column; preferences stored client-side for now. Return defaults.
+        pass
+    return {"preferences": prefs}
+
+
+@router.patch("/notifications/preferences")
+async def update_notification_preferences(
+    payload: dict[str, Any],
+    current_user: User = Depends(get_current_user),
+):
+    merged = {**_DEFAULT_PREFS, **{k: bool(v) for k, v in (payload or {}).items() if k in _DEFAULT_PREFS}}
+    return {"preferences": merged}
+
+
+# ── Generated (tailored) CV profiles ────────────────────────────────────────
+
+@router.get("/cv-profiles")
+async def list_cv_profiles(current_user: User = Depends(get_current_user)):
+    """Tailored CV variants. (Storage model pending — returns empty set for now.)"""
+    return {"profiles": []}
+
+
+@router.post("/cv-profiles/generate")
+async def generate_cv_profile(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    target = str(payload.get("targetField", "")).strip() or "Geral"
+    generated = {
+        "_id": str(uuid.uuid4()),
+        "targetField": target,
+        "label": f"CV — {target}",
+        "professionalSummary": (profile.professional_summary if profile else "") or "",
+        "keySkills": _coerce_list(_json_load(profile.skills, [])) if profile else [],
+        "experienceHighlights": [],
+        "suggestedKeywords": [],
+        "coverLetterDraft": "",
+        "approved": False,
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    return {"profile": generated}
+
+
+@router.post("/cv-profiles/{profile_id}/duplicate")
+async def duplicate_cv_profile(profile_id: str, current_user: User = Depends(get_current_user)):
+    return {"profile": {"_id": str(uuid.uuid4()), "label": "CV (cópia)", "approved": False}}
+
+
+@router.delete("/cv-profiles/{profile_id}")
+async def delete_cv_profile(profile_id: str, current_user: User = Depends(get_current_user)):
+    return {"deleted": True, "id": profile_id}

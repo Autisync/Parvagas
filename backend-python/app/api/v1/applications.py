@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models import (
-    CandidateProfile, Company, JobApplication, ApplicationNote, User, UserRole,
+    CandidateProfile, Company, JobApplication, ApplicationNote, CVUpload, User, UserRole,
 )
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email
@@ -266,6 +266,72 @@ async def list_applications(
         **pagination,
         "pagination": pagination,
     }
+
+
+_HIRING_STATUSES = {"submitted", "under_review", "viewed", "shortlisted", "interview", "offer", "rejected", "hired", "withdrawn"}
+
+
+@router.patch("/applications/{application_id}/status")
+async def update_application_status(
+    application_id: str,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Move an application along the hiring pipeline (company owner or admin)."""
+    app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not app_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    if current_user.role != UserRole.admin:
+        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        if not co or app_row.company_id != co.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+    new_status = str(payload.get("status", "")).strip().lower()
+    if new_status not in _HIRING_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
+    app_row.status = new_status
+    db.commit()
+    db.refresh(app_row)
+    return {"application": {"_id": app_row.id, "status": app_row.status}}
+
+
+@router.get("/applications/{application_id}/candidate-cv")
+async def application_candidate_cv(
+    application_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Candidate snapshot + CV documents for an application (company owner/admin)."""
+    app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not app_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+    if current_user.role != UserRole.admin:
+        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        if not co or app_row.company_id != co.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+
+    candidate = {
+        "fullName": app_row.applicant_full_name,
+        "email": app_row.applicant_email,
+        "location": app_row.applicant_location,
+        "professionalTitle": None,
+        "summary": app_row.cover_letter,
+        "skills": [],
+    }
+    documents = []
+    if app_row.candidate_user_id:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == app_row.candidate_user_id).first()
+        if profile:
+            candidate["professionalTitle"] = profile.job_title
+            candidate["summary"] = profile.professional_summary or candidate["summary"]
+            candidate["skills"] = _json_list_safe(profile.skills)
+            cvs = db.query(CVUpload).filter(CVUpload.candidate_id == profile.id).order_by(CVUpload.created_at.desc()).all()
+            documents = [
+                {"_id": c.id, "fileName": c.file_name, "mimeType": c.mime_type,
+                 "createdAt": c.created_at.isoformat() if c.created_at else None, "signedUrl": None}
+                for c in cvs
+            ]
+    return {"candidate": candidate, "documents": documents}
 
 
 # ── Application notes / ratings (mini-ATS) ──────────────────────────────────
