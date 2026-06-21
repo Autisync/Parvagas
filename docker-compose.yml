@@ -36,7 +36,6 @@ services:
       - ./backend-python/.env
       - ./.env.docker
     environment:
-      - DATABASE_URL=postgresql+psycopg://parvagas_user:REDACTED@postgres:5432/parvagas
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -81,7 +80,6 @@ services:
       - ./backend-python/.env
       - ./.env.docker
     environment:
-      - DATABASE_URL=postgresql+psycopg://parvagas_user:REDACTED@postgres:5432/parvagas
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -112,7 +110,6 @@ services:
       - ./backend-python/.env
       - ./.env.docker
     environment:
-      - DATABASE_URL=postgresql+psycopg://parvagas_user:REDACTED@postgres:5432/parvagas
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2

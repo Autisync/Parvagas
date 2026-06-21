@@ -76,3 +76,31 @@ Allow these examples:
 3. Restart services with docker compose up -d.
 4. Verify health and key workflows.
 5. Document incident and rotate dependent tokens.
+
+---
+
+## F0 Remediation status (2026-06-21)
+
+### Done in-repo (this commit)
+- **`.env.docker` untracked** (`git rm --cached`) and added to `.gitignore` — stops future leaks. The file remains locally for the running stack; `.env.docker.example` is the committed template.
+- **Hardcoded Postgres password removed** from `docker-compose.yml` and `docker-compose-updated.yml` — `DATABASE_URL` now comes from the `env_file` (`.env.docker`), which uses the `postgresql+psycopg://` driver.
+- **`JWT_SECRET` rotated** to a fresh 96-char random value (old sessions invalidated). Verified: stack healthy, DB+Redis OK, admin login works.
+
+### ⚠️ Still required (manual — old values remain in Git history & at providers)
+1. **Purge Git history** of the leaked values (they were committed before this fix and pushed to `origin/main`). This rewrites shared history and needs a force-push + team coordination:
+   ```bash
+   pip install git-filter-repo
+   git filter-repo --path .env.docker --invert-paths
+   git filter-repo --replace-text <(printf 'REDACTED==>REDACTED\n')
+   git push --force origin main      # coordinate with anyone who has cloned
+   ```
+2. **Rotate the actual Postgres password** (the in-repo value is unchanged to avoid breaking the live volume):
+   ```bash
+   docker compose exec postgres psql -U parvagas_user -d parvagas \
+     -c "ALTER USER parvagas_user WITH PASSWORD 'NEW_STRONG_PASS';"
+   # then update POSTGRES_PASSWORD + DATABASE_URL in .env.docker and restart
+   ```
+3. **Rotate provider credentials** at their source (cannot be done from the repo):
+   - SMTP / email account password (`SMTP_PASS` / `EMAIL_PASS`).
+   - Skima / any third-party API key.
+4. **Rotate the admin bootstrap password**: the seeded super-admin password equals the original `ADMIN_SIGNUP_KEY`. Set a new `ADMIN_SIGNUP_KEY` and reset the admin password (login → change password, or re-run the seed against a fresh value).
