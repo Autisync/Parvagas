@@ -1,4 +1,12 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+
+// Mobile-first (≈85% of AO traffic is mobile): explicit, zoomable viewport.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#dc2626",
+};
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Header from "./components/Header";
