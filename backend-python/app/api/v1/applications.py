@@ -10,8 +10,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models import (
-    CandidateProfile, Company, JobApplication, ApplicationNote, CVUpload, User, UserRole,
+    CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, User, UserRole,
 )
+
+
+def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
+    """Use the explicit companyId, else derive it from the job so applications
+    are never orphaned from the employer's pipeline view."""
+    cid = (provided or "").strip()
+    if cid:
+        return cid
+    job = db.query(Job).filter(Job.id == job_id).first()
+    return job.company_id if job else None
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email
 import json as _json
@@ -105,7 +115,7 @@ async def submit_candidate_application(
 
     application = JobApplication(
         job_id=jobId,
-        company_id=(companyId or "").strip() or None,
+        company_id=_resolve_company_id(db, jobId, companyId),
         candidate_user_id=current_user.id,
         applicant_full_name=current_user.full_name,
         applicant_email=current_user.email,
@@ -155,7 +165,7 @@ async def submit_quick_apply(
 
     application = JobApplication(
         job_id=job_id,
-        company_id=(companyId or "").strip() or None,
+        company_id=_resolve_company_id(db, job_id, companyId),
         candidate_user_id=None,
         applicant_full_name=full_name,
         applicant_email=applicant_email,
