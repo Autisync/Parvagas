@@ -8,6 +8,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { apiFetch, authFetch, getToken, getUser } from "@/lib/api";
 import { uploadWithProgress } from "@/lib/uploadClient";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
 import { track } from "@/lib/analytics";
 
@@ -191,9 +192,11 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
       formData.append("coverLetter", guestForm.coverLetter);
       formData.append("cv", guestForm.cv);
 
+      const captchaToken = await getRecaptchaToken("apply");
       await uploadWithProgress({
         path: `/public/jobs/${job._id}/quick-apply`,
         formData,
+        captchaToken,
         onProgress: setUploadProgress,
       });
       notify("Candidatura rápida submetida. Enviámos instruções para o seu email.", "success");

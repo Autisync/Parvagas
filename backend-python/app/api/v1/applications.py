@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -150,6 +150,7 @@ async def submit_candidate_application(
 
 @router.post("/public/jobs/{job_id}/quick-apply")
 async def submit_quick_apply(
+    request: Request,
     job_id: str,
     companyId: str | None = Form(default=None),
     fullName: str = Form(...),
@@ -161,6 +162,10 @@ async def submit_quick_apply(
     db: Session = Depends(get_db),
 ):
     """Submit a guest quick apply application."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not verify_captcha(request.headers.get("x-captcha-token"), action="apply", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     full_name = (fullName or "").strip()
     applicant_email = (email or "").strip().lower()
     if not full_name or not applicant_email:

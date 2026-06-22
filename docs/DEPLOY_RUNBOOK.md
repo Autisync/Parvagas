@@ -35,7 +35,10 @@ matters in the AO market — this covers the infra that earns it.
 ## P1 — Sentry + uptime + CAPTCHA
 - **Sentry:** already env-gated (`init_sentry()` in `app/main.py`). Set `SENTRY_DSN` + `SENTRY_TRACES_SAMPLE_RATE`. Add the frontend Sentry SDK too if desired.
 - **Uptime:** point an external monitor (UptimeRobot/BetterStack/Pingdom) at `https://api.parvagas.pt/health` and `https://parvagas.pt` (1-min interval, alert on 2 failures).
-- **CAPTCHA (anti-abuse on register + apply):** hook in place (`app/core/captcha.py`). Enable with `CAPTCHA_PROVIDER=turnstile|hcaptcha|recaptcha`, `CAPTCHA_SECRET=…`, `CAPTCHA_REQUIRED=true`. Add the matching widget token on the frontend forms (send as `x-captcha-token` header or `captchaToken`). Rate limiting already protects auth (slowapi).
+- **CAPTCHA (anti-abuse on login + register + apply):** wired end-to-end (`app/core/captcha.py` + frontend `src/lib/recaptcha.ts`). **reCAPTCHA Enterprise** is the default:
+  - **Backend:** `CAPTCHA_PROVIDER=recaptcha_enterprise`, `CAPTCHA_REQUIRED=true`, `RECAPTCHA_PROJECT_ID=parvagas`, `RECAPTCHA_API_KEY=<google api key>`, `RECAPTCHA_SITE_KEY=6Lf4CistAAAAAIq1r40uoJLlTspXn_05-0pz9zJc`, `RECAPTCHA_SCORE_THRESHOLD=0.5`. Verifier calls the assessments API (`POST .../v1/projects/{project}/assessments?key=…`), checks `tokenProperties.valid`, action match, and `riskAnalysis.score ≥ threshold`.
+  - **Frontend:** set `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (loads `enterprise.js` in `layout.tsx`). Login/Signup/Aplicar fetch a token via `grecaptcha.enterprise.execute(siteKey,{action})` (actions: `login`, `register`, `apply`) and send it as the `x-captcha-token` header.
+  - Falls back to classic siteverify (`turnstile|hcaptcha|recaptcha` + `CAPTCHA_SECRET`). No-ops (allows) until `CAPTCHA_REQUIRED=true` and the API key/secret are set. Rate limiting already protects auth (slowapi).
 
 ## Analytics (from F2)
 - Set `NEXT_PUBLIC_PLAUSIBLE_DOMAIN=parvagas.pt` (and `NEXT_PUBLIC_PLAUSIBLE_SRC` if self-hosting). Submit `https://parvagas.pt/sitemap.xml` to Google Search Console.

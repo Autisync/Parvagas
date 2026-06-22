@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const Logo = "/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
@@ -181,10 +182,14 @@ function LoginContent() {
 
     setLoading(true);
     try {
+      const captchaToken = await getRecaptchaToken("login");
       const res = await apiFetchRaw("/auth/login", {
         method: "POST",
         suppressGlobalErrors: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(captchaToken ? { "x-captcha-token": captchaToken } : {}),
+        },
         body: JSON.stringify({ email: email.trim(), password, role_hint: selectedRole }),
       });
 

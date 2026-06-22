@@ -52,8 +52,9 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """Register a new user."""
-    from app.core.captcha import verify_captcha, captcha_required
-    if captcha_required() and not verify_captcha(getattr(payload, "captchaToken", None) or (request.headers.get("x-captcha-token"))):
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not verify_captcha(request.headers.get("x-captcha-token"), action="register", remote_ip=_ip):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         # Register user
@@ -92,6 +93,10 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """Authenticate user and return access token."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not verify_captcha(request.headers.get("x-captcha-token"), action="login", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         user = AuthService.authenticate_user(
             db=db,

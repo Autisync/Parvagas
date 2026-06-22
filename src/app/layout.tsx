@@ -67,6 +67,13 @@ export default function RootLayout({
             src={`${process.env.NEXT_PUBLIC_PLAUSIBLE_SRC || "https://plausible.io"}/js/script.tagged-events.js`}
           />
         ) : null}
+        {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ? (
+          <script
+            async
+            defer
+            src={`https://www.google.com/recaptcha/enterprise.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
+          />
+        ) : null}
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <Providers>

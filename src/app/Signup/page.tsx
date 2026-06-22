@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 const Logo = "/icon2.png";
 import { apiFetch } from "@/lib/api";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
@@ -144,10 +145,13 @@ function SignUpContent() {
 
     setLoading(true);
     try {
+      const captchaToken = await getRecaptchaToken("register");
+      const captchaHeaders: Record<string, string> = captchaToken ? { "x-captcha-token": captchaToken } : {};
       if (selectedRole === "company" && inviteToken) {
         await apiFetch<{ message: string }>("/auth/company-invite/accept", {
           method: "POST",
           suppressGlobalErrors: true,
+          headers: captchaHeaders,
           body: JSON.stringify({
             inviteToken,
             fullName: fullName.trim(),
@@ -163,6 +167,7 @@ function SignUpContent() {
         await apiFetch<RegisterResponse>("/auth/register", {
           method: "POST",
           suppressGlobalErrors: true,
+          headers: captchaHeaders,
           body: JSON.stringify({
             fullName: fullName.trim(),
             email: email.trim(),
