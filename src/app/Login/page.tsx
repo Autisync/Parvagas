@@ -9,6 +9,7 @@ const Logo = "/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
+import GoogleSignInButton from "@/app/components/GoogleSignInButton";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
@@ -637,6 +638,20 @@ function LoginContent() {
               >
                 {loading ? dict.auth.login.processing : passwordResetToken ? dict.auth.login.resetPassword : firstLoginResetToken ? dict.auth.login.resetAndSignIn : dict.auth.login.signIn}
               </button>
+
+              {!passwordResetToken && !firstLoginResetToken ? (
+                <>
+                  <div className="flex items-center gap-3 py-1">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    <span className="text-xs uppercase tracking-wide text-slate-400">ou</span>
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
+                  <GoogleSignInButton
+                    text="signin_with"
+                    onError={(message) => showFeedback({ variant: "error", message })}
+                  />
+                </>
+              ) : null}
 
               <p className="text-center text-sm text-slate-600">
                 {dict.auth.login.noAccount}{" "}

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const Logo = "/icon2.png";
 import { apiFetch } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
+import GoogleSignInButton from "@/app/components/GoogleSignInButton";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
@@ -453,6 +454,17 @@ function SignUpContent() {
               >
                 {loading ? dict.auth.signup.creatingAccount : dict.auth.signup.createAccount}
               </button>
+
+              {selectedRole !== "company" ? (
+                <>
+                  <div className="flex items-center gap-3 py-1">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    <span className="text-xs uppercase tracking-wide text-slate-400">ou</span>
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </div>
+                  <GoogleSignInButton text="signup_with" onError={(message) => setError(message)} />
+                </>
+              ) : null}
 
               <p className="text-center text-sm text-slate-600">
                 {dict.auth.signup.hasAccount}{" "}
