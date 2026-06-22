@@ -154,6 +154,31 @@ def send_application_received_email(self, email: str, full_name: str, job_id: st
 
 
 @celery.task(
+    name='app.workers.tasks.send_application_status_email',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def send_application_status_email(self, email: str, full_name: str, job_title: str, new_status: str) -> bool:
+    """Notify a candidate when their application status changes."""
+    try:
+        success = EmailService.send_application_status_email(
+            email=email,
+            full_name=full_name,
+            job_title=job_title,
+            new_status=new_status,
+        )
+        if not success:
+            raise RuntimeError(f"Application status email send failed for {email}")
+        return success
+    except Exception as e:
+        logger.error(f"Failed to send application status email: {str(e)}")
+        raise
+
+
+@celery.task(
     name='app.workers.tasks.parse_cv',
     bind=True,
     soft_time_limit=settings.CV_PARSE_TASK_SOFT_TIMEOUT_SECONDS,

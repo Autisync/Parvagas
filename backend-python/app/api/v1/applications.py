@@ -23,7 +23,10 @@ def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
     job = db.query(Job).filter(Job.id == job_id).first()
     return job.company_id if job else None
 from app.services.storage_service import StorageService
-from app.workers.tasks import send_application_received_email
+from app.workers.tasks import send_application_received_email, send_application_status_email
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 import json as _json
 
 router = APIRouter(tags=["applications"])
@@ -314,9 +317,25 @@ async def update_application_status(
     new_status = str(payload.get("status", "")).strip().lower()
     if new_status not in _HIRING_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
+    previous_status = app_row.status
     app_row.status = new_status
     db.commit()
     db.refresh(app_row)
+
+    # Notify the candidate when the status meaningfully changes (skip self-service
+    # states and no-op updates). Sent async so the API stays fast.
+    if new_status != previous_status and new_status not in {"submitted", "withdrawn"}:
+        recipient = app_row.applicant_email
+        if recipient:
+            job = db.query(Job).filter(Job.id == app_row.job_id).first()
+            job_title = job.title if job else ""
+            try:
+                send_application_status_email.delay(
+                    recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status,
+                )
+            except Exception as e:  # never block the status update on the mail queue
+                logger.warning(f"Could not enqueue status email: {e}")
+
     return {"application": {"_id": app_row.id, "status": app_row.status}}
 
 

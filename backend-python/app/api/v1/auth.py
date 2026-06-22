@@ -30,6 +30,26 @@ settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _audit(db: Session, *, action: str, user, ip: str | None = None, extra: dict | None = None) -> None:
+    """Write a durable auth audit row. Never raises — auditing must not block auth."""
+    try:
+        details = {"ip": ip}
+        if extra:
+            details.update(extra)
+        db.add(AuditLog(
+            actor_user_id=str(user.id) if user is not None else None,
+            actor_email=getattr(user, "email", None),
+            action=action,
+            resource_type="user",
+            resource_id=str(user.id) if user is not None else None,
+            details=json.dumps(details),
+        ))
+        db.commit()
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(f"Audit log ({action}) failed: {e}")
+        db.rollback()
+
+
 def _friendly_auth_detail(detail: str) -> str:
     message = str(detail or "").strip()
     translations = {
@@ -107,13 +127,16 @@ async def login(
         )
         
         token = AuthService.create_access_token(user)
-        
+        _audit(db, action="auth.login", user=user, ip=_ip, extra={"method": "password"})
+
         return {
             "access_token": token,
             "token_type": "bearer",
             "user": UserResponse.model_validate(user)
         }
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
@@ -362,7 +385,8 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
 
     rec.consumed_at = datetime.utcnow()
     user = db.query(User).filter(User.phone == phone).first()
-    if not user:
+    is_new_user = user is None
+    if is_new_user:
         user = User(
             email=f"{phone}@phone.parvagas", full_name="Novo Utilizador",
             password_hash="!", role=UserRole.candidate, phone=phone, phone_verified=True,
@@ -373,6 +397,11 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
         user.phone_verified = True
     db.commit()
     db.refresh(user)
+    _audit(
+        db,
+        action="auth.otp.register" if is_new_user else "auth.otp.login",
+        user=user, ip=_ip, extra={"method": "otp", "new_user": is_new_user},
+    )
     token = AuthService.create_access_token(user)
     return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
 
@@ -428,19 +457,12 @@ async def google_login(request: Request, payload: dict, db: Session = Depends(ge
         db.refresh(user)
 
     # Durable audit trail (no PII beyond email/sub, never the raw token).
-    try:
-        db.add(AuditLog(
-            actor_user_id=str(user.id),
-            actor_email=email,
-            action="auth.google.register" if is_new_user else "auth.google.login",
-            resource_type="user",
-            resource_id=str(user.id),
-            details=json.dumps({"ip": _ip, "google_sub": info.get("sub"), "new_user": is_new_user}),
-        ))
-        db.commit()
-    except Exception as e:  # audit must never block auth
-        logger.warning(f"Audit log (google auth) failed: {e}")
-        db.rollback()
+    _audit(
+        db,
+        action="auth.google.register" if is_new_user else "auth.google.login",
+        user=user, ip=_ip,
+        extra={"method": "google", "google_sub": info.get("sub"), "new_user": is_new_user},
+    )
 
     token = AuthService.create_access_token(user)
     return {

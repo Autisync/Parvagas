@@ -14,44 +14,92 @@ class EmailService:
     """Email service for sending emails."""
 
     @staticmethod
-    def _build_email_html(title: str, body_html: str, action_text: str = "", action_url: str = "") -> str:
-        """Build a branded email layout shared by all templates."""
-        html_template = """
-        <div style="font-family: Arial, sans-serif; background: #f4f6f8; padding: 24px;">
-            <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e5e7eb;">
-                <div style="padding: 20px; background: {{ brand_bg_muted }}; text-align: center; border-bottom: 1px solid #e5e7eb;">
-                    <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" style="max-height: 56px; width: auto;" />
-                </div>
-                <div style="padding: 28px; color: {{ brand_text_strong }}; line-height: 1.6;">
-                    <h2 style="margin-top: 0; margin-bottom: 16px; color: {{ brand_text_strong }};">{{ title }}</h2>
-                    <div>{{ body_html | safe }}</div>
-                    {% if action_text and action_url %}
-                    <div style="margin: 24px 0;">
-                        <a href="{{ action_url }}" style="display: inline-block; padding: 12px 18px; border-radius: 9999px; background: {{ brand_primary_color }}; color: #ffffff; text-decoration: none; font-weight: 600;">{{ action_text }}</a>
-                    </div>
-                    {% endif %}
-                </div>
-                <div style="padding: 18px 28px; border-top: 1px solid #e5e7eb; color: {{ brand_text_muted }}; font-size: 13px; background: {{ brand_bg_muted }};">
-                    <p style="margin: 0 0 6px;">{{ brand_team_name }}</p>
-                    <p style="margin: 0;">{{ brand_name }}</p>
-                </div>
-            </div>
-        </div>
+    def _build_email_html(
+        title: str,
+        body_html: str,
+        action_text: str = "",
+        action_url: str = "",
+        preheader: str = "",
+    ) -> str:
+        """Minimal, professional email layout shared by all templates.
+
+        Design: lots of whitespace, a single brand accent, a clean text
+        wordmark (no remote logo to avoid broken images), system fonts, and an
+        email-client-robust table-based structure with fully inlined styles.
         """
+        html_template = """\
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light only" />
+<title>{{ title }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f4f5; -webkit-font-smoothing:antialiased;">
+<span style="display:none; max-height:0; overflow:hidden; opacity:0; color:#f4f4f5;">{{ preheader }}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5; padding:32px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background:#ffffff; border:1px solid #ececec; border-radius:14px; overflow:hidden;">
+        <tr>
+          <td style="padding:28px 32px 0 32px;">
+            <span style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:{{ brand_primary_color }};">{{ brand_name }}</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px 8px 32px;">
+            <h1 style="margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:20px; line-height:1.35; font-weight:700; color:#18181b;">{{ title }}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:4px 32px 8px 32px; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.65; color:#3f3f46;">
+            {{ body_html | safe }}
+          </td>
+        </tr>
+        {% if action_text and action_url %}
+        <tr>
+          <td style="padding:12px 32px 8px 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="border-radius:8px; background:{{ brand_primary_color }};">
+                  <a href="{{ action_url }}" style="display:inline-block; padding:12px 22px; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:8px;">{{ action_text }}</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td style="padding:24px 32px 28px 32px;">
+            <div style="border-top:1px solid #f0f0f0; padding-top:18px; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#a1a1aa;">
+              <p style="margin:0 0 2px;">{{ brand_team_name }}</p>
+              <p style="margin:0;"><a href="{{ frontend_url }}" style="color:#a1a1aa; text-decoration:none;">{{ frontend_label }}</a></p>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <p style="max-width:480px; margin:16px auto 0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:11px; line-height:1.5; color:#c4c4c8; text-align:center;">Recebeu este email porque tem uma conta na {{ brand_name }}.</p>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+        frontend_url = (settings.FRONTEND_URL or "https://parvagas.pt").rstrip("/")
+        frontend_label = frontend_url.replace("https://", "").replace("http://", "")
 
         return Template(html_template).render(
             title=title,
             body_html=body_html,
             action_text=action_text,
             action_url=action_url,
-            brand_logo_url=settings.BRAND_LOGO_URL,
+            preheader=preheader or title,
+            frontend_url=frontend_url,
+            frontend_label=frontend_label,
             brand_name=settings.BRAND_NAME,
             brand_team_name=settings.BRAND_TEAM_NAME,
             brand_primary_color=settings.BRAND_PRIMARY_COLOR,
-            brand_primary_color_hover=settings.BRAND_PRIMARY_COLOR_HOVER,
-            brand_text_strong=settings.BRAND_TEXT_STRONG,
-            brand_text_muted=settings.BRAND_TEXT_MUTED,
-            brand_bg_muted=settings.BRAND_BG_MUTED,
         )
     
     @staticmethod
@@ -62,19 +110,19 @@ class EmailService:
                 logger.warning(f"SMTP not configured, skipping email to {email}")
                 return False
             
-            subject = f"{settings.BRAND_NAME} - Verify Your Email"
+            subject = f"{settings.BRAND_NAME} — Confirme o seu email"
             body_html = f"""
-            <p>Hello {full_name},</p>
-            <p>Thank you for signing up. Please verify your email to activate your account.</p>
-            <p>This link expires in 24 hours.</p>
-            <p>If you did not create this account, you can ignore this message.</p>
+            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Obrigado por se registar. Confirme o seu email para ativar a sua conta.</p>
+            <p style="margin:0 0 14px;">Este link expira em 24 horas. Se não criou esta conta, ignore esta mensagem.</p>
             """
 
             html_content = EmailService._build_email_html(
-                title="Welcome! Verify Your Email",
+                title="Confirme o seu email",
                 body_html=body_html,
-                action_text="Verify Email",
+                action_text="Confirmar email",
                 action_url=verification_link,
+                preheader="Confirme o seu email para ativar a conta.",
             )
             
             return EmailService._send_email(email, subject, html_content)
@@ -91,18 +139,19 @@ class EmailService:
                 logger.warning(f"SMTP not configured, skipping email to {email}")
                 return False
             
-            subject = f"{settings.BRAND_NAME} - Reset Your Password"
+            subject = f"{settings.BRAND_NAME} — Redefinir a sua palavra-passe"
             body_html = f"""
-            <p>Hello {full_name},</p>
-            <p>We received a request to reset your password.</p>
-            <p>This link expires in 1 hour. If you did not request a reset, you can ignore this message.</p>
+            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Recebemos um pedido para redefinir a sua palavra-passe.</p>
+            <p style="margin:0 0 14px;">Este link expira em 1 hora. Se não fez este pedido, ignore esta mensagem — a sua palavra-passe permanece inalterada.</p>
             """
 
             html_content = EmailService._build_email_html(
-                title="Password Reset Request",
+                title="Redefinir a palavra-passe",
                 body_html=body_html,
-                action_text="Reset Password",
+                action_text="Redefinir palavra-passe",
                 action_url=reset_link,
+                preheader="Pedido de redefinição de palavra-passe.",
             )
             
             return EmailService._send_email(email, subject, html_content)
@@ -119,18 +168,22 @@ class EmailService:
                 logger.warning(f"SMTP not configured, skipping email to {email}")
                 return False
             
-            subject = f"Welcome to {settings.BRAND_NAME}!"
+            role_pt = {"candidate": "Candidato", "company": "Empresa", "admin": "Administrador"}.get(
+                str(role).lower(), str(role)
+            )
+            subject = f"Bem-vindo à {settings.BRAND_NAME}"
             body_html = f"""
-            <p>Hello {full_name},</p>
-            <p>Your account has been created successfully as a <strong>{role}</strong>.</p>
-            <p>You can now log in and start using {settings.BRAND_NAME}.</p>
+            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">A sua conta foi criada com sucesso como <strong>{role_pt}</strong>.</p>
+            <p style="margin:0 0 14px;">Já pode iniciar sessão e começar a usar a {settings.BRAND_NAME}.</p>
             """
 
             html_content = EmailService._build_email_html(
-                title=f"Welcome to {settings.BRAND_NAME}",
+                title=f"Bem-vindo à {settings.BRAND_NAME}",
                 body_html=body_html,
-                action_text="Open Platform",
+                action_text="Abrir a plataforma",
                 action_url=settings.FRONTEND_URL,
+                preheader="A sua conta foi criada com sucesso.",
             )
             
             return EmailService._send_email(email, subject, html_content)
@@ -147,18 +200,20 @@ class EmailService:
                 logger.warning(f"SMTP not configured, skipping email to {email}")
                 return False
 
-            subject = f"{settings.BRAND_NAME} - Candidatura recebida"
+            job_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Vagas-Disponiveis/{job_id}"
+            subject = f"{settings.BRAND_NAME} — Candidatura recebida"
             body_html = f"""
-            <p>Olá {full_name},</p>
-            <p>Recebemos a sua candidatura para a vaga <strong>{job_id}</strong>.</p>
-            <p>A equipa de recrutamento irá analisar o seu perfil e entrar em contacto quando houver atualização.</p>
+            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Recebemos a sua candidatura. A equipa de recrutamento vai analisar o seu perfil e será notificado/a sempre que houver uma atualização.</p>
+            <p style="margin:0 0 14px;">Pode acompanhar o estado das suas candidaturas no seu portal.</p>
             """
 
             html_content = EmailService._build_email_html(
-                title="Candidatura recebida com sucesso",
+                title="Candidatura recebida",
                 body_html=body_html,
-                action_text="Ver vagas disponíveis",
-                action_url=f"{settings.FRONTEND_URL}/Vagas-Disponiveis",
+                action_text="Ver a vaga",
+                action_url=job_url,
+                preheader="Recebemos a sua candidatura.",
             )
 
             return EmailService._send_email(email, subject, html_content)
@@ -166,7 +221,57 @@ class EmailService:
         except Exception as e:
             logger.error(f"Failed to send application confirmation email: {str(e)}")
             return False
-    
+
+    # Candidate-facing labels + short messages for each pipeline state.
+    _STATUS_COPY = {
+        "under_review": ("Candidatura em análise", "A sua candidatura está a ser analisada pela equipa de recrutamento."),
+        "viewed": ("Candidatura visualizada", "A empresa visualizou a sua candidatura."),
+        "shortlisted": ("Pré-selecionado", "Boas notícias — foi pré-selecionado/a para esta vaga."),
+        "interview": ("Convite para entrevista", "Foi selecionado/a para uma entrevista. A empresa irá contactá-lo/a com os próximos passos."),
+        "offer": ("Proposta de emprego", "Parabéns! Recebeu uma proposta para esta vaga."),
+        "hired": ("Contratado", "Parabéns! Foi selecionado/a para a vaga. Bem-vindo/a à equipa."),
+        "rejected": ("Atualização da candidatura", "Agradecemos o seu interesse. Desta vez a empresa avançou com outros candidatos, mas o seu perfil continua ativo para futuras oportunidades."),
+    }
+
+    @staticmethod
+    def send_application_status_email(email: str, full_name: str, job_title: str, new_status: str) -> bool:
+        """Notify a candidate when the status of their application changes."""
+        try:
+            if not settings.SMTP_HOST:
+                logger.warning(f"SMTP not configured, skipping email to {email}")
+                return False
+
+            status_key = str(new_status or "").strip().lower()
+            title, message = EmailService._STATUS_COPY.get(
+                status_key, ("Atualização da candidatura", "Há uma atualização sobre a sua candidatura.")
+            )
+            role = (full_name or "").strip() or "Candidato/a"
+            job_label = (job_title or "").strip() or "a vaga a que se candidatou"
+            portal_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Portal/Candidato"
+
+            subject = f"{settings.BRAND_NAME} — {title}: {job_label}"
+            body_html = f"""
+            <p style="margin:0 0 14px;">Olá {role},</p>
+            <p style="margin:0 0 14px;">{message}</p>
+            <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
+            <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{job_label}</p>
+            <p style="margin:0 0 14px;">Pode ver os detalhes no seu portal de candidato.</p>
+            """
+
+            html_content = EmailService._build_email_html(
+                title=title,
+                body_html=body_html,
+                action_text="Ver candidaturas",
+                action_url=portal_url,
+                preheader=f"{title}: {job_label}",
+            )
+
+            return EmailService._send_email(email, subject, html_content)
+
+        except Exception as e:
+            logger.error(f"Failed to send application status email: {str(e)}")
+            return False
+
     @staticmethod
     def _send_email(to_email: str, subject: str, html_content: str) -> bool:
         """Internal method to send email via SMTP."""
