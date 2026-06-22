@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircleIcon, EnvelopeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 
@@ -60,9 +61,11 @@ export default function RestorePass() {
 
     setStep("loading");
     try {
+      const captchaToken = await getRecaptchaToken("forgot_password");
       await apiFetch("/auth/forgot-password", {
         method: "POST",
         suppressGlobalErrors: true,
+        headers: captchaToken ? { "x-captcha-token": captchaToken } : {},
         body: JSON.stringify({ email: trimmed }),
       });
       setStep("sent");

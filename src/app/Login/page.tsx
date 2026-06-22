@@ -402,10 +402,14 @@ function LoginContent() {
 
     setLoading(true);
     try {
+      const captchaToken = await getRecaptchaToken("reset_password");
       const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
         suppressGlobalErrors: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(captchaToken ? { "x-captcha-token": captchaToken } : {}),
+        },
         body: JSON.stringify({ token: passwordResetToken, new_password: newPassword, confirm_password: newPassword }),
       });
 

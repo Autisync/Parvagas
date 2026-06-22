@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const Logo = "/icon2.png";
 import Reset from "@/app/components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
+import { getRecaptchaToken } from "@/lib/recaptcha";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
 
@@ -326,10 +327,14 @@ function AdminLoginContent() {
       return;
     }
     try {
+      const captchaToken = await getRecaptchaToken("reset_password");
       const res = await apiFetchRaw("/auth/reset-password", {
         method: "POST",
         suppressGlobalErrors: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(captchaToken ? { "x-captcha-token": captchaToken } : {}),
+        },
         body: JSON.stringify({ token: passwordResetToken, new_password: newPassword, confirm_password: newPassword }),
       });
 

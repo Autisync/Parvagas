@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
+import { track } from "@/lib/analytics";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -95,10 +96,12 @@ export default function GoogleSignInButton({
         const data = body as {
           access_token?: string;
           token?: string;
+          isNewUser?: boolean;
           user: Record<string, unknown> & { role: string };
         };
         const token = String(data.access_token || data.token || "").trim();
         if (!token) throw new Error("Resposta de autenticação inválida.");
+        if (data.isNewUser) track("register_success", { method: "google" });
         setToken(token);
         const u = data.user;
         setUser({

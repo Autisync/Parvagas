@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 import os
+import json
 import secrets
 from datetime import datetime, timedelta
 from app.db.session import get_db
@@ -9,7 +10,7 @@ from app.api.deps import get_current_user
 from app.core.observability import limiter
 from app.core.security import hash_token, hash_password
 from app.services.notification_service import send_sms
-from app.models import User, UserRole, OtpCode, CompanyInvite, CompanyMember
+from app.models import User, UserRole, OtpCode, CompanyInvite, CompanyMember, AuditLog
 from app.schemas import (
     UserRegisterRequest, UserLoginRequest, AuthTokenResponse,
     UserResponse, EmailVerificationRequest, ResendVerificationRequest,
@@ -54,7 +55,7 @@ async def register(
     """Register a new user."""
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
-    if not verify_captcha(request.headers.get("x-captcha-token"), action="register", remote_ip=_ip):
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="register", remote_ip=_ip):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         # Register user
@@ -95,7 +96,7 @@ async def login(
     """Authenticate user and return access token."""
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
-    if not verify_captcha(request.headers.get("x-captcha-token"), action="login", remote_ip=_ip):
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="login", remote_ip=_ip):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         user = AuthService.authenticate_user(
@@ -175,6 +176,10 @@ async def forgot_password(
     db: Session = Depends(get_db)
 ):
     """Initiate password reset process."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="forgot_password", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         user = db.query(User).filter(User.email == payload.email.lower()).first()
         
@@ -203,6 +208,10 @@ async def reset_password(
     db: Session = Depends(get_db)
 ):
     """Reset password with token."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="reset_password", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         if payload.new_password != payload.confirm_password:
             raise HTTPException(
@@ -304,6 +313,10 @@ def _normalize_phone(raw: str) -> str:
 @limiter.limit("5/hour")
 async def otp_request(request: Request, payload: dict, db: Session = Depends(get_db)):
     """Generate and send a one-time login code to a phone number."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_request", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     phone = _normalize_phone(payload.get("phone", ""))
     if len(phone) < 9:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Número de telefone inválido")
@@ -325,6 +338,10 @@ async def otp_request(request: Request, payload: dict, db: Session = Depends(get
 @limiter.limit("10/hour")
 async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_db)):
     """Verify an OTP and issue a session token (creates a candidate on first login)."""
+    from app.core.captcha import verify_captcha
+    _ip = request.client.host if request.client else None
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_verify", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     phone = _normalize_phone(payload.get("phone", ""))
     code = str(payload.get("code", "")).strip()
     rec = (
@@ -360,9 +377,19 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
     return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
 
 
+_GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
+
+
 @router.post("/google", response_model=AuthTokenResponse)
-async def google_login(payload: dict, db: Session = Depends(get_db)):
-    """Sign in with a Google ID token. Requires GOOGLE_CLIENT_ID + network verify."""
+@limiter.limit("20/hour")
+async def google_login(request: Request, payload: dict, db: Session = Depends(get_db)):
+    """Sign in with a Google ID token. Requires GOOGLE_CLIENT_ID + network verify.
+
+    Security: the token is verified server-side against Google (signature, aud,
+    iss, email_verified, expiry). We never trust client-sent profile data —
+    only the fields inside the Google-validated token. Every sign-in and any
+    first-time account creation is written to the durable audit log.
+    """
     id_token = str(payload.get("idToken", "")).strip()
     client_id = os.getenv("GOOGLE_CLIENT_ID", "")
     if not client_id:
@@ -371,20 +398,54 @@ async def google_login(payload: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="idToken em falta")
     try:
         import httpx
-        resp = httpx.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": id_token}, timeout=8)
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": id_token})
         info = resp.json() if resp.status_code == 200 else {}
     except Exception:
         info = {}
-    if not info or info.get("aud") != client_id or not info.get("email"):
+    # Validate the token: audience must be our client, issuer must be Google,
+    # and the email must be present AND Google-verified.
+    email_verified = str(info.get("email_verified", "")).lower() == "true"
+    if (
+        not info
+        or info.get("aud") != client_id
+        or info.get("iss") not in _GOOGLE_ISSUERS
+        or not info.get("email")
+        or not email_verified
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token Google inválido")
+
     email = str(info["email"]).lower()
+    _ip = request.client.host if request.client else None
     user = db.query(User).filter(User.email == email).first()
-    if not user:
+    is_new_user = user is None
+    if is_new_user:
         user = User(email=email, full_name=info.get("name", "Utilizador Google"),
                     password_hash="!", role=UserRole.candidate, email_verified=True,
                     email_verified_at=datetime.utcnow())
         db.add(user)
         db.commit()
         db.refresh(user)
+
+    # Durable audit trail (no PII beyond email/sub, never the raw token).
+    try:
+        db.add(AuditLog(
+            actor_user_id=str(user.id),
+            actor_email=email,
+            action="auth.google.register" if is_new_user else "auth.google.login",
+            resource_type="user",
+            resource_id=str(user.id),
+            details=json.dumps({"ip": _ip, "google_sub": info.get("sub"), "new_user": is_new_user}),
+        ))
+        db.commit()
+    except Exception as e:  # audit must never block auth
+        logger.warning(f"Audit log (google auth) failed: {e}")
+        db.rollback()
+
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(user),
+        "isNewUser": is_new_user,
+    }

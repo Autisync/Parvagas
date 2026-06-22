@@ -44,7 +44,7 @@ def captcha_required() -> bool:
     return bool(os.getenv("CAPTCHA_SECRET"))
 
 
-def _verify_enterprise(token: str, action: str | None, remote_ip: str | None) -> bool:
+async def _verify_enterprise(token: str, action: str | None, remote_ip: str | None) -> bool:
     project = os.getenv("RECAPTCHA_PROJECT_ID", "parvagas")
     api_key = os.getenv("RECAPTCHA_API_KEY", "")
     site_key = os.getenv("RECAPTCHA_SITE_KEY", DEFAULT_SITE_KEY)
@@ -60,7 +60,8 @@ def _verify_enterprise(token: str, action: str | None, remote_ip: str | None) ->
         import httpx
 
         url = f"https://recaptchaenterprise.googleapis.com/v1/projects/{project}/assessments?key={api_key}"
-        resp = httpx.post(url, json={"event": event}, timeout=8)
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.post(url, json={"event": event})
         if resp.status_code != 200:
             logger.warning("reCAPTCHA Enterprise HTTP %s: %s", resp.status_code, resp.text[:200])
             return False
@@ -79,7 +80,7 @@ def _verify_enterprise(token: str, action: str | None, remote_ip: str | None) ->
         return False
 
 
-def _verify_siteverify(token: str, remote_ip: str | None) -> bool:
+async def _verify_siteverify(token: str, remote_ip: str | None) -> bool:
     secret = os.getenv("CAPTCHA_SECRET", "")
     url = _SITEVERIFY_URLS.get(_provider())
     if not secret or not url:
@@ -90,19 +91,24 @@ def _verify_siteverify(token: str, remote_ip: str | None) -> bool:
         data = {"secret": secret, "response": token}
         if remote_ip:
             data["remoteip"] = remote_ip
-        resp = httpx.post(url, data=data, timeout=8)
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.post(url, data=data)
         return bool(resp.json().get("success")) if resp.status_code == 200 else False
     except Exception as exc:  # pragma: no cover
         logger.warning("CAPTCHA verify failed: %s", exc)
         return False
 
 
-def verify_captcha(token: str | None, action: str | None = None, remote_ip: str | None = None) -> bool:
-    """Return True if the captcha passes (or isn't enforced)."""
+async def verify_captcha(token: str | None, action: str | None = None, remote_ip: str | None = None) -> bool:
+    """Return True if the captcha passes (or isn't enforced).
+
+    Async so the verification HTTP call never blocks the event loop — keeps the
+    auth endpoints scalable under concurrent load.
+    """
     if not captcha_required():
         return True
     if not token:
         return False
     if _provider() == "recaptcha_enterprise":
-        return _verify_enterprise(token, action, remote_ip)
-    return _verify_siteverify(token, remote_ip)
+        return await _verify_enterprise(token, action, remote_ip)
+    return await _verify_siteverify(token, remote_ip)

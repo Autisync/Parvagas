@@ -43,6 +43,7 @@ class AuthTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    isNewUser: bool | None = None
 
 
 class EmailVerificationRequest(BaseModel):
