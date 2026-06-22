@@ -23,13 +23,33 @@ def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
     job = db.query(Job).filter(Job.id == job_id).first()
     return job.company_id if job else None
 from app.services.storage_service import StorageService
-from app.workers.tasks import send_application_received_email, send_application_status_email
+from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 import json as _json
 
 router = APIRouter(tags=["applications"])
+
+
+def _notify_company_new_applicant(db: Session, company_id: str, job_id: str, candidate_name: str) -> None:
+    """Email the company owner that a new candidate applied. Never blocks the apply."""
+    try:
+        company = db.query(Company).filter(Company.id == company_id).first() if company_id else None
+        if not company or not company.owner_user_id:
+            return
+        owner = db.query(User).filter(User.id == company.owner_user_id).first()
+        if not owner or not owner.email:
+            return
+        job = db.query(Job).filter(Job.id == job_id).first()
+        send_templated_email.delay("send_new_applicant_email", {
+            "email": owner.email,
+            "recruiter_name": owner.full_name or "",
+            "candidate_name": candidate_name or "Candidato",
+            "job_title": job.title if job else "",
+        })
+    except Exception as e:
+        logger.warning(f"Could not enqueue new-applicant email: {e}")
 
 
 def _json_list_safe(value):
@@ -144,6 +164,7 @@ async def submit_candidate_application(
     db.refresh(application)
 
     send_application_received_email.delay(current_user.email, current_user.full_name, jobId)
+    _notify_company_new_applicant(db, application.company_id, jobId, current_user.full_name)
 
     return {
         "message": "Application submitted successfully.",
@@ -200,6 +221,7 @@ async def submit_quick_apply(
     db.refresh(application)
 
     send_application_received_email.delay(applicant_email, full_name, job_id)
+    _notify_company_new_applicant(db, application.company_id, job_id, full_name)
 
     return {
         "message": "Quick apply submitted successfully.",

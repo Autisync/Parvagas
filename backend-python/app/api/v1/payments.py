@@ -18,6 +18,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models import Company, Plan, Subscription, Transaction, User, UserRole
+from app.workers.tasks import send_templated_email
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["payments"])
 
@@ -111,6 +115,18 @@ async def subscribe(payload: dict[str, Any], db: Session = Depends(get_db), curr
     # If free plan, activate immediately.
     if plan.price == 0:
         return _activate(db, tx)
+
+    # Paid plan: email the owner the payment instructions.
+    try:
+        owner = db.query(User).filter(User.id == co.owner_user_id).first() if co.owner_user_id else None
+        if owner and owner.email:
+            send_templated_email.delay("send_payment_instructions_email", {
+                "email": owner.email, "company_name": co.name, "plan_name": plan.name,
+                "amount": plan.price, "currency": plan.currency, "reference": reference,
+            })
+    except Exception as e:
+        logger.warning(f"Could not enqueue payment instructions email: {e}")
+
     return {
         "transaction": {"_id": tx.id, "reference": reference, "amount": tx.amount,
                         "currency": tx.currency, "provider": provider, "status": "pending"},
@@ -141,6 +157,23 @@ def _activate(db: Session, tx: Transaction) -> dict[str, Any]:
         sub.status = "active"
         sub.current_period_end = datetime.utcnow() + timedelta(days=30)
     db.commit()
+
+    # Receipt / activation email to the company owner.
+    try:
+        company = db.query(Company).filter(Company.id == tx.company_id).first()
+        owner = db.query(User).filter(User.id == company.owner_user_id).first() if company and company.owner_user_id else None
+        plan = db.query(Plan).filter(Plan.id == tx.plan_id).first()
+        if owner and owner.email:
+            period_end = sub.current_period_end.strftime("%d/%m/%Y") if sub and sub.current_period_end else ""
+            send_templated_email.delay("send_subscription_activated_email", {
+                "email": owner.email,
+                "company_name": company.name if company else "",
+                "plan_name": plan.name if plan else "",
+                "period_end": period_end,
+            })
+    except Exception as e:
+        logger.warning(f"Could not enqueue subscription activated email: {e}")
+
     return {"transaction": {"_id": tx.id, "reference": tx.reference, "status": tx.status}, "activated": True}
 
 

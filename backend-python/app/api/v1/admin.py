@@ -21,6 +21,10 @@ from app.models import (
     AdCampaign, AuditLog, CandidateProfile, Company, Job, JobApplication,
     ScrapedJob, User, UserRole,
 )
+from app.workers.tasks import send_templated_email
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -555,6 +559,25 @@ async def admin_moderate_job(
         resource_id=job_id,
         details={"status": next_status, "visibility": next_visibility, "reason": payload.get("reason", "")},
     )
+
+    # Notify the company owner of the moderation outcome.
+    try:
+        company = db.query(Company).filter(Company.id == job.company_id).first() if job.company_id else None
+        owner = db.query(User).filter(User.id == company.owner_user_id).first() if company and company.owner_user_id else None
+        if owner and owner.email:
+            if next_status in ("approved", "published", "active"):
+                send_templated_email.delay("send_job_approved_email", {
+                    "email": owner.email, "recruiter_name": owner.full_name or "",
+                    "job_title": job.title, "job_id": job_id,
+                })
+            elif next_status in ("rejected", "declined"):
+                send_templated_email.delay("send_job_rejected_email", {
+                    "email": owner.email, "recruiter_name": owner.full_name or "",
+                    "job_title": job.title, "reason": payload.get("reason", "") or "",
+                })
+    except Exception as e:
+        logger.warning(f"Could not enqueue job moderation email: {e}")
+
     return {"job": serialize_job(job, detail=True)}
 
 

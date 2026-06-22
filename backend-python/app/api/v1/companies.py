@@ -18,6 +18,8 @@ from app.api.v1.jobs import serialize_job
 from app.schemas import CompanyProfileResponse, CompanyProfileUpdateRequest
 from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
+from app.core.config import get_settings
+from app.workers.tasks import send_templated_email
 from app.api.deps import get_current_user
 
 # Heuristic spam/scam signals for job postings (regional fraud patterns).
@@ -39,9 +41,28 @@ def _spam_assessment(text: str) -> tuple[int, list[str]]:
     return min(score, 100), flags
 
 logger = get_logger(__name__)
+settings = get_settings()
 router = APIRouter(prefix="/companies", tags=["companies"])
 
 _deletion_requests: list[dict[str, Any]] = []
+
+_ROLE_PT = {"recruiter": "Recrutador", "viewer": "Visualizador", "owner": "Administrador"}
+
+
+def _send_team_invite_email(invite, raw_token: str, company: Company, inviter: User) -> None:
+    """Email a teammate their invite link. Never blocks the request."""
+    try:
+        base = (settings.FRONTEND_URL or "https://parvagas.pt").rstrip("/")
+        link = f"{base}/Signup?role=company&inviteToken={raw_token}"
+        send_templated_email.delay("send_team_invite_email", {
+            "email": invite.email,
+            "company_name": company.name,
+            "inviter_name": (getattr(inviter, "full_name", "") or ""),
+            "invite_link": link,
+            "role": _ROLE_PT.get(invite.role, invite.role),
+        })
+    except Exception as e:
+        logger.warning(f"Could not enqueue team invite email: {e}")
 
 
 def _ensure_admin(current_user: User) -> User:
@@ -179,12 +200,31 @@ async def update_company_verification(
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
+    previous_status = company.status
     next_status = str(payload.get("status") or payload.get("verificationStatus") or "").strip()
     if next_status:
         company.status = next_status
 
     db.commit()
     db.refresh(company)
+
+    # Notify the company owner when the verification outcome changes.
+    if next_status and next_status != previous_status:
+        try:
+            owner = db.query(User).filter(User.id == company.owner_user_id).first() if company.owner_user_id else None
+            if owner and owner.email:
+                if company.status == "active":
+                    send_templated_email.delay("send_company_verified_email", {
+                        "email": owner.email, "company_name": company.name,
+                    })
+                elif company.status in ("rejected", "suspended"):
+                    method = "send_company_suspended_email" if company.status == "suspended" else "send_company_rejected_email"
+                    send_templated_email.delay(method, {
+                        "email": owner.email, "company_name": company.name,
+                        "reason": str(payload.get("reason", "") or ""),
+                    })
+        except Exception as e:
+            logger.warning(f"Could not enqueue company verification email: {e}")
 
     return {
         "company": {
@@ -556,7 +596,7 @@ async def company_team_invite(
     db.add(invite)
     db.commit()
     db.refresh(invite)
-    # Email delivery is best-effort and handled by the notification layer.
+    _send_team_invite_email(invite, raw, company, current_user)
     return {"invite": {"_id": invite.id, "email": invite.email, "role": invite.role, "status": invite.status},
             "emailDelivery": {"status": "queued"}}
 
@@ -594,7 +634,10 @@ async def company_team_invite_resend(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite not found")
     invite.status = "pending"
     invite.expires_at = datetime.utcnow() + timedelta(days=7)
+    raw = create_verification_token()  # re-issue so the resent link is valid
+    invite.token_hash = hash_token(raw)
     db.commit()
+    _send_team_invite_email(invite, raw, company, current_user)
     return {"invite": {"_id": invite.id, "email": invite.email, "role": invite.role, "status": invite.status},
             "emailDelivery": {"status": "queued"}}
 

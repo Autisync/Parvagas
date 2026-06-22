@@ -154,6 +154,37 @@ def send_application_received_email(self, email: str, full_name: str, job_id: st
 
 
 @celery.task(
+    name='app.workers.tasks.send_templated_email',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def send_templated_email(self, method: str, payload: dict) -> bool:
+    """Generic async dispatcher for any EmailService.send_* template.
+
+    Keeps one task for the whole template catalog instead of one task each.
+    `method` must name a real EmailService method (allow-listed by prefix).
+    """
+    if not method.startswith("send_"):
+        logger.error(f"Refusing non-send email method: {method}")
+        return False
+    fn = getattr(EmailService, method, None)
+    if not callable(fn):
+        logger.error(f"Unknown email template method: {method}")
+        return False
+    try:
+        ok = fn(**(payload or {}))
+        if not ok:
+            raise RuntimeError(f"Email '{method}' send failed")
+        return ok
+    except Exception as e:
+        logger.error(f"Failed to send templated email '{method}': {str(e)}")
+        raise
+
+
+@celery.task(
     name='app.workers.tasks.send_application_status_email',
     bind=True,
     autoretry_for=(Exception,),
