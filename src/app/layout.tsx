@@ -16,6 +16,8 @@ import CookieConsent from "./components/CookieConsent";
 import { Providers } from "./Providers";
 // import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/react";
+import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
+import SentryInit from "./components/SentryInit";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -84,6 +86,8 @@ export default function RootLayout({
           {/* <Footer /> */}
         </Providers>
         <Analytics />
+        <ServiceWorkerRegister />
+        <SentryInit />
       </body>
     </html>
   );

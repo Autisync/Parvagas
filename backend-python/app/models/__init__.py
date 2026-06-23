@@ -121,6 +121,9 @@ class Company(Base, TimestampMixin):
     # Onboarding
     has_seen_tutorial = Column(Boolean, nullable=False, default=False)
 
+    # Angola differentiator: commits to the 70% national-hiring rule (Angolanização).
+    angolanizacao = Column(Boolean, nullable=False, default=False)
+
     # Relations
     owner = relationship("User", back_populates="company", foreign_keys=[owner_user_id])
 

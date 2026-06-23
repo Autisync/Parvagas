@@ -120,7 +120,8 @@ class CompanyProfileResponse(BaseModel):
     status: str
     description: Optional[str]
     logo_url: Optional[str]
-    
+    angolanizacao: Optional[bool] = None
+
     class Config:
         from_attributes = True
 
@@ -134,6 +135,7 @@ class CompanyProfileUpdateRequest(BaseModel):
     email: Optional[str] = None
     website: Optional[str] = None
     description: Optional[str] = None
+    angolanizacao: Optional[bool] = None
 
 
 # CV Schemas

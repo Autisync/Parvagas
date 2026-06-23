@@ -34,11 +34,67 @@ class StorageService:
             # blocking uploads when the scanner is misconfigured.
             return os.getenv("ANTIVIRUS_FAIL_OPEN", "true").lower() == "true"
 
+    # --- Supabase Storage (S3-free REST adapter) --------------------------
+    @staticmethod
+    def _supabase_enabled() -> bool:
+        return (
+            settings.STORAGE_PROVIDER == "supabase"
+            and bool(settings.SUPABASE_URL)
+            and bool(settings.SUPABASE_SERVICE_KEY)
+        )
+
+    @staticmethod
+    def _supabase_upload(file_content: bytes, file_name: str) -> str:
+        """Upload to Supabase Storage; returns a 'supabase:<key>' reference."""
+        import httpx
+        import mimetypes
+
+        key = file_name.lstrip("/")
+        url = f"{settings.SUPABASE_URL}/storage/v1/object/{settings.SUPABASE_BUCKET}/{key}"
+        ctype = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        resp = httpx.post(
+            url, content=file_content,
+            headers={
+                "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+                "Content-Type": ctype,
+                "x-upsert": "true",
+            },
+            timeout=30,
+        )
+        if resp.status_code not in (200, 201):
+            raise RuntimeError(f"Supabase upload failed ({resp.status_code}): {resp.text[:200]}")
+        return f"supabase:{key}"
+
+    @staticmethod
+    def signed_url(file_path: str, expires_in: int = 3600) -> str | None:
+        """Return a time-limited download URL for cloud objects (None for local files)."""
+        if not file_path or not file_path.startswith("supabase:"):
+            return None
+        try:
+            import httpx
+
+            key = file_path[len("supabase:"):]
+            url = f"{settings.SUPABASE_URL}/storage/v1/object/sign/{settings.SUPABASE_BUCKET}/{key}"
+            resp = httpx.post(
+                url, json={"expiresIn": expires_in},
+                headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                signed = resp.json().get("signedURL") or resp.json().get("signedUrl")
+                if signed:
+                    return f"{settings.SUPABASE_URL}/storage/v1{signed}"
+        except Exception:
+            return None
+        return None
+
     @staticmethod
     def save_file(file_content: bytes, file_name: str) -> str:
-        """Save file to disk and return path."""
-        StorageService.ensure_upload_dir()
+        """Save a file to the configured backend and return a reference/path."""
+        if StorageService._supabase_enabled():
+            return StorageService._supabase_upload(file_content, file_name)
 
+        StorageService.ensure_upload_dir()
         primary_path = Path(settings.UPLOAD_DIR) / file_name
         try:
             with open(primary_path, "wb") as f:
@@ -52,10 +108,20 @@ class StorageService:
             with open(fallback_path, "wb") as f:
                 f.write(file_content)
             return str(fallback_path)
-    
+
     @staticmethod
     def delete_file(file_path: str) -> bool:
-        """Delete file from disk."""
+        """Delete a file from the configured backend."""
+        if file_path and file_path.startswith("supabase:"):
+            try:
+                import httpx
+
+                key = file_path[len("supabase:"):]
+                url = f"{settings.SUPABASE_URL}/storage/v1/object/{settings.SUPABASE_BUCKET}/{key}"
+                resp = httpx.delete(url, headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"}, timeout=15)
+                return resp.status_code in (200, 204)
+            except Exception:
+                return False
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -63,8 +129,10 @@ class StorageService:
             return False
         except Exception:
             return False
-    
+
     @staticmethod
     def file_exists(file_path: str) -> bool:
-        """Check if file exists."""
+        """Check if a file exists (cloud refs are assumed present)."""
+        if file_path and file_path.startswith("supabase:"):
+            return True
         return os.path.exists(file_path)

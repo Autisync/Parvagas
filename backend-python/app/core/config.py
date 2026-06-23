@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     BRAND_TEXT_MUTED: str = os.getenv("BRAND_TEXT_MUTED", "#475569")
     BRAND_BG_MUTED: str = os.getenv("BRAND_BG_MUTED", "#f8fafc")
 
+    # Email delivery — provider: smtp (default) | resend
+    EMAIL_PROVIDER: str = os.getenv("EMAIL_PROVIDER", "smtp").strip().lower()
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     # SMTP
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
@@ -68,9 +71,13 @@ class Settings(BaseSettings):
     SMTP_PASS: str = os.getenv("SMTP_PASS", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@parvagas.com")
 
-    # File upload
+    # File upload — STORAGE_PROVIDER: local (default) | supabase
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "local").strip().lower()
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/uploads")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", 10))
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").rstrip("/")
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "cvs")
 
     # Optional AI-assisted CV parsing
     CV_PARSER_AI_ENABLED: bool = os.getenv("CV_PARSER_AI_ENABLED", "false").lower() == "true"

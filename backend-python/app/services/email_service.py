@@ -106,8 +106,8 @@ class EmailService:
     def send_verification_email(email: str, full_name: str, verification_link: str) -> bool:
         """Send email verification email."""
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
                 return False
             
             subject = f"{settings.BRAND_NAME} — Confirme o seu email"
@@ -135,8 +135,8 @@ class EmailService:
     def send_password_reset_email(email: str, full_name: str, reset_link: str) -> bool:
         """Send password reset email."""
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
                 return False
             
             subject = f"{settings.BRAND_NAME} — Redefinir a sua palavra-passe"
@@ -164,8 +164,8 @@ class EmailService:
     def send_welcome_email(email: str, full_name: str, role: str) -> bool:
         """Send welcome email after successful registration."""
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
                 return False
             
             role_pt = {"candidate": "Candidato", "company": "Empresa", "admin": "Administrador"}.get(
@@ -196,8 +196,8 @@ class EmailService:
     def send_application_received_email(email: str, full_name: str, job_id: str) -> bool:
         """Send acknowledgement after a job application is submitted."""
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
                 return False
 
             job_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Vagas-Disponiveis/{job_id}"
@@ -237,8 +237,8 @@ class EmailService:
     def send_application_status_email(email: str, full_name: str, job_title: str, new_status: str) -> bool:
         """Notify a candidate when the status of their application changes."""
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
                 return False
 
             status_key = str(new_status or "").strip().lower()
@@ -286,8 +286,8 @@ class EmailService:
         preheader: str = "",
     ) -> bool:
         try:
-            if not settings.SMTP_HOST:
-                logger.warning(f"SMTP not configured, skipping email to {to_email}")
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {to_email}")
                 return False
             html = EmailService._build_email_html(title, body_html, action_text, action_url, preheader)
             return EmailService._send_email(to_email, subject, html)
@@ -559,29 +559,51 @@ class EmailService:
         )
 
     @staticmethod
+    def _email_enabled() -> bool:
+        """True when a usable delivery provider is configured."""
+        if settings.EMAIL_PROVIDER == "resend":
+            return bool(settings.RESEND_API_KEY)
+        return bool(settings.SMTP_HOST)
+
+    @staticmethod
+    def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
+        """Send through the Resend HTTP API (better deliverability than a shared SMTP IP)."""
+        import httpx
+
+        resp = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
+            json={"from": settings.SMTP_FROM, "to": [to_email], "subject": subject, "html": html_content},
+            timeout=15,
+        )
+        if resp.status_code in (200, 201):
+            logger.info(f"Email sent to {to_email} via Resend")
+            return True
+        logger.error(f"Resend send failed ({resp.status_code}): {resp.text[:200]}")
+        return False
+
+    @staticmethod
     def _send_email(to_email: str, subject: str, html_content: str) -> bool:
-        """Internal method to send email via SMTP."""
+        """Send an email via the configured provider (smtp | resend)."""
         try:
-            # Create message
+            if settings.EMAIL_PROVIDER == "resend":
+                return EmailService._send_via_resend(to_email, subject, html_content)
+
+            # Default: SMTP
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = settings.SMTP_FROM
             msg["To"] = to_email
-            
-            # Attach HTML
             msg.attach(MIMEText(html_content, "html"))
-            
-            # Send email
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
                 if settings.SMTP_SECURE:
                     server.starttls()
                 if settings.SMTP_USER and settings.SMTP_PASS:
                     server.login(settings.SMTP_USER, settings.SMTP_PASS)
                 server.send_message(msg)
-            
-            logger.info(f"Email sent to {to_email}")
+            logger.info(f"Email sent to {to_email} via SMTP")
             return True
-        
+
         except Exception as e:
             logger.error(f"Failed to send email: {str(e)}")
             return False

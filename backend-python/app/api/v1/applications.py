@@ -408,7 +408,8 @@ async def application_candidate_cv(
             cvs = db.query(CVUpload).filter(CVUpload.candidate_id == profile.id).order_by(CVUpload.created_at.desc()).all()
             documents = [
                 {"_id": c.id, "fileName": c.file_name, "mimeType": c.mime_type,
-                 "createdAt": c.created_at.isoformat() if c.created_at else None, "signedUrl": None}
+                 "createdAt": c.created_at.isoformat() if c.created_at else None,
+                 "signedUrl": StorageService.signed_url(getattr(c, "file_path", None))}
                 for c in cvs
             ]
     return {"candidate": candidate, "documents": documents}

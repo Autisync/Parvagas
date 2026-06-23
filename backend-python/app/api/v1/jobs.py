@@ -7,6 +7,7 @@ import json
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
@@ -41,6 +42,8 @@ def _company_payload(company: Optional[Company]) -> Optional[dict[str, Any]]:
         "logo": company.logo_url,
         "status": company.status,
         "verified": company.status == "active",  # drives the "empresa verificada" badge
+        "whatsapp": getattr(company, "phone", None),  # for WhatsApp quick-apply
+        "angolanizacao": bool(getattr(company, "angolanizacao", False)),
     }
 
 
@@ -111,9 +114,20 @@ async def list_public_jobs(
         .filter(Job.visibility == "public")
     )
 
-    if keyword and keyword.strip():
-        like = f"%{keyword.strip()}%"
-        # Title OR description OR skills match (broader than title-only).
+    keyword_clean = keyword.strip() if keyword else ""
+    # Postgres full-text search (ranked, accent/stemming-aware) with ilike fallback.
+    _fts_expr = (
+        "to_tsvector('portuguese', coalesce(jobs.title,'') || ' ' || "
+        "coalesce(jobs.description,'') || ' ' || coalesce(jobs.required_skills,'') || ' ' || "
+        "coalesce(jobs.category,''))"
+    )
+    use_fts = bool(keyword_clean) and db.bind.dialect.name == "postgresql"
+    if use_fts:
+        query = query.filter(
+            text(f"{_fts_expr} @@ websearch_to_tsquery('portuguese', :kw)")
+        ).params(kw=keyword_clean)
+    elif keyword_clean:
+        like = f"%{keyword_clean}%"
         query = query.filter(
             Job.title.ilike(like) | Job.description.ilike(like) | Job.required_skills.ilike(like)
         )
@@ -136,7 +150,9 @@ async def list_public_jobs(
     total = query.count()
     if sort == "salary":
         order = Job.salary_max.desc()
-    elif sort == "relevance" and keyword:
+    elif sort == "relevance" and use_fts:
+        order = text(f"ts_rank({_fts_expr}, websearch_to_tsquery('portuguese', :kw)) DESC")
+    elif sort == "relevance" and keyword_clean:
         order = Job.views.desc()  # proxy for relevance/popularity
     else:
         order = Job.created_at.desc()

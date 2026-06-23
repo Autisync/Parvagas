@@ -234,6 +234,7 @@ function VagasDisponiveisContent() {
               <option value="Logistica">{categoryLabels.Logistica}</option>
               <option value="Recursos Humanos">{categoryLabels["Recursos Humanos"]}</option>
               <option value="Comercial">{categoryLabels.Comercial}</option>
+              <option value="Biscato">Biscato (trabalho ocasional)</option>
             </select>
             <div className="flex gap-2">
               <select className="app-input flex-1" value={workMode} onChange={e => setWorkMode(e.target.value)}>
