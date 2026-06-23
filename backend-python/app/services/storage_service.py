@@ -1,9 +1,11 @@
 """Storage service for file uploads."""
+import logging
 import os
 from pathlib import Path
 from app.core.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class StorageService:
@@ -143,6 +145,20 @@ class StorageService:
             return StorageService._server_upload(file_content, file_name)
         if StorageService._supabase_enabled():
             return StorageService._supabase_upload(file_content, file_name)
+
+        # Misconfiguration guard: provider asked for a remote store but its
+        # credentials are missing, so we're about to write to local disk. In a
+        # beta/prod container local disk is ephemeral — make this loud.
+        if settings.STORAGE_PROVIDER in ("supabase", "server"):
+            logger.warning(
+                "STORAGE_PROVIDER=%s but credentials are incomplete — falling back "
+                "to LOCAL DISK (ephemeral). Uploads will NOT persist to the remote "
+                "store. Set %s.",
+                settings.STORAGE_PROVIDER,
+                "SUPABASE_URL + SUPABASE_SERVICE_KEY"
+                if settings.STORAGE_PROVIDER == "supabase"
+                else "S3_ENDPOINT_URL + S3_ACCESS_KEY + S3_SECRET_KEY",
+            )
 
         StorageService.ensure_upload_dir()
         primary_path = Path(settings.UPLOAD_DIR) / file_name

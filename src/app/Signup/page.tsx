@@ -226,7 +226,7 @@ function SignUpContent() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center p-6 sm:p-10">
+        <section className="flex min-w-0 items-center justify-center p-4 sm:p-10">
           <div className="w-full max-w-md">
             <div className="lg:hidden">
               <Image width={160} height={160} className="h-14 w-auto" src={Logo} alt="Parvagas" />

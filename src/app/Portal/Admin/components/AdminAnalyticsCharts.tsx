@@ -100,7 +100,7 @@ export default function AdminAnalyticsCharts({
       {/* Trend — area (jobs) + line (signups) with gradient fill */}
       <ChartCard title="Vagas publicadas vs inscrições" subtitle="Evolução nos últimos períodos">
         <div className="h-72" role="img" aria-label="Evolução de vagas e inscrições">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <ComposedChart data={trend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradVagas" x1="0" y1="0" x2="0" y2="1">
@@ -122,7 +122,7 @@ export default function AdminAnalyticsCharts({
       {/* Applications per period — rounded gradient bars */}
       <ChartCard title="Submissões de candidaturas" subtitle="Volume por período">
         <div className="h-72" role="img" aria-label="Submissões de candidaturas por período">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={applications} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradApps" x1="0" y1="0" x2="0" y2="1">
@@ -144,7 +144,7 @@ export default function AdminAnalyticsCharts({
       <ChartCard title="Distribuição por estado" subtitle="Candidaturas por fase do funil">
         <div className="flex flex-col items-center gap-4 sm:flex-row">
           <div className="relative h-56 w-full sm:h-64 sm:w-1/2" role="img" aria-label="Distribuição de candidaturas por estado">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={applicationStatus} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={62} outerRadius={92} paddingAngle={2} stroke="none">
                   {applicationStatus.map((entry, idx) => (
@@ -176,7 +176,7 @@ export default function AdminAnalyticsCharts({
       {/* Jobs by workflow status — horizontal rounded bars */}
       <ChartCard title="Vagas por estado de workflow" subtitle="Saúde da fila de moderação">
         <div className="h-64" role="img" aria-label="Vagas por estado de workflow">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={jobsByStatus} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
               <XAxis type="number" tick={AXIS} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -195,7 +195,7 @@ export default function AdminAnalyticsCharts({
       {revenueEnabled && (
         <ChartCard title="Receita de campanhas" subtitle="Monetização por período" className="xl:col-span-2">
           <div className="h-72" role="img" aria-label="Receita de campanhas por período">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={revenue} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
