@@ -8,6 +8,8 @@ type NotificationItem = {
   _id: string;
   title?: string;
   description?: string;
+  body?: string;
+  link?: string;
   type?: string;
   readAt?: string | null;
   resolvedAt?: string | null;
@@ -143,7 +145,7 @@ export default function NotificationBell({ token, role, teamRole }: Props) {
               unresolved.map((item) => (
                 <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
                   <p className="text-sm font-semibold text-slate-900">{item.title || "Notificação"}</p>
-                  <p className="mt-1 text-xs text-slate-600">{item.description || ""}</p>
+                  <p className="mt-1 text-xs text-slate-600">{item.body || item.description || ""}</p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"

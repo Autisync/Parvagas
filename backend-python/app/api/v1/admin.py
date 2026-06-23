@@ -561,6 +561,7 @@ async def admin_moderate_job(
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
+    previous_status = job.status
     job.status = next_status
     job.visibility = next_visibility
     job.moderation_reason = payload.get("reason", "") or None
@@ -594,6 +595,15 @@ async def admin_moderate_job(
                 })
     except Exception as e:
         logger.warning(f"Could not enqueue job moderation email: {e}")
+
+    # Instant job alerts — only when the job newly becomes public.
+    _public = ("approved", "published", "active")
+    if next_status in _public and previous_status not in _public:
+        try:
+            from app.workers.tasks import dispatch_instant_alerts_for_job
+            dispatch_instant_alerts_for_job.delay(job_id)
+        except Exception as e:
+            logger.warning(f"Could not enqueue instant job alerts: {e}")
 
     return {"job": serialize_job(job, detail=True)}
 

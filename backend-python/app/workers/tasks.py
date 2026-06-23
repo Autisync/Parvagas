@@ -448,6 +448,52 @@ def dispatch_job_alert_digests() -> dict:
         db.close()
 
 
+@celery.task(name='app.workers.tasks.dispatch_instant_alerts_for_job')
+def dispatch_instant_alerts_for_job(job_id: str) -> dict:
+    """Instant: when a job is published, notify candidates whose instant alert matches."""
+    from app.models import JobAlert, Job, User
+    from app.services.notification_service import create_notification
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job or job.status not in _PUBLIC_JOB_STATUSES:
+            return {"notified": 0, "reason": "job not public"}
+        alerts = db.query(JobAlert).filter(
+            JobAlert.active.is_(True), JobAlert.frequency == "instant"
+        ).all()
+        text = f"{job.title or ''} {job.description or ''}".lower()
+        for alert in alerts:
+            if alert.keyword and alert.keyword.lower() not in text:
+                continue
+            if alert.location and (job.location or "").lower().find(alert.location.lower()) < 0:
+                continue
+            if alert.category and job.category != alert.category:
+                continue
+            if alert.work_mode and job.work_mode != alert.work_mode:
+                continue
+            user = db.query(User).filter(User.id == alert.candidate_user_id).first()
+            if not user or not user.email:
+                continue
+            query_label = alert.keyword or alert.category or alert.location or "as suas preferências"
+            EmailService.send_job_alert_digest(
+                user.email, user.full_name or "Candidato", query_label,
+                [{"id": job.id, "title": job.title, "company": "", "location": job.location or "", "url": ""}],
+            )
+            create_notification(
+                db, alert.candidate_user_id, type="job_alert",
+                title="Nova vaga para si", body=job.title or "", link=f"/Vagas-Disponiveis/{job.id}",
+            )
+            sent += 1
+        return {"notified": sent}
+    except Exception as e:
+        logger.error(f"Failed to dispatch instant alerts for job {job_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 @celery.task(name='app.workers.tasks.dispatch_subscription_expiry_reminders')
 def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
     """Daily: remind companies whose plan expires within `days_ahead` days."""
