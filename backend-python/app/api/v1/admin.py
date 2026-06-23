@@ -22,6 +22,7 @@ from app.models import (
     ScrapedJob, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
+from app.services.scraper_service import content_hash as scraped_content_hash
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -196,6 +197,10 @@ def _record_admin_event(
 
 
 def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
+    clicks = int(ad.clicks or 0)
+    impressions = int(ad.impressions or 0)
+    spent = (clicks * float(ad.cost_per_click or 0)) + (impressions * float(ad.cost_per_impression or 0))
+    ctr = round((clicks / impressions) * 100, 2) if impressions else 0.0
     return {
         "_id": ad.id,
         "title": ad.title,
@@ -205,8 +210,15 @@ def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
         "status": ad.status,
         "active": bool(ad.active),
         "budget": ad.budget,
-        "clicks": int(ad.clicks or 0),
-        "impressions": int(ad.impressions or 0),
+        "costPerClick": float(ad.cost_per_click or 0),
+        "costPerImpression": float(ad.cost_per_impression or 0),
+        "spent": round(spent, 2),
+        "budgetRemaining": round(float(ad.budget) - spent, 2) if ad.budget else None,
+        "targetCategory": ad.target_category,
+        "targetLocation": ad.target_location,
+        "clicks": clicks,
+        "impressions": impressions,
+        "ctr": ctr,
         "startDate": ad.start_date.isoformat() if ad.start_date else None,
         "endDate": ad.end_date.isoformat() if ad.end_date else None,
         "createdAt": ad.created_at.isoformat() if ad.created_at else None,
@@ -244,6 +256,14 @@ def _is_ad_live(ad: AdCampaign) -> bool:
     return _compute_ad_status(ad) == "active"
 
 
+def _validate_ad_fields(link, start_date, end_date) -> None:
+    """Lightweight validation for ad create/update."""
+    if link and not (str(link).startswith("http://") or str(link).startswith("https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O link deve começar por http:// ou https://")
+    if start_date and end_date and end_date <= start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A data de fim deve ser posterior à data de início")
+
+
 @router.get("/me")
 async def admin_me(current_user: User = Depends(get_current_user)):
     user = _ensure_admin(current_user)
@@ -265,7 +285,7 @@ async def admin_overview(
         "users": db.query(User).count(),
         "companies": db.query(Company).count(),
         "jobs": db.query(Job).count(),
-        "scraped": 0,  # scraped-jobs feature not yet modelled
+        "scraped": db.query(ScrapedJob).count(),
         "ads": db.query(AdCampaign).count(),
     }
 
@@ -314,21 +334,34 @@ async def admin_analytics(
     since14 = now - timedelta(days=14)
     active_app_statuses = ("submitted", "under_review", "shortlisted", "interview")
 
+    # Ad performance aggregates.
+    ad_clicks = int(db.query(func.coalesce(func.sum(AdCampaign.clicks), 0)).scalar() or 0)
+    ad_impressions = int(db.query(func.coalesce(func.sum(AdCampaign.impressions), 0)).scalar() or 0)
+    ad_ctr = round((ad_clicks / ad_impressions) * 100, 2) if ad_impressions else 0.0
+
     return {
         "range": {"from": from_date, "to": to_date},
         "totals": {
             "users": db.query(User).count(),
             "companies": db.query(Company).count(),
             "jobs": db.query(Job).count(),
-            "scraped": 0,
+            "scraped": db.query(ScrapedJob).count(),
             "ads": db.query(AdCampaign).count(),
             "applications": db.query(JobApplication).count(),
+        },
+        "ads": {
+            "total": db.query(AdCampaign).count(),
+            "active": db.query(AdCampaign).filter(AdCampaign.status == "active").count(),
+            "clicks": ad_clicks,
+            "impressions": ad_impressions,
+            "ctr": ad_ctr,
+            "byStatus": _distribution(db, AdCampaign.status),
         },
         "operational": {
             "pendingJobs": db.query(Job).filter(Job.status == "pending_platform_review").count(),
             "pendingCompanies": db.query(Company).filter(Company.status == "pending_verification").count(),
             "suspendedUsers": db.query(User).filter(User.suspended.is_(True)).count(),
-            "pendingScraped": 0,
+            "pendingScraped": db.query(ScrapedJob).filter(ScrapedJob.status == "pending").count(),
             "activeApplications": db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(),
         },
         "trends": {
@@ -720,30 +753,39 @@ async def admin_create_scraped(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_admin(current_user)
+    admin = _ensure_admin(current_user)
     title = str(payload.get("title", "")).strip()
     if not title:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title is required")
     company_name = str(payload.get("company", "") or payload.get("companyName", "")).strip() or None
-    # Dedupe heuristic: same title + company already ingested.
-    dup = (
-        db.query(ScrapedJob)
-        .filter(ScrapedJob.title == title, ScrapedJob.company_name == company_name)
-        .first()
-    )
+    location = str(payload.get("location", "")).strip() or None
+    source_url = str(payload.get("sourceUrl", "")).strip() or None
+    chash = scraped_content_hash(title, company_name, location)
+    # Dedup: same content hash OR same source_url already ingested.
+    dup = db.query(ScrapedJob).filter(ScrapedJob.content_hash == chash).first()
+    if not dup and source_url:
+        dup = db.query(ScrapedJob).filter(ScrapedJob.source_url == source_url).first()
+    if dup:
+        # Refresh the existing record's last_seen rather than create noise.
+        dup.last_seen_at = datetime.utcnow()
+        db.commit()
+        db.refresh(dup)
+        return {"scraped": _to_scraped_record(dup), "duplicate": True}
     s = ScrapedJob(
-        title=title, company_name=company_name,
-        location=str(payload.get("location", "")).strip() or None,
+        title=title, company_name=company_name, location=location,
         category=str(payload.get("category", "")).strip() or None,
         source=str(payload.get("source", "")).strip() or None,
-        source_url=str(payload.get("sourceUrl", "")).strip() or None,
+        source_url=source_url,
         description=str(payload.get("description", "")).strip() or None,
-        status="duplicate" if dup else "pending",
-        duplicate_of=dup.id if dup else None,
+        status="pending",
+        content_hash=chash,
+        last_seen_at=datetime.utcnow(),
     )
     db.add(s)
     db.commit()
     db.refresh(s)
+    _record_admin_event(actor=admin, action="scraped.create", resource_type="scraped_job",
+                        resource_id=s.id, details={"title": s.title, "source": s.source})
     return {"scraped": _to_scraped_record(s)}
 
 
@@ -754,16 +796,23 @@ async def admin_update_scraped(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_admin(current_user)
+    admin = _ensure_admin(current_user)
     s = db.query(ScrapedJob).filter(ScrapedJob.id == scraped_id).first()
     if not s:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped job not found")
+    changed = []
     for key, attr in (("title", "title"), ("company", "company_name"), ("location", "location"),
                       ("category", "category"), ("sourceUrl", "source_url"), ("description", "description")):
         if key in payload:
             setattr(s, attr, str(payload[key] or "").strip() or None)
+            changed.append(key)
+    # Keep the dedup hash in sync if identifying fields changed.
+    if {"title", "company", "location"} & set(changed):
+        s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)
     db.commit()
     db.refresh(s)
+    _record_admin_event(actor=admin, action="scraped.update", resource_type="scraped_job",
+                        resource_id=s.id, details={"fields": changed})
     return {"scraped": _to_scraped_record(s)}
 
 
@@ -788,14 +837,28 @@ async def admin_review_scraped(
                 location=s.location, category=s.category,
                 status="approved", visibility="public",
                 published_at=datetime.utcnow(),
+                # Carry attribution + a 45-day shelf life for aggregated listings.
+                source=s.source, source_url=s.source_url,
+                expires_at=datetime.utcnow() + timedelta(days=45),
             )
             db.add(job)
             db.flush()
             s.published_job_id = job.id
+            if not s.expires_at:
+                s.expires_at = datetime.utcnow() + timedelta(days=45)
     elif decision in {"reject", "rejected"}:
         s.status = "rejected"
     elif decision == "duplicate":
         s.status = "duplicate"
+    elif decision in {"archive", "archived"}:
+        s.status = "archived"
+        # Pull the published job from public view if it was live.
+        if s.published_job_id:
+            pub = db.query(Job).filter(Job.id == s.published_job_id).first()
+            if pub:
+                pub.status = "archived"
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Decisão inválida")
     db.commit()
     db.refresh(s)
     _record_admin_event(actor=admin, action="scraped.review", resource_type="scraped_job",
@@ -809,12 +872,37 @@ async def admin_delete_scraped(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_admin(current_user)
+    admin = _ensure_admin(current_user)
     s = db.query(ScrapedJob).filter(ScrapedJob.id == scraped_id).first()
     if s:
+        title = s.title
         db.delete(s)
         db.commit()
+        _record_admin_event(actor=admin, action="scraped.delete", resource_type="scraped_job",
+                            resource_id=scraped_id, details={"title": title})
     return {"deleted": True, "id": scraped_id}
+
+
+@router.post("/scraped-jobs/run")
+async def admin_run_scraper(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Trigger an immediate fetch from configured external sources (async)."""
+    admin = _ensure_admin(current_user)
+    from app.services.scraper_service import get_adapters
+    sources = [a.name for a in get_adapters()]
+    queued = False
+    try:
+        from app.workers.tasks import scrape_external_jobs
+        scrape_external_jobs.delay()
+        queued = True
+    except Exception as e:
+        logger.warning(f"Could not enqueue scraper run: {e}")
+    _record_admin_event(actor=admin, action="scraped.run", resource_type="scraped_job",
+                        resource_id=None, details={"sources": sources})
+    return {"queued": queued, "sources": sources,
+            "message": "Nenhuma fonte configurada (SCRAPER_SOURCES)." if not sources else "Scraper iniciado."}
 
 
 @router.get("/audit-logs")
@@ -996,14 +1084,20 @@ async def admin_create_ad(
     placement = str(payload.get("placement", "")).strip()
     if not title or not placement:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="title and placement are required")
+    link = str(payload.get("link", "")).strip() or None
+    _validate_ad_fields(link, _parse_dt(payload.get("startDate")), _parse_dt(payload.get("endDate")))
 
     created = AdCampaign(
         title=title,
         placement=placement,
-        link=str(payload.get("link", "")).strip() or None,
+        link=link,
         image_url=str(payload.get("imageUrl", "")).strip() or None,
         active=bool(payload.get("active", True)),
         budget=float(payload.get("budget", 0) or 0),
+        cost_per_click=float(payload.get("costPerClick", 0) or 0),
+        cost_per_impression=float(payload.get("costPerImpression", 0) or 0),
+        target_category=str(payload.get("targetCategory", "")).strip() or None,
+        target_location=str(payload.get("targetLocation", "")).strip() or None,
         start_date=_parse_dt(payload.get("startDate")),
         end_date=_parse_dt(payload.get("endDate")),
         status="draft",
@@ -1045,6 +1139,14 @@ async def admin_update_ad(
         ad.image_url = str(payload.get("imageUrl", "")).strip() or None
     if "budget" in payload:
         ad.budget = float(payload.get("budget") or 0)
+    if "costPerClick" in payload:
+        ad.cost_per_click = float(payload.get("costPerClick") or 0)
+    if "costPerImpression" in payload:
+        ad.cost_per_impression = float(payload.get("costPerImpression") or 0)
+    if "targetCategory" in payload:
+        ad.target_category = str(payload.get("targetCategory", "")).strip() or None
+    if "targetLocation" in payload:
+        ad.target_location = str(payload.get("targetLocation", "")).strip() or None
     if "active" in payload:
         ad.active = bool(payload.get("active"))
     if "startDate" in payload:
@@ -1052,6 +1154,7 @@ async def admin_update_ad(
     if "endDate" in payload:
         ad.end_date = _parse_dt(payload.get("endDate"))
 
+    _validate_ad_fields(ad.link, ad.start_date, ad.end_date)
     ad.status = _compute_ad_status(ad)
     db.commit()
     db.refresh(ad)

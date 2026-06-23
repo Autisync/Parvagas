@@ -32,6 +32,10 @@ const emptyForm = {
   startDate: "",
   endDate: "",
   budget: 0,
+  costPerClick: 0,
+  costPerImpression: 0,
+  targetCategory: "",
+  targetLocation: "",
   active: true,
 };
 
@@ -194,6 +198,10 @@ export default function AdminAdsPage() {
       startDate: String(ad.startDate || "").slice(0, 10),
       endDate: String(ad.endDate || "").slice(0, 10),
       budget: Number(ad.budget || 0),
+      costPerClick: Number(ad.costPerClick || 0),
+      costPerImpression: Number(ad.costPerImpression || 0),
+      targetCategory: ad.targetCategory || "",
+      targetLocation: ad.targetLocation || "",
       active: Boolean(ad.active),
     });
     setFormErrors({});
@@ -319,6 +327,21 @@ export default function AdminAdsPage() {
               className={adminFieldClass}
             />
             <FormFieldError id="ad-end-date-error" message={formErrors.endDate} />
+            <input type="number" min={0} step="0.01" value={form.budget}
+              onChange={(e) => setForm((prev) => ({ ...prev, budget: Number(e.target.value) }))}
+              placeholder="Orçamento total (0 = ilimitado)" className={adminFieldClass} />
+            <input type="number" min={0} step="0.01" value={form.costPerClick}
+              onChange={(e) => setForm((prev) => ({ ...prev, costPerClick: Number(e.target.value) }))}
+              placeholder="Custo por clique" className={adminFieldClass} />
+            <input type="number" min={0} step="0.0001" value={form.costPerImpression}
+              onChange={(e) => setForm((prev) => ({ ...prev, costPerImpression: Number(e.target.value) }))}
+              placeholder="Custo por impressão" className={adminFieldClass} />
+            <input value={form.targetCategory}
+              onChange={(e) => setForm((prev) => ({ ...prev, targetCategory: e.target.value }))}
+              placeholder="Segmentar por categoria (opcional)" className={adminFieldClass} />
+            <input value={form.targetLocation}
+              onChange={(e) => setForm((prev) => ({ ...prev, targetLocation: e.target.value }))}
+              placeholder="Segmentar por localização (opcional)" className={adminFieldClass} />
           </div>
           <div className="mt-3 flex gap-2">
             <button type="submit" disabled={busy} className={adminButtonClass}>
@@ -337,7 +360,18 @@ export default function AdminAdsPage() {
                 <p className="font-semibold text-slate-900">{ad.title || "Campanha"}</p>
                 <p className="text-xs text-slate-500">{ad.placement || "placement"} · {ad.link || "sem link"}</p>
                 <p className="text-xs text-slate-500">{toDateLabel(ad.startDate)} até {toDateLabel(ad.endDate)}</p>
-                <p className="text-xs text-slate-500">Impressões: {ad.impressions || 0} · Cliques: {ad.clicks || 0}</p>
+                <p className="text-xs text-slate-500">
+                  Impressões: {ad.impressions || 0} · Cliques: {ad.clicks || 0} · CTR: {(ad.ctr ?? 0).toFixed(2)}%
+                </p>
+                {ad.budget ? (
+                  <p className="text-xs text-slate-500">
+                    Gasto: {(ad.spent ?? 0).toLocaleString("pt-PT")} / {ad.budget.toLocaleString("pt-PT")}
+                    {(ad.budgetRemaining ?? 1) <= 0 ? <span className="ml-1 font-semibold text-rose-600">· orçamento esgotado</span> : null}
+                  </p>
+                ) : null}
+                {(ad.targetCategory || ad.targetLocation) ? (
+                  <p className="text-xs text-slate-500">Segmentação: {[ad.targetCategory, ad.targetLocation].filter(Boolean).join(" · ")}</p>
+                ) : null}
               </div>
               <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(ad.active ? "active" : "archived")}`}>
                 {ad.active ? "active" : "inactive"}
@@ -426,6 +460,21 @@ export default function AdminAdsPage() {
           }} className={adminFieldClass} />
           <FormFieldError id="edit-ad-start-date-error" message={formErrors.startDate} />
           <FormFieldError id="edit-ad-end-date-error" message={formErrors.endDate} />
+          <input type="number" min={0} step="0.01" value={form.budget}
+            onChange={(e) => setForm((prev) => ({ ...prev, budget: Number(e.target.value) }))}
+            placeholder="Orçamento total (0 = ilimitado)" className={adminFieldClass} />
+          <input type="number" min={0} step="0.01" value={form.costPerClick}
+            onChange={(e) => setForm((prev) => ({ ...prev, costPerClick: Number(e.target.value) }))}
+            placeholder="Custo por clique" className={adminFieldClass} />
+          <input type="number" min={0} step="0.0001" value={form.costPerImpression}
+            onChange={(e) => setForm((prev) => ({ ...prev, costPerImpression: Number(e.target.value) }))}
+            placeholder="Custo por impressão" className={adminFieldClass} />
+          <input value={form.targetCategory}
+            onChange={(e) => setForm((prev) => ({ ...prev, targetCategory: e.target.value }))}
+            placeholder="Segmentar por categoria (opcional)" className={adminFieldClass} />
+          <input value={form.targetLocation}
+            onChange={(e) => setForm((prev) => ({ ...prev, targetLocation: e.target.value }))}
+            placeholder="Segmentar por localização (opcional)" className={adminFieldClass} />
           <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
             <input type="checkbox" checked={form.active} onChange={(e) => setForm((prev) => ({ ...prev, active: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
             Campanha ativa

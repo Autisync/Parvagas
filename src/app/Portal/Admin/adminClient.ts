@@ -183,8 +183,15 @@ export type AdCampaignRecord = {
   status?: string;
   active?: boolean;
   budget?: number;
+  costPerClick?: number;
+  costPerImpression?: number;
+  spent?: number;
+  budgetRemaining?: number | null;
+  targetCategory?: string | null;
+  targetLocation?: string | null;
   clicks?: number;
   impressions?: number;
+  ctr?: number;
   startDate?: string;
   endDate?: string;
   createdAt?: string;
@@ -410,5 +417,12 @@ export async function updateScrapedJob(token: string, id: string, payload: Parti
 export async function deleteScrapedJob(token: string, id: string) {
   return authFetch<{ deleted: boolean }>(`/admin/scraped-jobs/${id}`, token, {
     method: "DELETE",
+  });
+}
+
+export async function runAdminScraper(token: string) {
+  return authFetch<{ queued: boolean; sources: string[]; message: string }>("/admin/scraped-jobs/run", token, {
+    method: "POST",
+    suppressGlobalErrors: true,
   });
 }

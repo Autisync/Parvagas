@@ -27,6 +27,8 @@ type Job = {
   expiresAt?: string;
   createdAt?: string;
   languages?: string[];
+  source?: string | null;
+  sourceUrl?: string | null;
   companyId?: {
     _id?: string;
     name?: string;
@@ -229,6 +231,17 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             </Link>
 
             <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
+
+            {job.sourceUrl ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
+                <p className="text-xs text-amber-800">
+                  Vaga agregada{job.source ? ` de ${job.source}` : ""}.{" "}
+                  <a href={job.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">
+                    Ver anúncio original
+                  </a>
+                </p>
+              </div>
+            ) : null}
 
             <div className="pt-1 text-center">
               <ReportJobButton jobId={job._id} />

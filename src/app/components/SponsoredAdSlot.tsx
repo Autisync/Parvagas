@@ -65,6 +65,8 @@ export default function SponsoredAdSlot({
   };
 
   if (!ad || !hasCreative) {
+    // No ad and no fallback copy → render nothing instead of an empty red box.
+    if (!fallbackTitle && !fallbackDescription) return null;
     return (
       <article className={`rounded-3xl border border-red-200 bg-red-600 p-8 text-white ${className}`}>
         <h2 className="text-2xl font-bold">{fallbackTitle}</h2>

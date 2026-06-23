@@ -7,12 +7,13 @@ import {
   fetchScraped,
   updateScrapedJob,
   deleteScrapedJob,
+  runAdminScraper,
   statusBadgeClass,
   toDateLabel,
   type ScrapedRecord,
   type Pagination,
 } from "../adminClient";
-import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, AdminSpinner, adminFieldClass } from "../components/AdminUI";
+import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, AdminSpinner, adminButtonClass, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -72,6 +73,21 @@ export default function AdminScrapedPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const [running, setRunning] = useState(false);
+  const runScraper = async () => {
+    if (!token) return;
+    setRunning(true);
+    try {
+      const res = await runAdminScraper(token);
+      notify(res.message || (res.queued ? "Scraper iniciado." : "Sem fontes configuradas."), res.queued ? "success" : "warning");
+      if (res.queued) setTimeout(() => load().catch(() => null), 4000);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao iniciar o scraper."), "error");
+    } finally {
+      setRunning(false);
+    }
+  };
 
   useEffect(() => {
     if (!notice) return;
@@ -197,11 +213,16 @@ export default function AdminScrapedPage() {
 
   return (
     <div>
-      <AdminPageHeader
-        eyebrow="Curadoria"
-        title="Curadoria de Scraped Jobs"
-        description="Controle qualidade de vagas externas e evite duplicados no catálogo."
-      />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <AdminPageHeader
+          eyebrow="Curadoria"
+          title="Curadoria de Scraped Jobs"
+          description="Controle qualidade de vagas externas e evite duplicados no catálogo."
+        />
+        <button type="button" onClick={runScraper} disabled={running} className={adminButtonClass}>
+          {running ? "A buscar..." : "Executar scraper agora"}
+        </button>
+      </div>
 
       {error ? <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div> : null}
 

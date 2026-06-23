@@ -192,9 +192,15 @@ class AdCampaign(Base, TimestampMixin):
     pause_reason = Column(Text, nullable=True)
 
     # Budget/performance
-    budget = Column(Float, nullable=True)
+    budget = Column(Float, nullable=True)              # total spend cap (same unit as cost_*)
+    cost_per_click = Column(Float, nullable=False, default=0)
+    cost_per_impression = Column(Float, nullable=False, default=0)
     clicks = Column(Integer, nullable=False, default=0)
     impressions = Column(Integer, nullable=False, default=0)
+
+    # Optional targeting (empty = show everywhere for the placement)
+    target_category = Column(String(100), nullable=True)
+    target_location = Column(String(255), nullable=True)
 
     # Delivery window
     start_date = Column(DateTime, nullable=True)
@@ -266,6 +272,10 @@ class Job(Base, TimestampMixin):
     views = Column(Integer, nullable=False, default=0)
     spam_score = Column(Integer, nullable=False, default=0)
     spam_flags = Column(Text, nullable=True)  # JSON array of reasons
+
+    # Aggregation attribution (set when published from a scraped/external source)
+    source = Column(String(100), nullable=True)
+    source_url = Column(String(1000), nullable=True)
 
     company = relationship("Company", foreign_keys=[company_id])
 
@@ -366,9 +376,12 @@ class ScrapedJob(Base, TimestampMixin):
     location = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
-    status = Column(String(30), nullable=False, default="pending", index=True)  # pending|approved|rejected|duplicate
+    status = Column(String(30), nullable=False, default="pending", index=True)  # pending|approved|rejected|duplicate|archived|expired
     duplicate_of = Column(String(36), nullable=True)
     published_job_id = Column(String(36), nullable=True)
+    content_hash = Column(String(64), nullable=True, index=True)  # sha256(title|company|location) for dedup
+    last_seen_at = Column(DateTime, nullable=True)                # last time source re-surfaced this listing
+    expires_at = Column(DateTime, nullable=True)                  # auto-expire stale aggregated listings
 
 
 class Plan(Base, TimestampMixin):

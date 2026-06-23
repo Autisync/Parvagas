@@ -67,6 +67,8 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
         "expiresAt": job.expires_at.isoformat() if job.expires_at else None,
         "createdAt": job.created_at.isoformat() if job.created_at else None,
         "companyId": _company_payload(getattr(job, "company", None)),
+        "source": getattr(job, "source", None),
+        "sourceUrl": getattr(job, "source_url", None),
     }
     if detail:
         payload.update(

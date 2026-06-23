@@ -5,9 +5,11 @@ from datetime import datetime
 from random import choices
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.observability import limiter
 from app.db.session import SessionLocal
 from app.models import AdCampaign
 
@@ -15,15 +17,36 @@ from app.models import AdCampaign
 router = APIRouter(prefix="/ads", tags=["ads"])
 
 
+def ad_spent(ad: AdCampaign) -> float:
+    """Estimated spend so far from the configured cost model."""
+    return (int(ad.clicks or 0) * float(ad.cost_per_click or 0)) + (
+        int(ad.impressions or 0) * float(ad.cost_per_impression or 0)
+    )
+
+
+def budget_exhausted(ad: AdCampaign) -> bool:
+    return bool(ad.budget) and float(ad.budget) > 0 and ad_spent(ad) >= float(ad.budget)
+
+
 def _is_live(ad: AdCampaign, now: datetime) -> bool:
-    if not ad.active:
-        return False
-    if ad.flagged:
+    if not ad.active or ad.flagged:
         return False
     if ad.start_date and now < ad.start_date:
         return False
     if ad.end_date and now > ad.end_date:
         return False
+    if budget_exhausted(ad):
+        return False
+    return True
+
+
+def _matches_target(ad: AdCampaign, category: str | None, location: str | None) -> bool:
+    """Empty targeting = matches everything; otherwise require a case-insensitive match."""
+    if ad.target_category and category and ad.target_category.strip().lower() != category.strip().lower():
+        return False
+    if ad.target_location and location and ad.target_location.strip().lower() not in location.strip().lower():
+        return False
+    # If the ad targets something but the request gave no context, still allow (placement-level).
     return True
 
 
@@ -43,8 +66,10 @@ def _to_public_ad(ad: AdCampaign) -> dict[str, Any]:
 async def get_ad_for_placement(
     placement: str,
     includeMetrics: bool = Query(default=False),
+    category: str | None = Query(default=None),
+    location: str | None = Query(default=None),
 ):
-    """Return one active ad for a placement using lightweight weighted rotation."""
+    """Return one live ad for a placement using lightweight weighted rotation."""
     now = datetime.utcnow()
     db: Session = SessionLocal()
     try:
@@ -54,15 +79,19 @@ async def get_ad_for_placement(
             .order_by(AdCampaign.created_at.desc())
             .all()
         )
-        live = [entry for entry in candidates if _is_live(entry, now)]
+        live = [e for e in candidates if _is_live(e, now) and _matches_target(e, category, location)]
         if not live:
             return {"ad": None}
 
         # Prefer lower-served ads but keep randomness for fair distribution.
-        weights = [max(1, 1000 - int(entry.impressions or 0)) for entry in live]
+        weights = [max(1, 1000 - int(e.impressions or 0)) for e in live]
         selected = choices(live, weights=weights, k=1)[0]
-        selected.impressions = int(selected.impressions or 0) + 1
-        selected.last_served_at = now
+
+        # Atomic impression increment — avoids lost updates under concurrency.
+        db.execute(
+            text("UPDATE ad_campaigns SET impressions = impressions + 1, last_served_at = :now WHERE id = :id"),
+            {"now": now, "id": selected.id},
+        )
         db.commit()
         db.refresh(selected)
 
@@ -76,34 +105,36 @@ async def get_ad_for_placement(
 
 
 @router.post("/{ad_id}/impression")
-async def track_impression(ad_id: str):
+@limiter.limit("30/minute")
+async def track_impression(request: Request, ad_id: str):
     db: Session = SessionLocal()
     try:
-        ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
-        if not ad:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
-        ad.impressions = int(ad.impressions or 0) + 1
-        ad.last_served_at = datetime.utcnow()
+        updated = db.execute(
+            text("UPDATE ad_campaigns SET impressions = impressions + 1, last_served_at = :now WHERE id = :id"),
+            {"now": datetime.utcnow(), "id": ad_id},
+        )
         db.commit()
-        return {"tracked": True, "adId": ad.id, "impressions": int(ad.impressions or 0)}
+        if updated.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
+        return {"tracked": True, "adId": ad_id}
     finally:
         db.close()
 
 
 @router.post("/{ad_id}/click")
-async def track_click(ad_id: str):
+@limiter.limit("30/minute")
+async def track_click(request: Request, ad_id: str):
     db: Session = SessionLocal()
     try:
-        ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
-        if not ad:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
-        ad.clicks = int(ad.clicks or 0) + 1
+        updated = db.execute(
+            text("UPDATE ad_campaigns SET clicks = clicks + 1 WHERE id = :id"),
+            {"id": ad_id},
+        )
         db.commit()
-        return {
-            "tracked": True,
-            "adId": ad.id,
-            "clicks": int(ad.clicks or 0),
-            "link": ad.link,
-        }
+        if updated.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
+        ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
+        return {"tracked": True, "adId": ad_id, "clicks": int(ad.clicks or 0) if ad else 0,
+                "link": ad.link if ad else None}
     finally:
         db.close()

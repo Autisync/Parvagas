@@ -56,4 +56,13 @@ celery.conf.beat_schedule = {
         'task': 'app.workers.tasks.dispatch_subscription_expiry_reminders',
         'schedule': crontab(hour=8, minute=0),  # 08:00 UTC daily
     },
+    # Job aggregation: fetch external sources every 6h, expire stale daily.
+    'scrape-external-jobs': {
+        'task': 'app.workers.tasks.scrape_external_jobs',
+        'schedule': crontab(minute=0, hour='*/6'),
+    },
+    'expire-stale-aggregated-jobs': {
+        'task': 'app.workers.tasks.expire_stale_aggregated_jobs',
+        'schedule': crontab(hour=4, minute=30),  # 04:30 UTC daily
+    },
 }

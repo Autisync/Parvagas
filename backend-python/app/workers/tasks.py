@@ -354,6 +354,90 @@ def parse_cv(self, cv_upload_id: str) -> dict:
             db.close()
 
 
+@celery.task(name='app.workers.tasks.scrape_external_jobs')
+def scrape_external_jobs() -> dict:
+    """Fetch jobs from configured external sources into the ScrapedJob queue (pending review)."""
+    from app.models import ScrapedJob
+    from app.services.scraper_service import get_adapters, content_hash
+
+    adapters = get_adapters()
+    if not adapters:
+        logger.info("scrape_external_jobs: no SCRAPER_SOURCES configured; nothing to do")
+        return {"sources": 0, "ingested": 0, "skipped": 0}
+
+    db = SessionLocal()
+    ingested = 0
+    skipped = 0
+    try:
+        now = datetime.utcnow()
+        for adapter in adapters:
+            try:
+                items = adapter.fetch()
+            except Exception as e:
+                logger.warning(f"scraper source '{adapter.name}' failed: {e}")
+                continue
+            for it in items:
+                title = (it.get("title") or "").strip()
+                if not title:
+                    continue
+                chash = content_hash(title, it.get("company"), it.get("location"))
+                existing = db.query(ScrapedJob).filter(ScrapedJob.content_hash == chash).first()
+                if not existing and it.get("sourceUrl"):
+                    existing = db.query(ScrapedJob).filter(ScrapedJob.source_url == it["sourceUrl"]).first()
+                if existing:
+                    existing.last_seen_at = now  # keep alive; don't re-create
+                    skipped += 1
+                    continue
+                db.add(ScrapedJob(
+                    title=title, company_name=it.get("company"), location=it.get("location"),
+                    category=it.get("category"), description=it.get("description"),
+                    source=it.get("source"), source_url=it.get("sourceUrl"),
+                    status="pending", content_hash=chash, last_seen_at=now,
+                ))
+                ingested += 1
+            db.commit()
+        logger.info(f"scrape_external_jobs: {ingested} ingested, {skipped} skipped from {len(adapters)} source(s)")
+        return {"sources": len(adapters), "ingested": ingested, "skipped": skipped}
+    except Exception as e:
+        logger.error(f"scrape_external_jobs failed: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+@celery.task(name='app.workers.tasks.expire_stale_aggregated_jobs')
+def expire_stale_aggregated_jobs() -> dict:
+    """Archive aggregated jobs whose shelf life has passed."""
+    from app.models import ScrapedJob, Job
+
+    db = SessionLocal()
+    expired = 0
+    try:
+        now = datetime.utcnow()
+        stale = (
+            db.query(ScrapedJob)
+            .filter(ScrapedJob.expires_at.isnot(None), ScrapedJob.expires_at < now,
+                    ScrapedJob.status == "approved")
+            .all()
+        )
+        for s in stale:
+            s.status = "expired"
+            if s.published_job_id:
+                job = db.query(Job).filter(Job.id == s.published_job_id).first()
+                if job and job.status not in ("archived", "expired"):
+                    job.status = "expired"
+            expired += 1
+        db.commit()
+        return {"expired": expired}
+    except Exception as e:
+        logger.error(f"expire_stale_aggregated_jobs failed: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 @celery.task(name='app.workers.tasks.cleanup_expired_tokens')
 def cleanup_expired_tokens() -> dict:
     """Cleanup expired verification and password reset tokens."""
