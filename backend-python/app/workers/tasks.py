@@ -383,3 +383,108 @@ def cleanup_expired_tokens() -> dict:
     except Exception as e:
         logger.error(f"Failed to cleanup tokens: {str(e)}")
         return {"success": False, "error": str(e)}
+
+
+_PUBLIC_JOB_STATUSES = ("approved", "published", "active")
+
+
+@celery.task(name='app.workers.tasks.dispatch_job_alert_digests')
+def dispatch_job_alert_digests() -> dict:
+    """Daily: email candidates new jobs matching their saved alerts."""
+    from datetime import timedelta
+    from app.models import JobAlert, Job, User
+    from app.services.notification_service import create_notification
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        now = datetime.utcnow()
+        alerts = db.query(JobAlert).filter(JobAlert.active.is_(True)).all()
+        for alert in alerts:
+            # Respect frequency: daily every run; weekly only after 7 days; skip instant here.
+            if alert.frequency == "instant":
+                continue
+            if alert.frequency == "weekly" and alert.last_notified_at and (now - alert.last_notified_at) < timedelta(days=7):
+                continue
+            since = alert.last_notified_at or (now - timedelta(days=1))
+            q = db.query(Job).filter(
+                Job.status.in_(_PUBLIC_JOB_STATUSES),
+                Job.published_at.isnot(None),
+                Job.published_at >= since,
+            )
+            if alert.keyword:
+                like = f"%{alert.keyword}%"
+                q = q.filter((Job.title.ilike(like)) | (Job.description.ilike(like)))
+            if alert.location:
+                q = q.filter(Job.location.ilike(f"%{alert.location}%"))
+            if alert.category:
+                q = q.filter(Job.category == alert.category)
+            if alert.work_mode:
+                q = q.filter(Job.work_mode == alert.work_mode)
+            jobs = q.order_by(Job.published_at.desc()).limit(10).all()
+            if not jobs:
+                continue
+            user = db.query(User).filter(User.id == alert.candidate_user_id).first()
+            if not user or not user.email:
+                continue
+            query_label = alert.keyword or alert.category or alert.location or "as suas preferências"
+            payload = [{"id": j.id, "title": j.title, "company": "", "location": j.location or "",
+                        "url": ""} for j in jobs]
+            EmailService.send_job_alert_digest(user.email, user.full_name or "Candidato", query_label, payload)
+            create_notification(
+                db, alert.candidate_user_id, type="job_alert",
+                title=f"{len(jobs)} nova(s) vaga(s) para si",
+                body=f"Novas vagas para {query_label}.", link="/Vagas-Disponiveis",
+            )
+            alert.last_notified_at = now
+            db.commit()
+            sent += 1
+        return {"alerts_notified": sent}
+    except Exception as e:
+        logger.error(f"Failed to dispatch job alert digests: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+@celery.task(name='app.workers.tasks.dispatch_subscription_expiry_reminders')
+def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
+    """Daily: remind companies whose plan expires within `days_ahead` days."""
+    from datetime import timedelta
+    from app.models import Subscription, Company, Plan, User
+
+    db = SessionLocal()
+    sent = 0
+    try:
+        now = datetime.utcnow()
+        horizon = now + timedelta(days=days_ahead)
+        subs = (
+            db.query(Subscription)
+            .filter(
+                Subscription.status == "active",
+                Subscription.current_period_end.isnot(None),
+                Subscription.current_period_end >= now,
+                Subscription.current_period_end <= horizon,
+            )
+            .all()
+        )
+        for sub in subs:
+            company = db.query(Company).filter(Company.id == sub.company_id).first()
+            if not company or not company.owner_user_id:
+                continue
+            owner = db.query(User).filter(User.id == company.owner_user_id).first()
+            if not owner or not owner.email:
+                continue
+            plan = db.query(Plan).filter(Plan.id == sub.plan_id).first()
+            days_left = max(0, (sub.current_period_end - now).days)
+            EmailService.send_subscription_expiring_email(
+                owner.email, company.name, plan.name if plan else "", days_left,
+            )
+            sent += 1
+        return {"reminders_sent": sent}
+    except Exception as e:
+        logger.error(f"Failed to dispatch expiry reminders: {str(e)}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()

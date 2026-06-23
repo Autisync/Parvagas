@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
 from app.core.config import get_settings
 from app.workers.tasks import send_templated_email
+from app.services.notification_service import admin_emails
 from app.api.deps import get_current_user
 
 # Heuristic spam/scam signals for job postings (regional fraud patterns).
@@ -446,6 +447,17 @@ async def create_company_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    # Alert admins that a job is awaiting review.
+    try:
+        for admin_email in admin_emails(db):
+            send_templated_email.delay("send_admin_job_pending_email", {
+                "email": admin_email, "job_title": job.title or "(sem título)",
+                "company_name": company.name,
+            })
+    except Exception as e:
+        logger.warning(f"Could not enqueue admin job-pending alert: {e}")
+
     return {"job": serialize_job(job, detail=True), "spamScore": score, "spamFlags": flags}
 
 

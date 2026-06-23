@@ -95,7 +95,19 @@ async def register(
         
         # Send verification email async
         send_verification_email.delay(str(user.id), raw_token)
-        
+
+        # Alert admins when a new company registers and awaits verification.
+        if str(payload.role) == "company" or getattr(payload.role, "value", "") == "company":
+            try:
+                from app.workers.tasks import send_templated_email
+                from app.services.notification_service import admin_emails
+                for admin_email in admin_emails(db):
+                    send_templated_email.delay("send_admin_company_pending_email", {
+                        "email": admin_email, "company_name": payload.company_name or user.full_name,
+                    })
+            except Exception as e:
+                logger.warning(f"Could not enqueue admin company-pending alert: {e}")
+
         return {"message": "Registration successful. Please check your email to verify your account."}
     
     except (ConflictError, ValidationError, ParavagasException) as e:

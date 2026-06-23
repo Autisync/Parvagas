@@ -186,6 +186,18 @@ async def report_job(job_id: str, payload: dict[str, Any] | None = None, db: Ses
     if job.spam_score >= 60 and job.status in PUBLIC_JOB_STATUSES:
         job.status = "pending_platform_review"
     db.commit()
+
+    # Alert admins of the report.
+    try:
+        from app.workers.tasks import send_templated_email
+        from app.services.notification_service import admin_emails
+        for admin_email in admin_emails(db):
+            send_templated_email.delay("send_admin_job_reported_email", {
+                "email": admin_email, "job_title": job.title or "(sem título)", "reason": reason,
+            })
+    except Exception as e:
+        logger.warning(f"Could not enqueue admin job-reported alert: {e}")
+
     return {"reported": True, "jobId": job_id}
 
 

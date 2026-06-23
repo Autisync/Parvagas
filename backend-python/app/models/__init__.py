@@ -341,6 +341,19 @@ class AuditLog(Base, TimestampMixin):
     details = Column(Text, nullable=True)  # JSON
 
 
+class Notification(Base, TimestampMixin):
+    """In-app notification shown in the portal header bell."""
+    __tablename__ = "notifications"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    type = Column(String(50), nullable=False, default="general")  # application_status | job | system | ...
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=True)
+    link = Column(String(500), nullable=True)
+    read_at = Column(DateTime, nullable=True)
+
+
 class ScrapedJob(Base, TimestampMixin):
     """External job listing ingested for curation into the public board."""
     __tablename__ = "scraped_jobs"

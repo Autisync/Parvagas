@@ -414,6 +414,7 @@ async def admin_suspend_user(
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    was_suspended = bool(target.suspended)
     target.suspended = bool(payload.get("suspended", False))
     db.commit()
     db.refresh(target)
@@ -424,6 +425,22 @@ async def admin_suspend_user(
         resource_id=target.id,
         details={"suspended": target.suspended, "reason": payload.get("reason", "")},
     )
+
+    # Notify the user when their access state actually changes.
+    if target.suspended != was_suspended and target.email:
+        try:
+            if target.suspended:
+                send_templated_email.delay("send_account_suspended_email", {
+                    "email": target.email, "full_name": target.full_name or "",
+                    "reason": str(payload.get("reason", "") or ""),
+                })
+            else:
+                send_templated_email.delay("send_account_reactivated_email", {
+                    "email": target.email, "full_name": target.full_name or "",
+                })
+        except Exception as e:
+            logger.warning(f"Could not enqueue account status email: {e}")
+
     return {"user": _to_user_record(target)}
 
 

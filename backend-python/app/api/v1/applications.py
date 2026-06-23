@@ -24,6 +24,8 @@ def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
     return job.company_id if job else None
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
+from app.services.email_service import EmailService
+from app.services.notification_service import create_notification
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -348,15 +350,27 @@ async def update_application_status(
     # states and no-op updates). Sent async so the API stays fast.
     if new_status != previous_status and new_status not in {"submitted", "withdrawn"}:
         recipient = app_row.applicant_email
+        job = db.query(Job).filter(Job.id == app_row.job_id).first()
+        job_title = job.title if job else ""
         if recipient:
-            job = db.query(Job).filter(Job.id == app_row.job_id).first()
-            job_title = job.title if job else ""
             try:
                 send_application_status_email.delay(
                     recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status,
                 )
             except Exception as e:  # never block the status update on the mail queue
                 logger.warning(f"Could not enqueue status email: {e}")
+        # In-app notification for the candidate (if they have an account).
+        if app_row.candidate_user_id:
+            label, _msg = EmailService._STATUS_COPY.get(
+                new_status, ("Atualização da candidatura", "")
+            )
+            create_notification(
+                db, app_row.candidate_user_id,
+                type="application_status",
+                title=label,
+                body=f"{job_title}".strip() or "A sua candidatura foi atualizada.",
+                link="/Portal/Candidato",
+            )
 
     return {"application": {"_id": app_row.id, "status": app_row.status}}
 

@@ -43,3 +43,38 @@ def send_whatsapp(to: str, message: str) -> dict:
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("send_whatsapp failed: %s", exc)
         return {"status": "error", "provider": WHATSAPP_PROVIDER, "to": to}
+
+
+def create_notification(db, user_id: str, *, type: str, title: str, body: str = "", link: str = "") -> None:
+    """Create an in-app notification (portal bell). Best-effort — never raises."""
+    if not user_id:
+        return
+    try:
+        from app.models import Notification
+
+        db.add(Notification(user_id=user_id, type=type, title=title, body=body or None, link=link or None))
+        db.commit()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("create_notification failed: %s", exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def admin_emails(db) -> list[str]:
+    """Recipient list for admin alerts.
+
+    ADMIN_ALERT_EMAILS (comma-separated) overrides; otherwise every admin user.
+    """
+    override = os.getenv("ADMIN_ALERT_EMAILS", "").strip()
+    if override:
+        return [e.strip() for e in override.split(",") if e.strip()]
+    try:
+        from app.models import User, UserRole
+
+        rows = db.query(User).filter(User.role == UserRole.admin).all()
+        return [u.email for u in rows if getattr(u, "email", None)]
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("admin_emails lookup failed: %s", exc)
+        return []

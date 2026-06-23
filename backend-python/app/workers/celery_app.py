@@ -1,5 +1,6 @@
 """Celery configuration and app setup."""
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Exchange, Queue
 from app.core.config import get_settings
 
@@ -39,6 +40,20 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_password_reset_email': {'queue': 'emails'},
     'app.workers.tasks.send_welcome_email': {'queue': 'emails'},
     'app.workers.tasks.send_application_received_email': {'queue': 'emails'},
+    'app.workers.tasks.send_application_status_email': {'queue': 'emails'},
+    'app.workers.tasks.send_templated_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
+}
+
+# Periodic schedules (run a `celery beat` process alongside the worker).
+celery.conf.beat_schedule = {
+    'job-alert-digests-daily': {
+        'task': 'app.workers.tasks.dispatch_job_alert_digests',
+        'schedule': crontab(hour=7, minute=0),  # 07:00 UTC daily
+    },
+    'subscription-expiry-reminders-daily': {
+        'task': 'app.workers.tasks.dispatch_subscription_expiry_reminders',
+        'schedule': crontab(hour=8, minute=0),  # 08:00 UTC daily
+    },
 }
