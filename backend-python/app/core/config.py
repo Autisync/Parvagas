@@ -71,13 +71,20 @@ class Settings(BaseSettings):
     SMTP_PASS: str = os.getenv("SMTP_PASS", "")
     SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@parvagas.com")
 
-    # File upload — STORAGE_PROVIDER: local (default) | supabase
+    # File upload — STORAGE_PROVIDER: local (default) | supabase (temp) | server (self-hosted S3/MinIO, final stage)
     STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "local").strip().lower()
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/uploads")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", 10))
+    # Supabase Storage (temporary infra)
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "cvs")
+    # Self-hosted S3-compatible object store on your own server (e.g. MinIO) — for launch.
+    S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "")        # e.g. https://storage.parvagas.pt
+    S3_BUCKET: str = os.getenv("S3_BUCKET", "cvs")
+    S3_ACCESS_KEY: str = os.getenv("S3_ACCESS_KEY", "")
+    S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
+    S3_REGION: str = os.getenv("S3_REGION", "us-east-1")
 
     # Optional AI-assisted CV parsing
     CV_PARSER_AI_ENABLED: bool = os.getenv("CV_PARSER_AI_ENABLED", "false").lower() == "true"

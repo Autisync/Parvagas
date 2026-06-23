@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import * as Sentry from "@sentry/react";
 
 export default function Error({
   error,
@@ -18,6 +19,7 @@ export default function Error({
 
   useEffect(() => {
     console.error("[app-error]", error);
+    Sentry.captureException(error);
   }, [error]);
 
   return (

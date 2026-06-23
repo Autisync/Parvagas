@@ -65,32 +65,82 @@ class StorageService:
             raise RuntimeError(f"Supabase upload failed ({resp.status_code}): {resp.text[:200]}")
         return f"supabase:{key}"
 
+    # --- Self-hosted S3-compatible object store (MinIO/S3 on your own server) ---
+    # Final-stage option: flip STORAGE_PROVIDER=server + S3_* env. Requires boto3
+    # (add `boto3` to requirements before launch). Supabase remains the temp default.
+    @staticmethod
+    def _server_enabled() -> bool:
+        return (
+            settings.STORAGE_PROVIDER == "server"
+            and bool(settings.S3_ENDPOINT_URL)
+            and bool(settings.S3_ACCESS_KEY)
+            and bool(settings.S3_SECRET_KEY)
+        )
+
+    @staticmethod
+    def _s3_client():
+        import boto3  # lazy — only needed when STORAGE_PROVIDER=server
+
+        return boto3.client(
+            "s3",
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            region_name=settings.S3_REGION,
+        )
+
+    @staticmethod
+    def _server_upload(file_content: bytes, file_name: str) -> str:
+        import mimetypes
+
+        key = file_name.lstrip("/")
+        ctype = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        StorageService._s3_client().put_object(
+            Bucket=settings.S3_BUCKET, Key=key, Body=file_content, ContentType=ctype
+        )
+        return f"server:{key}"
+
     @staticmethod
     def signed_url(file_path: str, expires_in: int = 3600) -> str | None:
         """Return a time-limited download URL for cloud objects (None for local files)."""
-        if not file_path or not file_path.startswith("supabase:"):
+        if not file_path:
             return None
-        try:
-            import httpx
+        # Self-hosted S3 (server)
+        if file_path.startswith("server:"):
+            try:
+                key = file_path[len("server:"):]
+                return StorageService._s3_client().generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": settings.S3_BUCKET, "Key": key},
+                    ExpiresIn=expires_in,
+                )
+            except Exception:
+                return None
+        # Supabase (temp)
+        if file_path.startswith("supabase:"):
+            try:
+                import httpx
 
-            key = file_path[len("supabase:"):]
-            url = f"{settings.SUPABASE_URL}/storage/v1/object/sign/{settings.SUPABASE_BUCKET}/{key}"
-            resp = httpx.post(
-                url, json={"expiresIn": expires_in},
-                headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"},
-                timeout=15,
-            )
-            if resp.status_code == 200:
-                signed = resp.json().get("signedURL") or resp.json().get("signedUrl")
-                if signed:
-                    return f"{settings.SUPABASE_URL}/storage/v1{signed}"
-        except Exception:
-            return None
+                key = file_path[len("supabase:"):]
+                url = f"{settings.SUPABASE_URL}/storage/v1/object/sign/{settings.SUPABASE_BUCKET}/{key}"
+                resp = httpx.post(
+                    url, json={"expiresIn": expires_in},
+                    headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"},
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    signed = resp.json().get("signedURL") or resp.json().get("signedUrl")
+                    if signed:
+                        return f"{settings.SUPABASE_URL}/storage/v1{signed}"
+            except Exception:
+                return None
         return None
 
     @staticmethod
     def save_file(file_content: bytes, file_name: str) -> str:
         """Save a file to the configured backend and return a reference/path."""
+        if StorageService._server_enabled():
+            return StorageService._server_upload(file_content, file_name)
         if StorageService._supabase_enabled():
             return StorageService._supabase_upload(file_content, file_name)
 
@@ -112,6 +162,13 @@ class StorageService:
     @staticmethod
     def delete_file(file_path: str) -> bool:
         """Delete a file from the configured backend."""
+        if file_path and file_path.startswith("server:"):
+            try:
+                key = file_path[len("server:"):]
+                StorageService._s3_client().delete_object(Bucket=settings.S3_BUCKET, Key=key)
+                return True
+            except Exception:
+                return False
         if file_path and file_path.startswith("supabase:"):
             try:
                 import httpx
@@ -133,6 +190,6 @@ class StorageService:
     @staticmethod
     def file_exists(file_path: str) -> bool:
         """Check if a file exists (cloud refs are assumed present)."""
-        if file_path and file_path.startswith("supabase:"):
+        if file_path and (file_path.startswith("supabase:") or file_path.startswith("server:")):
             return True
         return os.path.exists(file_path)
