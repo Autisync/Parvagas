@@ -66,7 +66,14 @@ if _trusted and _trusted != ["*"]:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted)
 
 # CORS middleware
-_allowed_origins = sorted({o for o in (settings.CORS_ORIGIN, settings.FRONTEND_URL) if o})
+# Allow multiple origins (comma-separated) from CORS_ORIGIN + FRONTEND_URL,
+# e.g. "https://parvagas.pt,https://www.parvagas.pt".
+_allowed_origins = sorted({
+    origin.strip()
+    for source in (settings.CORS_ORIGIN, settings.FRONTEND_URL)
+    for origin in (source or "").split(",")
+    if origin.strip()
+})
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
