@@ -90,10 +90,11 @@ services:
       redis:
         condition: service_healthy
     ports:
-      # Expose to the host so your reverse proxy can route api.parvagas.pt here.
-      # If your proxy is on the same Docker network, you can remove this and
-      # route to "backend-python:8000" internally instead.
-      - "8000:8000"
+      # Host port for your reverse proxy to route api.parvagas.pt -> here.
+      # Override BACKEND_HOST_PORT in Portainer if 8000 is already taken on the host.
+      # If your proxy runs in Docker on a shared network, you can delete this whole
+      # "ports:" block and route to "backend-python:8000" internally instead.
+      - "${BACKEND_HOST_PORT:-8000}:8000"
     volumes:
       - python_uploads:/app/uploads
       - python_logs:/app/logs
