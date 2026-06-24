@@ -89,20 +89,16 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    # Traefik routes to this container over the shared "proxy" network — no host
-    # port published. Confirm TRAEFIK_ENTRYPOINT / TRAEFIK_CERTRESOLVER against
-    # your traefik.yml (network is already confirmed as "proxy").
+    # Your Traefik uses the FILE provider (not docker labels), so the route is
+    # defined in a dynamic file on the server:
+    #   deploy/traefik/dynamic/parvagas.yml  ->  /home/autisync/infra/traefik/dynamic/
+    # This service just needs to sit on the shared "proxy" network with a stable
+    # alias ("parvagas-backend-api") that Traefik resolves over Docker DNS.
     networks:
-      - default
-      - traefik-net
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_NETWORK:-proxy}"
-      - "traefik.http.routers.parvagas-api.rule=Host(`${API_DOMAIN:-api.parvagas.pt}`)"
-      - "traefik.http.routers.parvagas-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.parvagas-api.tls=true"
-      - "traefik.http.routers.parvagas-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      - "traefik.http.services.parvagas-api.loadbalancer.server.port=8000"
+      default: {}
+      traefik-net:
+        aliases:
+          - parvagas-backend-api
     volumes:
       - python_uploads:/app/uploads
       - python_logs:/app/logs

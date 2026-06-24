@@ -1,0 +1,29 @@
+# Traefik dynamic config for the Parvagas backend API.
+#
+# Your Traefik uses the FILE provider (providers.file.directory: /dynamic), so it
+# does NOT read container labels — routes are defined here instead.
+#
+# DEPLOY: copy this file onto the server as:
+#   /home/autisync/infra/traefik/dynamic/parvagas.yml
+# Traefik watches that folder (watch: true) and reloads automatically — no restart.
+#
+# Requirements:
+#  - api.parvagas.pt resolves (Cloudflare A record) to the Traefik host.
+#  - The backend container is on the "proxy" network with alias "parvagas-backend-api"
+#    (set by docker-compose.prod.yml), so Traefik reaches it via Docker DNS.
+
+http:
+  routers:
+    parvagas-api:
+      rule: "Host(`api.parvagas.pt`)"
+      entryPoints:
+        - websecure
+      service: parvagas-api
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    parvagas-api:
+      loadBalancer:
+        servers:
+          - url: "http://parvagas-backend-api:8000"
