@@ -13,6 +13,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import AppErrorBanner from "@/app/components/errors/AppErrorBanner";
+import { track } from "@/lib/analytics";
 
 type AuthRole = "candidate" | "company";
 
@@ -480,7 +481,6 @@ function SignUpContent() {
   );
 }
 
-import { track } from "@/lib/analytics";
 export default function SignUpPage() {
   return (
     <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-white"><div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" /></div>}>

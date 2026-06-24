@@ -254,14 +254,14 @@ function LoginContent() {
       }
 
       const data = (await res.json()) as LoginResponse;
-        if (data.user.role === "admin") {
-          showFeedback({
-            variant: "warning",
-            message: "Use o acesso administrativo para contas de administrador.",
-          });
-          router.replace("/Admin/Login");
-          return;
-        }
+      if (data.user.role === "admin") {
+        showFeedback({
+          variant: "warning",
+          message: "Use o acesso administrativo para contas de administrador.",
+        });
+        router.replace("/Admin/Login");
+        return;
+      }
       if (selectedRole !== data.user.role) {
         showFeedback({
           variant: "warning",
