@@ -27,7 +27,7 @@ _SITEVERIFY_URLS = {
     "recaptcha": "https://www.google.com/recaptcha/api/siteverify",
 }
 
-DEFAULT_SITE_KEY = "6Lf4CistAAAAAIq1r40uoJLlTspXn_05-0pz9zJc"
+DEFAULT_SITE_KEY = "6LfJUDAtAAAAAG9UPxxPtGoaUNCrnYtyZSnor3fB"
 
 
 def _provider() -> str:
