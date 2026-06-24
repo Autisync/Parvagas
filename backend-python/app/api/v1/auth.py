@@ -476,6 +476,14 @@ async def google_login(request: Request, payload: dict, db: Session = Depends(ge
         extra={"method": "google", "google_sub": info.get("sub"), "new_user": is_new_user},
     )
 
+    # New Google users are pre-verified by Google (no verification email needed) —
+    # send a welcome email instead. Fire-and-forget; never block sign-in.
+    if is_new_user:
+        try:
+            send_welcome_email.delay(str(user.id))
+        except Exception:  # noqa: BLE001 - email queue must never break auth
+            pass
+
     token = AuthService.create_access_token(user)
     return {
         "access_token": token,
