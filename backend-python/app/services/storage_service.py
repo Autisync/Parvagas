@@ -82,6 +82,7 @@ class StorageService:
     @staticmethod
     def _s3_client():
         import boto3  # lazy — only needed when STORAGE_PROVIDER=server
+        from botocore.client import Config
 
         return boto3.client(
             "s3",
@@ -89,6 +90,9 @@ class StorageService:
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
+            # MinIO behind a custom domain needs path-style addressing + SigV4 so
+            # presigned URLs validate against the request host.
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
 
     @staticmethod
