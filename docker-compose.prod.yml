@@ -24,7 +24,7 @@ x-backend-env: &backend-env
   SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@autisync.com}
   # Public URLs / CORS
   FRONTEND_URL: ${FRONTEND_URL:-https://parvagas.pt}
-  CORS_ORIGIN: ${CORS_ORIGIN:-https://parvagas.pt}
+  CORS_ORIGIN: ${CORS_ORIGIN:-https://parvagas.pt,https://www.parvagas.pt}
   BACKEND_URL: ${BACKEND_URL:-https://api.parvagas.pt}
   # Redis / Celery
   REDIS_URL: redis://redis:6379/0
