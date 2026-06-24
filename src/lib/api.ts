@@ -95,7 +95,7 @@ export function apiUrl(path: string): string {
 
   const [base] = getApiBaseCandidates();
   if (!base) {
-    throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
+    throw new ApiError("Não foi possível ligar-se ao serviço neste momento. Tente novamente mais tarde.");
   }
 
   return buildApiUrl(base, path);
@@ -104,7 +104,7 @@ export function apiUrl(path: string): string {
 function buildApiUrl(base: string, path: string): string {
   const normalizedBase = String(base || "").trim().replace(/\/$/, "");
   if (!normalizedBase) {
-    throw new ApiError("Configuração em falta: defina NEXT_PUBLIC_API_URL para ligar ao servidor.");
+    throw new ApiError("Não foi possível ligar-se ao serviço neste momento. Tente novamente mais tarde.");
   }
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -375,12 +375,12 @@ export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Prom
     if (!options?.suppressGlobalErrors) {
       getGlobalErrorDispatch()?.appError?.({
         type: "network",
-        message: "A ligação ao servidor expirou. Verifique a internet e tente novamente.",
+        message: "A ligação demorou demasiado tempo. Verifique a sua internet e tente novamente.",
         action: "retry",
       });
     }
     throw new ApiError(
-      "A ligação expirou. Verifique se a API está ativa e confirme NEXT_PUBLIC_API_URL.",
+      "A ligação demorou demasiado tempo. Verifique a sua internet e tente novamente.",
       { isNetworkError: true }
     );
   }
@@ -392,7 +392,7 @@ export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Prom
       action: "retry",
     });
   }
-  throw new ApiError("Não foi possível ligar ao servidor. Confirme a API e NEXT_PUBLIC_API_URL.", {
+  throw new ApiError("Não foi possível ligar-se ao serviço. Verifique a sua ligação e tente novamente.", {
     details: lastError,
     isNetworkError: true,
   });
