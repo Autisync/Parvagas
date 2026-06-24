@@ -73,7 +73,7 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup
     restart: unless-stopped
     user: "0:0"
     env_file:
