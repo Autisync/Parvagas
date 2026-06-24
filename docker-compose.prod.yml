@@ -89,12 +89,20 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    ports:
-      # Published host port. Override BACKEND_HOST_PORT in Portainer if 8000 is taken.
-      # NOTE: the live HTTPS frontend (https://parvagas.pt) cannot call a plain-HTTP
-      # API — browsers block mixed content. You still need TLS in front of this port
-      # (a reverse proxy or Cloudflare) so api.parvagas.pt is served over HTTPS.
-      - "${BACKEND_HOST_PORT:-8000}:8000"
+    # Traefik routes to this container over the shared "proxy" network — no host
+    # port published. Confirm TRAEFIK_ENTRYPOINT / TRAEFIK_CERTRESOLVER against
+    # your traefik.yml (network is already confirmed as "proxy").
+    networks:
+      - default
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-proxy}"
+      - "traefik.http.routers.parvagas-api.rule=Host(`${API_DOMAIN:-api.parvagas.pt}`)"
+      - "traefik.http.routers.parvagas-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.parvagas-api.tls=true"
+      - "traefik.http.routers.parvagas-api.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.parvagas-api.loadbalancer.server.port=8000"
     volumes:
       - python_uploads:/app/uploads
       - python_logs:/app/logs
@@ -131,6 +139,14 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+networks:
+  # Traefik's shared network (confirmed name: "proxy"). Override TRAEFIK_NETWORK
+  # only if it ever changes.
+  traefik-net:
+    external: true
+    name: ${TRAEFIK_NETWORK:-proxy}
+  default: {}
 
 volumes:
   redis_data:
