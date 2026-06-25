@@ -595,17 +595,25 @@ class EmailService:
             msg["From"] = settings.SMTP_FROM
             msg["To"] = to_email
             msg.attach(MIMEText(html_content, "html"))
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as server:
-                server.ehlo()
-                # Upgrade to TLS before AUTH — submission servers (port 587) only
-                # advertise the AUTH extension after STARTTLS. Auto-detect support
-                # so it works whether or not SMTP_SECURE is set.
-                if settings.SMTP_SECURE or server.has_extn("starttls"):
-                    server.starttls()
+            # Port 465 = SMTPS (implicit TLS from first byte, use SMTP_SSL).
+            # Port 587 / SMTP_SECURE = submission with STARTTLS upgrade (use SMTP).
+            if settings.SMTP_PORT == 465:
+                import ssl as _ssl
+                with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT,
+                                       timeout=20, context=_ssl.create_default_context()) as server:
                     server.ehlo()
-                if settings.SMTP_USER and settings.SMTP_PASS:
-                    server.login(settings.SMTP_USER, settings.SMTP_PASS)
-                server.send_message(msg)
+                    if settings.SMTP_USER and settings.SMTP_PASS:
+                        server.login(settings.SMTP_USER, settings.SMTP_PASS)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as server:
+                    server.ehlo()
+                    if settings.SMTP_SECURE or server.has_extn("starttls"):
+                        server.starttls()
+                        server.ehlo()
+                    if settings.SMTP_USER and settings.SMTP_PASS:
+                        server.login(settings.SMTP_USER, settings.SMTP_PASS)
+                    server.send_message(msg)
             logger.info(f"Email sent to {to_email} via SMTP")
             return True
 
