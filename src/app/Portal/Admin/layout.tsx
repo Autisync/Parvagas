@@ -8,11 +8,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { logoutCurrentSession } from "@/lib/api";
 import { fetchAdminMe } from "./adminClient";
 import { useClientLocale } from "@/lib/i18n/client";
-import { ArrowRightOnRectangleIcon, Bars3Icon } from "@heroicons/react/24/outline";
+import { ArrowRightOnRectangleIcon } from "@heroicons/react/24/outline";
 
 const AdminSidebar = dynamic(() => import("./components/AdminSidebar"), {
   ssr: false,
-  loading: () => <div className="h-80 app-card p-4" />,
+  loading: () => <div className="h-80 app-card p-4 hidden lg:block" />,
 });
 
 const NotificationBell = dynamic(() => import("@/app/Portal/components/NotificationBell"), {
@@ -27,7 +27,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     [user?.adminLevel]
   );
   const [level, setLevel] = useState<"super-admin" | "moderator">(fallbackLevel);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { dict } = useClientLocale();
 
   useEffect(() => {
@@ -38,15 +37,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     if (!token) return;
     fetchAdminMe(token)
       .then((me) => setLevel(me.adminLevel))
-      .catch(() => {
-        // Keep fallback level from local session if /admin/me fails.
-      });
+      .catch(() => {});
   }, [token]);
 
   const handleLogout = () => {
-    logoutCurrentSession(token).finally(() => {
-      router.replace("/Admin/Login");
-    });
+    logoutCurrentSession(token).finally(() => router.replace("/Admin/Login"));
   };
 
   if (loading) {
@@ -61,18 +56,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-white text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-100 lg:hidden"
-              onClick={() => setSidebarOpen((prev) => !prev)}
-              aria-expanded={sidebarOpen}
-              aria-controls="admin-sidebar"
-            >
-              <Bars3Icon className="h-5 w-5" />
-            </button>
-            <span className="text-sm font-semibold uppercase tracking-[0.18em] text-red-600">Parvagas Admin</span>
-          </div>
+          <span className="text-sm font-semibold uppercase tracking-[0.18em] text-red-600">Parvagas Admin</span>
           <div className="flex items-center gap-2">
             {token && <NotificationBell token={token} role="admin" />}
             <button
@@ -81,14 +65,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700 transition hover:bg-red-100"
             >
               <ArrowRightOnRectangleIcon className="h-4 w-4" />
-              {dict.portal.admin.logout}
+              <span className="hidden sm:inline">{dict.portal.admin.logout}</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 pb-16 pt-8">
-
+      <main className="mx-auto max-w-7xl px-6 pb-16 pt-8 pb-24 lg:pb-16">
         <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
           <AdminSidebar
             level={level}
@@ -96,8 +79,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               name: (user as { fullName?: string; name?: string } | null)?.fullName || user?.name || "Admin",
               email: user?.email,
             }}
-            open={sidebarOpen}
-            onNavigate={() => setSidebarOpen(false)}
             onLogout={handleLogout}
           />
           <section className="min-w-0">{children}</section>

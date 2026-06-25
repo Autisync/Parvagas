@@ -161,7 +161,7 @@ export default function MinhasVagasPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <main className="pt-8 px-6 pb-16 max-w-7xl mx-auto">
+      <main className="pt-8 px-6 pb-24 lg:pb-16 max-w-7xl mx-auto">
         <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
           <CompanySidebar />
 

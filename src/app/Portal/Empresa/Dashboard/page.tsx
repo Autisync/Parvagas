@@ -155,7 +155,7 @@ export default function EmpresaDashboard() {
   if (loading || fetching) {
     return (
       <div className="min-h-screen bg-white">
-        <main className="max-w-7xl mx-auto px-6 pt-8 pb-16">
+        <main className="max-w-7xl mx-auto px-6 pt-8 pb-24 lg:pb-16">
           <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
             <CompanySidebar />
             <div className="flex items-center justify-center py-24">
@@ -169,7 +169,7 @@ export default function EmpresaDashboard() {
 
   return (
     <div className="min-h-screen bg-white">
-      <main className="max-w-7xl mx-auto px-6 pt-8 pb-16">
+      <main className="max-w-7xl mx-auto px-6 pt-8 pb-24 lg:pb-16">
         <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
           <CompanySidebar />
 

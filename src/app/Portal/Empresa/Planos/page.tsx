@@ -99,7 +99,7 @@ export default function EmpresaPlanosPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <main className="mx-auto max-w-7xl px-6 pb-16 pt-8">
+      <main className="mx-auto max-w-7xl px-6 pb-24 lg:pb-16 pt-8">
         <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
           <CompanySidebar />
           <div className="space-y-6">
