@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getToken, getUser } from "@/lib/api";
+import { clearToken, getToken, getUser, isTokenExpired } from "@/lib/api";
 
 type User = {
   id: string;
@@ -55,6 +55,16 @@ export function useAuth(requiredRole?: string, options: UseAuthOptions = {}) {
     if (!t || !u || !u.role) {
       setLoading(false);
       router.replace(getLoginRoute(requiredRole));
+      return;
+    }
+
+    // An expired JWT still sits in localStorage — without this check the portal
+    // would render as "logged in" and the first data call would 401, surfacing
+    // as a confusing "could not load" error instead of a clean re-login.
+    if (isTokenExpired(t)) {
+      clearToken();
+      setLoading(false);
+      router.replace(`${getLoginRoute(requiredRole)}?session=expired`);
       return;
     }
 

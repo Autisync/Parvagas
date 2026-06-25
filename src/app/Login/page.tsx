@@ -134,6 +134,21 @@ function LoginContent() {
     setPasswordResetToken("");
   }, [queryFirstLoginToken, queryResetToken]);
 
+  // Explain an automatic logout (idle timeout or expired token) so the user
+  // understands why they landed back on the login screen.
+  useEffect(() => {
+    const reason = searchParams.get("session");
+    if (reason !== "expired" && reason !== "idle") return;
+    setFormFeedback({
+      variant: "info",
+      title: "Sessão terminada",
+      message:
+        reason === "idle"
+          ? "A sua sessão foi terminada por inatividade. Inicie sessão novamente para continuar."
+          : "A sua sessão expirou. Inicie sessão novamente para continuar.",
+    });
+  }, [searchParams]);
+
   const showFeedback = (next: FormFeedback | null) => {
     if (!next) {
       feedbackHashRef.current = "";

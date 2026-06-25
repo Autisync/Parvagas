@@ -105,10 +105,25 @@ function AdminLoginContent() {
       return;
     }
 
+    const sessionReason = searchParams.get("session");
+    if (sessionReason === "expired" || sessionReason === "idle") {
+      setFirstLoginResetToken("");
+      setPasswordResetToken("");
+      setFormFeedback({
+        variant: "info",
+        title: "Sessão terminada",
+        message:
+          sessionReason === "idle"
+            ? "A sua sessão foi terminada por inatividade. Inicie sessão novamente."
+            : "A sua sessão expirou. Inicie sessão novamente.",
+      });
+      return;
+    }
+
     // If there is no reset token in the URL, ensure reset mode is disabled.
     setFirstLoginResetToken("");
     setPasswordResetToken("");
-  }, [queryFirstLoginToken, queryResetToken]);
+  }, [queryFirstLoginToken, queryResetToken, searchParams]);
 
   const showFeedback = (next: FormFeedback | null) => {
     if (!next) {

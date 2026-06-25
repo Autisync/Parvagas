@@ -47,6 +47,56 @@ export function touchClientSession() {
   notifySessionChange("activity");
 }
 
+// Treat a token as expired slightly early so an in-flight request never races
+// the server's own expiry check (which would surface as a confusing 401).
+const TOKEN_EXPIRY_GRACE_MS = 10 * 1000;
+
+/** Decode a JWT payload (base64url) without verifying the signature. */
+export function decodeJwtPayload(token: string | null): Record<string, unknown> | null {
+  if (!token || typeof token !== "string") return null;
+  const part = token.split(".")[1];
+  if (!part) return null;
+  try {
+    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const binary = typeof atob !== "undefined" ? atob(padded) : "";
+    if (!binary) return null;
+    // Recover UTF-8 (names/emails can be non-ASCII) before JSON.parse.
+    const json = decodeURIComponent(
+      binary
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(""),
+    );
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** Token expiry as epoch milliseconds, or 0 when there is no `exp` claim. */
+export function getTokenExpiryMs(token: string | null): number {
+  const payload = decodeJwtPayload(token);
+  const exp = payload && typeof payload.exp === "number" ? payload.exp : 0;
+  return exp > 0 ? exp * 1000 : 0;
+}
+
+/** True when the token carries an `exp` claim that has passed (minus grace). */
+export function isTokenExpired(token: string | null): boolean {
+  const expMs = getTokenExpiryMs(token);
+  if (!expMs) return false; // No exp claim — cannot prove expiry, don't force logout.
+  return Date.now() >= expMs - TOKEN_EXPIRY_GRACE_MS;
+}
+
+/** True when the stored session is still usable (token present, not expired, not idle-timed-out). */
+export function isSessionValid(): boolean {
+  const token = getToken();
+  if (!token || isTokenExpired(token)) return false;
+  const lastActivity = getLastSessionActivityAt();
+  if (lastActivity && Date.now() - lastActivity > getSessionIdleTimeoutMs()) return false;
+  return true;
+}
+
 export type ApiFetchOptions = RequestInit & {
   suppressGlobalErrors?: boolean;
 };
