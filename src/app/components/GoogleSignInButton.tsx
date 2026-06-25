@@ -69,6 +69,7 @@ export default function GoogleSignInButton({
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
 
   const handleCredential = useCallback(
     async (res: GoogleCredentialResponse) => {
@@ -77,6 +78,7 @@ export default function GoogleSignInButton({
         onError?.("Não foi possível obter o token do Google.");
         return;
       }
+      setSigningIn(true);
       try {
         const r = await apiFetchRaw("/auth/google", {
           method: "POST",
@@ -116,6 +118,7 @@ export default function GoogleSignInButton({
         });
         router.replace(portalRoute(u.role));
       } catch (err) {
+        setSigningIn(false);
         onError?.(err instanceof Error ? err.message : "Falha ao iniciar sessão com Google.");
       }
     },
@@ -154,8 +157,21 @@ export default function GoogleSignInButton({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div ref={containerRef} className="min-h-[44px]" />
-      {!ready && <span className="text-xs text-[var(--text-subtle)]">A carregar Google…</span>}
+      <div className="relative">
+        <div ref={containerRef} className="min-h-[44px]" />
+        {signingIn && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-md bg-white/90">
+            <svg className="h-5 w-5 animate-spin text-red-600" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-sm font-medium text-slate-700">A entrar…</span>
+          </div>
+        )}
+      </div>
+      {!ready && !signingIn && (
+        <span className="text-xs text-[var(--text-subtle)]">A carregar Google…</span>
+      )}
     </div>
   );
 }
