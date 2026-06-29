@@ -10,7 +10,7 @@ reCAPTCHA Enterprise env:
   CAPTCHA_REQUIRED=true
   RECAPTCHA_PROJECT_ID=parvagas
   RECAPTCHA_API_KEY=<google api key>
-  RECAPTCHA_SITE_KEY=6Lf4CistAAAAAIq1r40uoJLlTspXn_05-0pz9zJc
+  RECAPTCHA_SITE_KEY=6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ
   RECAPTCHA_SCORE_THRESHOLD=0.5
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ _SITEVERIFY_URLS = {
     "recaptcha": "https://www.google.com/recaptcha/api/siteverify",
 }
 
-DEFAULT_SITE_KEY = "6LfJUDAtAAAAAG9UPxxPtGoaUNCrnYtyZSnor3fB"
+DEFAULT_SITE_KEY = "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ"
 
 
 def _provider() -> str:

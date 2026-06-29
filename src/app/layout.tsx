@@ -72,7 +72,7 @@ export default function RootLayout({
         <script
           async
           defer
-          src={`https://www.google.com/recaptcha/enterprise.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6Lf4CistAAAAAIq1r40uoJLlTspXn_05-0pz9zJc"}`}
+          src={`https://www.google.com/recaptcha/enterprise.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ"}`}
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>

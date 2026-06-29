@@ -4,7 +4,7 @@
 // resolves to null and the backend treats captcha as not-enforced.
 
 export const RECAPTCHA_SITE_KEY =
-  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6Lf4CistAAAAAIq1r40uoJLlTspXn_05-0pz9zJc";
+  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ";
 
 type Grecaptcha = {
   enterprise: {
