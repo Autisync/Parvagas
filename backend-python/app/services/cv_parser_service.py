@@ -1,5 +1,6 @@
 """CV parsing service for extracting text from various formats."""
 import json
+import os
 import re
 from typing import Dict, List
 import httpx
@@ -9,6 +10,17 @@ from app.schemas import ParsedCVProfile
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+
+# MIME types we can OCR directly (image CVs / photos of a CV).
+_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/tiff",
+    "image/bmp",
+}
 
 
 class CVParserService:
@@ -35,14 +47,103 @@ class CVParserService:
     }
     
     @staticmethod
+    def _ocr_enabled() -> bool:
+        return bool(getattr(settings, "CV_OCR_ENABLED", True))
+
+    @staticmethod
+    def _ocr_image(image) -> str:
+        """OCR a single PIL image. Returns '' on any failure (never raises).
+
+        Tesseract may be missing or a language pack absent — in every failure
+        mode we degrade to empty text so CV parsing never crashes.
+        """
+        try:
+            import pytesseract
+
+            langs = (getattr(settings, "CV_OCR_LANGS", "por+eng") or "por+eng").strip()
+            return pytesseract.image_to_string(image, lang=langs) or ""
+        except Exception as exc:  # noqa: BLE001 - OCR must never break parsing
+            logger.warning(f"OCR unavailable/failed (tesseract or language pack?): {exc}")
+            return ""
+
+    @staticmethod
+    def _open_image_guarded(file_path_or_bytes):
+        """Open an image with a hard pixel cap to prevent decompression bombs."""
+        from PIL import Image
+
+        # Cap total pixels so a crafted tiny file can't blow up to gigabytes.
+        max_mp = int(getattr(settings, "CV_OCR_MAX_IMAGE_MEGAPIXELS", 40) or 40)
+        Image.MAX_IMAGE_PIXELS = max_mp * 1_000_000
+        img = Image.open(file_path_or_bytes)
+        img.load()  # force decode now so a bomb raises here, inside our guard
+        return img
+
+    @staticmethod
+    def extract_text_from_image(file_path: str) -> str:
+        """OCR an uploaded image CV (JPG/PNG/etc.)."""
+        if not CVParserService._ocr_enabled():
+            return ""
+        try:
+            with CVParserService._open_image_guarded(file_path) as img:
+                # Grayscale generally improves OCR accuracy on document scans.
+                return CVParserService._ocr_image(img.convert("L"))
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Failed to OCR image CV: {exc}")
+            return ""
+
+    @staticmethod
     def extract_text_from_pdf(file_path: str) -> str:
-        """Extract text from PDF file."""
+        """Extract text from a PDF, OCR'ing pages that have no selectable text.
+
+        Uses PyMuPDF (better extraction than pypdf) and, for scanned/image-only
+        pages, rasterises the page and runs Tesseract. Page count and DPI are
+        bounded so a large scan can't exhaust the worker. Falls back to pypdf
+        (text-only) if PyMuPDF is unavailable.
+        """
+        try:
+            import fitz  # PyMuPDF
+
+            ocr_enabled = CVParserService._ocr_enabled()
+            max_ocr_pages = int(getattr(settings, "CV_OCR_MAX_PAGES", 8) or 8)
+            dpi = int(getattr(settings, "CV_OCR_DPI", 200) or 200)
+
+            parts: list[str] = []
+            ocr_pages_done = 0
+            with fitz.open(file_path) as doc:
+                for index, page in enumerate(doc):
+                    page_text = page.get_text("text") or ""
+                    # A page with almost no extractable text is almost certainly
+                    # a scan/image — OCR it (bounded by max_ocr_pages).
+                    if (
+                        ocr_enabled
+                        and len(page_text.strip()) < 20
+                        and ocr_pages_done < max_ocr_pages
+                    ):
+                        ocr_pages_done += 1
+                        try:
+                            import io
+
+                            pix = page.get_pixmap(dpi=dpi)
+                            with CVParserService._open_image_guarded(io.BytesIO(pix.tobytes("png"))) as img:
+                                ocr_text = CVParserService._ocr_image(img.convert("L"))
+                            if ocr_text.strip():
+                                page_text = ocr_text
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(f"OCR of PDF page {index} failed: {exc}")
+                    parts.append(page_text)
+            text = "\n".join(parts)
+            if text.strip():
+                return text
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"PyMuPDF extraction failed, falling back to pypdf: {exc}")
+
+        # Fallback: pypdf (text layer only, no OCR).
         try:
             from pypdf import PdfReader
             reader = PdfReader(file_path)
             text = ""
             for page in reader.pages:
-                text += page.extract_text() + "\n"
+                text += (page.extract_text() or "") + "\n"
             return text
         except Exception as e:
             logger.error(f"Failed to parse PDF: {str(e)}")
@@ -84,7 +185,17 @@ class CVParserService:
             return ""
         elif mime_type == "text/plain":
             return CVParserService.extract_text_from_txt(file_path)
+        elif mime_type in _IMAGE_MIME_TYPES:
+            return CVParserService.extract_text_from_image(file_path)
         else:
+            # Unknown MIME (e.g. a generic application/octet-stream from some
+            # browsers): infer image CVs from the file extension so they still
+            # get OCR'd instead of silently failing.
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in {".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif", ".bmp"}:
+                return CVParserService.extract_text_from_image(file_path)
+            if ext == ".pdf":
+                return CVParserService.extract_text_from_pdf(file_path)
             logger.warning(f"Unsupported MIME type: {mime_type}")
             return ""
 
@@ -503,9 +614,11 @@ class CVParserService:
             text = CVParserService._normalize_text(CVParserService.extract_text(file_path, mime_type))
 
             # Fallback when extracted text is empty/very short (common in scanned PDFs).
+            # Skip for images: decoding raw image bytes yields only binary noise,
+            # and OCR has already had its chance via extract_text().
             fallback_text = ""
             used_fallback = False
-            if len(text) < 80:
+            if len(text) < 80 and mime_type not in _IMAGE_MIME_TYPES:
                 fallback_text = CVParserService._extract_fallback_text_from_bytes(file_path)
                 used_fallback = bool(fallback_text)
                 if fallback_text and fallback_text not in text:

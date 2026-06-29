@@ -105,6 +105,14 @@ class Settings(BaseSettings):
     CV_PARSE_TASK_SOFT_TIMEOUT_SECONDS: int = int(os.getenv("CV_PARSE_TASK_SOFT_TIMEOUT_SECONDS", 90))
     CV_PARSE_TASK_TIMEOUT_SECONDS: int = int(os.getenv("CV_PARSE_TASK_TIMEOUT_SECONDS", 120))
 
+    # OCR for scanned PDFs and image CVs (Tesseract). Bounded so a large scan
+    # can't exhaust worker CPU/memory; the Celery soft timeout is the backstop.
+    CV_OCR_ENABLED: bool = os.getenv("CV_OCR_ENABLED", "true").lower() == "true"
+    CV_OCR_LANGS: str = os.getenv("CV_OCR_LANGS", "por+eng")
+    CV_OCR_MAX_PAGES: int = int(os.getenv("CV_OCR_MAX_PAGES", 8))
+    CV_OCR_DPI: int = int(os.getenv("CV_OCR_DPI", 200))
+    CV_OCR_MAX_IMAGE_MEGAPIXELS: int = int(os.getenv("CV_OCR_MAX_IMAGE_MEGAPIXELS", 40))
+
     # CORS
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", FRONTEND_URL)
 

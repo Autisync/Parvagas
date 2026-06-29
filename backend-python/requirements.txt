@@ -15,6 +15,12 @@ celery==5.3.4
 email-validator==2.1.0
 python-docx==0.8.11
 pypdf==4.0.1
+# CV text extraction + OCR (scanned PDFs and image CVs).
+# PyMuPDF ships musllinux wheels (Alpine-compatible); pytesseract shells out to
+# the tesseract binary installed in the Docker image; Pillow rasterises images.
+pymupdf==1.24.10
+pytesseract==0.3.13
+Pillow==10.4.0
 slowapi==0.1.9
 jinja2==3.1.2
 python-dotenv==1.0.0

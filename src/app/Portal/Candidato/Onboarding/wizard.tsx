@@ -677,8 +677,9 @@ function StepCv({
       <div>
         <h2 className="text-lg font-bold text-slate-900">Carregue o seu CV</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Carregue um CV em PDF ou DOCX e o sistema extrai os dados automaticamente.
-          Em alternativa, descarregue o nosso modelo e preencha manualmente.
+          Carregue um CV em PDF, DOCX ou imagem (foto/digitalização) e o sistema
+          extrai os dados automaticamente. Em alternativa, descarregue o nosso
+          modelo e preencha manualmente.
         </p>
       </div>
 
@@ -691,7 +692,7 @@ function StepCv({
       <input
         ref={fileRef}
         type="file"
-        accept=".pdf,.doc,.docx"
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.tiff,.bmp"
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -712,7 +713,7 @@ function StepCv({
           </div>
           <div>
             <p className="text-sm font-bold text-slate-900">{uploading ? "A processar…" : "Carregar o meu CV"}</p>
-            <p className="mt-0.5 text-xs text-slate-500">PDF ou DOCX, máx. 5 MB</p>
+            <p className="mt-0.5 text-xs text-slate-500">PDF, DOCX ou imagem, máx. 5 MB</p>
           </div>
         </button>
 

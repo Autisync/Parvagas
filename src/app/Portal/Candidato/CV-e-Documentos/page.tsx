@@ -279,11 +279,17 @@ export default function CvDocumentosPage() {
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/tiff",
+      "image/bmp",
     ];
-    const allowedByExt = /\.(pdf|doc|docx)$/i.test(file.name || "");
+    const allowedByExt = /\.(pdf|doc|docx|png|jpe?g|webp|tiff?|bmp)$/i.test(file.name || "");
 
     if (!allowedByExt && !allowedByMime.includes(file.type)) {
-      return "Formato inválido. Use PDF, DOC ou DOCX.";
+      return "Formato inválido. Use PDF, DOC, DOCX ou imagem (PNG/JPG).";
     }
     if (file.size > MAX_FILE_BYTES) {
       return "Ficheiro excede o limite de 5MB.";
@@ -609,7 +615,7 @@ export default function CvDocumentosPage() {
           className="cursor-pointer rounded-2xl border-2 border-dashed border-red-200 p-10 text-center transition-colors hover:bg-red-50"
           onClick={() => inputRef.current?.click()}
         >
-          <input ref={inputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleUpload} />
+          <input ref={inputRef} type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.tiff,.bmp" className="hidden" onChange={handleUpload} />
           {uploading ? (
             <div className="flex flex-col items-center gap-3">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />

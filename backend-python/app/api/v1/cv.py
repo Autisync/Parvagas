@@ -38,13 +38,20 @@ async def upload_cv(
         allowed_mime_types = [
             "application/pdf",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "text/plain"
+            "text/plain",
+            # Image CVs / photos of a CV — text extracted via OCR.
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp",
+            "image/tiff",
+            "image/bmp",
         ]
-        
+
         if file.content_type not in allowed_mime_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid file type. Allowed: PDF, DOCX, TXT"
+                detail="Invalid file type. Allowed: PDF, DOCX, TXT, imagem (PNG/JPG)"
             )
 
         # Enforce the upload size cap BEFORE buffering the whole file in memory.

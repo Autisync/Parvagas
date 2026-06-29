@@ -24,12 +24,19 @@ logger = get_logger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-_ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
+_ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".png", ".jpg", ".jpeg", ".webp", ".tiff", ".bmp"}
 _ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
+    # Image CVs / photos of a CV — text extracted via OCR.
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/tiff",
+    "image/bmp",
 }
 
 
