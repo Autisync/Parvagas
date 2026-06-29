@@ -76,9 +76,13 @@ class CandidateProfile(Base, TimestampMixin):
     job_title = Column(String(255), nullable=True)
     years_of_experience = Column(Integer, nullable=True)
     
-    # Skills
+    # Skills (flat combined list kept for backward compat; split buckets below)
     skills = Column(Text, nullable=True)  # JSON array as string
-    
+    # Split skill buckets populated by the rules-first parser (added 2026-06-29).
+    hard_skills = Column(Text, nullable=True)   # JSON array as string
+    techniques = Column(Text, nullable=True)    # JSON array as string
+    tools = Column(Text, nullable=True)         # JSON array as string
+
     # Experience
     work_experience = Column(Text, nullable=True)  # JSON array as string
     education = Column(Text, nullable=True)  # JSON array as string

@@ -378,15 +378,45 @@ def parse_structured(text: str) -> dict[str, Any]:
 
 
 def to_parsed_profile(structured: dict[str, Any]) -> dict[str, Any]:
-    """Map the structured result onto the existing ParsedCVProfile dict shape."""
+    """Map the structured result onto the existing ParsedCVProfile dict shape.
+
+    work_experience and education items are normalized to camelCase keys so
+    they round-trip cleanly through the DB and the _profile_to_payload()
+    serializer without breaking the wizard's field expectations.
+    """
     c = structured.get("contact", {})
     full = c.get("full_name") or ""
     parts = full.split()
     skills = structured.get("skills", {})
     all_skills = skills.get("hard_skills", []) + skills.get("techniques", []) + skills.get("tools", [])
     links = c.get("links", [])
-    linkedin = next((l for l in links if "linkedin" in l.lower()), None)
-    github = next((l for l in links if "github" in l.lower()), None)
+    linkedin = next((lnk for lnk in links if "linkedin" in lnk.lower()), None)
+    github = next((lnk for lnk in links if "github" in lnk.lower()), None)
+
+    work_experience = [
+        {
+            "jobTitle": e.get("role") or "",
+            "company": e.get("company") or "",
+            "location": e.get("location") or "",
+            "startDate": e.get("start_date") or "",
+            "endDate": e.get("end_date") or "",
+            "current": e.get("end_date") == "present",
+            "description": " ".join(e.get("bullets", [])),
+        }
+        for e in structured.get("experience", [])
+    ]
+    education = [
+        {
+            "degree": e.get("degree") or "",
+            "institution": e.get("institution") or "",
+            "fieldOfStudy": e.get("field_of_study") or "",
+            "location": e.get("location") or "",
+            "startDate": e.get("start_date") or "",
+            "endDate": e.get("end_date") or "",
+            "description": "",
+        }
+        for e in structured.get("education", [])
+    ]
     return {
         "first_name": parts[0] if parts else None,
         "last_name": parts[-1] if len(parts) > 1 else None,
@@ -403,7 +433,7 @@ def to_parsed_profile(structured: dict[str, Any]) -> dict[str, Any]:
         "techniques": skills.get("techniques", []),
         "tools": skills.get("tools", []),
         "languages": skills.get("languages", []),
-        "work_experience": structured.get("experience", []),
-        "education": structured.get("education", []),
+        "work_experience": work_experience,
+        "education": education,
         "certifications": structured.get("certifications", []),
     }

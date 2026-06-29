@@ -121,6 +121,9 @@ def _latest_cv_document(db: Session, profile: CandidateProfile) -> dict[str, Any
 
 def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfile) -> dict[str, Any]:
     skills = _coerce_list(_json_load(profile.skills, []))
+    hard_skills = _coerce_list(_json_load(getattr(profile, "hard_skills", None), []))
+    techniques = _coerce_list(_json_load(getattr(profile, "techniques", None), []))
+    tools = _coerce_list(_json_load(getattr(profile, "tools", None), []))
     languages = _coerce_list(_json_load(profile.languages, []))
     certifications = _coerce_list(_json_load(profile.certifications, []))
     work_experience = _json_load(profile.work_experience, [])
@@ -145,6 +148,9 @@ def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfi
         "summary": profile.professional_summary or "",
         "yearsOfExperience": profile.years_of_experience,
         "skills": skills,
+        "hardSkills": hard_skills,
+        "techniques": techniques,
+        "tools": tools,
         "languages": languages,
         "certifications": certifications,
         "experience": work_experience if isinstance(work_experience, list) else [],

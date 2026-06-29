@@ -155,6 +155,10 @@ class ParsedCVProfile(BaseModel):
     job_title: Optional[str] = None
     years_of_experience: Optional[int] = None
     skills: List[str] = []
+    # Split skill buckets from the rules-based parser (stored as separate columns).
+    hard_skills: List[str] = []
+    techniques: List[str] = []
+    tools: List[str] = []
     work_experience: List[dict] = []
     education: List[dict] = []
     # certifications/languages are simple string lists (heuristic + frontend

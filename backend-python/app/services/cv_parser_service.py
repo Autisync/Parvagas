@@ -622,15 +622,30 @@ class CVParserService:
     
     @staticmethod
     def parse_cv_file(file_path: str, mime_type: str) -> Dict:
-        """Parse CV file and return parsed profile."""
-        try:
-            # Extract text
-            text = CVParserService._normalize_text(CVParserService.extract_text(file_path, mime_type))
+        """Parse CV file and return parsed profile.
 
-            # Fallback when extracted text is empty/very short (common in scanned PDFs).
-            # Skip for images: decoding raw image bytes yields only binary noise,
-            # and OCR has already had its chance via extract_text().
-            fallback_text = ""
+        Extraction priority (PDF):
+          1. Layout-aware extraction (PyMuPDF block geometry → two-column safe)
+          2. OCR-augmented extraction (same PyMuPDF + Tesseract for scanned pages)
+
+        Parsing priority:
+          1. AI provider (if configured)
+          2. Rules-based parser (PT/EN locale-aware, gazetteer-driven)
+          3. Legacy heuristic parser (last-resort fallback)
+        """
+        try:
+            # ── 1. Text extraction ───────────────────────────────────────────
+            if mime_type == "application/pdf":
+                # Try layout-aware extraction first (preserves two-column order).
+                from app.services.cv_parsing.layout import extract_pdf_layout_text
+                text = CVParserService._normalize_text(extract_pdf_layout_text(file_path))
+                # Layout extraction returns '' for scanned PDFs — fall through to OCR.
+                if len(text.strip()) < 80:
+                    text = CVParserService._normalize_text(CVParserService.extract_text_from_pdf(file_path))
+            else:
+                text = CVParserService._normalize_text(CVParserService.extract_text(file_path, mime_type))
+
+            # Byte-decode fallback for low-text non-image files.
             used_fallback = False
             if len(text) < 80 and mime_type not in _IMAGE_MIME_TYPES:
                 fallback_text = CVParserService._extract_fallback_text_from_bytes(file_path)
@@ -638,10 +653,7 @@ class CVParserService:
                 if fallback_text and fallback_text not in text:
                     text = f"{text}\n{fallback_text}".strip()
 
-            # Treat "no usable text" as a failure with actionable guidance.
-            # This covers a truly empty extraction AND a corrupt/garbage file
-            # whose only recoverable bytes are a few stray ASCII characters
-            # (which would otherwise masquerade as a successful, all-empty parse).
+            # Reject files that yield no meaningful content.
             meaningful_chars = sum(1 for c in text if c.isalnum())
             if meaningful_chars < _MIN_MEANINGFUL_CHARS:
                 return {
@@ -654,24 +666,35 @@ class CVParserService:
                     ],
                 }
 
+            # ── 2. AI parsing (highest quality when configured) ──────────────
             ai_result = CVParserService._try_ai_parse(text)
             if ai_result:
                 return ai_result
-            
-            # Parse text
-            profile = CVParserService.parse_cv_text(text)
 
+            # ── 3. Rules-based parser ────────────────────────────────────────
+            source = "rules"
+            try:
+                from app.services.cv_parsing import parse_structured, to_parsed_profile
+                structured = parse_structured(text)
+                profile_dict = to_parsed_profile(structured)
+                # Build ParsedCVProfile; extra keys (hard_skills/techniques/tools)
+                # pass through since ParsedCVProfile now declares them.
+                profile = ParsedCVProfile(**profile_dict)
+            except Exception as exc:
+                logger.warning(f"Rules-based parser failed, using heuristic fallback: {exc}")
+                profile = CVParserService.parse_cv_text(text)
+                source = "heuristic"
+
+            # ── 4. Confidence + warnings ─────────────────────────────────────
             confidence = {
-                "fullName": 0.85 if profile.full_name else 0.0,
+                "fullName": 0.9 if profile.full_name else 0.0,
                 "email": 0.9 if profile.email else 0.0,
                 "phone": 0.8 if profile.phone else 0.0,
-                "skills": 0.75 if profile.skills else 0.2,
-                "experience": 0.8 if (profile.work_experience or profile.years_of_experience is not None) else 0.3,
-                "education": 0.8 if profile.education else 0.2,
+                "skills": 0.85 if profile.skills else 0.2,
+                "experience": 0.85 if (profile.work_experience or profile.years_of_experience is not None) else 0.3,
+                "education": 0.85 if profile.education else 0.2,
             }
-
             if used_fallback:
-                # Reduce confidence for fields when only fallback decoding was usable.
                 confidence = {k: round(v * 0.8, 2) for k, v in confidence.items()}
 
             warnings: List[str] = []
@@ -681,14 +704,15 @@ class CVParserService:
                 warnings.append("Could not confidently identify full name.")
             if not profile.email:
                 warnings.append("Could not identify email address.")
-            
+
             return {
                 "success": True,
                 "parsedProfile": profile.model_dump(),
                 "confidence": confidence,
-                "warnings": warnings
+                "warnings": warnings,
+                "source": source,
             }
-        
+
         except Exception as e:
             logger.error(f"CV parsing failed: {str(e)}")
             return {

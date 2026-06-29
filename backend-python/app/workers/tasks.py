@@ -304,12 +304,18 @@ def parse_cv(self, cv_upload_id: str) -> dict:
                         profile.years_of_experience = None
 
                 skills = _as_list(_pick("skills"))
+                hard_skills = _as_list(_pick("hard_skills"))
+                techniques = _as_list(_pick("techniques"))
+                tools = _as_list(_pick("tools"))
                 languages = _as_list(_pick("languages"))
                 certifications = _as_list(_pick("certifications"))
                 work_experience = _pick("work_experience", "workExperience", "experience")
                 education = _pick("education")
 
                 profile.skills = json.dumps(skills, ensure_ascii=True)
+                profile.hard_skills = json.dumps(hard_skills, ensure_ascii=True)
+                profile.techniques = json.dumps(techniques, ensure_ascii=True)
+                profile.tools = json.dumps(tools, ensure_ascii=True)
                 profile.languages = json.dumps(languages, ensure_ascii=True)
                 profile.certifications = json.dumps(certifications, ensure_ascii=True)
                 profile.work_experience = json.dumps(work_experience if isinstance(work_experience, list) else [], ensure_ascii=True)

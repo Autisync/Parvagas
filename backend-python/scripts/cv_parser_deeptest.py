@@ -72,8 +72,12 @@ def make_text_pdf(text: str) -> str:
 
     path = _tmp(".pdf")
     doc = fitz.open()
-    # Split across two pages to exercise multi-page joining.
-    chunks = [text[: len(text) // 2], text[len(text) // 2 :]]
+    # Split at a LINE boundary around the midpoint so section headers are never
+    # broken mid-word across pages (raw char-position splits would e.g. turn
+    # "COMPETENCIAS" into "CO" + "MPETENCIAS" which defeats section detection).
+    lines = text.splitlines(keepends=True)
+    mid = len(lines) // 2
+    chunks = ["".join(lines[:mid]), "".join(lines[mid:])]
     for chunk in chunks:
         page = doc.new_page()
         page.insert_text((50, 60), chunk, fontsize=11)
