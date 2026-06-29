@@ -157,8 +157,11 @@ class ParsedCVProfile(BaseModel):
     skills: List[str] = []
     work_experience: List[dict] = []
     education: List[dict] = []
-    certifications: List[dict] = []
-    languages: List[dict] = []
+    # certifications/languages are simple string lists (heuristic + frontend
+    # both treat them as string[]); typing them as List[dict] caused pydantic
+    # serializer warnings and a type-contract mismatch.
+    certifications: List[str] = []
+    languages: List[str] = []
 
 
 class CVUploadResponse(BaseModel):

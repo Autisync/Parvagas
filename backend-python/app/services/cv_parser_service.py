@@ -12,6 +12,10 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
+# Below this many alphanumeric characters we consider the extraction a failure
+# (empty scan, corrupt file, or junk bytes) and ask the user to retry / fill in.
+_MIN_MEANINGFUL_CHARS = 25
+
 # MIME types we can OCR directly (image CVs / photos of a CV).
 _IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -220,24 +224,27 @@ class CVParserService:
             return ""
 
         # Try multiple decodings to recover any embedded text snippets.
-        chunks: List[str] = []
+        # De-duplicate lines across encodings: utf-8 and latin-1 produce
+        # identical output for ASCII content, and emitting each line twice both
+        # wastes work and inflates "meaningful text" measurements downstream.
+        seen: set[str] = set()
+        ordered_lines: List[str] = []
         for encoding in ("utf-8", "latin-1"):
             try:
                 decoded = raw.decode(encoding, errors="ignore")
             except Exception:
                 continue
+            if not decoded:
+                continue
+            # Keep only printable-ish lines to avoid noisy binary blocks.
+            for line in decoded.splitlines():
+                line = re.sub(r"[^\x20-\x7E\u00A0-\u024F]", " ", line)
+                line = re.sub(r"\s+", " ", line).strip()
+                if len(line) >= 3 and line not in seen:
+                    seen.add(line)
+                    ordered_lines.append(line)
 
-            if decoded:
-                # Keep only printable-ish lines to avoid noisy binary blocks.
-                cleaned_lines = []
-                for line in decoded.splitlines():
-                    line = re.sub(r"[^\x20-\x7E\u00A0-\u024F]", " ", line)
-                    line = re.sub(r"\s+", " ", line).strip()
-                    if len(line) >= 3:
-                        cleaned_lines.append(line)
-                chunks.append("\n".join(cleaned_lines))
-
-        return CVParserService._normalize_text("\n".join(chunks))
+        return CVParserService._normalize_text("\n".join(ordered_lines))
 
     @staticmethod
     def _extract_name(lines: List[str]) -> tuple[str | None, str | None, str | None]:
@@ -594,8 +601,15 @@ class CVParserService:
         profile.work_experience = CVParserService._parse_experience_entries(experience_lines)
         profile.education = CVParserService._parse_education_entries(education_lines)
 
-        # Years of experience (PT + EN variants)
-        exp_match = re.search(r"(\d{1,2})\s*(?:years?|yrs?|anos?)\s*(?:of\s*)?(?:experience|experiencia|experiência|exp)", text_lower)
+        # Years of experience (PT + EN). Handles both orders and the Portuguese
+        # connector "de" (e.g. "6 anos de experiência") as well as English "of".
+        _exp_word = r"(?:experience|experi[êe]ncia|exp)"
+        exp_match = (
+            # "6 anos de experiência" / "6 years of experience"
+            re.search(rf"(\d{{1,2}})\s*\+?\s*(?:years?|yrs?|anos?)\s*(?:(?:of|de)\s+)?{_exp_word}", text_lower)
+            # "experiência de 6 anos" / "experience of 6 years"
+            or re.search(rf"{_exp_word}\s*(?:(?:of|de)\s+)?(\d{{1,2}})\s*\+?\s*(?:years?|yrs?|anos?)", text_lower)
+        )
         if exp_match:
             profile.years_of_experience = int(exp_match.group(1))
 
@@ -624,14 +638,19 @@ class CVParserService:
                 if fallback_text and fallback_text not in text:
                     text = f"{text}\n{fallback_text}".strip()
 
-            if not text.strip():
+            # Treat "no usable text" as a failure with actionable guidance.
+            # This covers a truly empty extraction AND a corrupt/garbage file
+            # whose only recoverable bytes are a few stray ASCII characters
+            # (which would otherwise masquerade as a successful, all-empty parse).
+            meaningful_chars = sum(1 for c in text if c.isalnum())
+            if meaningful_chars < _MIN_MEANINGFUL_CHARS:
                 return {
                     "success": False,
                     "warnings": [
                         "Não foi possível extrair texto do ficheiro. "
-                        "O ficheiro pode ser uma imagem digitalizada (scan). "
-                        "Carregue um PDF com texto selecionável ou um DOCX e tente novamente. "
-                        "Em alternativa, preencha os dados manualmente."
+                        "O ficheiro pode ser uma imagem digitalizada (scan) ou estar danificado. "
+                        "Carregue um PDF com texto selecionável, um DOCX ou uma imagem nítida, "
+                        "ou preencha os dados manualmente."
                     ],
                 }
 
