@@ -514,7 +514,12 @@ class CVParserService:
             if not text.strip():
                 return {
                     "success": False,
-                    "warnings": ["Could not extract readable text from file"]
+                    "warnings": [
+                        "Não foi possível extrair texto do ficheiro. "
+                        "O ficheiro pode ser uma imagem digitalizada (scan). "
+                        "Carregue um PDF com texto selecionável ou um DOCX e tente novamente. "
+                        "Em alternativa, preencha os dados manualmente."
+                    ],
                 }
 
             ai_result = CVParserService._try_ai_parse(text)

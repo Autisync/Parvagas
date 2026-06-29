@@ -260,6 +260,7 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
   const [data, setData] = useState<WizardState>(INITIAL_STATE);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cvWarning, setCvWarning] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -361,6 +362,7 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
     if (!token) return;
     setUploading(true);
     setError("");
+    setCvWarning("");
     try {
       const form = new FormData();
       form.append("cv", file);
@@ -403,7 +405,9 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
       }
 
       if (String(latest.status || "").toLowerCase() === "failed") {
-        throw new Error(latest.parserError || "Erro ao processar CV.");
+        // Non-blocking: show as amber warning so the user can fill in manually.
+        setCvWarning(latest.parserError || "Não foi possível processar o CV. Preencha os dados manualmente.");
+        return;
       }
 
       const p = latest.parsedProfile || latest.profileDraft;
@@ -555,6 +559,11 @@ export default function OnboardingWizard({ rerun = false }: { rerun?: boolean })
         )}
         {step === 7 && <StepConfirm data={data} onEdit={setStep} />}
 
+        {cvWarning && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            {cvWarning}
+          </div>
+        )}
         {error && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}

@@ -42,7 +42,6 @@ function ready(): Promise<void> {
  */
 export async function getRecaptchaToken(action: string): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  if (!process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) return null;
   try {
     await ready();
     if (!window.grecaptcha?.enterprise?.execute) return null;
