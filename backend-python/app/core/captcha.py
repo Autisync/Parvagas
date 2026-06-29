@@ -30,25 +30,44 @@ _SITEVERIFY_URLS = {
 DEFAULT_SITE_KEY = "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ"
 
 
+def _clean_env(name: str, default: str = "") -> str:
+    """Read a single-token credential env var defensively.
+
+    Portainer / .env paste mistakes routinely leave a trailing newline or glue
+    the next `KEY=value` onto a value (we have seen SENTRY_DSN come through as
+    '…/4511615953862736APP_ENV=production'). None of the captcha credentials
+    contain spaces, so we strip surrounding whitespace AND keep only the first
+    whitespace-delimited token. That neutralises a trailing newline or a
+    space/newline-glued next variable. (Direct concatenation with no separator
+    at all still can't be recovered — fix the env in that case.)
+    """
+    raw = (os.getenv(name, default) or "").strip()
+    return raw.split()[0] if raw else ""
+
+
 def _provider() -> str:
-    return os.getenv("CAPTCHA_PROVIDER", "").strip().lower()
+    return _clean_env("CAPTCHA_PROVIDER").lower()
 
 
 def captcha_required() -> bool:
     """True only when enforcement is on AND the provider has its credential."""
-    if os.getenv("CAPTCHA_REQUIRED", "false").lower() != "true":
+    if _clean_env("CAPTCHA_REQUIRED", "false").lower() != "true":
         return False
     p = _provider()
     if p == "recaptcha_enterprise":
-        return bool(os.getenv("RECAPTCHA_API_KEY"))
-    return bool(os.getenv("CAPTCHA_SECRET"))
+        return bool(_clean_env("RECAPTCHA_API_KEY"))
+    return bool(_clean_env("CAPTCHA_SECRET"))
 
 
 async def _verify_enterprise(token: str, action: str | None, remote_ip: str | None) -> bool:
-    project = os.getenv("RECAPTCHA_PROJECT_ID", "parvagas")
-    api_key = os.getenv("RECAPTCHA_API_KEY", "")
-    site_key = os.getenv("RECAPTCHA_SITE_KEY", DEFAULT_SITE_KEY)
-    threshold = float(os.getenv("RECAPTCHA_SCORE_THRESHOLD", "0.5"))
+    project = _clean_env("RECAPTCHA_PROJECT_ID") or "parvagas"
+    api_key = _clean_env("RECAPTCHA_API_KEY")
+    site_key = _clean_env("RECAPTCHA_SITE_KEY") or DEFAULT_SITE_KEY
+    try:
+        threshold = float(_clean_env("RECAPTCHA_SCORE_THRESHOLD") or "0.5")
+    except ValueError:
+        logger.warning("RECAPTCHA_SCORE_THRESHOLD is not a number; defaulting to 0.5")
+        threshold = 0.5
     if not api_key:
         return True  # not configured
     event: dict = {"token": token, "siteKey": site_key}
@@ -96,7 +115,7 @@ async def _verify_enterprise(token: str, action: str | None, remote_ip: str | No
 
 
 async def _verify_siteverify(token: str, remote_ip: str | None) -> bool:
-    secret = os.getenv("CAPTCHA_SECRET", "")
+    secret = _clean_env("CAPTCHA_SECRET")
     url = _SITEVERIFY_URLS.get(_provider())
     if not secret or not url:
         return True
@@ -120,7 +139,7 @@ def _fail_open() -> bool:
     Use only while reCAPTCHA Enterprise config is being set up (key/project/
     domain). Keep false in steady state. Default false (fail closed).
     """
-    return os.getenv("CAPTCHA_FAIL_OPEN", "false").strip().lower() == "true"
+    return _clean_env("CAPTCHA_FAIL_OPEN", "false").lower() == "true"
 
 
 async def verify_captcha(token: str | None, action: str | None = None, remote_ip: str | None = None) -> bool:

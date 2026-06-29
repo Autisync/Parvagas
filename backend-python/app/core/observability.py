@@ -26,7 +26,15 @@ limiter = Limiter(
 
 def init_sentry() -> bool:
     """Initialise Sentry if a DSN is configured. Returns True when enabled."""
-    if not settings.SENTRY_DSN:
+    # Defensive: a Portainer/.env paste mistake can leave a trailing newline or
+    # glue the next variable onto the DSN (we observed
+    # '…/4511615953862736APP_ENV=production'). Strip whitespace, keep only the
+    # first token, and ignore anything that isn't a real http(s) DSN so a
+    # malformed value just disables Sentry instead of spamming warnings.
+    dsn = (settings.SENTRY_DSN or "").strip().split()[0] if (settings.SENTRY_DSN or "").strip() else ""
+    if not dsn.startswith(("http://", "https://")):
+        if dsn:
+            logger.warning("SENTRY_DSN is malformed (not an http(s) URL); Sentry disabled.")
         return False
     try:
         import sentry_sdk
@@ -34,7 +42,7 @@ def init_sentry() -> bool:
         from sentry_sdk.integrations.starlette import StarletteIntegration
 
         sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
+            dsn=dsn,
             environment=settings.APP_ENV,
             traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
             integrations=[StarletteIntegration(), FastApiIntegration()],
