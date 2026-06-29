@@ -63,18 +63,33 @@ async def _verify_enterprise(token: str, action: str | None, remote_ip: str | No
         async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.post(url, json={"event": event})
         if resp.status_code != 200:
-            logger.warning("reCAPTCHA Enterprise HTTP %s: %s", resp.status_code, resp.text[:200])
+            # WARNING (not INFO): surfaces config errors — bad API key, wrong
+            # project id, reCAPTCHA Enterprise API not enabled, etc.
+            logger.warning(
+                "reCAPTCHA Enterprise HTTP %s (project=%s, siteKey=%s…): %s",
+                resp.status_code, project, site_key[:12], resp.text[:300],
+            )
             return False
         data = resp.json()
         token_props = data.get("tokenProperties", {})
         if not token_props.get("valid"):
-            logger.info("reCAPTCHA token invalid: %s", token_props.get("invalidReason"))
+            # The #1 cause here is a frontend/backend SITE KEY MISMATCH
+            # (invalidReason == "INVALID_REASON_UNSPECIFIED" or "MALFORMED").
+            logger.warning(
+                "reCAPTCHA token invalid (reason=%s). Check that backend "
+                "RECAPTCHA_SITE_KEY (%s…) matches the frontend "
+                "NEXT_PUBLIC_RECAPTCHA_SITE_KEY.",
+                token_props.get("invalidReason"), site_key[:12],
+            )
             return False
         if action and token_props.get("action") and token_props["action"] != action:
-            logger.info("reCAPTCHA action mismatch: %s != %s", token_props.get("action"), action)
+            logger.warning("reCAPTCHA action mismatch: %s != %s", token_props.get("action"), action)
             return False
         score = float(data.get("riskAnalysis", {}).get("score", 0.0))
-        return score >= threshold
+        if score < threshold:
+            logger.warning("reCAPTCHA score %.2f below threshold %.2f", score, threshold)
+            return False
+        return True
     except Exception as exc:  # pragma: no cover - network/defensive
         logger.warning("reCAPTCHA Enterprise verify failed: %s", exc)
         return False
@@ -99,6 +114,15 @@ async def _verify_siteverify(token: str, remote_ip: str | None) -> bool:
         return False
 
 
+def _fail_open() -> bool:
+    """Escape hatch: when true, a failed captcha is logged but ALLOWED.
+
+    Use only while reCAPTCHA Enterprise config is being set up (key/project/
+    domain). Keep false in steady state. Default false (fail closed).
+    """
+    return os.getenv("CAPTCHA_FAIL_OPEN", "false").strip().lower() == "true"
+
+
 async def verify_captcha(token: str | None, action: str | None = None, remote_ip: str | None = None) -> bool:
     """Return True if the captcha passes (or isn't enforced).
 
@@ -108,7 +132,18 @@ async def verify_captcha(token: str | None, action: str | None = None, remote_ip
     if not captcha_required():
         return True
     if not token:
+        if _fail_open():
+            logger.warning("captcha: no token but CAPTCHA_FAIL_OPEN=true — allowing (action=%s)", action)
+            return True
+        logger.warning("captcha: request rejected — no x-captcha-token header (action=%s)", action)
         return False
+
     if _provider() == "recaptcha_enterprise":
-        return await _verify_enterprise(token, action, remote_ip)
-    return await _verify_siteverify(token, remote_ip)
+        ok = await _verify_enterprise(token, action, remote_ip)
+    else:
+        ok = await _verify_siteverify(token, remote_ip)
+
+    if not ok and _fail_open():
+        logger.warning("captcha: verification failed but CAPTCHA_FAIL_OPEN=true — allowing (action=%s)", action)
+        return True
+    return ok
