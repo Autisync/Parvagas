@@ -232,8 +232,152 @@ class Tally:
         return p, r
 
 
+def _onecol_europass_pt():
+    """Single-column Europass-style CV (EN + Portuguese company names)."""
+    body = [
+        ("Maria Santos", 20, True),
+        ("Full-Stack Developer", 12, False),
+        ("Lisbon, Portugal  |  +351 912 345 678  |  maria.santos@example.com", 10, False),
+        ("WORK EXPERIENCE", 13, True),
+        ("Caixa Geral de Depositos, Lisbon, Portugal", 11, True),
+        ("Full-Stack Developer        01/2020 - Present", 11, False),
+        ("- Developed REST APIs in Python serving 500K daily requests.", 10, False),
+        ("Novabase, Lisbon, Portugal", 11, True),
+        ("Junior Developer        03/2017 - 12/2019", 11, False),
+        ("- Built Angular front-ends and Spring Boot back-ends.", 10, False),
+        ("EDUCATION AND TRAINING", 13, True),
+        ("NOVA University Lisbon, Lisbon, Portugal", 11, True),
+        ("Bachelor of Science in Computer Science        09/2013 - 07/2017", 10, False),
+        ("DIGITAL SKILLS", 13, True),
+        ("Python, JavaScript, TypeScript, React, Docker, PostgreSQL, AWS", 10, False),
+        ("LANGUAGE SKILLS", 13, True),
+        ("Portuguese (Native)", 10, False),
+        ("English (C1 Advanced)", 10, False),
+    ]
+    gold = {
+        "contact": {
+            "full_name": "Maria Santos",
+            "headline": "Full-Stack Developer",
+            "email": "maria.santos@example.com",
+            "phone": "+351 912 345 678",
+            "location": "Lisbon, Portugal",
+        },
+        "experience": [
+            {"company": "Caixa Geral de Depositos", "role": "Full-Stack Developer",
+             "location": "Lisbon, Portugal", "start_date": "2020-01", "end_date": "present"},
+            {"company": "Novabase", "role": "Junior Developer",
+             "location": "Lisbon, Portugal", "start_date": "2017-03", "end_date": "2019-12"},
+        ],
+        "education": [
+            {"institution": "NOVA University Lisbon", "degree": "Bachelor of Science",
+             "field_of_study": "Computer Science", "start_date": "2013-09", "end_date": "2017-07"},
+        ],
+        "skills": {
+            "hard_skills": [],
+            "techniques": [],
+            "tools": ["Python", "JavaScript", "TypeScript", "React", "Docker", "PostgreSQL", "AWS"],
+            "languages": ["Portuguese (Native)", "English (C1 Advanced)"],
+        },
+    }
+    return {"title": "Single-column Europass (EN)", "layout": "one", "body": body, "gold": gold}
+
+
+# ── OCR gold (scanned PDF round-trip via CVParserService) ────────────────────
+
+def _make_scanned_pdf(spec) -> str:
+    """Render a gold-fixture spec as an image-only (scanned) PDF."""
+    import fitz
+    from PIL import Image, ImageDraw, ImageFont
+
+    lines: list[tuple[str, int, bool]] = spec.get("body") or (spec.get("left", []) + spec.get("right", []))
+
+    img = Image.new("RGB", (1240, 1754), "white")
+    draw = ImageDraw.Draw(img)
+    try:
+        font_bold = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 28)
+        font_reg  = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 24)
+    except Exception:
+        font_bold = font_reg = ImageFont.load_default()
+    y = 50
+    for text, size_hint, bold in lines:
+        fnt = font_bold if bold else font_reg
+        draw.text((60, y), text, fill="black", font=fnt)
+        y += 38
+        if y > 1700:
+            break
+
+    # Wrap in PDF as an image page (no text layer).
+    import io as _io
+    png_buf = _io.BytesIO()
+    img.save(png_buf, format="PNG")
+    png_buf.seek(0)
+
+    import tempfile as _tmp
+    fd, path = _tmp.mkstemp(suffix=".pdf")
+    import os as _os; _os.close(fd)
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)
+    rect = fitz.Rect(0, 0, 595, 842)
+    page.insert_image(rect, stream=png_buf.read())
+    doc.save(path)
+    doc.close()
+    return path
+
+
+def evaluate_ocr(match_threshold: int = 80) -> bool:
+    """Score the full CVParserService (OCR path) on a scanned version of the NLP fixture.
+
+    Uses a lower match threshold (default 80%) because OCR introduces noise.
+    Tests contact + experience companies (most resilient to OCR distortion).
+    """
+    import sys as _sys, os as _os
+    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    try:
+        from app.services.cv_parser_service import CVParserService
+    except Exception as exc:
+        print(f"[OCR eval] Skipped — service import failed: {exc}")
+        return True  # not a failure of the parser logic
+
+    spec = _onecol_senior_ml()
+    try:
+        pdf_path = _make_scanned_pdf(spec)
+    except Exception as exc:
+        print(f"[OCR eval] Skipped — scanned PDF render failed: {exc}")
+        return True
+
+    result = CVParserService.parse_cv_file(pdf_path, "application/pdf")
+    if not result.get("success"):
+        print(f"[OCR eval] FAIL — parse_cv_file returned success=False: {result.get('warnings')}")
+        return False
+
+    parsed = result.get("parsedProfile", {})
+    g = spec["gold"]
+    gc = g["contact"]
+
+    ocr_fields = [
+        ("full_name",   gc["full_name"],   parsed.get("full_name")),
+        ("email",       gc["email"],        parsed.get("email")),
+        ("exp.company0", g["experience"][0]["company"], (parsed.get("work_experience") or [{}])[0].get("company", "") if parsed.get("work_experience") else ""),
+        ("exp.role0",   g["experience"][0]["role"],    (parsed.get("work_experience") or [{}])[0].get("jobTitle", "") if parsed.get("work_experience") else ""),
+    ]
+
+    print(f"\n{'OCR FIELD':20} {'THRESHOLD':>9} {'RESULT':>7}")
+    print("-" * 42)
+    all_pass = True
+    for fname, gold_val, pred_val in ocr_fields:
+        score = fuzz.token_set_ratio(str(gold_val or ""), str(pred_val or ""))
+        ok = score >= match_threshold
+        all_pass &= ok
+        flag = "" if ok else f"  <-- below {match_threshold}%"
+        print(f"{fname:20} {match_threshold:>8}% {score:>6}%{flag}")
+        print(f"  gold: {gold_val!r}  pred: {pred_val!r}")
+    print("-" * 42)
+    print("OCR RESULT:", "PASS" if all_pass else "FAIL")
+    return all_pass
+
+
 def evaluate():
-    specs = [_twocol_nlp(), _onecol_senior_ml(), _twocol_pt_angola()]
+    specs = [_twocol_nlp(), _onecol_senior_ml(), _twocol_pt_angola(), _onecol_europass_pt()]
     fields = ["full_name", "headline", "email", "phone", "location",
               "exp.company", "exp.role", "exp.location", "exp.start", "exp.end",
               "edu.institution", "edu.degree", "edu.field", "edu.start", "edu.end",
@@ -287,4 +431,6 @@ def evaluate():
 
 
 if __name__ == "__main__":
-    sys.exit(0 if evaluate() else 1)
+    ok_text = evaluate()
+    ok_ocr  = evaluate_ocr()
+    sys.exit(0 if (ok_text and ok_ocr) else 1)

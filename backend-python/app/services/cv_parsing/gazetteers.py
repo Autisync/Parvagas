@@ -31,12 +31,14 @@ SECTION_HEADERS: dict[str, list[str]] = {
     "education": [
         "formacao academica", "habilitacoes literarias", "habilitacoes academicas",
         "educacao", "formacao", "escolaridade",
-        "education", "academic background", "academic qualifications", "qualifications",
+        "education", "education and training", "academic background",
+        "academic qualifications", "qualifications",
     ],
     "skills": [
         "competencias", "competencias tecnicas", "aptidoes", "conhecimentos",
-        "competencias profissionais",
+        "competencias profissionais", "competencias digitais",
         "skills", "technical skills", "core competencies", "competencies", "expertise",
+        "digital skills", "computer skills", "it skills",
     ],
     "languages": [
         "idiomas", "linguas", "competencias linguisticas",

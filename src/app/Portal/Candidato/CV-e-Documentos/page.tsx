@@ -217,6 +217,32 @@ export default function CvDocumentosPage() {
   const [jobDescription, setJobDescription] = useState("");
   const [generating, setGenerating] = useState(false);
 
+  const [exporting, setExporting] = useState<string | null>(null);
+
+  const handleExport = async (format: "pdf" | "docx" | "json") => {
+    if (!token) return;
+    setExporting(format);
+    setError("");
+    try {
+      const res = await authFetchRaw(`/candidates/cv/export?format=${format}`, token);
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(err.detail || "Erro ao exportar CV.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `cv.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      setError((err as Error).message || "Erro ao exportar CV.");
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<GeneratedCvProfile | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
@@ -668,6 +694,38 @@ export default function CvDocumentosPage() {
             Descarregar modelo
           </a>
         </div>
+
+        {/* Export current profile */}
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Exportar perfil como CV</p>
+              <p className="mt-1 text-xs text-slate-600">
+                Descarregue o seu perfil guardado como CV formatado.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["pdf", "docx", "json"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => handleExport(fmt)}
+                  disabled={!!exporting}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {exporting === fmt ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" />
+                    </svg>
+                  )}
+                  {fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {draft ? (
           <div className="mt-8 rounded-2xl border border-gray-100 p-6">
