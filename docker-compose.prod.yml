@@ -62,7 +62,13 @@ x-backend-env: &backend-env
   UPLOAD_DIR: /app/uploads
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
   WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
-  TRUSTED_HOSTS: ${TRUSTED_HOSTS:-api.parvagas.pt}
+  # Default "*" disables TrustedHostMiddleware. The app sits behind Cloudflare +
+  # Traefik, which already enforce host-based routing, and the container
+  # healthcheck calls in via Host: localhost. Restricting this to a single host
+  # makes Starlette reject EVERY request with 400 "Invalid host header"
+  # (the Host the ASGI app sees behind the proxies is not a clean api.parvagas.pt).
+  # Only set a real value if you also include localhost and the proxied host.
+  TRUSTED_HOSTS: ${TRUSTED_HOSTS:-*}
 
 services:
   postgres:
