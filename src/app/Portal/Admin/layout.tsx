@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { logoutCurrentSession } from "@/lib/api";
 import { fetchAdminMe } from "./adminClient";
@@ -20,7 +19,6 @@ const NotificationBell = dynamic(() => import("@/app/Portal/components/Notificat
 });
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const { token, user, loading } = useAuth("admin");
   const fallbackLevel = useMemo(
     () => (user?.adminLevel === "moderator" ? "moderator" : "super-admin"),
@@ -41,7 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, [token]);
 
   const handleLogout = () => {
-    logoutCurrentSession(token).finally(() => router.replace("/Admin/Login"));
+    logoutCurrentSession(token, { redirectTo: "/Admin/Login" });
   };
 
   if (loading) {

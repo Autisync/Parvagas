@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Bars3Icon, ChevronDownIcon, UserCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { clearToken, getToken, getUser } from "@/lib/api";
+import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import { ENABLE_I18N } from "@/config/appConfig";
 
@@ -57,10 +57,10 @@ export default function Header() {
   }, [mobileMenuOpen]);
 
   const handleSignout = () => {
-    clearToken();
     setMobileMenuOpen(false);
     setAuthUser(null);
-    router.push("/Login");
+    // Optimistic clear + background server logout + hard redirect to /Login.
+    logoutCurrentSession(getToken(), { redirectTo: "/Login" });
   };
 
   const getPortalRoute = (role?: string) => {

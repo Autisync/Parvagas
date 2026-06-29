@@ -498,17 +498,46 @@ export function setUser(user: Record<string, unknown>) {
   localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
 }
 
-export async function logoutCurrentSession(token?: string | null) {
-  try {
-    if (token) {
-      await authFetchRaw("/auth/logout", token, {
+/** Login route appropriate for the current path (admin areas -> admin login). */
+export function loginRouteForCurrentPath(): string {
+  if (typeof window === "undefined") return "/Login";
+  const path = window.location.pathname || "";
+  return path.startsWith("/Portal/Admin") || path.startsWith("/Admin") ? "/Admin/Login" : "/Login";
+}
+
+/**
+ * Log the user out. Optimistic by design: the local session is cleared FIRST so
+ * the UI reflects logout instantly — we never block the user on a network
+ * round-trip (backend logout is stateless; the JWT simply stops being sent).
+ *
+ * By default it then hard-navigates to the login screen, which guarantees a
+ * clean state (no stale React/React-Query/Google-session memory survives).
+ * Pass { redirect: false } to handle navigation yourself, or { redirectTo }
+ * to control the destination (e.g. an expiry reason on the query string).
+ */
+export function logoutCurrentSession(
+  token?: string | null,
+  options?: { redirect?: boolean; redirectTo?: string },
+): void {
+  // 1) Clear local session immediately (also signals other tabs + listeners).
+  clearToken();
+
+  // 2) Best-effort server notification — fire-and-forget, never awaited.
+  if (token) {
+    try {
+      void authFetchRaw("/auth/logout", token, {
         method: "POST",
         suppressGlobalErrors: true,
+      }).catch(() => {
+        /* logout already succeeded locally; ignore network failures */
       });
+    } catch {
+      /* never let logout throw */
     }
-  } catch {
-    // Session cleanup must still succeed locally if the backend is unavailable.
-  } finally {
-    clearToken();
+  }
+
+  // 3) Navigate to login (hard reload) unless the caller opts out.
+  if (options?.redirect !== false && typeof window !== "undefined") {
+    window.location.assign(options?.redirectTo || loginRouteForCurrentPath());
   }
 }

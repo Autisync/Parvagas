@@ -8,11 +8,13 @@ from app.services.storage_service import StorageService
 from app.services.cv_parser_service import CVParserService
 from app.workers.tasks import parse_cv
 from app.core.logging import get_logger
+from app.core.config import get_settings
 from app.api.deps import get_current_user
 import uuid
 from pathlib import Path
 
 logger = get_logger(__name__)
+settings = get_settings()
 router = APIRouter(prefix="/cv", tags=["cv"])
 
 
@@ -44,9 +46,22 @@ async def upload_cv(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid file type. Allowed: PDF, DOCX, TXT"
             )
-        
+
+        # Enforce the upload size cap BEFORE buffering the whole file in memory.
+        # Reject early on the declared size when present, then re-check the real
+        # bytes (a client can lie about Content-Length).
+        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+        too_large = HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Ficheiro demasiado grande. Tamanho máximo: {settings.MAX_UPLOAD_MB} MB.",
+        )
+        if getattr(file, "size", None) and file.size > max_bytes:
+            raise too_large
+
         # Save file
         file_content = await file.read()
+        if len(file_content) > max_bytes:
+            raise too_large
         file_name = f"{uuid.uuid4()}_{file.filename}"
         file_path = StorageService.save_file(file_content, file_name)
         

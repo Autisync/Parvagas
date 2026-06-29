@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { logoutCurrentSession, authFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
@@ -16,7 +16,6 @@ import { useEffect, useState } from "react";
 
 export default function CandidateSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, token } = useAuth("candidate");
   const { dict } = useClientLocale();
   const candidateName = (user as { fullName?: string; name?: string } | null)?.fullName || user?.name || "Candidato";
@@ -45,7 +44,7 @@ export default function CandidateSidebar() {
     { href: "/Portal/Candidato/Definicoes",        label: dict.portal.candidate.settings,     icon: <CogIcon className="h-5 w-5" /> },
   ];
 
-  const handleSignout = () => logoutCurrentSession(token).finally(() => router.push("/Login"));
+  const handleSignout = () => logoutCurrentSession(token);
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href);

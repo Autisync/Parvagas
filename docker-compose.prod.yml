@@ -61,6 +61,8 @@ x-backend-env: &backend-env
   SKIMA_API_KEY: ${SKIMA_API_KEY:-}
   UPLOAD_DIR: /app/uploads
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+  WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+  TRUSTED_HOSTS: ${TRUSTED_HOSTS:-api.parvagas.pt}
 
 services:
   postgres:
@@ -154,7 +156,7 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup
     restart: unless-stopped
     user: "0:0"
     # Override the image's HTTP healthcheck — workers don't serve :8000.

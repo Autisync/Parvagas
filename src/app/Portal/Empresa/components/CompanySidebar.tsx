@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, logoutCurrentSession } from "@/lib/api";
@@ -17,7 +17,6 @@ import {
 
 export default function CompanySidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { token, user } = useAuth("company");
   const { dict } = useClientLocale();
   const [doubleLogged, setDoubleLogged] = useState(false);
@@ -45,7 +44,7 @@ export default function CompanySidebar() {
     ...(canManageUsers ? [{ href: "/Portal/Empresa/Utilizadores", label: dict.portal.company.users, icon: <UserGroupIcon className="h-5 w-5" /> }] : []),
   ];
 
-  const handleSignout = () => logoutCurrentSession(token).finally(() => router.push("/Login"));
+  const handleSignout = () => logoutCurrentSession(token);
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");

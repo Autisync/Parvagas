@@ -208,10 +208,14 @@ function AdminLoginContent() {
       return;
     }
     try {
+      const captchaToken = await getRecaptchaToken("login");
       const res = await apiFetchRaw("/auth/login", {
         method: "POST",
         suppressGlobalErrors: true,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(captchaToken ? { "x-captcha-token": captchaToken } : {}),
+        },
         body: JSON.stringify({ email: email.trim(), password, role_hint: "admin" }),
       });
 

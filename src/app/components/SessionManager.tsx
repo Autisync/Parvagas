@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  clearToken,
   getLastSessionActivityAt,
   getSessionIdleTimeoutMs,
   getToken,
@@ -55,9 +54,9 @@ export default function SessionManager() {
       if (loggedOut) return;
       loggedOut = true;
       clearTimers();
-      logoutCurrentSession(getToken()).finally(() => {
-        router.replace(loginWithReason(pathname, reason));
-      });
+      // Optimistic clear + background server logout + redirect carrying the
+      // reason so the login screen can explain why the session ended.
+      logoutCurrentSession(getToken(), { redirectTo: loginWithReason(pathname, reason) });
     };
 
     // Hard ceiling: log out exactly when the JWT expires, regardless of activity.
@@ -95,7 +94,9 @@ export default function SessionManager() {
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === "parvagas_logout_at") {
-        clearToken();
+        // Another tab logged out. localStorage is shared, so the token is
+        // already gone here — just navigate. Do NOT call clearToken(), which
+        // would re-broadcast the signal and make tabs ping-pong.
         if (!loggedOut) {
           loggedOut = true;
           clearTimers();

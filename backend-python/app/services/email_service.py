@@ -2,6 +2,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from html import escape
 from jinja2 import Template
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -101,7 +102,7 @@ class EmailService:
             brand_team_name=settings.BRAND_TEAM_NAME,
             brand_primary_color=settings.BRAND_PRIMARY_COLOR,
         )
-    
+
     @staticmethod
     def send_verification_email(email: str, full_name: str, verification_link: str) -> bool:
         """Send email verification email."""
@@ -109,10 +110,10 @@ class EmailService:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
                 return False
-            
+
             subject = f"{settings.BRAND_NAME} — Confirme o seu email"
             body_html = f"""
-            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
             <p style="margin:0 0 14px;">Obrigado por se registar. Confirme o seu email para ativar a sua conta.</p>
             <p style="margin:0 0 14px;">Este link expira em 24 horas. Se não criou esta conta, ignore esta mensagem.</p>
             """
@@ -124,13 +125,13 @@ class EmailService:
                 action_url=verification_link,
                 preheader="Confirme o seu email para ativar a conta.",
             )
-            
+
             return EmailService._send_email(email, subject, html_content)
-        
+
         except Exception as e:
             logger.error(f"Failed to send verification email: {str(e)}")
             return False
-    
+
     @staticmethod
     def send_password_reset_email(email: str, full_name: str, reset_link: str) -> bool:
         """Send password reset email."""
@@ -138,10 +139,10 @@ class EmailService:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
                 return False
-            
+
             subject = f"{settings.BRAND_NAME} — Redefinir a sua palavra-passe"
             body_html = f"""
-            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
             <p style="margin:0 0 14px;">Recebemos um pedido para redefinir a sua palavra-passe.</p>
             <p style="margin:0 0 14px;">Este link expira em 1 hora. Se não fez este pedido, ignore esta mensagem — a sua palavra-passe permanece inalterada.</p>
             """
@@ -153,13 +154,13 @@ class EmailService:
                 action_url=reset_link,
                 preheader="Pedido de redefinição de palavra-passe.",
             )
-            
+
             return EmailService._send_email(email, subject, html_content)
-        
+
         except Exception as e:
             logger.error(f"Failed to send password reset email: {str(e)}")
             return False
-    
+
     @staticmethod
     def send_welcome_email(email: str, full_name: str, role: str) -> bool:
         """Send welcome email after successful registration."""
@@ -167,14 +168,14 @@ class EmailService:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
                 return False
-            
+
             role_pt = {"candidate": "Candidato", "company": "Empresa", "admin": "Administrador"}.get(
                 str(role).lower(), str(role)
             )
             subject = f"Bem-vindo à {settings.BRAND_NAME}"
             body_html = f"""
-            <p style="margin:0 0 14px;">Olá {full_name},</p>
-            <p style="margin:0 0 14px;">A sua conta foi criada com sucesso como <strong>{role_pt}</strong>.</p>
+            <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
+            <p style="margin:0 0 14px;">A sua conta foi criada com sucesso como <strong>{escape(role_pt)}</strong>.</p>
             <p style="margin:0 0 14px;">Já pode iniciar sessão e começar a usar a {settings.BRAND_NAME}.</p>
             """
 
@@ -185,9 +186,9 @@ class EmailService:
                 action_url=settings.FRONTEND_URL,
                 preheader="A sua conta foi criada com sucesso.",
             )
-            
+
             return EmailService._send_email(email, subject, html_content)
-        
+
         except Exception as e:
             logger.error(f"Failed to send welcome email: {str(e)}")
             return False
@@ -203,7 +204,7 @@ class EmailService:
             job_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Vagas-Disponiveis/{job_id}"
             subject = f"{settings.BRAND_NAME} — Candidatura recebida"
             body_html = f"""
-            <p style="margin:0 0 14px;">Olá {full_name},</p>
+            <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
             <p style="margin:0 0 14px;">Recebemos a sua candidatura. A equipa de recrutamento vai analisar o seu perfil e será notificado/a sempre que houver uma atualização.</p>
             <p style="margin:0 0 14px;">Pode acompanhar o estado das suas candidaturas no seu portal.</p>
             """
@@ -251,10 +252,10 @@ class EmailService:
 
             subject = f"{settings.BRAND_NAME} — {title}: {job_label}"
             body_html = f"""
-            <p style="margin:0 0 14px;">Olá {role},</p>
+            <p style="margin:0 0 14px;">Olá {escape(role)},</p>
             <p style="margin:0 0 14px;">{message}</p>
             <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
-            <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{job_label}</p>
+            <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{escape(job_label)}</p>
             <p style="margin:0 0 14px;">Pode ver os detalhes no seu portal de candidato.</p>
             """
 
@@ -307,9 +308,9 @@ class EmailService:
         base = EmailService._base_url()
         rows = ""
         for j in (jobs or [])[:10]:
-            title = (j.get("title") or "Vaga").strip()
-            company = (j.get("company") or "").strip()
-            location = (j.get("location") or "").strip()
+            title = escape((j.get("title") or "Vaga").strip())
+            company = escape((j.get("company") or "").strip())
+            location = escape((j.get("location") or "").strip())
             url = j.get("url") or f"{base}/Vagas-Disponiveis/{j.get('id', '')}"
             meta = " · ".join([x for x in [company, location] if x])
             rows += f"""
@@ -319,8 +320,8 @@ class EmailService:
             </a>"""
         count = len(jobs or [])
         body = f"""
-        <p style="margin:0 0 14px;">Olá {full_name},</p>
-        <p style="margin:0 0 16px;">Encontrámos <strong>{count}</strong> nova(s) vaga(s) para o seu alerta <strong>{query_label}</strong>:</p>
+        <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
+        <p style="margin:0 0 16px;">Encontrámos <strong>{count}</strong> nova(s) vaga(s) para o seu alerta <strong>{escape(query_label)}</strong>:</p>
         {rows}
         """
         return EmailService._compose_and_send(
@@ -332,9 +333,9 @@ class EmailService:
 
     @staticmethod
     def send_account_suspended_email(email: str, full_name: str, reason: str = "") -> bool:
-        reason_html = f'<p style="margin:0 0 14px;">Motivo: {reason}</p>' if reason else ""
+        reason_html = f'<p style="margin:0 0 14px;">Motivo: {escape(reason)}</p>' if reason else ""
         body = f"""
-        <p style="margin:0 0 14px;">Olá {full_name},</p>
+        <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
         <p style="margin:0 0 14px;">A sua conta na {settings.BRAND_NAME} foi suspensa e o acesso está temporariamente indisponível.</p>
         {reason_html}
         <p style="margin:0 0 14px;">Se considera que se trata de um engano, responda a este email para contactar a nossa equipa.</p>
@@ -348,7 +349,7 @@ class EmailService:
     @staticmethod
     def send_account_reactivated_email(email: str, full_name: str) -> bool:
         body = f"""
-        <p style="margin:0 0 14px;">Olá {full_name},</p>
+        <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
         <p style="margin:0 0 14px;">A sua conta na {settings.BRAND_NAME} foi reativada. Já pode iniciar sessão normalmente.</p>
         """
         return EmailService._compose_and_send(
@@ -365,7 +366,7 @@ class EmailService:
         base = EmailService._base_url()
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">A empresa <strong>{company_name}</strong> foi verificada com sucesso. A partir de agora as suas vagas exibem o selo de empresa verificada.</p>
+        <p style="margin:0 0 14px;">A empresa <strong>{escape(company_name)}</strong> foi verificada com sucesso. A partir de agora as suas vagas exibem o selo de empresa verificada.</p>
         <p style="margin:0 0 14px;">Já pode publicar vagas e gerir candidaturas no seu portal.</p>
         """
         return EmailService._compose_and_send(
@@ -377,10 +378,10 @@ class EmailService:
 
     @staticmethod
     def send_company_rejected_email(email: str, company_name: str, reason: str = "") -> bool:
-        reason_html = f'<p style="margin:0 0 14px;">Motivo: {reason}</p>' if reason else ""
+        reason_html = f'<p style="margin:0 0 14px;">Motivo: {escape(reason)}</p>' if reason else ""
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">Não foi possível verificar a empresa <strong>{company_name}</strong> neste momento.</p>
+        <p style="margin:0 0 14px;">Não foi possível verificar a empresa <strong>{escape(company_name)}</strong> neste momento.</p>
         {reason_html}
         <p style="margin:0 0 14px;">Pode atualizar os dados da empresa e voltar a submeter para revisão.</p>
         """
@@ -393,10 +394,10 @@ class EmailService:
 
     @staticmethod
     def send_company_suspended_email(email: str, company_name: str, reason: str = "") -> bool:
-        reason_html = f'<p style="margin:0 0 14px;">Motivo: {reason}</p>' if reason else ""
+        reason_html = f'<p style="margin:0 0 14px;">Motivo: {escape(reason)}</p>' if reason else ""
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">A conta da empresa <strong>{company_name}</strong> foi suspensa. As vagas ativas deixam de estar visíveis até à reativação.</p>
+        <p style="margin:0 0 14px;">A conta da empresa <strong>{escape(company_name)}</strong> foi suspensa. As vagas ativas deixam de estar visíveis até à reativação.</p>
         {reason_html}
         <p style="margin:0 0 14px;">Para esclarecer a situação, responda a este email.</p>
         """
@@ -411,12 +412,12 @@ class EmailService:
         """Notify a company when a new candidate applies to one of their jobs."""
         base = EmailService._base_url()
         body = f"""
-        <p style="margin:0 0 14px;">Olá {recruiter_name or ''},</p>
+        <p style="margin:0 0 14px;">Olá {escape(recruiter_name or '')},</p>
         <p style="margin:0 0 14px;">Recebeu uma nova candidatura.</p>
         <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Candidato</p>
-        <p style="margin:0 0 12px; font-weight:600; color:#18181b;">{candidate_name or 'Candidato'}</p>
+        <p style="margin:0 0 12px; font-weight:600; color:#18181b;">{escape(candidate_name or 'Candidato')}</p>
         <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
-        <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{job_title or 'a sua vaga'}</p>
+        <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{escape(job_title or 'a sua vaga')}</p>
         """
         return EmailService._compose_and_send(
             email, f"{settings.BRAND_NAME} — Nova candidatura: {job_title or 'vaga'}",
@@ -429,8 +430,8 @@ class EmailService:
     def send_job_approved_email(email: str, recruiter_name: str, job_title: str, job_id: str = "") -> bool:
         base = EmailService._base_url()
         body = f"""
-        <p style="margin:0 0 14px;">Olá {recruiter_name or ''},</p>
-        <p style="margin:0 0 14px;">A sua vaga <strong>{job_title}</strong> foi aprovada e está agora publicada e visível para candidatos.</p>
+        <p style="margin:0 0 14px;">Olá {escape(recruiter_name or '')},</p>
+        <p style="margin:0 0 14px;">A sua vaga <strong>{escape(job_title)}</strong> foi aprovada e está agora publicada e visível para candidatos.</p>
         """
         return EmailService._compose_and_send(
             email, f"{settings.BRAND_NAME} — Vaga publicada: {job_title}",
@@ -441,10 +442,10 @@ class EmailService:
 
     @staticmethod
     def send_job_rejected_email(email: str, recruiter_name: str, job_title: str, reason: str = "") -> bool:
-        reason_html = f'<p style="margin:0 0 14px;">Motivo: {reason}</p>' if reason else ""
+        reason_html = f'<p style="margin:0 0 14px;">Motivo: {escape(reason)}</p>' if reason else ""
         body = f"""
-        <p style="margin:0 0 14px;">Olá {recruiter_name or ''},</p>
-        <p style="margin:0 0 14px;">A sua vaga <strong>{job_title}</strong> não foi aprovada para publicação.</p>
+        <p style="margin:0 0 14px;">Olá {escape(recruiter_name or '')},</p>
+        <p style="margin:0 0 14px;">A sua vaga <strong>{escape(job_title)}</strong> não foi aprovada para publicação.</p>
         {reason_html}
         <p style="margin:0 0 14px;">Pode editar a vaga e voltar a submeter para revisão.</p>
         """
@@ -459,7 +460,7 @@ class EmailService:
     def send_team_invite_email(email: str, company_name: str, inviter_name: str, invite_link: str, role: str = "membro") -> bool:
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;"><strong>{inviter_name or 'Um administrador'}</strong> convidou-o/a para se juntar à equipa de <strong>{company_name}</strong> na {settings.BRAND_NAME} como <strong>{role}</strong>.</p>
+        <p style="margin:0 0 14px;"><strong>{escape(inviter_name or 'Um administrador')}</strong> convidou-o/a para se juntar à equipa de <strong>{escape(company_name)}</strong> na {settings.BRAND_NAME} como <strong>{escape(role)}</strong>.</p>
         <p style="margin:0 0 14px;">Este convite expira em 7 dias.</p>
         """
         return EmailService._compose_and_send(
@@ -471,10 +472,10 @@ class EmailService:
 
     @staticmethod
     def send_subscription_activated_email(email: str, company_name: str, plan_name: str, period_end: str = "") -> bool:
-        when = f" Renova em {period_end}." if period_end else ""
+        when = f" Renova em {escape(period_end)}." if period_end else ""
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">A subscrição do plano <strong>{plan_name}</strong> da empresa <strong>{company_name}</strong> está ativa.{when}</p>
+        <p style="margin:0 0 14px;">A subscrição do plano <strong>{escape(plan_name)}</strong> da empresa <strong>{escape(company_name)}</strong> está ativa.{when}</p>
         <p style="margin:0 0 14px;">Obrigado por confiar na {settings.BRAND_NAME}.</p>
         """
         return EmailService._compose_and_send(
@@ -488,10 +489,10 @@ class EmailService:
     def send_payment_instructions_email(email: str, company_name: str, plan_name: str, amount, currency: str, reference: str) -> bool:
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">Para ativar o plano <strong>{plan_name}</strong> da empresa <strong>{company_name}</strong>, conclua o pagamento com os dados abaixo.</p>
+        <p style="margin:0 0 14px;">Para ativar o plano <strong>{escape(plan_name)}</strong> da empresa <strong>{escape(company_name)}</strong>, conclua o pagamento com os dados abaixo.</p>
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
-          <tr><td style="padding:4px 0; color:#71717a; font-size:13px;">Montante</td><td style="padding:4px 0 4px 16px; font-weight:600; color:#18181b;">{amount} {currency}</td></tr>
-          <tr><td style="padding:4px 0; color:#71717a; font-size:13px;">Referência</td><td style="padding:4px 0 4px 16px; font-weight:600; color:#18181b; font-family:monospace;">{reference}</td></tr>
+          <tr><td style="padding:4px 0; color:#71717a; font-size:13px;">Montante</td><td style="padding:4px 0 4px 16px; font-weight:600; color:#18181b;">{escape(str(amount))} {escape(str(currency))}</td></tr>
+          <tr><td style="padding:4px 0; color:#71717a; font-size:13px;">Referência</td><td style="padding:4px 0 4px 16px; font-weight:600; color:#18181b; font-family:monospace;">{escape(str(reference))}</td></tr>
         </table>
         <p style="margin:0 0 14px;">A conta é ativada automaticamente assim que o pagamento for confirmado.</p>
         """
@@ -506,7 +507,7 @@ class EmailService:
     def send_subscription_expiring_email(email: str, company_name: str, plan_name: str, days_left: int) -> bool:
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>
-        <p style="margin:0 0 14px;">O plano <strong>{plan_name}</strong> da empresa <strong>{company_name}</strong> expira dentro de <strong>{days_left} dia(s)</strong>.</p>
+        <p style="margin:0 0 14px;">O plano <strong>{escape(plan_name)}</strong> da empresa <strong>{escape(company_name)}</strong> expira dentro de <strong>{days_left} dia(s)</strong>.</p>
         <p style="margin:0 0 14px;">Renove para manter as vagas ativas e o acesso a todas as funcionalidades.</p>
         """
         return EmailService._compose_and_send(
@@ -521,7 +522,7 @@ class EmailService:
     @staticmethod
     def send_admin_company_pending_email(email: str, company_name: str) -> bool:
         body = f"""
-        <p style="margin:0 0 14px;">A empresa <strong>{company_name}</strong> submeteu-se para verificação e aguarda revisão.</p>
+        <p style="margin:0 0 14px;">A empresa <strong>{escape(company_name)}</strong> submeteu-se para verificação e aguarda revisão.</p>
         """
         return EmailService._compose_and_send(
             email, f"{settings.BRAND_NAME} — Empresa a aguardar verificação",
@@ -533,7 +534,7 @@ class EmailService:
     @staticmethod
     def send_admin_job_pending_email(email: str, job_title: str, company_name: str) -> bool:
         body = f"""
-        <p style="margin:0 0 14px;">A vaga <strong>{job_title}</strong> de <strong>{company_name}</strong> aguarda revisão antes de ser publicada.</p>
+        <p style="margin:0 0 14px;">A vaga <strong>{escape(job_title)}</strong> de <strong>{escape(company_name)}</strong> aguarda revisão antes de ser publicada.</p>
         """
         return EmailService._compose_and_send(
             email, f"{settings.BRAND_NAME} — Vaga a aguardar revisão",
@@ -544,10 +545,10 @@ class EmailService:
 
     @staticmethod
     def send_admin_job_reported_email(email: str, job_title: str, reason: str = "", reporter: str = "") -> bool:
-        who = f" por {reporter}" if reporter else ""
-        reason_html = f'<p style="margin:0 0 14px;">Motivo indicado: {reason}</p>' if reason else ""
+        who = f" por {escape(reporter)}" if reporter else ""
+        reason_html = f'<p style="margin:0 0 14px;">Motivo indicado: {escape(reason)}</p>' if reason else ""
         body = f"""
-        <p style="margin:0 0 14px;">A vaga <strong>{job_title}</strong> foi denunciada{who}.</p>
+        <p style="margin:0 0 14px;">A vaga <strong>{escape(job_title)}</strong> foi denunciada{who}.</p>
         {reason_html}
         <p style="margin:0 0 14px;">Reveja a vaga e tome a ação adequada.</p>
         """
