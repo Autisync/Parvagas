@@ -220,6 +220,30 @@ class AdCampaign(Base, TimestampMixin):
     last_served_at = Column(DateTime, nullable=True)
 
 
+class CareerPost(Base, TimestampMixin):
+    """Editorial career-tips / blog article, managed via the admin console.
+
+    ``body`` and ``takeaways`` are stored as JSON-encoded string arrays (the
+    serializer parses them back into lists). ``slug`` is the public URL key.
+    """
+    __tablename__ = "career_posts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    slug = Column(String(255), nullable=False, unique=True, index=True)
+    title = Column(String(255), nullable=False)
+    category = Column(String(100), nullable=True)
+    excerpt = Column(Text, nullable=True)
+    read_time = Column(String(50), nullable=True)
+    author = Column(String(255), nullable=True)
+    cover_image = Column(Text, nullable=True)
+    body = Column(Text, nullable=True)        # JSON array of paragraphs
+    takeaways = Column(Text, nullable=True)   # JSON array of bullet points
+
+    featured_on_home = Column(Boolean, nullable=False, default=False)
+    published = Column(Boolean, nullable=False, default=True)
+    published_at = Column(DateTime, nullable=True)
+
+
 class EmailVerificationToken(Base, TimestampMixin):
     """Email verification tokens."""
     __tablename__ = "email_verification_tokens"

@@ -197,6 +197,23 @@ export type AdCampaignRecord = {
   createdAt?: string;
 };
 
+export type CareerPostRecord = {
+  _id: string;
+  slug: string;
+  title: string;
+  category?: string | null;
+  excerpt?: string | null;
+  readTime?: string | null;
+  author?: string | null;
+  coverImage?: string | null;
+  body: string[];
+  takeaways: string[];
+  featuredOnHome: boolean;
+  published: boolean;
+  publishedAt?: string | null;
+  createdAt?: string | null;
+};
+
 export type AuditLogRecord = {
   _id: string;
   actorUserId?: string | null;
@@ -402,6 +419,33 @@ export async function flagAdminAd(token: string, id: string, reason: string) {
 
 export async function deleteAdminAd(token: string, id: string) {
   return authFetch<{ deleted: boolean }>(`/admin/ads/${id}`, token, {
+    method: "DELETE",
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function fetchAdminCareerPosts(token: string) {
+  return authFetch<{ posts: CareerPostRecord[] }>("/admin/career-posts", token);
+}
+
+export async function createAdminCareerPost(token: string, payload: Partial<CareerPostRecord>) {
+  return authFetch<{ post: CareerPostRecord }>("/admin/career-posts", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function updateAdminCareerPost(token: string, id: string, payload: Partial<CareerPostRecord>) {
+  return authFetch<{ post: CareerPostRecord }>(`/admin/career-posts/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function deleteAdminCareerPost(token: string, id: string) {
+  return authFetch<{ deleted: boolean }>(`/admin/career-posts/${id}`, token, {
     method: "DELETE",
     suppressGlobalErrors: true,
   });

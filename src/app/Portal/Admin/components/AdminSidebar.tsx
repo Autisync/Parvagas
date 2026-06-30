@@ -10,7 +10,7 @@ import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/Por
 import {
   HomeIcon, ChartBarIcon, BriefcaseIcon, BuildingOffice2Icon,
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
-  ClipboardDocumentListIcon, ArrowRightOnRectangleIcon,
+  ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -25,6 +25,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/companies",    label: "Empresas",       hint: "Verificação",            levels: ["super-admin", "moderator"], icon: <BuildingOffice2Icon className="h-5 w-5" />,       pinned: true },
   { href: "/Portal/Admin/scraped",      label: "Scraped Jobs",   hint: "Curadoria",              levels: ["super-admin", "moderator"], icon: <CloudArrowDownIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/users",        label: "Utilizadores",   hint: "Acesso e estado",        levels: ["super-admin", "moderator"], icon: <UsersIcon className="h-5 w-5" />,                 pinned: true },
+  { href: "/Portal/Admin/blog",         label: "Conteúdo",       hint: "Dicas de Carreira / Blog", levels: ["super-admin", "moderator"], icon: <NewspaperIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/ads",          label: "Campanhas",      hint: "Ads e placements",       levels: ["super-admin"],             icon: <MegaphoneIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/admin-levels", label: "Super-admin",    hint: "Admins e moderadores",   levels: ["super-admin"],             icon: <ShieldCheckIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/audit",        label: "Auditoria",      hint: "Ações privilegiadas",    levels: ["super-admin"],             icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },

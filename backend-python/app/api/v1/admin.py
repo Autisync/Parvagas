@@ -18,7 +18,7 @@ from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
-    AdCampaign, AuditLog, CandidateProfile, Company, Job, JobApplication,
+    AdCampaign, AuditLog, CandidateProfile, CareerPost, Company, Job, JobApplication,
     ScrapedJob, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
@@ -1317,6 +1317,168 @@ async def admin_delete_ad(
         details={},
     )
     return {"deleted": True, "id": ad_id}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Career posts / blog — admin CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+def _slugify(value: str) -> str:
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return text or uuid.uuid4().hex[:8]
+
+
+def _to_career_record(post: CareerPost) -> dict[str, Any]:
+    return {
+        "_id": post.id,
+        "slug": post.slug,
+        "title": post.title,
+        "category": post.category,
+        "excerpt": post.excerpt,
+        "readTime": post.read_time,
+        "author": post.author,
+        "coverImage": post.cover_image,
+        "body": json.loads(post.body) if post.body else [],
+        "takeaways": json.loads(post.takeaways) if post.takeaways else [],
+        "featuredOnHome": bool(post.featured_on_home),
+        "published": bool(post.published),
+        "publishedAt": post.published_at.isoformat() if post.published_at else None,
+        "createdAt": post.created_at.isoformat() if post.created_at else None,
+    }
+
+
+def _coerce_str_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        # Allow newline- or blank-line-separated paragraphs from a textarea.
+        parts = [p.strip() for p in value.split("\n\n")] if "\n\n" in value else value.split("\n")
+        return [p.strip() for p in parts if p.strip()]
+    return []
+
+
+@router.get("/career-posts")
+async def admin_career_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    rows = (
+        db.query(CareerPost)
+        .order_by(CareerPost.published_at.desc(), CareerPost.created_at.desc())
+        .all()
+    )
+    return {"posts": [_to_career_record(r) for r in rows]}
+
+
+@router.post("/career-posts")
+async def admin_create_career_post(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    title = str(payload.get("title", "")).strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O título é obrigatório")
+
+    slug = str(payload.get("slug", "")).strip() or _slugify(title)
+    slug = _slugify(slug)
+    if db.query(CareerPost).filter(CareerPost.slug == slug).first():
+        slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+
+    post = CareerPost(
+        slug=slug,
+        title=title,
+        category=str(payload.get("category", "")).strip() or None,
+        excerpt=str(payload.get("excerpt", "")).strip() or None,
+        read_time=str(payload.get("readTime", "")).strip() or None,
+        author=str(payload.get("author", "")).strip() or "Equipa Parvagas",
+        cover_image=str(payload.get("coverImage", "")).strip() or None,
+        body=json.dumps(_coerce_str_list(payload.get("body")), ensure_ascii=False),
+        takeaways=json.dumps(_coerce_str_list(payload.get("takeaways")), ensure_ascii=False),
+        featured_on_home=bool(payload.get("featuredOnHome", False)),
+        published=bool(payload.get("published", True)),
+        published_at=_parse_dt(payload.get("publishedAt")) or datetime.utcnow(),
+    )
+    db.add(post)
+    db.commit()
+    db.refresh(post)
+    _record_admin_event(
+        actor=admin, action="career_post.create", resource_type="career_post",
+        resource_id=post.id, details={"slug": post.slug, "title": post.title},
+    )
+    return {"post": _to_career_record(post)}
+
+
+@router.patch("/career-posts/{post_id}")
+async def admin_update_career_post(
+    post_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    post = db.query(CareerPost).filter(CareerPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado")
+
+    if "title" in payload:
+        post.title = str(payload.get("title") or post.title).strip() or post.title
+    if "slug" in payload and str(payload.get("slug", "")).strip():
+        new_slug = _slugify(str(payload["slug"]))
+        clash = db.query(CareerPost).filter(CareerPost.slug == new_slug, CareerPost.id != post.id).first()
+        post.slug = f"{new_slug}-{uuid.uuid4().hex[:6]}" if clash else new_slug
+    if "category" in payload:
+        post.category = str(payload.get("category", "")).strip() or None
+    if "excerpt" in payload:
+        post.excerpt = str(payload.get("excerpt", "")).strip() or None
+    if "readTime" in payload:
+        post.read_time = str(payload.get("readTime", "")).strip() or None
+    if "author" in payload:
+        post.author = str(payload.get("author", "")).strip() or None
+    if "coverImage" in payload:
+        post.cover_image = str(payload.get("coverImage", "")).strip() or None
+    if "body" in payload:
+        post.body = json.dumps(_coerce_str_list(payload.get("body")), ensure_ascii=False)
+    if "takeaways" in payload:
+        post.takeaways = json.dumps(_coerce_str_list(payload.get("takeaways")), ensure_ascii=False)
+    if "featuredOnHome" in payload:
+        post.featured_on_home = bool(payload.get("featuredOnHome"))
+    if "published" in payload:
+        post.published = bool(payload.get("published"))
+    if "publishedAt" in payload:
+        post.published_at = _parse_dt(payload.get("publishedAt")) or post.published_at
+
+    db.commit()
+    db.refresh(post)
+    _record_admin_event(
+        actor=admin, action="career_post.update", resource_type="career_post",
+        resource_id=post.id, details={"slug": post.slug},
+    )
+    return {"post": _to_career_record(post)}
+
+
+@router.delete("/career-posts/{post_id}")
+async def admin_delete_career_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    post = db.query(CareerPost).filter(CareerPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado")
+    db.delete(post)
+    db.commit()
+    _record_admin_event(
+        actor=admin, action="career_post.delete", resource_type="career_post",
+        resource_id=post_id, details={},
+    )
+    return {"deleted": True, "id": post_id}
 
 
 @router.get("/exports/{kind}.csv")

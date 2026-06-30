@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
-from app.models import Job, Company
+from app.models import Job, Company, CareerPost
 from app.content import career_posts
 from app.core.logging import get_logger
 
@@ -220,6 +220,63 @@ async def report_job(job_id: str, payload: dict[str, Any] | None = None, db: Ses
     return {"reported": True, "jobId": job_id}
 
 
+# ── Career posts: DB-row serializers (with static fallback when table empty) ──
+def _career_card(post: CareerPost) -> dict[str, Any]:
+    return {
+        "_id": post.id,
+        "slug": post.slug,
+        "title": post.title,
+        "category": post.category,
+        "excerpt": post.excerpt,
+        "readTime": post.read_time,
+        "publishedAt": post.published_at.isoformat() if post.published_at else None,
+        "featuredOnHome": bool(post.featured_on_home),
+    }
+
+
+def _career_detail(post: CareerPost) -> dict[str, Any]:
+    card = _career_card(post)
+    card.update(
+        {
+            "author": post.author,
+            "coverImage": post.cover_image,
+            "body": _json_list(post.body),
+            "takeaways": _json_list(post.takeaways),
+        }
+    )
+    return card
+
+
+def _published_career_cards(db: Session) -> list[dict[str, Any]]:
+    """All published posts (newest first); falls back to curated content."""
+    rows = (
+        db.query(CareerPost)
+        .filter(CareerPost.published.is_(True))
+        .order_by(CareerPost.published_at.desc(), CareerPost.created_at.desc())
+        .all()
+    )
+    if rows:
+        return [_career_card(r) for r in rows]
+    return career_posts.list_posts()
+
+
+def _featured_career_cards(db: Session, limit: int = 3) -> list[dict[str, Any]]:
+    rows = (
+        db.query(CareerPost)
+        .filter(CareerPost.published.is_(True), CareerPost.featured_on_home.is_(True))
+        .order_by(CareerPost.published_at.desc(), CareerPost.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    if rows:
+        return [_career_card(r) for r in rows]
+    # Only fall back to curated content when there are no DB posts at all,
+    # so an admin who unfeatures everything genuinely sees an empty section.
+    if db.query(CareerPost).filter(CareerPost.published.is_(True)).count() == 0:
+        return career_posts.featured_posts(limit=limit)
+    return []
+
+
 @router.get("/public/homepage")
 async def public_homepage(
     jobsLimit: int = Query(default=6, ge=1, le=24),
@@ -237,7 +294,7 @@ async def public_homepage(
     )
     return {
         "featuredJobs": [serialize_job(j) for j in rows],
-        "featuredCareerPosts": career_posts.featured_posts(limit=postsLimit),
+        "featuredCareerPosts": _featured_career_cards(db, limit=postsLimit),
     }
 
 
@@ -245,9 +302,10 @@ async def public_homepage(
 async def public_career_posts(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=12, ge=1, le=50),
+    db: Session = Depends(get_db),
 ):
-    """Paginated career-tips / blog listing (served from curated content)."""
-    all_posts = career_posts.list_posts()
+    """Paginated career-tips / blog listing (DB-managed, static fallback)."""
+    all_posts = _published_career_cards(db)
     total = len(all_posts)
     start = (page - 1) * limit
     page_items = all_posts[start : start + limit]
@@ -263,9 +321,14 @@ async def public_career_posts(
 
 
 @router.get("/public/career/posts/{slug}")
-async def public_career_post_detail(slug: str):
-    """Single career article by slug."""
-    post = career_posts.get_post(slug)
+async def public_career_post_detail(slug: str, db: Session = Depends(get_db)):
+    """Single published career article by slug (DB-managed, static fallback)."""
+    row = (
+        db.query(CareerPost)
+        .filter(CareerPost.slug == slug, CareerPost.published.is_(True))
+        .first()
+    )
+    post = _career_detail(row) if row else career_posts.get_post(slug)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado")
     return {"post": post}
