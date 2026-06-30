@@ -9,6 +9,7 @@ import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { apiFetch, authFetch, getToken, getUser } from "@/lib/api";
 import { uploadWithProgress } from "@/lib/uploadClient";
 import { getRecaptchaToken } from "@/lib/recaptcha";
+import RecaptchaNotice from "@/app/components/RecaptchaNotice";
 import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
 import { track } from "@/lib/analytics";
 
@@ -414,6 +415,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
                   </div>
                 </div>
               ) : null}
+              <RecaptchaNotice className="mt-4" />
             </section>
           </div>
         )}

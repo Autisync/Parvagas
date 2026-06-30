@@ -11,6 +11,7 @@ import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
+import RecaptchaNotice from "@/app/components/RecaptchaNotice";
 
 type LoginResponse = {
   access_token?: string;
@@ -513,6 +514,8 @@ function AdminLoginContent() {
                 <Link href="/Login?role=candidate" className="font-semibold text-slate-600 hover:text-red-700">Login público</Link>
                 <Link href="/" className="font-semibold text-red-600 hover:text-red-700">Voltar ao site</Link>
               </div>
+
+              <RecaptchaNotice />
             </form>
             )}
           </div>

@@ -13,6 +13,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import AppErrorBanner from "@/app/components/errors/AppErrorBanner";
+import RecaptchaNotice from "@/app/components/RecaptchaNotice";
 import { track } from "@/lib/analytics";
 
 type AuthRole = "candidate" | "company";
@@ -473,6 +474,8 @@ function SignUpContent() {
                   {dict.auth.signup.signIn}
                 </Link>
               </p>
+
+              <RecaptchaNotice />
             </form>
           </div>
         </section>

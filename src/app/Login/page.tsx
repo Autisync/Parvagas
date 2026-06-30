@@ -13,6 +13,7 @@ import GoogleSignInButton from "@/app/components/GoogleSignInButton";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
+import RecaptchaNotice from "@/app/components/RecaptchaNotice";
 import { EyeIcon, EyeSlashIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
 
 type LoginResponse = {
@@ -678,6 +679,8 @@ function LoginContent() {
                   {dict.auth.login.createAccount}
                 </Link>
               </p>
+
+              <RecaptchaNotice />
             </form>
           </div>
         </section>

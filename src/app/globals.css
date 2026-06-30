@@ -349,3 +349,12 @@ textarea:-webkit-autofill {
   }
   .app-skeleton { animation: none; }
 }
+
+/* =========================================================================
+   reCAPTCHA badge — hidden per Google's allowance, provided the
+   "protected by reCAPTCHA" disclosure is shown next to each protected form
+   (see <RecaptchaNotice />). Do not remove the disclosure if you keep this.
+   ========================================================================= */
+.grecaptcha-badge {
+  visibility: hidden;
+}
