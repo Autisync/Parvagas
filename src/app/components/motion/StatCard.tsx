@@ -14,6 +14,8 @@ type Props = {
   decimals?: number;
   /** Accent tone for the icon chip. */
   tone?: "brand" | "success" | "info" | "warning";
+  /** When true, the value could not be loaded — render "—" instead of 0. */
+  unavailable?: boolean;
   className?: string;
 };
 
@@ -38,10 +40,11 @@ export default function StatCard({
   suffix = "",
   decimals = 0,
   tone = "brand",
+  unavailable = false,
   className = "",
 }: Props) {
   const t = TONES[tone];
-  const hasTrend = typeof trendPct === "number" && Number.isFinite(trendPct);
+  const hasTrend = !unavailable && typeof trendPct === "number" && Number.isFinite(trendPct);
   const up = (trendPct ?? 0) >= 0;
 
   return (
@@ -60,7 +63,11 @@ export default function StatCard({
       </div>
       <div className="mt-3 flex items-end gap-2">
         <span className="text-3xl font-bold tracking-tight text-[var(--text-strong)]">
-          <AnimatedCounter value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
+          {unavailable ? (
+            <span className="text-[var(--text-subtle)]" title="Indisponível de momento">—</span>
+          ) : (
+            <AnimatedCounter value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
+          )}
         </span>
       </div>
       {hasTrend && (

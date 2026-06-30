@@ -7,6 +7,7 @@ import { AdminPermissions, fetchAdminMe, fetchOverview, fetchAnalytics, hasPermi
 import { AdminPageHeader } from "./components/AdminUI";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import WarningAlert from "@/app/components/errors/WarningAlert";
 import { StatCard } from "@/app/components/motion";
 import {
   UsersIcon,
@@ -22,18 +23,20 @@ import {
 } from "@heroicons/react/24/outline";
 
 type Overview = {
-  users: number;
-  companies: number;
-  jobs: number;
-  scraped: number;
-  ads: number;
+  users: number | null;
+  companies: number | null;
+  jobs: number | null;
+  scraped: number | null;
+  ads: number | null;
+  ok?: boolean;
 };
 
 type Analytics = {
-  pendingJobs: number;
-  pendingCompanies: number;
-  suspendedUsers: number;
-  pendingScraped: number;
+  pendingJobs: number | null;
+  pendingCompanies: number | null;
+  suspendedUsers: number | null;
+  pendingScraped: number | null;
+  ok?: boolean;
 };
 
 const quickLinks = [
@@ -53,6 +56,10 @@ export default function AdminOverviewPage() {
   const [ops, setOps] = useState<Analytics | null>(null);
   const [me, setMe] = useState<AdminMe | null>(null);
   const [error, setError] = useState("");
+  // True when the metric blocks couldn't be read (network failure or backend
+  // ok:false). We show "—" + a retry hint instead of misleading zeros.
+  const [overviewDegraded, setOverviewDegraded] = useState(false);
+  const [opsDegraded, setOpsDegraded] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -65,8 +72,18 @@ export default function AdminOverviewPage() {
       fetchAnalytics(token),
       fetchAdminMe(token),
     ]);
-    if (oRes.status === "fulfilled") setOverview(oRes.value);
-    if (aRes.status === "fulfilled") setOps(aRes.value.operational);
+    if (oRes.status === "fulfilled") {
+      setOverview(oRes.value);
+      setOverviewDegraded(oRes.value.ok === false);
+    } else {
+      setOverviewDegraded(true);
+    }
+    if (aRes.status === "fulfilled") {
+      setOps(aRes.value.operational);
+      setOpsDegraded(aRes.value.operational?.ok === false);
+    } else {
+      setOpsDegraded(true);
+    }
     if (meRes.status === "fulfilled") setMe(meRes.value);
     if (oRes.status === "rejected" && aRes.status === "rejected" && meRes.status === "rejected") {
       const err = oRes.reason;
@@ -92,27 +109,40 @@ export default function AdminOverviewPage() {
         </div>
       )}
 
+      {!error && overviewDegraded && (
+        <div className="mt-6">
+          <WarningAlert
+            title="Indicadores temporariamente indisponíveis"
+            message="Não foi possível ler alguns contadores agora. Os valores marcados com — serão atualizados assim que a ligação for restabelecida."
+            actionLabel="Tentar novamente"
+            onAction={load}
+          />
+        </div>
+      )}
+
       <section className="mt-6 grid gap-4 pv-stagger sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Utilizadores" value={overview?.users ?? 0} tone="brand" icon={<UsersIcon className="h-5 w-5" />} />
-        <StatCard label="Empresas" value={overview?.companies ?? 0} tone="info" icon={<BuildingOffice2Icon className="h-5 w-5" />} />
-        <StatCard label="Vagas" value={overview?.jobs ?? 0} tone="brand" icon={<BriefcaseIcon className="h-5 w-5" />} />
-        <StatCard label="Scraped" value={overview?.scraped ?? 0} tone="warning" icon={<GlobeAltIcon className="h-5 w-5" />} />
-        <StatCard label="Campanhas" value={overview?.ads ?? 0} tone="success" icon={<MegaphoneIcon className="h-5 w-5" />} />
+        <StatCard label="Utilizadores" value={overview?.users ?? 0} unavailable={overviewDegraded || overview?.users == null} tone="brand" icon={<UsersIcon className="h-5 w-5" />} />
+        <StatCard label="Empresas" value={overview?.companies ?? 0} unavailable={overviewDegraded || overview?.companies == null} tone="info" icon={<BuildingOffice2Icon className="h-5 w-5" />} />
+        <StatCard label="Vagas" value={overview?.jobs ?? 0} unavailable={overviewDegraded || overview?.jobs == null} tone="brand" icon={<BriefcaseIcon className="h-5 w-5" />} />
+        <StatCard label="Scraped" value={overview?.scraped ?? 0} unavailable={overviewDegraded || overview?.scraped == null} tone="warning" icon={<GlobeAltIcon className="h-5 w-5" />} />
+        <StatCard label="Campanhas" value={overview?.ads ?? 0} unavailable={overviewDegraded || overview?.ads == null} tone="success" icon={<MegaphoneIcon className="h-5 w-5" />} />
       </section>
 
       {/* Operational attention strip */}
       <section className="mt-4 grid gap-3 sm:grid-cols-3">
         {[
-          { label: "Vagas pendentes", value: ops?.pendingJobs ?? 0, href: "/Portal/Admin/jobs", icon: ClipboardDocumentCheckIcon },
-          { label: "Empresas por verificar", value: ops?.pendingCompanies ?? 0, href: "/Portal/Admin/companies", icon: BuildingOffice2Icon },
-          { label: "Utilizadores suspensos", value: ops?.suspendedUsers ?? 0, href: "/Portal/Admin/users", icon: UsersIcon },
+          { label: "Vagas pendentes", value: ops?.pendingJobs, href: "/Portal/Admin/jobs", icon: ClipboardDocumentCheckIcon },
+          { label: "Empresas por verificar", value: ops?.pendingCompanies, href: "/Portal/Admin/companies", icon: BuildingOffice2Icon },
+          { label: "Utilizadores suspensos", value: ops?.suspendedUsers, href: "/Portal/Admin/users", icon: UsersIcon },
         ].map((item) => (
           <Link key={item.label} href={item.href} className="app-card app-card-interactive flex items-center gap-3 p-4">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-50)] text-[var(--brand-600)]">
               <item.icon className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-xl font-bold leading-tight text-[var(--text-strong)]">{item.value}</p>
+              <p className="text-xl font-bold leading-tight text-[var(--text-strong)]">
+                {opsDegraded || item.value == null ? "—" : item.value}
+              </p>
               <p className="truncate text-xs text-[var(--text-muted)]">{item.label}</p>
             </div>
           </Link>

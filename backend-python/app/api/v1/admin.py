@@ -293,19 +293,46 @@ def _safe_count(db: Session, model, label: str) -> int:
     return _safe_metric(db, lambda: db.query(model).count(), label)
 
 
+def _count_block(db: Session, specs: dict[str, Any], label: str) -> tuple[dict[str, Any], bool]:
+    """Run a group of count queries as ONE all-or-nothing unit with a single
+    retry on a fresh transaction.
+
+    Returns ``(values, ok)``. On total failure every value is ``None`` (NOT 0)
+    and ``ok`` is ``False`` — so the UI can show an explicit "couldn't load"
+    state instead of misleading zeros. Running the group together also means a
+    transient DB blip can never produce an inconsistent *partial* result where
+    some metrics show real numbers and others silently fall back to 0 (the
+    cause of the "numbers change on every refresh" behaviour)."""
+    for attempt in (1, 2):
+        try:
+            return {key: fn() for key, fn in specs.items()}, True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("admin %s counts failed (attempt %d/2): %s", label, attempt, exc)
+            try:
+                db.rollback()  # drop the aborted txn; next attempt gets a clean connection
+            except Exception:  # noqa: BLE001
+                pass
+    return {key: None for key in specs}, False
+
+
 @router.get("/overview")
 async def admin_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    return {
-        "users": _safe_count(db, User, "users"),
-        "companies": _safe_count(db, Company, "companies"),
-        "jobs": _safe_count(db, Job, "jobs"),
-        "scraped": _safe_count(db, ScrapedJob, "scraped"),
-        "ads": _safe_count(db, AdCampaign, "ads"),
-    }
+    values, ok = _count_block(
+        db,
+        {
+            "users": lambda: db.query(User).count(),
+            "companies": lambda: db.query(Company).count(),
+            "jobs": lambda: db.query(Job).count(),
+            "scraped": lambda: db.query(ScrapedJob).count(),
+            "ads": lambda: db.query(AdCampaign).count(),
+        },
+        "overview",
+    )
+    return {**values, "ok": ok}
 
 
 def _distribution(db: Session, column) -> list[dict[str, Any]]:
@@ -380,16 +407,33 @@ async def admin_analytics(
     ad_impressions = _safe_sum(AdCampaign.impressions)
     ad_ctr = round((ad_clicks / ad_impressions) * 100, 2) if ad_impressions else 0.0
 
+    totals_values, totals_ok = _count_block(
+        db,
+        {
+            "users": lambda: db.query(User).count(),
+            "companies": lambda: db.query(Company).count(),
+            "jobs": lambda: db.query(Job).count(),
+            "scraped": lambda: db.query(ScrapedJob).count(),
+            "ads": lambda: db.query(AdCampaign).count(),
+            "applications": lambda: db.query(JobApplication).count(),
+        },
+        "totals",
+    )
+    operational_values, operational_ok = _count_block(
+        db,
+        {
+            "pendingJobs": lambda: db.query(Job).filter(Job.status == "pending_platform_review").count(),
+            "pendingCompanies": lambda: db.query(Company).filter(Company.status == "pending_verification").count(),
+            "suspendedUsers": lambda: db.query(User).filter(User.suspended.is_(True)).count(),
+            "pendingScraped": lambda: db.query(ScrapedJob).filter(ScrapedJob.status == "pending").count(),
+            "activeApplications": lambda: db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(),
+        },
+        "operational",
+    )
+
     return {
         "range": {"from": from_date, "to": to_date},
-        "totals": {
-            "users": _safe_count(db, User, "totals.users"),
-            "companies": _safe_count(db, Company, "totals.companies"),
-            "jobs": _safe_count(db, Job, "totals.jobs"),
-            "scraped": _safe_count(db, ScrapedJob, "totals.scraped"),
-            "ads": _safe_count(db, AdCampaign, "totals.ads"),
-            "applications": _safe_count(db, JobApplication, "totals.applications"),
-        },
+        "totals": {**totals_values, "ok": totals_ok},
         "ads": {
             "total": _safe_count(db, AdCampaign, "ads.total"),
             "active": _safe_metric(db, lambda: db.query(AdCampaign).filter(AdCampaign.status == "active").count(), "ads.active"),
@@ -398,13 +442,7 @@ async def admin_analytics(
             "ctr": ad_ctr,
             "byStatus": _distribution(db, AdCampaign.status),
         },
-        "operational": {
-            "pendingJobs": _safe_metric(db, lambda: db.query(Job).filter(Job.status == "pending_platform_review").count(), "pendingJobs"),
-            "pendingCompanies": _safe_metric(db, lambda: db.query(Company).filter(Company.status == "pending_verification").count(), "pendingCompanies"),
-            "suspendedUsers": _safe_metric(db, lambda: db.query(User).filter(User.suspended.is_(True)).count(), "suspendedUsers"),
-            "pendingScraped": _safe_metric(db, lambda: db.query(ScrapedJob).filter(ScrapedJob.status == "pending").count(), "pendingScraped"),
-            "activeApplications": _safe_metric(db, lambda: db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(), "activeApplications"),
-        },
+        "operational": {**operational_values, "ok": operational_ok},
         "trends": {
             "usersPct": _pct_change(db, User, now),
             "companiesPct": _pct_change(db, Company, now),

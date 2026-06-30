@@ -57,22 +57,26 @@ export type Paginated<T extends string, R> = Record<T, R[]> & {
 };
 
 export type Overview = {
-  users: number;
-  companies: number;
-  jobs: number;
-  scraped: number;
-  ads: number;
+  // null when the backend could not read the metric (vs. a real 0). `ok: false`
+  // signals the whole block failed to load so the UI can show an error, not 0.
+  users: number | null;
+  companies: number | null;
+  jobs: number | null;
+  scraped: number | null;
+  ads: number | null;
+  ok?: boolean;
 };
 
 export type AnalyticsResponse = {
   range: { from: string | null; to: string | null };
-  totals: Overview & { applications: number };
+  totals: Overview & { applications: number | null };
   operational: {
-    pendingJobs: number;
-    pendingCompanies: number;
-    suspendedUsers: number;
-    pendingScraped: number;
-    activeApplications: number;
+    pendingJobs: number | null;
+    pendingCompanies: number | null;
+    suspendedUsers: number | null;
+    pendingScraped: number | null;
+    activeApplications: number | null;
+    ok?: boolean;
   };
   trends: {
     usersPct: number;
