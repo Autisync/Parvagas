@@ -73,7 +73,7 @@ export default function CompanySidebar() {
       {/* Desktop sidebar — hidden on mobile */}
       <aside className="hidden lg:block h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
         <div className="mb-3 flex items-center justify-end">
-          {token && <NotificationBell token={token} role="company" teamRole={role} />}
+          {token && <NotificationBell token={token} role="company" teamRole={role} align="left" />}
         </div>
         <p className="px-2 text-xs uppercase tracking-[0.18em] text-slate-500">{dict.portal.company.role}</p>
         <nav className="mt-4 space-y-1">
@@ -127,6 +127,7 @@ export default function CompanySidebar() {
         onDrawerOpen={() => setDrawerOpen(true)}
         onDrawerClose={() => setDrawerOpen(false)}
         extra={<LocaleCompactControl />}
+        headerAction={token ? <NotificationBell token={token} role="company" teamRole={role} align="left" /> : undefined}
       />
     </>
   );

@@ -55,7 +55,7 @@ export default function CandidateSidebar() {
       {/* Desktop sidebar — hidden on mobile */}
       <aside className="hidden lg:block h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
         <div className="mb-2 flex items-center justify-end">
-          {token && <NotificationBell token={token} role="candidate" />}
+          {token && <NotificationBell token={token} role="candidate" align="left" />}
         </div>
         <div className="flex items-center gap-2 px-2 py-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-sm font-bold text-red-700 ring-1 ring-red-100">
@@ -116,6 +116,7 @@ export default function CandidateSidebar() {
         onDrawerOpen={() => setDrawerOpen(true)}
         onDrawerClose={() => setDrawerOpen(false)}
         extra={<LocaleCompactControl />}
+        headerAction={token ? <NotificationBell token={token} role="candidate" align="left" /> : undefined}
       />
     </>
   );

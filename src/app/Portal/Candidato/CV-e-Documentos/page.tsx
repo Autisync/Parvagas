@@ -245,7 +245,9 @@ export default function CvDocumentosPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<GeneratedCvProfile | null>(null);
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[] | null>(null);
+  const [deletingBatch, setDeletingBatch] = useState(false);
 
   const [expModalOpen, setExpModalOpen] = useState(false);
   const [eduModalOpen, setEduModalOpen] = useState(false);
@@ -529,20 +531,48 @@ export default function CvDocumentosPage() {
     }
   };
 
-  const handleDeleteDocument = async (id: string) => {
-    if (!token) return;
-    setDeletingDocId(id);
+  const toggleDocSelected = (id: string) => {
+    setSelectedDocIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allDocsSelected = documents.length > 0 && documents.every((doc) => selectedDocIds.has(doc._id));
+
+  const toggleSelectAllDocs = () => {
+    setSelectedDocIds((prev) => (prev.size === documents.length ? new Set() : new Set(documents.map((d) => d._id))));
+  };
+
+  const performDeleteDocuments = async (ids: string[]) => {
+    if (!token || ids.length === 0) return;
+    setDeletingBatch(true);
     setError("");
     try {
-      await authFetch(`/candidates/cv/documents/${id}`, token, { method: "DELETE" });
+      const results = await Promise.allSettled(
+        ids.map((id) => authFetch(`/candidates/cv/documents/${id}`, token, { method: "DELETE" }))
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      setSelectedDocIds(new Set());
+      setConfirmDeleteIds(null);
       await loadLists();
-      setMessage("Documento removido com sucesso.");
+      if (failed > 0) {
+        setError(`Não foi possível remover ${failed} de ${ids.length} documento(s). Tente novamente.`);
+      } else {
+        setMessage(ids.length > 1 ? `${ids.length} documentos removidos com sucesso.` : "Documento removido com sucesso.");
+      }
     } catch (err: unknown) {
-      setError((err as Error).message || "Erro ao remover documento.");
+      setError((err as Error).message || "Erro ao remover documento(s).");
     } finally {
-      setDeletingDocId(null);
+      setDeletingBatch(false);
     }
   };
+
+  const confirmDocNames = confirmDeleteIds
+    ? documents.filter((d) => confirmDeleteIds.includes(d._id)).map((d) => d.fileName || "Documento")
+    : [];
 
   const draftExperiences = ((draft?.experience as ParsedDraft["experience"]) || []) as ExperienceItem[];
   const draftEducationList = ((draft?.education as ParsedDraft["education"]) || []) as EducationItem[];
@@ -992,24 +1022,55 @@ export default function CvDocumentosPage() {
         </section>
 
         <section className="mt-10">
-          <h2 className="mb-3 text-lg font-bold">Documentos</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-bold">Documentos</h2>
+            {documents.length > 0 ? (
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    checked={allDocsSelected}
+                    onChange={toggleSelectAllDocs}
+                  />
+                  Selecionar todos
+                </label>
+                <button
+                  type="button"
+                  disabled={selectedDocIds.size === 0}
+                  onClick={() => setConfirmDeleteIds(Array.from(selectedDocIds))}
+                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Eliminar selecionados{selectedDocIds.size > 0 ? ` (${selectedDocIds.size})` : ""}
+                </button>
+              </div>
+            ) : null}
+          </div>
           {documents.length === 0 ? <p className="text-sm text-gray-500">Sem documentos carregados.</p> : null}
           <div className="space-y-2">
             {documents.map((doc) => (
-              <div key={doc._id} className="flex items-center justify-between rounded-xl border border-gray-100 p-3 text-sm">
-                <div>
-                  <p className="font-medium">{doc.fileName || "Documento"}</p>
-                  <p className="text-xs text-gray-500">{doc.type || "file"} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-AO") : ""}</p>
+              <div key={doc._id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 p-3 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Selecionar ${doc.fileName || "documento"}`}
+                    className="h-4 w-4 shrink-0 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    checked={selectedDocIds.has(doc._id)}
+                    onChange={() => toggleDocSelected(doc._id)}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{doc.fileName || "Documento"}</p>
+                    <p className="text-xs text-gray-500">{doc.type || "file"} • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-AO") : ""}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center gap-3">
                   {doc.signedUrl ? <a href={doc.signedUrl} target="_blank" rel="noreferrer" className="text-red-600 hover:underline">Abrir</a> : null}
                   <button
                     type="button"
-                    disabled={deletingDocId === doc._id}
-                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    onClick={() => handleDeleteDocument(doc._id)}
+                    className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                    onClick={() => setConfirmDeleteIds([doc._id])}
                   >
-                    {deletingDocId === doc._id ? "A remover..." : "Eliminar"}
+                    Eliminar
                   </button>
                 </div>
               </div>
@@ -1038,6 +1099,43 @@ export default function CvDocumentosPage() {
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setExpModalOpen(false)}>Cancelar</button>
           <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveExperience}>Guardar</button>
+        </div>
+      </AddItemModal>
+
+      <AddItemModal
+        open={confirmDeleteIds !== null}
+        title={confirmDocNames.length > 1 ? "Eliminar documentos" : "Eliminar documento"}
+        onClose={() => { if (!deletingBatch) setConfirmDeleteIds(null); }}
+      >
+        <p className="text-sm text-slate-700">
+          {confirmDocNames.length > 1
+            ? `Tem a certeza que pretende eliminar ${confirmDocNames.length} documentos? Esta ação é permanente e não pode ser anulada.`
+            : "Tem a certeza que pretende eliminar este documento? Esta ação é permanente e não pode ser anulada."}
+        </p>
+        {confirmDocNames.length > 0 ? (
+          <ul className="mt-3 max-h-40 space-y-1 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            {confirmDocNames.map((name, i) => (
+              <li key={`${name}-${i}`} className="truncate">• {name}</li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={deletingBatch}
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+            onClick={() => setConfirmDeleteIds(null)}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={deletingBatch}
+            className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            onClick={() => performDeleteDocuments(confirmDeleteIds || [])}
+          >
+            {deletingBatch ? "A remover..." : "Eliminar"}
+          </button>
         </div>
       </AddItemModal>
 

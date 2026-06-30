@@ -27,9 +27,12 @@ type Props = {
   token: string;
   role: "company" | "candidate" | "admin";
   teamRole?: string;
+  /** Which edge the desktop dropdown anchors to. Left sidebars should use "left"
+   *  so the panel opens over the main content instead of off-screen. */
+  align?: "left" | "right";
 };
 
-export default function NotificationBell({ token, role, teamRole }: Props) {
+export default function NotificationBell({ token, role, teamRole, align = "right" }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -130,10 +133,30 @@ export default function NotificationBell({ token, role, teamRole }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[22rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+        <div
+          className={[
+            "z-[70] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl",
+            // Mobile: viewport-anchored sheet (escapes any ancestor overflow clipping,
+            // e.g. the mobile drawer) so the panel is never cut off.
+            "fixed inset-x-3 top-16 max-h-[75vh] overflow-auto",
+            // Desktop: absolute dropdown anchored to the bell, on the chosen edge.
+            "sm:absolute sm:inset-x-auto sm:top-full sm:mt-2 sm:max-h-none sm:w-[22rem] sm:overflow-visible",
+            align === "left" ? "sm:left-0 sm:right-auto" : "sm:right-0 sm:left-auto",
+          ].join(" ")}
+        >
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-900">Notificações</p>
-            <span className="text-xs text-slate-500">{unreadCount} não lidas</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">{unreadCount} não lidas</span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Fechar notificações"
+                className="rounded-lg px-2 py-0.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 sm:hidden"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
 
           <div className="max-h-72 space-y-2 overflow-auto pr-1">

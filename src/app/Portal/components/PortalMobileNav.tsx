@@ -19,6 +19,8 @@ interface Props {
   onLogout: () => void;
   /** Extra content rendered at the bottom of the drawer (e.g. locale control). */
   extra?: ReactNode;
+  /** Action rendered in the drawer header (e.g. the notification bell). */
+  headerAction?: ReactNode;
   drawerOpen: boolean;
   onDrawerOpen: () => void;
   onDrawerClose: () => void;
@@ -29,6 +31,7 @@ export default function PortalMobileNav({
   identity,
   onLogout,
   extra,
+  headerAction,
   drawerOpen,
   onDrawerOpen,
   onDrawerClose,
@@ -138,14 +141,17 @@ export default function PortalMobileNav({
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onDrawerClose}
-                aria-label="Fechar menu"
-                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {headerAction}
+                <button
+                  type="button"
+                  onClick={onDrawerClose}
+                  aria-label="Fechar menu"
+                  className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {/* Nav items */}

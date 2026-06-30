@@ -149,7 +149,7 @@ export default function CandidatoDashboard() {
         />
 
         <DashboardCard
-          href="/Portal/Candidato/Vagas-Disponíveis"
+          href="/Portal/Candidato/Vagas-Disponiveis"
           icon={<BriefcaseIcon className="h-6 w-6" />}
           title={dict.portal.candidate.jobs}
           description="Todas as oportunidades abertas"
