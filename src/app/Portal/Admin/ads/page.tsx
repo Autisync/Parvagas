@@ -278,10 +278,9 @@ export default function AdminAdsPage() {
               }}
               className={adminFieldClass}
             >
-              <option value="homepage_banner">Homepage Banner</option>
-              <option value="sidebar">Sidebar</option>
-              <option value="inline">Inline</option>
-              <option value="newsletter">Newsletter</option>
+              <option value="homepage_banner">Banner da Homepage</option>
+              <option value="job_list">Listagem de Vagas</option>
+              <option value="sidebar">Barra lateral (detalhe da vaga)</option>
             </select>
             <FormFieldError id="ad-placement-error" message={formErrors.placement} />
             <input
@@ -434,10 +433,9 @@ export default function AdminAdsPage() {
             setForm((prev) => ({ ...prev, placement: value }));
             setFormErrors((prev) => ({ ...prev, placement: undefined }));
           }} className={adminFieldClass}>
-            <option value="homepage_banner">Homepage Banner</option>
-            <option value="sidebar">Job List Sidebar</option>
-            <option value="inline">Inline</option>
-            <option value="newsletter">Newsletter</option>
+            <option value="homepage_banner">Banner da Homepage</option>
+            <option value="job_list">Listagem de Vagas</option>
+            <option value="sidebar">Barra lateral (detalhe da vaga)</option>
           </select>
           <FormFieldError id="edit-ad-title-error" message={formErrors.title} />
           <FormFieldError id="edit-ad-placement-error" message={formErrors.placement} />

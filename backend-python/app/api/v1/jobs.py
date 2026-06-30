@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.models import Job, Company
+from app.content import career_posts
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -225,7 +226,7 @@ async def public_homepage(
     postsLimit: int = Query(default=3, ge=1, le=12),
     db: Session = Depends(get_db),
 ):
-    """Homepage payload: featured live jobs + (placeholder) career posts."""
+    """Homepage payload: featured live jobs + featured career posts."""
     rows = (
         db.query(Job)
         .options(joinedload(Job.company))
@@ -234,7 +235,10 @@ async def public_homepage(
         .limit(jobsLimit)
         .all()
     )
-    return {"featuredJobs": [serialize_job(j) for j in rows], "featuredCareerPosts": []}
+    return {
+        "featuredJobs": [serialize_job(j) for j in rows],
+        "featuredCareerPosts": career_posts.featured_posts(limit=postsLimit),
+    }
 
 
 @router.get("/public/career/posts")
@@ -242,5 +246,26 @@ async def public_career_posts(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=12, ge=1, le=50),
 ):
-    """Career-tips listing. (Content model pending — returns empty set for now.)"""
-    return {"posts": [], "pagination": {"page": page, "limit": limit, "total": 0, "totalPages": 1}}
+    """Paginated career-tips / blog listing (served from curated content)."""
+    all_posts = career_posts.list_posts()
+    total = len(all_posts)
+    start = (page - 1) * limit
+    page_items = all_posts[start : start + limit]
+    return {
+        "posts": page_items,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "totalPages": max(1, (total + limit - 1) // limit),
+        },
+    }
+
+
+@router.get("/public/career/posts/{slug}")
+async def public_career_post_detail(slug: str):
+    """Single career article by slug."""
+    post = career_posts.get_post(slug)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado")
+    return {"post": post}
