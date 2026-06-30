@@ -272,7 +272,7 @@ export default function MeuPerfilPage() {
       (profile.experience || []).length > 0,
       (profile.education || []).length > 0,
       Boolean(latestCvName),
-      Boolean(profile.preferredJobType) && profile.expectedSalaryAoa !== null && profile.expectedSalaryAoa !== undefined,
+      Boolean(profile.preferredJobType),
       Boolean(profile.availability),
     ];
     const done = checks.filter(Boolean).length;
@@ -285,7 +285,7 @@ export default function MeuPerfilPage() {
     const hasExperience = (profile.experience || []).length >= 2;
     const hasEducation = (profile.education || []).length >= 1;
     const hasSummary = String(profile.summary || "").trim().length >= 120;
-    const hasPreferences = Boolean(profile.preferredJobType) && (profile.expectedSalaryAoa || 0) > 0;
+    const hasPreferences = Boolean(profile.preferredJobType);
     return [
       { label: "Informação pessoal", done: hasPersonal },
       { label: "Título profissional", done: String(profile.professionalTitle || "").trim().length > 0 },

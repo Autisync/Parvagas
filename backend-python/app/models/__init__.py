@@ -88,7 +88,12 @@ class CandidateProfile(Base, TimestampMixin):
     education = Column(Text, nullable=True)  # JSON array as string
     certifications = Column(Text, nullable=True)  # JSON array as string
     languages = Column(Text, nullable=True)  # JSON array as string
-    
+
+    # Job preferences (added 2026-06-30)
+    preferred_job_type = Column(String(50), nullable=True)   # tempo_integral | remoto | ...
+    expected_salary_aoa = Column(Integer, nullable=True)     # monthly expectation, AOA
+    availability = Column(String(50), nullable=True)         # imediata | 1_semana | ...
+
     # Onboarding
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_seen_tutorial = Column(Boolean, nullable=False, default=False)

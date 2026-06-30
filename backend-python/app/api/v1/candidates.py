@@ -97,6 +97,8 @@ def _profile_completion_score(profile_payload: dict[str, Any], has_cv: bool) -> 
         bool(profile_payload.get("experience")),
         bool(profile_payload.get("education")),
         bool(has_cv),
+        bool(profile_payload.get("preferredJobType")),
+        bool(profile_payload.get("availability")),
     ]
     done = len([item for item in checks if item])
     return int(round((done / len(checks)) * 100))
@@ -158,6 +160,9 @@ def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfi
         "experience": work_experience if isinstance(work_experience, list) else [],
         "workExperience": work_experience if isinstance(work_experience, list) else [],
         "education": education if isinstance(education, list) else [],
+        "preferredJobType": getattr(profile, "preferred_job_type", None) or "",
+        "expectedSalaryAoa": getattr(profile, "expected_salary_aoa", None),
+        "availability": getattr(profile, "availability", None) or "",
         "hasCompletedOnboarding": bool(profile.has_completed_onboarding),
         "hasSeenTutorial": bool(profile.has_seen_tutorial),
     }
@@ -219,6 +224,20 @@ def _apply_profile_payload(profile: CandidateProfile, current_user: User, payloa
     if "education" in payload:
         education = payload.get("education")
         profile.education = _json_dump(education if isinstance(education, list) else [])
+
+    # Job preferences
+    if "preferredJobType" in payload or "preferred_job_type" in payload:
+        pref = payload.get("preferredJobType") if "preferredJobType" in payload else payload.get("preferred_job_type")
+        profile.preferred_job_type = str(pref or "").strip() or None
+    if "availability" in payload:
+        profile.availability = str(payload.get("availability") or "").strip() or None
+    if "expectedSalaryAoa" in payload or "expected_salary_aoa" in payload:
+        salary_raw = payload.get("expectedSalaryAoa") if "expectedSalaryAoa" in payload else payload.get("expected_salary_aoa")
+        try:
+            salary_val = int(salary_raw) if salary_raw not in (None, "") else None
+            profile.expected_salary_aoa = salary_val if (salary_val is None or salary_val >= 0) else None
+        except (TypeError, ValueError):
+            profile.expected_salary_aoa = None
 
 
 @router.get("/profile")
