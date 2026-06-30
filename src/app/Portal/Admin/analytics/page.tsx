@@ -30,6 +30,7 @@ import {
 import PaginationControls from "../components/PaginationControls";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import WarningAlert from "@/app/components/errors/WarningAlert";
 import { StatCard, AnimatedCounter } from "@/app/components/motion";
 import {
   UsersIcon,
@@ -73,11 +74,13 @@ export default function AdminAnalyticsPage() {
   const [error, setError] = useState("");
   const [me, setMe] = useState<AdminMe | null>(null);
   const [analytics, setAnalytics] = useState<Awaited<ReturnType<typeof fetchAnalytics>> | null>(null);
+  const [totalsDegraded, setTotalsDegraded] = useState(false);
+  const [opsDegraded, setOpsDegraded] = useState(false);
 
   const [jobSearch, setJobSearch] = useState("");
-  const [jobStatus, setJobStatus] = useState("pending_platform_review");
+  const [jobStatus, setJobStatus] = useState("all");
   const [jobSort, setJobSort] = useState("createdAt_desc");
-  const [companyStatus, setCompanyStatus] = useState("pending_verification");
+  const [companyStatus, setCompanyStatus] = useState("all");
   const [companySort, setCompanySort] = useState("createdAt_desc");
   const [applicationStatus, setApplicationStatus] = useState("all");
   const [applicationSort, setApplicationSort] = useState("createdAt_desc");
@@ -109,6 +112,8 @@ export default function AdminAnalyticsPage() {
       const [data, currentAdmin] = await Promise.all([fetchAnalytics(token, from, to), fetchAdminMe(token)]);
       setAnalytics(data);
       setMe(currentAdmin);
+      setTotalsDegraded(data.totals?.ok === false);
+      setOpsDegraded(data.operational?.ok === false);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar analytics."));
     } finally {
@@ -259,6 +264,17 @@ export default function AdminAnalyticsPage() {
 
       {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
 
+      {!error && (totalsDegraded || opsDegraded) && (
+        <div className="mt-5">
+          <WarningAlert
+            title="Indicadores temporariamente indisponíveis"
+            message="Não foi possível ler alguns contadores agora. Os valores marcados com — serão atualizados assim que a ligação for restabelecida."
+            actionLabel="Tentar novamente"
+            onAction={load}
+          />
+        </div>
+      )}
+
       <section className="app-card mt-5 flex flex-wrap items-end justify-between gap-4 p-4">
         <div className="flex flex-wrap items-end gap-4">
           {/* Segmented quick-range */}
@@ -309,11 +325,11 @@ export default function AdminAnalyticsPage() {
       >
 
       <section className="mt-6 grid gap-4 pv-stagger sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label="Utilizadores" value={analytics?.totals?.users ?? 0} trendPct={analytics?.trends?.usersPct ?? null} tone="brand" icon={<UsersIcon className="h-5 w-5" />} />
-        <StatCard label="Empresas" value={analytics?.totals?.companies ?? 0} trendPct={analytics?.trends?.companiesPct ?? null} tone="info" icon={<BuildingOffice2Icon className="h-5 w-5" />} />
-        <StatCard label="Vagas" value={analytics?.totals?.jobs ?? 0} trendPct={analytics?.trends?.jobsPct ?? null} tone="brand" icon={<BriefcaseIcon className="h-5 w-5" />} />
-        <StatCard label="Candidaturas" value={analytics?.totals?.applications ?? 0} trendPct={analytics?.trends?.applicationsPct ?? null} tone="success" icon={<DocumentTextIcon className="h-5 w-5" />} />
-        <StatCard label="Ativas" value={analytics?.operational?.activeApplications ?? 0} trendPct={null} tone="warning" icon={<BoltIcon className="h-5 w-5" />} />
+        <StatCard label="Utilizadores" value={analytics?.totals?.users ?? 0} unavailable={totalsDegraded || analytics?.totals?.users == null} trendPct={analytics?.trends?.usersPct ?? null} tone="brand" icon={<UsersIcon className="h-5 w-5" />} />
+        <StatCard label="Empresas" value={analytics?.totals?.companies ?? 0} unavailable={totalsDegraded || analytics?.totals?.companies == null} trendPct={analytics?.trends?.companiesPct ?? null} tone="info" icon={<BuildingOffice2Icon className="h-5 w-5" />} />
+        <StatCard label="Vagas" value={analytics?.totals?.jobs ?? 0} unavailable={totalsDegraded || analytics?.totals?.jobs == null} trendPct={analytics?.trends?.jobsPct ?? null} tone="brand" icon={<BriefcaseIcon className="h-5 w-5" />} />
+        <StatCard label="Candidaturas" value={analytics?.totals?.applications ?? 0} unavailable={totalsDegraded || analytics?.totals?.applications == null} trendPct={analytics?.trends?.applicationsPct ?? null} tone="success" icon={<DocumentTextIcon className="h-5 w-5" />} />
+        <StatCard label="Ativas" value={analytics?.operational?.activeApplications ?? 0} unavailable={opsDegraded || analytics?.operational?.activeApplications == null} trendPct={null} tone="warning" icon={<BoltIcon className="h-5 w-5" />} />
         {isSuperAdmin ? (
           <StatCard label="Receita" value={analytics?.business?.revenueInRange ?? 0} trendPct={analytics?.trends?.revenuePct ?? null} tone="success" icon={<BanknotesIcon className="h-5 w-5" />} />
         ) : (
@@ -339,11 +355,13 @@ export default function AdminAnalyticsPage() {
         ].map((item) => (
           <div key={item.label} className="app-card p-5">
             <p className="text-sm font-medium text-[var(--text-muted)]">{item.label}</p>
-            <p className="mt-2 text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={item.value} /></p>
+            <p className="mt-2 text-2xl font-bold text-[var(--text-strong)]">
+              {opsDegraded ? <span className="text-[var(--text-subtle)]">—</span> : <AnimatedCounter value={item.value} />}
+            </p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-sunken)]">
-              <div className="h-full rounded-full bg-[var(--brand-500)]" style={{ width: `${Math.min(100, Math.max(4, item.ratio))}%` }} />
+              <div className="h-full rounded-full bg-[var(--brand-500)]" style={{ width: opsDegraded ? "0%" : `${Math.min(100, Math.max(4, item.ratio))}%` }} />
             </div>
-            <p className="mt-2 text-xs text-[var(--text-subtle)]">{item.ratio}% no intervalo selecionado</p>
+            <p className="mt-2 text-xs text-[var(--text-subtle)]">{opsDegraded ? "—" : `${item.ratio}% no intervalo selecionado`}</p>
             <p className="mt-1 text-xs text-[var(--text-subtle)]">{item.tip}</p>
           </div>
         ))}
@@ -452,10 +470,10 @@ export default function AdminAnalyticsPage() {
             placeholder="Pesquisar vagas"
           />
           <select value={jobStatus} onChange={(e) => { setJobStatus(e.target.value); setPageJobs(1); }} className={adminFieldClass}>
+            <option value="all">Todas as vagas</option>
             <option value="pending_platform_review">Vagas pendentes</option>
             <option value="published">Vagas publicadas</option>
             <option value="platform_rejected">Vagas rejeitadas</option>
-            <option value="all">Todas</option>
           </select>
           <select value={jobSort} onChange={(e) => { setJobSort(e.target.value); setPageJobs(1); }} className={adminFieldClass} aria-label="Ordenação de vagas">
             <option value="createdAt_desc">Mais recentes</option>
@@ -514,9 +532,9 @@ export default function AdminAnalyticsPage() {
         <article className="app-card p-4">
           <div className="grid gap-2 sm:grid-cols-2">
             <select value={companyStatus} onChange={(e) => { setCompanyStatus(e.target.value); setPageCompanies(1); }} className={adminFieldClass}>
+              <option value="all">Todas as empresas</option>
               <option value="pending_verification">Empresas pendentes</option>
               <option value="active">Empresas ativas</option>
-              <option value="all">Todas</option>
             </select>
             <select value={companySort} onChange={(e) => { setCompanySort(e.target.value); setPageCompanies(1); }} className={adminFieldClass} aria-label="Ordenação de empresas">
               <option value="createdAt_desc">Mais recentes</option>
