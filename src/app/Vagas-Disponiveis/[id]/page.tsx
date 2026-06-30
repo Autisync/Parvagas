@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
 import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
@@ -46,6 +47,33 @@ type Job = {
 async function getJob(id: string): Promise<Job | null> {
   const data = await serverGetJson<{ job?: Job }>(`/jobs/${id}`, { revalidateSeconds: 60 });
   return data?.job || null;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const job = await getJob(id);
+  if (!job) return { title: "Vaga não encontrada" };
+
+  const company = job.companyId && typeof job.companyId === "object" ? job.companyId : null;
+  const companyName = company?.name ?? "Empresa";
+  const title = `${job.title} — ${companyName}`;
+  const description = job.description
+    ? job.description.replace(/<[^>]+>/g, "").slice(0, 155)
+    : `${job.title} em ${companyName}. Candidata-te agora na Parvagas.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/Vagas-Disponiveis/${id}` },
+    openGraph: {
+      title: `${title} | Parvagas`,
+      description,
+      url: `/Vagas-Disponiveis/${id}`,
+      type: "website",
+      siteName: "Parvagas",
+    },
+    twitter: { card: "summary", title: `${title} | Parvagas`, description },
+  };
 }
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {

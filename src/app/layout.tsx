@@ -23,20 +23,34 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt"),
   title: {
-    default: "Parvagas",
+    default: "Parvagas — Emprego em Angola",
     template: "%s | Parvagas",
   },
-  description: "Plataforma de recrutamento Angola-first para candidatos e empresas.",
-  alternates: {
-    canonical: "/",
-  },
+  description: "Plataforma de recrutamento Angola-first. Encontre vagas, candidate-se e recrute os melhores talentos em Angola.",
+  keywords: ["emprego Angola", "vagas Angola", "recrutamento Angola", "trabalho Angola", "Luanda emprego"],
+  authors: [{ name: "Parvagas", url: "https://parvagas.pt" }],
+  creator: "Parvagas",
+  publisher: "Parvagas",
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "Parvagas",
-    description: "Plataforma de recrutamento Angola-first para candidatos e empresas.",
+    title: "Parvagas — Emprego em Angola",
+    description: "Plataforma de recrutamento Angola-first. Encontre vagas, candidate-se e recrute os melhores talentos em Angola.",
     url: "https://parvagas.pt",
     siteName: "Parvagas",
     locale: "pt_AO",
     type: "website",
+    images: [{ url: "/og-default.png", width: 1200, height: 630, alt: "Parvagas — Emprego em Angola" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Parvagas — Emprego em Angola",
+    description: "Plataforma de recrutamento Angola-first. Encontre vagas, candidate-se e recrute talentos.",
+    images: ["/og-default.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
   },
 };
 
@@ -76,6 +90,21 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Parvagas",
+              url: process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt",
+              logo: `${process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt"}/icon2.png`,
+              description: "Plataforma de recrutamento Angola-first para candidatos e empresas.",
+              areaServed: { "@type": "Country", name: "Angola" },
+              sameAs: [],
+            }),
+          }}
+        />
         <Providers>
           {/* <Header /> */}
           {children}

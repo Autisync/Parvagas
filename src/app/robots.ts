@@ -1,16 +1,28 @@
 import { MetadataRoute } from "next";
 
-export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
+const BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
 
+export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/Portal/", "/Dashboard/"],
+        disallow: [
+          "/Portal/",
+          "/Dashboard/",
+          "/Admin/",
+          "/Aplicar/",
+          "/Login",
+          "/Signup",
+          "/Acesso/Login",
+          "/verify-email",
+          "/resend-verification",
+          "/Submission/",
+          "/api/",
+        ],
       },
     ],
-    sitemap: `${base}/sitemap.xml`,
+    sitemap: `${BASE}/sitemap.xml`,
   };
 }

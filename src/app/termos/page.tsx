@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { getServerDictionary } from "@/lib/i18n/server";
+
+export const metadata: Metadata = {
+  title: "Termos e Condições",
+  description: "Termos e condições de utilização da plataforma Parvagas.",
+  alternates: { canonical: "/termos" },
+  robots: { index: true, follow: true },
+};
 
 export default async function TermosPage() {
   const dict = await getServerDictionary();

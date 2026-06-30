@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
+
+export const metadata: Metadata = {
+  title: "Aceder à Plataforma",
+  description: "Entre ou crie a sua conta Parvagas — para candidatos e empresas em Angola.",
+  alternates: { canonical: "/Acesso" },
+};
 
 export default async function AccessPortalPage() {
   const dict = await getServerDictionary();

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { getServerDictionary } from "@/lib/i18n/server";
+
+export const metadata: Metadata = {
+  title: "Política de Privacidade",
+  description: "Como a Parvagas recolhe, usa e protege os seus dados pessoais.",
+  alternates: { canonical: "/privacidade" },
+  robots: { index: true, follow: true },
+};
 
 export default async function PrivacidadePage() {
   const dict = await getServerDictionary();

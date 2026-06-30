@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Header from "../../components/Header";
 import Footer from "../../components/Footer";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
 
 type CareerPost = {
   _id: string;
@@ -26,13 +29,31 @@ async function getPost(slug: string): Promise<CareerPost | null> {
   return data?.post ?? null;
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const post = await getPost(slug);
   const dict = await getServerDictionary();
+  if (!post) return { title: dict.careerPost.fallbackTitle, description: dict.careerPost.fallbackDescription };
+
+  const title = post.title;
+  const description = post.excerpt ?? dict.careerPost.fallbackDescription;
+  const url = `${SITE}/Dicas-de-Carreira/${slug}`;
+
   return {
-    title: post ? `${post.title} | Parvagas` : dict.careerPost.fallbackTitle,
-    description: post?.excerpt ?? dict.careerPost.fallbackDescription,
+    title,
+    description,
+    alternates: { canonical: `/Dicas-de-Carreira/${slug}` },
+    openGraph: {
+      title: `${title} | Parvagas`,
+      description,
+      url,
+      type: "article",
+      siteName: "Parvagas",
+      publishedTime: post.publishedAt,
+      authors: post.author ? [post.author] : undefined,
+      ...(post.coverImage ? { images: [{ url: post.coverImage, alt: title }] } : {}),
+    },
+    twitter: { card: "summary_large_image", title: `${title} | Parvagas`, description },
   };
 }
 
@@ -58,8 +79,21 @@ export default async function CareerPostPage({ params }: { params: Promise<{ slu
   if (!post) notFound();
   const dict = await getServerDictionary();
 
+  const articleLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description: post.excerpt,
+    author: { "@type": "Person", name: post.author ?? "Parvagas" },
+    publisher: { "@type": "Organization", name: "Parvagas", url: SITE },
+    datePublished: post.publishedAt,
+    url: `${SITE}/Dicas-de-Carreira/${slug}`,
+    ...(post.coverImage ? { image: post.coverImage } : {}),
+  };
+
   return (
     <div className="bg-white min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
       <Header />
       <main className="py-10 pb-20 px-6 mx-auto max-w-3xl">
         <Link href="/Dicas-de-Carreira/" className="text-sm text-red-700 font-semibold hover:underline">

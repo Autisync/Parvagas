@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { getServerDictionary } from "@/lib/i18n/server";
+
+export const metadata: Metadata = {
+  title: "Termos para Empregadores",
+  description: "Condições de utilização da Parvagas para empresas e empregadores em Angola.",
+  alternates: { canonical: "/termos-empregador" },
+  robots: { index: true, follow: true },
+};
 
 export default async function TermosEmpregadorPage() {
   const dict = await getServerDictionary();
