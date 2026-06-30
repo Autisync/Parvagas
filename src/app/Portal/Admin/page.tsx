@@ -57,12 +57,19 @@ export default function AdminOverviewPage() {
   const load = useCallback(async () => {
     if (!token) return;
     setError("");
-    try {
-      const [o, a, currentAdmin] = await Promise.all([fetchOverview(token), fetchAnalytics(token), fetchAdminMe(token)]);
-      setOverview(o);
-      setOps(a.operational);
-      setMe(currentAdmin);
-    } catch (err: unknown) {
+    // Independent fetches: a single failing endpoint must not blank the whole
+    // dashboard. Each result is applied on its own; we only surface an error if
+    // everything failed.
+    const [oRes, aRes, meRes] = await Promise.allSettled([
+      fetchOverview(token),
+      fetchAnalytics(token),
+      fetchAdminMe(token),
+    ]);
+    if (oRes.status === "fulfilled") setOverview(oRes.value);
+    if (aRes.status === "fulfilled") setOps(aRes.value.operational);
+    if (meRes.status === "fulfilled") setMe(meRes.value);
+    if (oRes.status === "rejected" && aRes.status === "rejected" && meRes.status === "rejected") {
+      const err = oRes.reason;
       setError(err instanceof Error ? err.message : "Erro ao carregar dashboard.");
     }
   }, [token]);

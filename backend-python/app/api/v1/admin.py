@@ -275,6 +275,24 @@ async def admin_me(current_user: User = Depends(get_current_user)):
     }
 
 
+def _safe_metric(db: Session, fn, label: str, default=0):
+    """Run a metric query, never raising — a single broken query must not blank
+    the entire dashboard. Logs, rolls back the aborted txn, and returns default."""
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin metric '%s' failed: %s", label, exc)
+        try:
+            db.rollback()  # clear the aborted transaction so later queries still run
+        except Exception:  # noqa: BLE001
+            pass
+        return default
+
+
+def _safe_count(db: Session, model, label: str) -> int:
+    return _safe_metric(db, lambda: db.query(model).count(), label)
+
+
 @router.get("/overview")
 async def admin_overview(
     db: Session = Depends(get_db),
@@ -282,44 +300,59 @@ async def admin_overview(
 ):
     _ensure_admin(current_user)
     return {
-        "users": db.query(User).count(),
-        "companies": db.query(Company).count(),
-        "jobs": db.query(Job).count(),
-        "scraped": db.query(ScrapedJob).count(),
-        "ads": db.query(AdCampaign).count(),
+        "users": _safe_count(db, User, "users"),
+        "companies": _safe_count(db, Company, "companies"),
+        "jobs": _safe_count(db, Job, "jobs"),
+        "scraped": _safe_count(db, ScrapedJob, "scraped"),
+        "ads": _safe_count(db, AdCampaign, "ads"),
     }
 
 
 def _distribution(db: Session, column) -> list[dict[str, Any]]:
-    rows = (
-        db.query(column, func.count())
-        .filter(column.isnot(None))
-        .group_by(column)
-        .order_by(func.count().desc())
-        .all()
-    )
-    return [{"label": str(label), "value": int(count)} for label, count in rows if str(label).strip()]
+    try:
+        rows = (
+            db.query(column, func.count())
+            .filter(column.isnot(None))
+            .group_by(column)
+            .order_by(func.count().desc())
+            .all()
+        )
+        return [{"label": str(label), "value": int(count)} for label, count in rows if str(label).strip()]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: distribution failed: %s", exc)
+        db.rollback()
+        return []
 
 
 def _daily_series(db: Session, model, since: datetime) -> list[dict[str, Any]]:
-    rows = (
-        db.query(func.date(model.created_at), func.count())
-        .filter(model.created_at >= since)
-        .group_by(func.date(model.created_at))
-        .order_by(func.date(model.created_at))
-        .all()
-    )
-    return [{"label": str(d), "value": int(c)} for d, c in rows]
+    try:
+        rows = (
+            db.query(func.date(model.created_at), func.count())
+            .filter(model.created_at >= since)
+            .group_by(func.date(model.created_at))
+            .order_by(func.date(model.created_at))
+            .all()
+        )
+        return [{"label": str(d), "value": int(c)} for d, c in rows]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: daily series failed: %s", exc)
+        db.rollback()
+        return []
 
 
 def _pct_change(db: Session, model, now: datetime, window_days: int = 30) -> float:
-    cur_start = now - timedelta(days=window_days)
-    prev_start = now - timedelta(days=2 * window_days)
-    current = db.query(model).filter(model.created_at >= cur_start).count()
-    previous = db.query(model).filter(model.created_at >= prev_start, model.created_at < cur_start).count()
-    if previous == 0:
-        return 100.0 if current else 0.0
-    return round((current - previous) / previous * 100, 1)
+    try:
+        cur_start = now - timedelta(days=window_days)
+        prev_start = now - timedelta(days=2 * window_days)
+        current = db.query(model).filter(model.created_at >= cur_start).count()
+        previous = db.query(model).filter(model.created_at >= prev_start, model.created_at < cur_start).count()
+        if previous == 0:
+            return 100.0 if current else 0.0
+        return round((current - previous) / previous * 100, 1)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: pct_change failed: %s", exc)
+        db.rollback()
+        return 0.0
 
 
 @router.get("/analytics")
@@ -335,34 +368,42 @@ async def admin_analytics(
     active_app_statuses = ("submitted", "under_review", "shortlisted", "interview")
 
     # Ad performance aggregates.
-    ad_clicks = int(db.query(func.coalesce(func.sum(AdCampaign.clicks), 0)).scalar() or 0)
-    ad_impressions = int(db.query(func.coalesce(func.sum(AdCampaign.impressions), 0)).scalar() or 0)
+    def _safe_sum(column) -> int:
+        try:
+            return int(db.query(func.coalesce(func.sum(column), 0)).scalar() or 0)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("admin_analytics: sum failed: %s", exc)
+            db.rollback()
+            return 0
+
+    ad_clicks = _safe_sum(AdCampaign.clicks)
+    ad_impressions = _safe_sum(AdCampaign.impressions)
     ad_ctr = round((ad_clicks / ad_impressions) * 100, 2) if ad_impressions else 0.0
 
     return {
         "range": {"from": from_date, "to": to_date},
         "totals": {
-            "users": db.query(User).count(),
-            "companies": db.query(Company).count(),
-            "jobs": db.query(Job).count(),
-            "scraped": db.query(ScrapedJob).count(),
-            "ads": db.query(AdCampaign).count(),
-            "applications": db.query(JobApplication).count(),
+            "users": _safe_count(db, User, "totals.users"),
+            "companies": _safe_count(db, Company, "totals.companies"),
+            "jobs": _safe_count(db, Job, "totals.jobs"),
+            "scraped": _safe_count(db, ScrapedJob, "totals.scraped"),
+            "ads": _safe_count(db, AdCampaign, "totals.ads"),
+            "applications": _safe_count(db, JobApplication, "totals.applications"),
         },
         "ads": {
-            "total": db.query(AdCampaign).count(),
-            "active": db.query(AdCampaign).filter(AdCampaign.status == "active").count(),
+            "total": _safe_count(db, AdCampaign, "ads.total"),
+            "active": _safe_metric(db, lambda: db.query(AdCampaign).filter(AdCampaign.status == "active").count(), "ads.active"),
             "clicks": ad_clicks,
             "impressions": ad_impressions,
             "ctr": ad_ctr,
             "byStatus": _distribution(db, AdCampaign.status),
         },
         "operational": {
-            "pendingJobs": db.query(Job).filter(Job.status == "pending_platform_review").count(),
-            "pendingCompanies": db.query(Company).filter(Company.status == "pending_verification").count(),
-            "suspendedUsers": db.query(User).filter(User.suspended.is_(True)).count(),
-            "pendingScraped": db.query(ScrapedJob).filter(ScrapedJob.status == "pending").count(),
-            "activeApplications": db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(),
+            "pendingJobs": _safe_metric(db, lambda: db.query(Job).filter(Job.status == "pending_platform_review").count(), "pendingJobs"),
+            "pendingCompanies": _safe_metric(db, lambda: db.query(Company).filter(Company.status == "pending_verification").count(), "pendingCompanies"),
+            "suspendedUsers": _safe_metric(db, lambda: db.query(User).filter(User.suspended.is_(True)).count(), "suspendedUsers"),
+            "pendingScraped": _safe_metric(db, lambda: db.query(ScrapedJob).filter(ScrapedJob.status == "pending").count(), "pendingScraped"),
+            "activeApplications": _safe_metric(db, lambda: db.query(JobApplication).filter(JobApplication.status.in_(active_app_statuses)).count(), "activeApplications"),
         },
         "trends": {
             "usersPct": _pct_change(db, User, now),
@@ -386,7 +427,7 @@ async def admin_analytics(
         },
         "business": {
             "revenueInRange": 0,
-            "adCountInRange": db.query(AdCampaign).count(),
+            "adCountInRange": _safe_count(db, AdCampaign, "business.adCountInRange"),
         },
         "insights": {
             "anomalies": [],
