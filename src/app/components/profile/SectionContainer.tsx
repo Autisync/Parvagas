@@ -39,7 +39,7 @@ export default function SectionContainer({
   children,
 }: SectionContainerProps) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white">
+    <section id={`section-${id}`} className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white">
       <button
         type="button"
         onClick={() => onToggle(id)}

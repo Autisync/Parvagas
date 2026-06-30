@@ -154,6 +154,21 @@ function formatCurrencyInput(value: number | null | undefined): string {
   return new Intl.NumberFormat("pt-PT").format(value);
 }
 
+// Where each completion chip takes the user. Most map to a collapsible section
+// on this page; "CV carregado" lives on the CV e Documentos page.
+const CHIP_TARGET: Record<string, { section?: string; href?: string }> = {
+  "Informação pessoal": { section: "informacao" },
+  "Título profissional": { section: "informacao" },
+  "Resumo": { section: "resumo" },
+  "Skills": { section: "skills" },
+  "Idiomas": { section: "idiomas" },
+  "Experiência": { section: "experiencia" },
+  "Educação": { section: "educacao" },
+  "CV carregado": { href: "/Portal/Candidato/CV-e-Documentos" },
+  "Preferências": { section: "informacao" },
+  "Disponibilidade": { section: "informacao" },
+};
+
 export default function MeuPerfilPage() {
   const router = useRouter();
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
@@ -284,6 +299,21 @@ export default function MeuPerfilPage() {
       { label: "Disponibilidade", done: Boolean(profile.availability) },
     ];
   }, [latestCvName, profile]);
+
+  const goToChecklistItem = useCallback((label: string) => {
+    const target = CHIP_TARGET[label];
+    if (!target) return;
+    if (target.href) {
+      router.push(target.href);
+      return;
+    }
+    if (target.section) {
+      setOpenSection(target.section);
+      setTimeout(() => {
+        document.getElementById(`section-${target.section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+  }, [router]);
 
   const actionableHint = useMemo(() => {
     if ((profile.experience || []).length < 2) return "Adicione pelo menos 2 experiências para melhorar a sua visibilidade.";
@@ -699,19 +729,36 @@ export default function MeuPerfilPage() {
       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center gap-3">
           {progressChecklist.map((item) => (
-            <span
+            <button
               key={item.label}
-              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${
+              type="button"
+              onClick={() => goToChecklistItem(item.label)}
+              title={item.done ? `Rever ${item.label}` : `Completar ${item.label}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 ${
                 item.done
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-amber-200 bg-amber-50 text-amber-800"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-300"
+                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:ring-amber-300"
               }`}
             >
               {item.done ? "✓" : "!"} {item.label}
-            </span>
+              {!item.done ? <span aria-hidden="true">→</span> : null}
+            </button>
           ))}
         </div>
         <p className="mt-2 text-sm text-slate-600">{actionableHint}</p>
+        {progressChecklist.some((item) => !item.done) ? (
+          <button
+            type="button"
+            onClick={() => {
+              const firstMissing = progressChecklist.find((item) => !item.done);
+              if (firstMissing) goToChecklistItem(firstMissing.label);
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+          >
+            Completar perfil
+            <span aria-hidden="true">→</span>
+          </button>
+        ) : null}
       </div>
 
       {/* Stats Cards */}

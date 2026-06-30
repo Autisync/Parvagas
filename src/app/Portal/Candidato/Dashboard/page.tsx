@@ -23,6 +23,7 @@ import {
 
 type DashboardStats = {
   recommendedJobs?: number;
+  availableJobs?: number;
   savedJobs?: number;
   applications?: number;
   jobAlerts?: number;
@@ -68,16 +69,17 @@ export default function CandidatoDashboard() {
       try {
         setFetching(true);
         setPageError(false);
-        const [profileRes, recommendedRes, savedRes, applicationsRes, alertsRes, docsRes] = await Promise.allSettled([
+        const [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes] = await Promise.allSettled([
           authFetch("/candidates/profile", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/jobs/recommended?limit=1&page=1", token, { suppressGlobalErrors: true }),
+          authFetch("/jobs?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/jobs/saved?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/applications?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/alerts?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/cv/documents", token, { suppressGlobalErrors: true }),
         ]);
 
-        const failedCount = [profileRes, recommendedRes, savedRes, applicationsRes, alertsRes, docsRes].filter((r) => r.status === "rejected").length;
+        const failedCount = [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes].filter((r) => r.status === "rejected").length;
         if (failedCount > 0) {
           setPageError(true);
         }
@@ -89,6 +91,7 @@ export default function CandidatoDashboard() {
 
         setStats({
           recommendedJobs: recommendedRes.status === "fulfilled" ? readTotal(recommendedRes.value) : 0,
+          availableJobs: availableRes.status === "fulfilled" ? readTotal(availableRes.value) : 0,
           savedJobs: savedRes.status === "fulfilled" ? readTotal(savedRes.value) : 0,
           applications: applicationsRes.status === "fulfilled" ? readTotal(applicationsRes.value) : 0,
           jobAlerts: alertsRes.status === "fulfilled" ? readTotal(alertsRes.value) : 0,
@@ -152,7 +155,9 @@ export default function CandidatoDashboard() {
           href="/Portal/Candidato/Vagas-Disponiveis"
           icon={<BriefcaseIcon className="h-6 w-6" />}
           title={dict.portal.candidate.jobs}
-          description="Todas as oportunidades abertas"
+          description={`${stats.availableJobs || 0} oportunidade${stats.availableJobs !== 1 ? "s" : ""} aberta${stats.availableJobs !== 1 ? "s" : ""}`}
+          badge={stats.availableJobs}
+          badgeColor="blue"
         />
 
         <DashboardCard
