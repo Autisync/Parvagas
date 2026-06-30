@@ -39,13 +39,11 @@ export const metadata: Metadata = {
     siteName: "Parvagas",
     locale: "pt_AO",
     type: "website",
-    images: [{ url: "/og-default.png", width: 1200, height: 630, alt: "Parvagas — Emprego em Angola" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Parvagas — Emprego em Angola",
     description: "Plataforma de recrutamento Angola-first. Encontre vagas, candidate-se e recrute talentos.",
-    images: ["/og-default.png"],
   },
   robots: {
     index: true,
