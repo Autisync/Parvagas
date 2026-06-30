@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
@@ -17,6 +18,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models import CVUpload, CandidateProfile, Job, JobAlert, SavedJob, User, UserRole
+from app.services.cv_export_service import to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
 from app.workers.tasks import parse_cv
 
@@ -518,6 +520,76 @@ async def delete_candidate_cv_document(
     db.delete(doc)
     db.commit()
     return {"message": "Documento removido."}
+
+
+@router.get("/cv/export")
+async def export_candidate_cv(
+    format: str = Query(default="pdf", pattern="^(pdf|docx|json)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export the candidate's saved profile as a formatted CV (PDF, DOCX, or JSON-Resume)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    def _jl(value, default):
+        if not value:
+            return default
+        try:
+            return json.loads(value)
+        except Exception:
+            return default
+
+    profile_dict = {
+        "fullName": current_user.full_name or "",
+        "email": current_user.email or "",
+        "phone": profile.phone or "",
+        "location": profile.location or "",
+        "linkedinUrl": profile.linkedin_url or "",
+        "portfolioUrl": profile.portfolio_url or "",
+        "githubUrl": profile.github_url or "",
+        "professionalTitle": profile.job_title or "",
+        "professionalSummary": profile.professional_summary or "",
+        "skills": _jl(profile.skills, []),
+        "hardSkills": _jl(getattr(profile, "hard_skills", None), []),
+        "techniques": _jl(getattr(profile, "techniques", None), []),
+        "tools": _jl(getattr(profile, "tools", None), []),
+        "languages": _jl(profile.languages, []),
+        "certifications": _jl(profile.certifications, []),
+        "workExperience": _jl(profile.work_experience, []),
+        "education": _jl(profile.education, []),
+    }
+
+    safe_name = (current_user.full_name or "cv").replace(" ", "_").lower()
+
+    try:
+        if format == "docx":
+            data = to_docx(profile_dict)
+            return Response(
+                content=data,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.docx"'},
+            )
+        elif format == "json":
+            data = json.dumps(to_json_resume(profile_dict), ensure_ascii=False, indent=2).encode("utf-8")
+            return Response(
+                content=data,
+                media_type="application/json",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.json"'},
+            )
+        else:  # pdf
+            data = to_pdf(profile_dict)
+            return Response(
+                content=data,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.pdf"'},
+            )
+    except Exception as exc:
+        logger.error(f"CV export error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao gerar CV. Tente novamente.",
+        )
 
 
 @router.post("/profile/approve")

@@ -1,10 +1,8 @@
-"""CV upload, parsing, and export endpoints."""
-import json
+"""CV upload and parsing endpoints."""
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -13,7 +11,6 @@ from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models import User, CandidateProfile, CVUpload
 from app.schemas import CVUploadResponse
-from app.services.cv_export_service import to_docx, to_pdf, to_json_resume
 from app.services.cv_parser_service import CVParserService
 from app.services.storage_service import StorageService
 from app.workers.tasks import parse_cv
@@ -104,80 +101,3 @@ async def upload_cv(
     except Exception as e:
         logger.error(f"CV upload error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-@router.get("/export")
-async def export_cv(
-    format: str = Query(default="pdf", pattern="^(pdf|docx|json)$"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Export the candidate's profile as a formatted CV.
-
-    ``format`` may be ``pdf`` (default), ``docx``, or ``json`` (JSON-Resume).
-    Returns the file as a binary download with the correct Content-Type.
-    """
-    profile = db.query(CandidateProfile).filter(
-        CandidateProfile.user_id == current_user.id
-    ).first()
-    if not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de candidato não encontrado.")
-
-    def _json_load(value, default):
-        if not value:
-            return default
-        try:
-            return json.loads(value)
-        except Exception:
-            return default
-
-    profile_dict = {
-        "fullName": current_user.full_name or "",
-        "email": current_user.email or "",
-        "phone": profile.phone or "",
-        "location": profile.location or "",
-        "postcode": profile.postcode or "",
-        "linkedinUrl": profile.linkedin_url or "",
-        "portfolioUrl": profile.portfolio_url or "",
-        "githubUrl": profile.github_url or "",
-        "professionalTitle": profile.job_title or "",
-        "professionalSummary": profile.professional_summary or "",
-        "yearsOfExperience": profile.years_of_experience,
-        "skills": _json_load(profile.skills, []),
-        "hardSkills": _json_load(getattr(profile, "hard_skills", None), []),
-        "techniques": _json_load(getattr(profile, "techniques", None), []),
-        "tools": _json_load(getattr(profile, "tools", None), []),
-        "languages": _json_load(profile.languages, []),
-        "certifications": _json_load(profile.certifications, []),
-        "workExperience": _json_load(profile.work_experience, []),
-        "education": _json_load(profile.education, []),
-    }
-
-    safe_name = (current_user.full_name or "cv").replace(" ", "_").lower()
-
-    try:
-        if format == "docx":
-            data = to_docx(profile_dict)
-            return Response(
-                content=data,
-                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.docx"'},
-            )
-        elif format == "json":
-            data = json.dumps(to_json_resume(profile_dict), ensure_ascii=False, indent=2).encode("utf-8")
-            return Response(
-                content=data,
-                media_type="application/json",
-                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.json"'},
-            )
-        else:  # pdf
-            data = to_pdf(profile_dict)
-            return Response(
-                content=data,
-                media_type="application/pdf",
-                headers={"Content-Disposition": f'attachment; filename="{safe_name}_cv.pdf"'},
-            )
-    except Exception as exc:
-        logger.error(f"CV export error: {exc}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail="Erro ao gerar CV. Tente novamente.")
