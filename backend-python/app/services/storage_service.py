@@ -1,6 +1,8 @@
 """Storage service for file uploads."""
 import logging
 import os
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from app.core.config import get_settings
 
@@ -213,3 +215,70 @@ class StorageService:
         if file_path and (file_path.startswith("supabase:") or file_path.startswith("server:")):
             return True
         return os.path.exists(file_path)
+
+    @staticmethod
+    def read_bytes(file_path: str) -> bytes:
+        """Read a stored file's raw bytes regardless of backend.
+
+        Resolves cloud references ('server:<key>', 'supabase:<key>') by
+        downloading them; reads local paths directly. Raises on failure so
+        callers can surface a real error instead of silently treating a
+        download failure as 'empty file'.
+        """
+        if not file_path:
+            raise ValueError("Empty file path")
+
+        # Self-hosted S3 (MinIO / S3 on your own server)
+        if file_path.startswith("server:"):
+            key = file_path[len("server:"):]
+            obj = StorageService._s3_client().get_object(Bucket=settings.S3_BUCKET, Key=key)
+            return obj["Body"].read()
+
+        # Supabase Storage
+        if file_path.startswith("supabase:"):
+            import httpx
+
+            key = file_path[len("supabase:"):]
+            url = f"{settings.SUPABASE_URL}/storage/v1/object/{settings.SUPABASE_BUCKET}/{key}"
+            resp = httpx.get(
+                url,
+                headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}"},
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(
+                    f"Supabase download failed ({resp.status_code}): {resp.text[:200]}"
+                )
+            return resp.content
+
+        # Local disk
+        with open(file_path, "rb") as f:
+            return f.read()
+
+    @staticmethod
+    @contextmanager
+    def local_path(file_path: str):
+        """Yield a local filesystem path for a stored file.
+
+        For local files this is the path itself (no copy). For cloud
+        references the object is downloaded to a NamedTemporaryFile that
+        preserves the original suffix (so extension-based detection keeps
+        working) and is removed on exit.
+        """
+        if file_path and (file_path.startswith("server:") or file_path.startswith("supabase:")):
+            data = StorageService.read_bytes(file_path)
+            # Preserve the real extension so downstream (.pdf/.docx/.png) detection works.
+            suffix = Path(file_path).suffix
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            try:
+                tmp.write(data)
+                tmp.flush()
+                tmp.close()
+                yield tmp.name
+            finally:
+                try:
+                    os.remove(tmp.name)
+                except OSError:
+                    pass
+        else:
+            yield file_path

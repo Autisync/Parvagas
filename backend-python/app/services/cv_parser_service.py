@@ -636,7 +636,18 @@ class CVParserService:
           1. AI provider (if configured)
           2. Rules-based parser (PT/EN locale-aware, gazetteer-driven)
           3. Legacy heuristic parser (last-resort fallback)
+
+        Accepts both local paths and storage references ('server:<key>',
+        'supabase:<key>'); cloud objects are downloaded to a temp file first.
         """
+        from app.services.storage_service import StorageService
+
+        with StorageService.local_path(file_path) as resolved_path:
+            return CVParserService._parse_local_cv_file(resolved_path, mime_type)
+
+    @staticmethod
+    def _parse_local_cv_file(file_path: str, mime_type: str) -> Dict:
+        """Parse a CV from a guaranteed-local filesystem path."""
         try:
             # ── 1. Text extraction ───────────────────────────────────────────
             if mime_type == "application/pdf":
