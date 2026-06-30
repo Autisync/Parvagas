@@ -379,7 +379,11 @@ async def parse_candidate_cv(
             detail="Limite diario de processamentos de CV atingido. Tente novamente amanha.",
         )
 
-    file_name = f"{uuid.uuid4()}_{cv.filename or 'cv'}"
+    # Sanitize the storage-key suffix: keep only the basename and strip any path
+    # separators / traversal sequences so the upload can never write outside the
+    # upload dir (local fallback) or create stray nested keys (S3/MinIO).
+    safe_suffix = Path(cv.filename or "cv").name.replace("/", "_").replace("\\", "_") or "cv"
+    file_name = f"{uuid.uuid4()}_{safe_suffix}"
     file_path = StorageService.save_file(file_content, file_name)
 
     cv_upload = CVUpload(

@@ -388,9 +388,12 @@ def to_pdf(profile: dict[str, Any]) -> bytes:
     gray = HexColor("#555555")
     light_gray = HexColor("#888888")
 
-    st_name = ParagraphStyle("Name", parent=styles["Normal"], fontSize=20, textColor=dark,
-                             fontName="Helvetica-Bold", alignment=TA_CENTER, spaceAfter=2)
-    st_title = ParagraphStyle("Title", parent=styles["Normal"], fontSize=11, textColor=gray,
+    # Explicit leading + generous spaceAfter on the name: a 20pt Helvetica-Bold
+    # glyph box is ~27.6pt tall, which exceeds reportlab's default leading (24pt).
+    # Without the extra spacing the title overlaps the name's descenders.
+    st_name = ParagraphStyle("Name", parent=styles["Normal"], fontSize=20, leading=24, textColor=dark,
+                             fontName="Helvetica-Bold", alignment=TA_CENTER, spaceAfter=10)
+    st_title = ParagraphStyle("Title", parent=styles["Normal"], fontSize=11, leading=14, textColor=gray,
                               alignment=TA_CENTER, spaceAfter=2)
     st_contact = ParagraphStyle("Contact", parent=styles["Normal"], fontSize=8.5, textColor=gray,
                                 alignment=TA_CENTER, spaceAfter=8)

@@ -71,7 +71,8 @@ async def upload_cv(
         file_content = await file.read()
         if len(file_content) > max_bytes:
             raise too_large
-        file_name = f"{uuid.uuid4()}_{file.filename}"
+        safe_suffix = Path(file.filename or "cv").name.replace("/", "_").replace("\\", "_") or "cv"
+        file_name = f"{uuid.uuid4()}_{safe_suffix}"
         file_path = StorageService.save_file(file_content, file_name)
         
         # Create CV upload record
