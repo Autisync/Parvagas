@@ -11,7 +11,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
@@ -1129,15 +1129,113 @@ async def admin_actions(
 
 
 @router.get("/launch-readiness")
-async def admin_launch_readiness(current_user: User = Depends(get_current_user)):
+async def admin_launch_readiness(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Real launch-readiness probe. Each check is isolated so one failure never
+    masks the others; the endpoint never 500s. Surfaces actual DB connectivity,
+    migration state, and critical production config instead of hardcoded green."""
     _ensure_admin(current_user)
-    checks = [
-        {"id": "api", "scope": "backend", "status": "pass", "message": "API online"},
-        {"id": "db", "scope": "database", "status": "pass", "message": "Database reachable"},
-    ]
+
+    from app.core.config import get_settings
+    from app.core.captcha import captcha_required
+
+    settings = get_settings()
+    checks: list[dict[str, Any]] = []
+
+    def add(check_id: str, scope: str, status_: str, message: str) -> None:
+        checks.append({"id": check_id, "scope": scope, "status": status_, "message": message})
+
+    # API is responding (we are inside the handler).
+    add("api", "backend", "pass", "API online")
+
+    # Database connectivity.
+    try:
+        db.execute(text("SELECT 1"))
+        add("db", "database", "pass", "Base de dados acessível")
+    except Exception as exc:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        add("db", "database", "fail", f"Base de dados inacessível: {exc}")
+
+    # Migrations applied (alembic_version present and populated).
+    try:
+        row = db.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+        if row and row[0]:
+            add("migrations", "database", "pass", f"Migrações aplicadas (rev {row[0]})")
+        else:
+            add("migrations", "database", "warn", "Tabela de migrações vazia")
+    except Exception:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        add("migrations", "database", "fail", "Migrações não aplicadas (alembic_version ausente)")
+
+    # Core table sanity — a super-admin must exist to operate the platform.
+    try:
+        admins = db.query(User).filter(User.role == "admin").count()
+        if admins > 0:
+            add("admin-account", "auth", "pass", f"{admins} conta(s) de administração")
+        else:
+            add("admin-account", "auth", "fail", "Nenhuma conta de administração existe")
+    except Exception:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        add("admin-account", "auth", "warn", "Não foi possível verificar contas de administração")
+
+    # JWT secret strength (enforced at boot in prod, but report explicitly).
+    if settings.JWT_SECRET and len(settings.JWT_SECRET) >= 32 and settings.JWT_SECRET != "your-secret-key-change-in-production":
+        add("jwt", "security", "pass", "JWT_SECRET forte configurado")
+    else:
+        add("jwt", "security", "fail", "JWT_SECRET fraco ou em valor por defeito")
+
+    # CAPTCHA enforcement in production.
+    if captcha_required():
+        add("captcha", "security", "pass", "CAPTCHA ativo")
+    elif settings.is_production:
+        add("captcha", "security", "warn", "CAPTCHA desativado em produção (CAPTCHA_REQUIRED=true recomendado)")
+    else:
+        add("captcha", "security", "warn", "CAPTCHA desativado (ambiente não-produção)")
+
+    # Email delivery configuration.
+    if settings.SMTP_HOST and settings.SMTP_USER:
+        add("email", "delivery", "pass", f"SMTP configurado ({settings.SMTP_HOST})")
+    else:
+        add("email", "delivery", "warn", "SMTP não configurado — emails não serão enviados")
+
+    # File storage configuration.
+    provider = settings.STORAGE_PROVIDER
+    if provider == "server":
+        if settings.S3_ENDPOINT_URL and settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY:
+            add("storage", "storage", "pass", f"Armazenamento S3/MinIO configurado ({provider})")
+        else:
+            add("storage", "storage", "fail", "STORAGE_PROVIDER=server mas credenciais S3 em falta")
+    else:
+        add("storage", "storage", "warn", f"Armazenamento '{provider}' — confirme adequação para produção")
+
+    # Frontend / CORS origin.
+    if settings.FRONTEND_URL and "localhost" not in settings.FRONTEND_URL:
+        add("frontend", "config", "pass", f"FRONTEND_URL definido ({settings.FRONTEND_URL})")
+    elif settings.is_production:
+        add("frontend", "config", "fail", "FRONTEND_URL aponta para localhost em produção")
+    else:
+        add("frontend", "config", "warn", "FRONTEND_URL em localhost (ambiente não-produção)")
+
+    summary = {
+        "total": len(checks),
+        "pass": sum(1 for c in checks if c["status"] == "pass"),
+        "warn": sum(1 for c in checks if c["status"] == "warn"),
+        "fail": sum(1 for c in checks if c["status"] == "fail"),
+    }
     return {
         "generatedAt": datetime.utcnow().isoformat(),
-        "summary": {"total": len(checks), "pass": len(checks), "warn": 0, "fail": 0},
+        "summary": summary,
         "checks": checks,
     }
 
