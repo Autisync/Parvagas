@@ -116,11 +116,15 @@ class CVParserService:
             with fitz.open(file_path) as doc:
                 for index, page in enumerate(doc):
                     page_text = page.get_text("text") or ""
-                    # A page with almost no extractable text is almost certainly
-                    # a scan/image — OCR it (bounded by max_ocr_pages).
+                    # A page with almost no *meaningful* text is almost certainly
+                    # a scan/image-based PDF — OCR it (bounded by max_ocr_pages).
+                    # We check alphanumeric count, not just length, because some PDFs
+                    # with bad font encoding return many non-alphanumeric glyphs that
+                    # look like text but carry no readable content.
+                    page_meaningful = sum(1 for c in page_text if c.isalnum())
                     if (
                         ocr_enabled
-                        and len(page_text.strip()) < 20
+                        and page_meaningful < 15
                         and ocr_pages_done < max_ocr_pages
                     ):
                         ocr_pages_done += 1
@@ -639,8 +643,11 @@ class CVParserService:
                 # Try layout-aware extraction first (preserves two-column order).
                 from app.services.cv_parsing.layout import extract_pdf_layout_text
                 text = CVParserService._normalize_text(extract_pdf_layout_text(file_path))
-                # Layout extraction returns '' for scanned PDFs — fall through to OCR.
-                if len(text.strip()) < 80:
+                # Fall through to OCR/full extraction when:
+                # - layout returned very little text (scanned PDF), OR
+                # - text is present but mostly non-alphanumeric (bad font encoding)
+                meaningful_layout = sum(1 for c in text if c.isalnum())
+                if len(text.strip()) < 80 or meaningful_layout < _MIN_MEANINGFUL_CHARS:
                     text = CVParserService._normalize_text(CVParserService.extract_text_from_pdf(file_path))
             else:
                 text = CVParserService._normalize_text(CVParserService.extract_text(file_path, mime_type))
@@ -656,6 +663,11 @@ class CVParserService:
             # Reject files that yield no meaningful content.
             meaningful_chars = sum(1 for c in text if c.isalnum())
             if meaningful_chars < _MIN_MEANINGFUL_CHARS:
+                logger.warning(
+                    f"CV text extraction yielded too little content "
+                    f"(meaningful_chars={meaningful_chars}, text_len={len(text)}, "
+                    f"mime={mime_type}). Returning failure."
+                )
                 return {
                     "success": False,
                     "warnings": [
