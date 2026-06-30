@@ -26,8 +26,9 @@ async function getPost(slug: string): Promise<CareerPost | null> {
   return data?.post ?? null;
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
-  const post = await getPost(params.slug);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPost(slug);
   const dict = await getServerDictionary();
   return {
     title: post ? `${post.title} | Parvagas` : dict.careerPost.fallbackTitle,
@@ -51,8 +52,9 @@ function BodyParagraph({ text }: { text: string }) {
   );
 }
 
-export default async function CareerPostPage({ params }: { params: { slug: string } }) {
-  const post = await getPost(params.slug);
+export default async function CareerPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const post = await getPost(slug);
   if (!post) notFound();
   const dict = await getServerDictionary();
 

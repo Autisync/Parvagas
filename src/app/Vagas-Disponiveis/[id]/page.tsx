@@ -48,8 +48,9 @@ async function getJob(id: string): Promise<Job | null> {
   return data?.job || null;
 }
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
-  const job = await getJob(params.id);
+export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const job = await getJob(id);
   const dict = await getServerDictionary();
 
   if (!job) {

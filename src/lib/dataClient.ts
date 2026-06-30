@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from "@/lib/api";
+import { buildApiUrl, getApiBaseUrl } from "@/lib/api";
 
 type ServerGetOptions = {
   revalidateSeconds?: number;
@@ -8,9 +8,12 @@ export async function serverGetJson<T>(path: string, options: ServerGetOptions =
   const base = getApiBaseUrl();
   if (!base) return null;
 
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  // Use the same URL builder as the client so the /api/v1 prefix is applied
+  // consistently. Without this, SSR fetches hit the un-prefixed path and 404,
+  // which silently blanks server-rendered pages (homepage featured jobs, job
+  // detail) while client-rendered pages keep working.
   try {
-    const res = await fetch(`${base}${normalizedPath}`, {
+    const res = await fetch(buildApiUrl(base, path), {
       next: { revalidate: options.revalidateSeconds ?? 60 },
       signal: AbortSignal.timeout(5000),
     });

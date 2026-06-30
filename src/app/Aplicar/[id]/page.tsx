@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import { useAppNotifier } from "@/app/components/AppNotifier";
@@ -41,7 +41,8 @@ type CvDocument = {
 
 type ViewMode = "candidate" | "guest";
 
-export default function ApplyJobPage({ params }: { params: { id: string } }) {
+export default function ApplyJobPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: jobId } = use(params);
   const { notify } = useAppNotifier();
   const [job, setJob] = useState<JobDetail | null>(null);
   const [loadingJob, setLoadingJob] = useState(true);
@@ -80,7 +81,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     const bootstrap = async () => {
       try {
         const [jobRes] = await Promise.all([
-          apiFetch<{ job?: JobDetail }>(`/jobs/${params.id}`, { suppressGlobalErrors: true }),
+          apiFetch<{ job?: JobDetail }>(`/jobs/${jobId}`, { suppressGlobalErrors: true }),
         ]);
 
         if (!mounted) return;
@@ -120,7 +121,7 @@ export default function ApplyJobPage({ params }: { params: { id: string } }) {
     return () => {
       mounted = false;
     };
-  }, [params.id, notify]);
+  }, [jobId, notify]);
 
   const companyName = useMemo(() => {
     if (!job?.companyId || typeof job.companyId === "string") return "Empresa";

@@ -151,7 +151,7 @@ export function apiUrl(path: string): string {
   return buildApiUrl(base, path);
 }
 
-function buildApiUrl(base: string, path: string): string {
+export function buildApiUrl(base: string, path: string): string {
   const normalizedBase = String(base || "").trim().replace(/\/$/, "");
   if (!normalizedBase) {
     throw new ApiError("Não foi possível ligar-se ao serviço neste momento. Tente novamente mais tarde.");
