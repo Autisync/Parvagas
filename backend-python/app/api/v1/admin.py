@@ -857,6 +857,36 @@ def _resolve_scraped_job_expiry(application_deadline: datetime | None, now: date
     return now + timedelta(days=shelf_life_days)
 
 
+# changed-payload key -> (Job attribute, ScrapedJob attribute) — names diverge
+# for the two company-attribution fields since Job prefixes them "external_".
+_SCRAPED_TO_JOB_FIELD_MAP = {
+    "title": ("title", "title"),
+    "description": ("description", "description"),
+    "location": ("location", "location"),
+    "category": ("category", "category"),
+    "responsibilities": ("responsibilities", "responsibilities"),
+    "requirements": ("requirements", "requirements"),
+    "company": ("external_company_name", "company_name"),
+    "companyLogoUrl": ("external_company_logo_url", "company_logo_url"),
+}
+
+
+def _sync_scraped_edit_to_job(job: Job, s: ScrapedJob, changed_fields: list[str]) -> None:
+    """Mirror a post-publish ScrapedJob edit onto its already-live Job.
+
+    Admins routinely curate a scraped listing (paste in the full description,
+    requirements, company logo) *after* it's already been published — those
+    edits must reach the public listing, not just sit on the ScrapedJob row.
+    """
+    for key in changed_fields:
+        mapping = _SCRAPED_TO_JOB_FIELD_MAP.get(key)
+        if mapping:
+            job_attr, scraped_attr = mapping
+            setattr(job, job_attr, getattr(s, scraped_attr))
+    if "applicationDeadline" in changed_fields:
+        job.expires_at = _resolve_scraped_job_expiry(s.application_deadline, datetime.utcnow())
+
+
 def _aggregator_company(db: Session, admin: User) -> Company:
     """Synthetic company that owns published scraped jobs."""
     co = db.query(Company).filter(Company.name == "Parvagas Aggregator").first()
@@ -970,6 +1000,14 @@ async def admin_update_scraped(
     # Keep the dedup hash in sync if identifying fields changed.
     if {"title", "company", "location"} & set(changed):
         s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)
+    # Curation happens after publish too (admins fill in the full description/
+    # requirements post-approval) — without this, edits only ever touched the
+    # ScrapedJob row and the live public listing stayed stuck at whatever was
+    # captured at publish time.
+    if changed and s.published_job_id:
+        job = db.query(Job).filter(Job.id == s.published_job_id).first()
+        if job:
+            _sync_scraped_edit_to_job(job, s, changed)
     db.commit()
     db.refresh(s)
     _record_admin_event(actor=admin, action="scraped.update", resource_type="scraped_job",
