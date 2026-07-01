@@ -44,6 +44,18 @@ const nextConfig = {
             },
         ];
     },
+    // Canonical host is the apex domain (matches metadataBase / og:url below) —
+    // redirect www so share previews and SEO don't split across two hosts.
+    async redirects() {
+        return [
+            {
+                source: '/:path*',
+                has: [{ type: 'host', value: 'www.parvagas.pt' }],
+                destination: 'https://parvagas.pt/:path*',
+                permanent: true,
+            },
+        ];
+    },
     images: {
         unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === '1',
         remotePatterns: [

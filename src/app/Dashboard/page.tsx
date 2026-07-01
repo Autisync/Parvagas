@@ -7,22 +7,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ParVaga | Dasboard",
     description: "Plataforma útil para agerir talento Profissional submetido.",
-    url: "https://parvagas.pt",
-    siteName: "parVagas",
-    images: [
-      {
-        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
-        width: 300,
-        height: 300,
-      },
-      {
-        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
-        width: 300,
-        height: 300,
-        alt: "Homepage",
-      },
-    ],
-    locale: "pt",
+    url: "https://parvagas.pt/Dashboard",
+    siteName: "Parvagas",
+    // Explicit ref to the branded generated OG image (nested routes with their
+    // own openGraph don't inherit the root file-based one). Resolves to an
+    // absolute URL via metadataBase. Never hardcode a remote image URL.
+    images: ["/opengraph-image"],
+    locale: "pt_AO",
     type: "website",
   },
 };

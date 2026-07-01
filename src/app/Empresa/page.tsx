@@ -12,22 +12,14 @@ export const metadata: Metadata = {
     title: "ParVaga | Empresas",
     description:
       "Uma plataforma útil para quem procura talento Profissional para seus Projetos em Angola.",
-    url: "https://parvagas.pt",
-    siteName: "parVagas",
-    images: [
-      {
-        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
-        width: 300,
-        height: 300,
-      },
-      {
-        url: "https://www.segucyber.ao/public/OG/homepage.png", // Must be an absolute URL
-        width: 300,
-        height: 300,
-        alt: "Homepage",
-      },
-    ],
-    locale: "pt",
+    url: "https://parvagas.pt/Empresa",
+    siteName: "Parvagas",
+    // Nested routes that declare their own `openGraph` do NOT inherit the root's
+    // file-based opengraph-image, so point at it explicitly. The relative path
+    // resolves to an absolute URL via `metadataBase` (the branded 1200×630 PNG
+    // from src/app/opengraph-image.tsx). Never hardcode a remote image URL.
+    images: ["/opengraph-image"],
+    locale: "pt_AO",
     type: "website",
   },
 };

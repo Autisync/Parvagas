@@ -12,15 +12,11 @@ export const metadata: Metadata = {
     description:
       "Parvagas é um site de recrutamento em Angola que recolhe CV's para Partilhar com Empresas procurando Talentos Profissionais.",
     url: "https://parvagas.pt",
-    siteName: "parVagas",
-    images: [
-      {
-        url: "https://www.segucyber.ao/public/OG/homepage.png",
-        width: 300,
-        height: 300,
-      },
-    ],
-    locale: "pt",
+    siteName: "Parvagas",
+    // No explicit `images` here on purpose: Next.js auto-injects the branded
+    // 1200×630 og:image from src/app/opengraph-image.tsx. Do NOT hardcode a
+    // remote image URL — a dead one silently breaks every social share preview.
+    locale: "pt_AO",
     type: "website",
   },
 };
