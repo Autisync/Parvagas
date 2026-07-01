@@ -194,6 +194,35 @@ class EmailService:
             return False
 
     @staticmethod
+    def send_newsletter_confirmation_email(email: str) -> bool:
+        """Confirm a newsletter opt-in (job-openings + platform news)."""
+        try:
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
+                return False
+
+            subject = f"Subscrição confirmada — {settings.BRAND_NAME}"
+            body_html = """
+            <p style="margin:0 0 14px;">Olá,</p>
+            <p style="margin:0 0 14px;">A sua subscrição foi confirmada. Vai passar a receber novidades sobre novas vagas e da plataforma.</p>
+            <p style="margin:0 0 14px;">Pode cancelar a subscrição a qualquer momento a partir dos links nos nossos e-mails.</p>
+            """
+
+            html_content = EmailService._build_email_html(
+                title="Subscrição confirmada",
+                body_html=body_html,
+                action_text="Ver vagas disponíveis",
+                action_url=f"{settings.FRONTEND_URL}/Vagas-Disponiveis",
+                preheader="A sua subscrição às novidades da Parvagas foi confirmada.",
+            )
+
+            return EmailService._send_email(email, subject, html_content)
+
+        except Exception as e:
+            logger.error(f"Failed to send newsletter confirmation email: {str(e)}")
+            return False
+
+    @staticmethod
     def send_application_received_email(email: str, full_name: str, job_id: str) -> bool:
         """Send acknowledgement after a job application is submitted."""
         try:

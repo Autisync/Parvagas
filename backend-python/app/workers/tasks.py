@@ -154,6 +154,29 @@ def send_application_received_email(self, email: str, full_name: str, job_id: st
 
 
 @celery.task(
+    name='app.workers.tasks.send_newsletter_confirmation_email',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def send_newsletter_confirmation_email(self, email: str) -> bool:
+    """Send newsletter opt-in confirmation email task."""
+    try:
+        success = EmailService.send_newsletter_confirmation_email(email=email)
+
+        if not success:
+            raise RuntimeError(f"Newsletter confirmation email send failed for {email}")
+
+        return success
+
+    except Exception as e:
+        logger.error(f"Failed to send newsletter confirmation email: {str(e)}")
+        raise
+
+
+@celery.task(
     name='app.workers.tasks.send_templated_email',
     bind=True,
     autoretry_for=(Exception,),
@@ -360,6 +383,21 @@ def parse_cv(self, cv_upload_id: str) -> dict:
             db.close()
 
 
+def _parse_scraped_deadline(value) -> "datetime | None":
+    """Best-effort ISO-date parse for a source-provided hiring deadline."""
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        if len(raw) == 10:
+            return datetime.fromisoformat(raw)
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
 @celery.task(name='app.workers.tasks.scrape_external_jobs')
 def scrape_external_jobs() -> dict:
     """Fetch jobs from configured external sources into the ScrapedJob queue (pending review)."""
@@ -392,12 +430,16 @@ def scrape_external_jobs() -> dict:
                     existing = db.query(ScrapedJob).filter(ScrapedJob.source_url == it["sourceUrl"]).first()
                 if existing:
                     existing.last_seen_at = now  # keep alive; don't re-create
+                    new_deadline = _parse_scraped_deadline(it.get("deadline"))
+                    if new_deadline:
+                        existing.application_deadline = new_deadline
                     skipped += 1
                     continue
                 db.add(ScrapedJob(
                     title=title, company_name=it.get("company"), location=it.get("location"),
                     category=it.get("category"), description=it.get("description"),
                     source=it.get("source"), source_url=it.get("sourceUrl"),
+                    application_deadline=_parse_scraped_deadline(it.get("deadline")),
                     status="pending", content_hash=chash, last_seen_at=now,
                 ))
                 ingested += 1

@@ -309,9 +309,12 @@ class Job(Base, TimestampMixin):
     spam_score = Column(Integer, nullable=False, default=0)
     spam_flags = Column(Text, nullable=True)  # JSON array of reasons
 
-    # Aggregation attribution (set when published from a scraped/external source)
+    # Aggregation attribution (set when published from a scraped/external source).
+    # `company_id` always points at the synthetic "Parvagas Aggregator" company for
+    # these listings, so the real hiring company name has nowhere else to live.
     source = Column(String(100), nullable=True)
     source_url = Column(String(1000), nullable=True)
+    external_company_name = Column(String(255), nullable=True)
 
     company = relationship("Company", foreign_keys=[company_id])
 
@@ -400,6 +403,16 @@ class Notification(Base, TimestampMixin):
     read_at = Column(DateTime, nullable=True)
 
 
+class NewsletterSubscriber(Base, TimestampMixin):
+    """Public email opt-in for job-openings / platform news announcements."""
+    __tablename__ = "newsletter_subscribers"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    source = Column(String(50), nullable=True)  # e.g. "footer", "signup"
+    unsubscribed_at = Column(DateTime, nullable=True)
+
+
 class ScrapedJob(Base, TimestampMixin):
     """External job listing ingested for curation into the public board."""
     __tablename__ = "scraped_jobs"
@@ -418,6 +431,10 @@ class ScrapedJob(Base, TimestampMixin):
     content_hash = Column(String(64), nullable=True, index=True)  # sha256(title|company|location) for dedup
     last_seen_at = Column(DateTime, nullable=True)                # last time source re-surfaced this listing
     expires_at = Column(DateTime, nullable=True)                  # auto-expire stale aggregated listings
+    # The real hiring/application deadline, from the source feed or set by an
+    # admin — distinct from `expires_at`, which is our internal 45-day shelf
+    # life fallback used when the source doesn't provide one.
+    application_deadline = Column(DateTime, nullable=True)
 
 
 class Plan(Base, TimestampMixin):

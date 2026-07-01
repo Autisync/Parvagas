@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.models import Job, Company, CareerPost
 from app.content import career_posts
+from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,7 +41,7 @@ def _company_payload(company: Optional[Company]) -> Optional[dict[str, Any]]:
         "name": company.name,
         "website": company.website,
         "description": company.description,
-        "logo": company.logo_url,
+        "logo": StorageService.resolve_public_url(company.logo_url),
         "status": company.status,
         "verified": company.status == "active",  # drives the "empresa verificada" badge
         "whatsapp": getattr(company, "phone", None),  # for WhatsApp quick-apply
@@ -73,6 +74,9 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
         "companyId": _company_payload(getattr(job, "company", None)),
         "source": getattr(job, "source", None),
         "sourceUrl": getattr(job, "source_url", None),
+        # Real hiring company for aggregated/scraped listings — companyId always
+        # points at the synthetic "Parvagas Aggregator" company for these.
+        "externalCompanyName": getattr(job, "external_company_name", None),
     }
     if detail:
         payload.update(

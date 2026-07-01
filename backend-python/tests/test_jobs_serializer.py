@@ -28,6 +28,7 @@ def _fake_job(**over):
         spam_score=0, spam_flags=None,
         expires_at=None, published_at=None, created_at=datetime(2026, 1, 1),
         company=_fake_company(),
+        external_company_name=None,
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -68,3 +69,16 @@ def test_serialize_job_without_company():
 def test_public_statuses_include_approved_and_published():
     assert "approved" in PUBLIC_JOB_STATUSES
     assert "published" in PUBLIC_JOB_STATUSES
+
+
+def test_serialize_job_exposes_external_company_name_for_aggregated_jobs():
+    out = serialize_job(_fake_job(external_company_name="Empresa Real Lda"))
+    assert out["externalCompanyName"] == "Empresa Real Lda"
+    # companyId still reflects the synthetic aggregator company underneath;
+    # the frontend is responsible for preferring externalCompanyName.
+    assert out["companyId"]["name"] == "Acme Lda"
+
+
+def test_serialize_job_external_company_name_defaults_to_none():
+    out = serialize_job(_fake_job())
+    assert out["externalCompanyName"] is None

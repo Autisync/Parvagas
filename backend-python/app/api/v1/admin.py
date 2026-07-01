@@ -9,7 +9,9 @@ import csv
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pathlib import Path as _Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
@@ -23,6 +25,7 @@ from app.models import (
 )
 from app.workers.tasks import send_templated_email
 from app.services.scraper_service import content_hash as scraped_content_hash
+from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -206,7 +209,7 @@ def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
         "title": ad.title,
         "placement": ad.placement,
         "link": ad.link,
-        "imageUrl": ad.image_url,
+        "imageUrl": StorageService.resolve_public_url(ad.image_url),
         "status": ad.status,
         "active": bool(ad.active),
         "budget": ad.budget,
@@ -223,6 +226,27 @@ def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
         "endDate": ad.end_date.isoformat() if ad.end_date else None,
         "createdAt": ad.created_at.isoformat() if ad.created_at else None,
     }
+
+
+def _resolve_ad_image_update(existing_ref: str | None, incoming: Any) -> str | None:
+    """Decide what to store for AdCampaign.image_url on an edit.
+
+    The admin UI always echoes back whatever `imageUrl` it last displayed —
+    which is a resolved, time-limited signed URL, not the stable stored ref —
+    even when the admin never touched the image field. Blindly persisting that
+    would silently replace a durable "server:<key>" ref with a URL that
+    expires and can never be re-derived. Only treat the incoming value as a
+    real change when it's a fresh upload ref or genuinely differs from what
+    we'd currently resolve the existing ref to.
+    """
+    value = str(incoming or "").strip()
+    if not value:
+        return None  # admin explicitly cleared the field
+    if value.startswith(("server:", "supabase:")):
+        return value  # fresh ref from our own upload endpoint
+    if existing_ref and value == StorageService.resolve_public_url(existing_ref):
+        return existing_ref  # echoed-back resolved URL — no real change
+    return value  # a genuinely different (admin-pasted) external URL
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -791,8 +815,18 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "status": s.status,
         "duplicateOf": s.duplicate_of,
         "publishedJobId": s.published_job_id,
+        "applicationDeadline": s.application_deadline.isoformat() if s.application_deadline else None,
         "createdAt": s.created_at.isoformat() if s.created_at else None,
     }
+
+
+def _resolve_scraped_job_expiry(application_deadline: datetime | None, now: datetime, shelf_life_days: int = 45) -> datetime:
+    """Prefer the real hiring deadline (source-provided or admin-set) over the
+    internal shelf-life fallback, but only when it's still in the future —
+    otherwise an already-passed deadline would publish a pre-expired job."""
+    if application_deadline and application_deadline > now:
+        return application_deadline
+    return now + timedelta(days=shelf_life_days)
 
 
 def _aggregator_company(db: Session, admin: User) -> Company:
@@ -856,6 +890,7 @@ async def admin_create_scraped(
         source=str(payload.get("source", "")).strip() or None,
         source_url=source_url,
         description=str(payload.get("description", "")).strip() or None,
+        application_deadline=_parse_date(payload.get("applicationDeadline") or payload.get("deadline")),
         status="pending",
         content_hash=chash,
         last_seen_at=datetime.utcnow(),
@@ -885,6 +920,9 @@ async def admin_update_scraped(
         if key in payload:
             setattr(s, attr, str(payload[key] or "").strip() or None)
             changed.append(key)
+    if "applicationDeadline" in payload:
+        s.application_deadline = _parse_date(payload.get("applicationDeadline"))
+        changed.append("applicationDeadline")
     # Keep the dedup hash in sync if identifying fields changed.
     if {"title", "company", "location"} & set(changed):
         s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)
@@ -911,14 +949,15 @@ async def admin_review_scraped(
         s.status = "approved"
         if not s.published_job_id:
             co = _aggregator_company(db, admin)
+            expires_at = _resolve_scraped_job_expiry(s.application_deadline, datetime.utcnow())
             job = Job(
                 company_id=co.id, title=s.title, description=s.description,
                 location=s.location, category=s.category,
                 status="approved", visibility="public",
                 published_at=datetime.utcnow(),
-                # Carry attribution + a 45-day shelf life for aggregated listings.
                 source=s.source, source_url=s.source_url,
-                expires_at=datetime.utcnow() + timedelta(days=45),
+                external_company_name=s.company_name,
+                expires_at=expires_at,
             )
             db.add(job)
             db.flush()
@@ -1250,6 +1289,30 @@ async def admin_ads(
     return {"ads": [_to_ad_record(row) for row in rows]}
 
 
+_AD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+_AD_IMAGE_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/ads/upload-image")
+async def admin_upload_ad_image(
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Upload an ad creative to durable storage and return its stored ref +
+    a resolved preview URL. The stored ref (not the preview URL) is what
+    should be sent back in the imageUrl field when creating/updating the ad."""
+    _ensure_admin(current_user)
+    ext = _Path(image.filename or "").suffix.lower() or ".png"
+    if ext not in _AD_IMAGE_EXTENSIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de imagem não suportado")
+    data = await image.read()
+    if len(data) > _AD_IMAGE_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imagem excede o tamanho máximo de 5MB")
+    ref = StorageService.save_file(data, f"ad-image-{uuid.uuid4()}{ext}")
+    return {"imageUrl": ref, "previewUrl": StorageService.resolve_public_url(ref)}
+
+
 @router.post("/ads")
 async def admin_create_ad(
     payload: dict[str, Any],
@@ -1313,7 +1376,7 @@ async def admin_update_ad(
     if "link" in payload:
         ad.link = str(payload.get("link", "")).strip() or None
     if "imageUrl" in payload:
-        ad.image_url = str(payload.get("imageUrl", "")).strip() or None
+        ad.image_url = _resolve_ad_image_update(ad.image_url, payload.get("imageUrl"))
     if "budget" in payload:
         ad.budget = float(payload.get("budget") or 0)
     if "costPerClick" in payload:

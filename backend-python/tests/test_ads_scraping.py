@@ -90,3 +90,47 @@ def test_rss_adapter_parses_items(monkeypatch):
     assert len(out) == 1
     assert out[0]["title"] == "Vaga A"
     assert out[0]["sourceUrl"] == "http://a/1"
+
+
+# ---- scraper hiring-deadline normalisation ----
+
+def test_json_adapter_normalises_deadline_field(monkeypatch):
+    import app.services.scraper_service as svc
+    payload = '{"jobs":[{"title":"Dev","company":"X","deadline":"2026-08-01"}]}'
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3: payload)
+    out = JSONFeedAdapter(name="X", url="http://x").fetch()
+    assert out[0]["deadline"] == "2026-08-01"
+
+
+def test_json_adapter_accepts_deadline_field_aliases(monkeypatch):
+    import app.services.scraper_service as svc
+    for key in ("closingDate", "applicationDeadline", "expiresAt"):
+        payload = f'{{"jobs":[{{"title":"Dev","{key}":"2026-09-15"}}]}}'
+        monkeypatch.setattr(svc, "_get", lambda url, retries=3: payload)
+        out = JSONFeedAdapter(name="X", url="http://x").fetch()
+        assert out[0]["deadline"] == "2026-09-15", f"alias {key} not picked up"
+
+
+def test_json_adapter_deadline_absent_is_none(monkeypatch):
+    import app.services.scraper_service as svc
+    payload = '{"jobs":[{"title":"Dev"}]}'
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3: payload)
+    out = JSONFeedAdapter(name="X", url="http://x").fetch()
+    assert out[0]["deadline"] is None
+
+
+# ---- scraper -> ScrapedJob ingestion deadline parsing ----
+
+def test_parse_scraped_deadline_handles_date_and_datetime():
+    from app.workers.tasks import _parse_scraped_deadline
+
+    assert _parse_scraped_deadline("2026-08-01") == datetime(2026, 8, 1)
+    assert _parse_scraped_deadline("2026-08-01T10:00:00Z") == datetime(2026, 8, 1, 10, 0, 0)
+
+
+def test_parse_scraped_deadline_handles_blank_and_garbage():
+    from app.workers.tasks import _parse_scraped_deadline
+
+    assert _parse_scraped_deadline(None) is None
+    assert _parse_scraped_deadline("") is None
+    assert _parse_scraped_deadline("not-a-date") is None

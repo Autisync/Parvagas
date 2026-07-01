@@ -1,0 +1,56 @@
+"""Public newsletter signup — email opt-in for job-opening announcements."""
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models import NewsletterSubscriber
+from app.workers.tasks import send_newsletter_confirmation_email
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+router = APIRouter(tags=["newsletter"])
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class NewsletterSubscribeRequest(BaseModel):
+    email: str
+    source: str | None = None
+
+
+@router.post("/newsletter/subscribe")
+async def subscribe_newsletter(
+    payload: NewsletterSubscribeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    from app.core.captcha import verify_captcha
+
+    _ip = request.client.host if request.client else None
+    if not await verify_captcha(request.headers.get("x-captcha-token"), action="newsletter_subscribe", remote_ip=_ip):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
+
+    email = (payload.email or "").strip().lower()
+    if not email or not EMAIL_RE.match(email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail inválido.")
+
+    existing = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == email).first()
+    if existing:
+        if existing.unsubscribed_at is not None:
+            existing.unsubscribed_at = None
+            db.commit()
+        return {"message": "Subscrição confirmada."}
+
+    subscriber = NewsletterSubscriber(
+        email=email,
+        source=(payload.source or "").strip()[:50] or None,
+    )
+    db.add(subscriber)
+    db.commit()
+
+    send_newsletter_confirmation_email.delay(email)
+
+    return {"message": "Subscrição confirmada."}

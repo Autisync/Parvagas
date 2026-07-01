@@ -145,6 +145,26 @@ class StorageService:
         return None
 
     @staticmethod
+    def resolve_public_url(file_path: str | None, expires_in: int = 86400) -> str | None:
+        """Turn a stored reference into something an <img src> can actually load.
+
+        `save_file` returns opaque refs like "server:<key>" or "supabase:<key>" —
+        those are DB-storage identifiers, not browsable URLs. Public-facing
+        images (logos, ad creatives) must be resolved before being sent to the
+        frontend, or the <img> tag just gets a broken non-URL string. Values
+        that are already a plain http(s)/data/root-relative URL (legacy
+        free-text entries, or admin-pasted external URLs) pass through
+        unchanged.
+        """
+        if not file_path:
+            return None
+        if file_path.startswith(("http://", "https://", "data:", "/")):
+            return file_path
+        if file_path.startswith(("server:", "supabase:")):
+            return StorageService.signed_url(file_path, expires_in=expires_in)
+        return None
+
+    @staticmethod
     def save_file(file_content: bytes, file_name: str) -> str:
         """Save a file to the configured backend and return a reference/path."""
         if StorageService._server_enabled():

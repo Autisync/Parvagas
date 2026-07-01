@@ -90,12 +90,17 @@ class SourceAdapter:
         raise NotImplementedError
 
     def _normalise(self, raw: dict[str, Any]) -> dict[str, Any]:
+        deadline_raw = (
+            raw.get("deadline") or raw.get("closingDate") or raw.get("applicationDeadline")
+            or raw.get("expiresAt") or raw.get("expires_at") or ""
+        )
         return {
             "title": (raw.get("title") or "").strip(),
             "company": (raw.get("company") or raw.get("companyName") or "").strip() or None,
             "location": (raw.get("location") or "").strip() or None,
             "category": (raw.get("category") or self.category or "").strip() or None,
             "description": (raw.get("description") or "").strip() or None,
+            "deadline": str(deadline_raw).strip() or None,
             "source": self.name,
             "sourceUrl": (raw.get("url") or raw.get("link") or raw.get("sourceUrl") or "").strip() or None,
         }

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.observability import limiter
 from app.db.session import SessionLocal
 from app.models import AdCampaign
+from app.services.storage_service import StorageService
 
 
 router = APIRouter(prefix="/ads", tags=["ads"])
@@ -56,7 +57,7 @@ def _to_public_ad(ad: AdCampaign) -> dict[str, Any]:
         "title": ad.title,
         "placement": ad.placement,
         "link": ad.link,
-        "imageUrl": ad.image_url,
+        "imageUrl": StorageService.resolve_public_url(ad.image_url),
         "impressions": int(ad.impressions or 0),
         "clicks": int(ad.clicks or 0),
     }

@@ -22,6 +22,16 @@ def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
         return cid
     job = db.query(Job).filter(Job.id == job_id).first()
     return job.company_id if job else None
+
+
+def _resolve_applicant_field(submitted: str | None, fallback: str | None) -> str | None:
+    """Prefer a value typed for this specific application over the profile
+    default, so per-application edits (e.g. a different phone number) take
+    effect instead of being silently discarded."""
+    trimmed = (submitted or "").strip()
+    return trimmed or fallback
+
+
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.services.email_service import EmailService
@@ -121,6 +131,8 @@ async def submit_candidate_application(
     companyId: str | None = Form(default=None),
     useLatestCv: str = Form("true"),
     coverLetter: str = Form(""),
+    phone: str | None = Form(default=None),
+    location: str | None = Form(default=None),
     savedCvDocumentId: str | None = Form(default=None),
     customCv: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
@@ -153,8 +165,8 @@ async def submit_candidate_application(
         candidate_user_id=current_user.id,
         applicant_full_name=current_user.full_name,
         applicant_email=current_user.email,
-        applicant_phone=candidate_profile.phone if candidate_profile else None,
-        applicant_location=candidate_profile.location if candidate_profile else None,
+        applicant_phone=_resolve_applicant_field(phone, candidate_profile.phone if candidate_profile else None),
+        applicant_location=_resolve_applicant_field(location, candidate_profile.location if candidate_profile else None),
         cover_letter=(coverLetter or "").strip() or None,
         profile_source="main_profile" if use_latest_cv else "custom_cv",
         status="submitted",
