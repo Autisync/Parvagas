@@ -298,6 +298,33 @@ async def public_homepage(
     }
 
 
+@router.get("/public/stats")
+async def public_stats(db: Session = Depends(get_db)):
+    """Real, anonymous platform counters for public marketing surfaces (e.g. the
+    Empresa page). Never 500s: every counter is read independently and falls back
+    to null, so a transient DB blip degrades one number rather than the section.
+    The frontend applies any marketing adjustment; this endpoint returns truth."""
+    from app.models import User, UserRole, JobApplication
+
+    def _count(fn):
+        try:
+            return int(fn())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("public_stats counter failed: %s", exc)
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            return None
+
+    return {
+        "candidates": _count(lambda: db.query(User).filter(User.role == UserRole.candidate).count()),
+        "companies": _count(lambda: db.query(Company).count()),
+        "jobs": _count(lambda: db.query(Job).filter(Job.status.in_(PUBLIC_JOB_STATUSES)).count()),
+        "applications": _count(lambda: db.query(JobApplication).count()),
+    }
+
+
 @router.get("/public/career/posts")
 async def public_career_posts(
     page: int = Query(default=1, ge=1),
