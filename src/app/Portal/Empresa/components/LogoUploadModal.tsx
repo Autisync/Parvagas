@@ -270,7 +270,7 @@ export default function LogoUploadModal({ token, open, currentLogo, onClose, onU
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-bold text-slate-900">Upload e gestão de logo</h3>

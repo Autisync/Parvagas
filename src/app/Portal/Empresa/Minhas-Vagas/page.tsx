@@ -54,7 +54,7 @@ const statusLabel: Record<string, string> = {
   suspended: "Suspensa",
 };
 const statusColor: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
+  pending: "bg-orange-100 text-orange-700",
   pending_company_approval: "bg-amber-100 text-amber-700",
   pending_platform_review: "bg-sky-100 text-sky-700",
   approved: "bg-green-100 text-green-700",

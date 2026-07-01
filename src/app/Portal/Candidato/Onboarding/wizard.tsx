@@ -767,7 +767,7 @@ function StepPersonal({
         <Field label="Nome completo" required>
           <input className={inputCls} value={data.fullName} onChange={s("fullName")} placeholder="Ex: Ana Paula Ferreira" />
         </Field>
-        <Field label="Email" required>
+        <Field label="E-mail" required>
           <input type="email" className={inputCls} value={data.email} onChange={s("email")} placeholder="email@exemplo.com" />
         </Field>
         <Field label="Telefone">

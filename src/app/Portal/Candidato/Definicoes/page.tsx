@@ -128,10 +128,10 @@ export default function DefinicoesPage() {
 
       <form onSubmit={handleSave}>
         <div className="rounded-lg border border-slate-200 px-6">
-          <Row label="Email job alerts" desc="Receber alertas de vagas por email" k="emailJobAlerts" />
-          <Row label="Application status updates" desc="Ser avisado de alterações de estado de candidatura" k="applicationStatusUpdates" />
-          <Row label="Saved job reminders" desc="Lembretes sobre vagas guardadas" k="savedJobReminders" />
-          <Row label="Recommendation updates" desc="Novas recomendações relevantes" k="recommendationUpdates" />
+          <Row label="Alertas de vagas por e-mail" desc="Receber alertas de vagas por email" k="emailJobAlerts" />
+          <Row label="Actualizações de candidatura" desc="Ser avisado de alterações de estado de candidatura" k="applicationStatusUpdates" />
+          <Row label="Lembretes de vagas guardadas" desc="Lembretes sobre vagas guardadas" k="savedJobReminders" />
+          <Row label="Actualizações de recomendações" desc="Novas recomendações relevantes" k="recommendationUpdates" />
           <Row label="Marketing/newsletter" desc="Novidades e conteúdos da plataforma" k="marketingNewsletter" />
           </div>
 

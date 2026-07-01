@@ -4,6 +4,7 @@ import BannerError from "@/app/components/errors/BannerError";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import ModalError from "@/app/components/errors/ModalError";
 import ToastError from "@/app/components/errors/ToastError";
+import FeedbackAlert from "@/app/components/errors/FeedbackAlert";
 
 describe("Error UI components", () => {
   it("renders FormFieldError next to a field with alert semantics", () => {
@@ -60,5 +61,14 @@ describe("Error UI components", () => {
 
     expect(screen.getByText("Falha crítica")).toBeInTheDocument();
     expect(screen.getByText("Código de suporte: REQ-123")).toBeInTheDocument();
+  });
+
+  it("renders the warning variant with amber accent styling and alert role", () => {
+    render(<FeedbackAlert variant="warning" title="Atenção" message="Verifique os dados." />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Atenção");
+    expect(alert.className).toContain("border-l-amber-500");
+    expect(alert.className).toContain("bg-amber-50");
   });
 });

@@ -27,12 +27,15 @@ const variantStyles: Record<FeedbackVariant, { container: string; title: string;
     button: "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100",
     icon: "text-emerald-500",
   },
+  // Left accent bar (unlike the other variants) keeps this readable as an
+  // urgent notice rather than a muted tip — amber-50/200 alone read as too
+  // soft next to the app's saturated brand-red surfaces.
   warning: {
-    container: "border-amber-200 bg-amber-50",
+    container: "border-amber-200 border-l-4 border-l-amber-500 bg-amber-50",
     title: "text-amber-900",
     message: "text-amber-800",
-    button: "border-amber-200 bg-white text-amber-900 hover:bg-amber-100",
-    icon: "text-amber-500",
+    button: "border-amber-300 bg-white text-amber-900 hover:bg-amber-100",
+    icon: "text-amber-600",
   },
   info: {
     container: "border-slate-200 bg-slate-50",

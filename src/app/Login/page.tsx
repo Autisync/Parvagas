@@ -229,7 +229,7 @@ function LoginContent() {
         if (res.status === 403 && apiCode === "EMAIL_NOT_VERIFIED") {
           showFeedback({
             variant: "warning",
-            message: "Please verify your email before signing in.",
+            message: "Confirme o seu e-mail antes de iniciar sessão.",
             actionLabel: resendingVerification ? "A reenviar..." : "Reenviar verificação",
             onAction: () => {
               if (!email.trim()) return;

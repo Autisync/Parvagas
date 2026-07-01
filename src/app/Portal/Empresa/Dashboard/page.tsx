@@ -17,6 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import WarningAlert from "@/app/components/errors/WarningAlert";
 import { AnimatedCounter, MilestoneCelebration } from "@/app/components/motion";
 
 const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
@@ -190,14 +191,14 @@ export default function EmpresaDashboard() {
               }
             />
 
-            {(profile.status === "pending_verification" || profile.status === "rejected") && (
-              <section className={`rounded-2xl border p-4 ${profile.status === "pending_verification" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
-                <p className={`text-sm font-semibold ${profile.status === "pending_verification" ? "text-amber-900" : "text-red-900"}`}>
-                  {profile.status === "pending_verification"
-                    ? "A sua empresa está em validação. Publicação de vagas indisponível até aprovação."
-                    : "A conta da empresa está rejeitada ou inativa. Contacte o suporte para regularização."}
-                </p>
-              </section>
+            {profile.status === "pending_verification" && (
+              <WarningAlert message="A sua empresa está em validação. Publicação de vagas indisponível até aprovação." />
+            )}
+            {profile.status === "rejected" && (
+              <InlineErrorState
+                title="Conta rejeitada"
+                message="A conta da empresa está rejeitada ou inativa. Contacte o suporte para regularização."
+              />
             )}
 
             {pageError && <InlineErrorState onAction={() => window.location.reload()} />}

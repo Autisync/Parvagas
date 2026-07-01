@@ -50,7 +50,7 @@ const statusLabel: Record<string, string> = {
 const statusColor: Record<string, string> = {
   submitted: "bg-red-100 text-red-700",
   under_review: "bg-amber-100 text-amber-700",
-  viewed: "bg-yellow-100 text-yellow-700",
+  viewed: "bg-sky-100 text-sky-700",
   shortlisted: "bg-purple-100 text-purple-700",
   interview: "bg-indigo-100 text-indigo-700",
   offer: "bg-emerald-100 text-emerald-700",
