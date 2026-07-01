@@ -13,7 +13,7 @@ const csp = [
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "connect-src 'self' https:",
-    "frame-src 'self' https://www.google.com https://recaptcha.net",
+    "frame-src 'self' https://www.google.com https://recaptcha.net https://www.youtube.com https://www.youtube-nocookie.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

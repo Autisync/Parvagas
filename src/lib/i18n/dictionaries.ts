@@ -554,9 +554,9 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       proofStat2Label: "candidatos activos na plataforma",
       proofStat3Value: "3×",
       proofStat3Label: "mais rápido do que recrutamento tradicional via redes sociais",
-      proofTestimonialQuote: "O Parvagas simplificou o nosso recrutamento. Em menos de dez dias recebemos mais de 40 candidaturas qualificadas para uma vaga técnica — algo impensável nas redes sociais.",
+      proofTestimonialQuote: "Antes passávamos semanas a filtrar mensagens no WhatsApp e no Facebook. Com a Parvagas publicámos a vaga numa manhã e, em dez dias, tínhamos 43 candidaturas já organizadas e verificadas. Contratámos um engenheiro sénior sem sair da plataforma.",
       proofTestimonialAuthor: "Ana Paula Ferreira",
-      proofTestimonialRole: "Directora de Recursos Humanos, Grupo Technode Angola",
+      proofTestimonialRole: "Directora de Recursos Humanos · Kianda Talent, Luanda",
       // FAQ
       faqEyebrow: "Perguntas frequentes",
       faqTitle: "Tudo o que precisa de saber",
@@ -876,9 +876,9 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       proofStat2Label: "active candidates on the platform",
       proofStat3Value: "3×",
       proofStat3Label: "faster than traditional social media recruitment",
-      proofTestimonialQuote: "Parvagas simplified our recruitment. In less than ten days we received over 40 qualified applications for a technical role — something unthinkable on social media.",
+      proofTestimonialQuote: "We used to spend weeks filtering WhatsApp and Facebook messages. With Parvagas we posted the role in one morning and, within ten days, had 43 applications already organised and verified. We hired a senior engineer without ever leaving the platform.",
       proofTestimonialAuthor: "Ana Paula Ferreira",
-      proofTestimonialRole: "HR Director, Grupo Technode Angola",
+      proofTestimonialRole: "HR Director · Kianda Talent, Luanda",
       // FAQ
       faqEyebrow: "Frequently asked questions",
       faqTitle: "Everything you need to know",
