@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -262,7 +263,7 @@ function EmpresaPerfilContent() {
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
                   <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {profile.logo ? (
-                      <img src={resolveLogoUrl(profile.logo)} alt="Logo da empresa" className="h-full w-full object-contain p-3" />
+                      <Image src={resolveLogoUrl(profile.logo)} alt="Logo da empresa" width={180} height={180} className="h-full w-full object-contain p-3" unoptimized />
                     ) : (
                       <div className="text-center">
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-lg font-bold text-red-700">

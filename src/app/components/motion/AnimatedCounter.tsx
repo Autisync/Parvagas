@@ -67,7 +67,6 @@ export default function AnimatedCounter({
     );
     io.observe(el);
     return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, duration]);
 
   const formatted = display.toLocaleString(locale, {

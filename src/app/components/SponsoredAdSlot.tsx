@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
@@ -85,7 +86,17 @@ export default function SponsoredAdSlot({
       aria-label={ad.title || "Publicidade"}
     >
       {ad.imageUrl ? (
-        <img src={ad.imageUrl} alt={ad.title || "Publicidade"} className="h-52 w-full object-cover" loading="lazy" />
+        <div className="relative h-52 w-full">
+          <Image
+            src={ad.imageUrl}
+            alt={ad.title || "Publicidade"}
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover"
+            loading="lazy"
+            unoptimized
+          />
+        </div>
       ) : null}
       <div className="p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-600">Patrocinado</p>

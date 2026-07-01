@@ -2,26 +2,34 @@ import { MetadataRoute } from "next";
 
 const BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
 
-async function fetchCareerSlugs(): Promise<string[]> {
+// Regenerate the sitemap hourly at runtime (ISR) rather than freezing it at
+// build time. Combined with the per-fetch timeout below, a slow or down API
+// during a deploy can never stall the build or permanently omit URLs — the
+// next hourly regeneration picks them back up.
+export const revalidate = 3600;
+
+// Bound each upstream call so a hanging API can't stall generation.
+async function fetchJson<T>(path: string): Promise<T | null> {
   try {
-    const res = await fetch(`${BASE}/api/v1/public/career/posts`, { next: { revalidate: 3600 } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { posts?: { slug?: string }[] };
-    return (data.posts ?? []).map((p) => p.slug).filter(Boolean) as string[];
+    const res = await fetch(`${BASE}${path}`, {
+      next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
   } catch {
-    return [];
+    return null;
   }
 }
 
+async function fetchCareerSlugs(): Promise<string[]> {
+  const data = await fetchJson<{ posts?: { slug?: string }[] }>("/api/v1/public/career/posts");
+  return (data?.posts ?? []).map((p) => p.slug).filter(Boolean) as string[];
+}
+
 async function fetchJobIds(): Promise<string[]> {
-  try {
-    const res = await fetch(`${BASE}/api/v1/public/homepage`, { next: { revalidate: 3600 } });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { jobs?: { _id?: string }[] };
-    return (data.jobs ?? []).map((j) => j._id).filter(Boolean) as string[];
-  } catch {
-    return [];
-  }
+  const data = await fetchJson<{ jobs?: { _id?: string }[] }>("/api/v1/public/homepage");
+  return (data?.jobs ?? []).map((j) => j._id).filter(Boolean) as string[];
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { AdminLoadingLabel } from "../components/AdminUI";
@@ -347,7 +348,7 @@ export default function AdminAdsPage() {
               <AdminLoadingLabel loading={busy} idle="Criar anúncio" busy="A guardar..." />
             </button>
           </div>
-          {previewImage ? <img src={previewImage} alt="Pré-visualização do anúncio" className="mt-3 h-24 rounded-xl border border-slate-200 object-contain p-1" /> : null}
+          {previewImage ? <Image src={previewImage} alt="Pré-visualização do anúncio" width={240} height={96} className="mt-3 h-24 w-auto rounded-xl border border-slate-200 object-contain p-1" unoptimized /> : null}
         </form>
       )}
 

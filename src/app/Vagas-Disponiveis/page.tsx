@@ -67,6 +67,10 @@ function companyLogo(job: Job): string | null {
   return null;
 }
 
+// Stable module-level default so it never re-creates per render (used as both a
+// useState initializer and a useCallback default arg).
+const emptyFilters = { keyword: "", location: "", category: "", workMode: "", contractType: "", seniority: "", salaryMin: "", datePosted: "", sort: "recent" };
+
 function VagasDisponiveisContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,7 +88,6 @@ function VagasDisponiveisContent() {
   const [datePosted, setDatePosted] = useState("");
   const [sort, setSort] = useState("recent");
   const [showFilters, setShowFilters] = useState(false);
-  const emptyFilters = { keyword: "", location: "", category: "", workMode: "", contractType: "", seniority: "", salaryMin: "", datePosted: "", sort: "recent" };
   const [applied, setApplied] = useState(emptyFilters);
   const { dict, locale } = useClientLocale();
   const categoryLabels: Record<string, string> =

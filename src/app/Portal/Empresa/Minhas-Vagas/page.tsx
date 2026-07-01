@@ -85,7 +85,7 @@ export default function MinhasVagasPage() {
   // Fetch jobs with TanStack Query
   const { data: jobsData, isLoading, error, refetch } = useCompanyJobs(token, page, 20);
   
-  const jobs = jobsData?.jobs || [];
+  const jobs = useMemo(() => jobsData?.jobs || [], [jobsData]);
   const totalRecords = jobsData?.total || 0;
   const totalPages = jobsData?.totalPages || 1;
 

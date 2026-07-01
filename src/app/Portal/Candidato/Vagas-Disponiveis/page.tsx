@@ -76,7 +76,7 @@ export default function PortalVagasDisponiveisPage() {
   // Fetch jobs from API with pagination
   const { data: jobsData, isLoading, error } = usePublicJobs(page, 10, { keyword: debouncedQuery });
 
-  const jobs = jobsData?.jobs || [];
+  const jobs = useMemo(() => jobsData?.jobs || [], [jobsData]);
   const total = jobsData?.total || 0;
   const totalPages = jobsData?.totalPages || 1;
 

@@ -75,7 +75,7 @@ export default function CandidaturasPage() {
   // Fetch applications with TanStack Query
   const { data: applicationsData, isLoading, error } = useApplications(token, page, 20);
   
-  const applications = applicationsData?.applications || [];
+  const applications = useMemo(() => applicationsData?.applications || [], [applicationsData]);
   const totalRecords = applicationsData?.total || 0;
   const totalPages = applicationsData?.totalPages || 1;
 

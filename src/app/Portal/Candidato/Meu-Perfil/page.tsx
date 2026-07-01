@@ -323,7 +323,7 @@ export default function MeuPerfilPage() {
     return "Bom trabalho. Continue a atualizar o perfil com informação recente.";
   }, [latestCvName, profile]);
 
-  const sectionState = {
+  const sectionState = useMemo(() => ({
     informacao: [profile.fullName, profile.email, profile.phone, profile.location].every((v) => String(v || "").trim())
       ? "complete"
       : [profile.fullName, profile.email, profile.phone, profile.location].some((v) => String(v || "").trim())
@@ -335,7 +335,7 @@ export default function MeuPerfilPage() {
     certificacoes: (profile.certifications || []).length >= 1 ? "complete" : "empty",
     idiomas: (profile.languages || []).length >= 1 ? "complete" : "empty",
     resumo: String(profile.summary || "").trim().length >= 150 ? "complete" : String(profile.summary || "").trim() ? "partial" : "empty",
-  } as const;
+  } as const), [profile]);
 
   const validateForm = () => {
     // Format-only validation — do NOT block on empty fields.

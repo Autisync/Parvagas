@@ -99,7 +99,7 @@ export default function EmpresaCandidaturasPage() {
   // Fetch applications with pagination using TanStack Query
   const { data: applicationsData, isLoading, error, refetch } = useApplications(token, page, 20);
   
-  const applications = applicationsData?.applications || [];
+  const applications = useMemo(() => applicationsData?.applications || [], [applicationsData]);
   const totalRecords = applicationsData?.total || 0;
   const totalPages = applicationsData?.totalPages || 1;
 
