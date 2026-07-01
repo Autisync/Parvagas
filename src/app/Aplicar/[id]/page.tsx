@@ -52,6 +52,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
   const [celebrate, setCelebrate] = useState(false);
 
   const [token, setToken] = useState<string | null>(null);
+  const [accountRole, setAccountRole] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("guest");
   const [savedCvs, setSavedCvs] = useState<CvDocument[]>([]);
 
@@ -91,6 +92,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
         const u = (getUser() || {}) as CandidateUser;
         const isCandidate = Boolean(t && u?.role === "candidate");
         setToken(t);
+        setAccountRole(t ? u?.role || null : null);
         setMode(isCandidate ? "candidate" : "guest");
 
         if (isCandidate && t) {
@@ -149,6 +151,8 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
       if (companyId) formData.append("companyId", companyId);
       formData.append("useLatestCv", candidateForm.useLatestCv ? "true" : "false");
       formData.append("coverLetter", candidateForm.coverLetter);
+      formData.append("phone", candidateForm.phone);
+      formData.append("location", candidateForm.location);
       if (candidateForm.useLatestCv && candidateForm.savedCvDocumentId) {
         formData.append("savedCvDocumentId", candidateForm.savedCvDocumentId);
       }
@@ -298,11 +302,20 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
                         <Link href={`/Signup?next=/Aplicar/${job._id}`} className="rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700">Criar conta</Link>
                       </div>
                     </div>
+                  ) : accountRole && accountRole !== "candidate" ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                      Esta conta não é uma conta de candidato, por isso não pode candidatar-se com dados de perfil. Use o Quick Apply ou inicie sessão com uma conta de candidato.
+                    </div>
                   ) : (
                     <>
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <input className="rounded-xl border border-slate-300 px-3 py-2" value={candidateForm.fullName} onChange={(e) => setCandidateForm((p) => ({ ...p, fullName: e.target.value }))} placeholder="Nome" />
-                        <input className="rounded-xl border border-slate-300 px-3 py-2" value={candidateForm.email} onChange={(e) => setCandidateForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" />
+                        {/* Locked to the account: the acknowledgement email and
+                            the applicant record on the company side always use
+                            the verified account identity, never a value typed
+                            here — so these stay read-only instead of pretending
+                            to be editable. */}
+                        <input readOnly className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-500" value={candidateForm.fullName} placeholder="Nome" title="Vem da sua conta" />
+                        <input readOnly className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-500" value={candidateForm.email} placeholder="E-mail" title="Vem da sua conta" />
                         <input className="rounded-xl border border-slate-300 px-3 py-2" value={candidateForm.phone} onChange={(e) => setCandidateForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefone" />
                         <input className="rounded-xl border border-slate-300 px-3 py-2" value={candidateForm.location} onChange={(e) => setCandidateForm((p) => ({ ...p, location: e.target.value }))} placeholder="Localização" />
                       </div>
@@ -374,7 +387,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
                 <div className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <input className="rounded-xl border border-slate-300 px-3 py-2" value={guestForm.fullName} onChange={(e) => setGuestForm((p) => ({ ...p, fullName: e.target.value }))} placeholder="Nome completo *" />
-                    <input className="rounded-xl border border-slate-300 px-3 py-2" value={guestForm.email} onChange={(e) => setGuestForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email *" />
+                    <input className="rounded-xl border border-slate-300 px-3 py-2" value={guestForm.email} onChange={(e) => setGuestForm((p) => ({ ...p, email: e.target.value }))} placeholder="E-mail *" />
                     <input className="rounded-xl border border-slate-300 px-3 py-2" value={guestForm.phone} onChange={(e) => setGuestForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Telefone *" />
                     <input className="rounded-xl border border-slate-300 px-3 py-2" value={guestForm.location} onChange={(e) => setGuestForm((p) => ({ ...p, location: e.target.value }))} placeholder="Localização *" />
                   </div>

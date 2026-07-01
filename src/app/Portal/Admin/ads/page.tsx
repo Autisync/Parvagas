@@ -17,6 +17,7 @@ import {
   setAdminAdStatus,
   statusBadgeClass,
   toDateLabel,
+  uploadAdminAdImage,
   type AdCampaignRecord,
   type AdminMe,
 } from "../adminClient";
@@ -83,6 +84,7 @@ export default function AdminAdsPage() {
   const [selectedAd, setSelectedAd] = useState<AdCampaignRecord | null>(null);
   const [previewImage, setPreviewImage] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const { notify } = useAppNotifier();
 
   const canManage = useMemo(() => hasPermission(me, AdminPermissions.ADS_MANAGE), [me]);
@@ -230,15 +232,21 @@ export default function AdminAdsPage() {
 
   const onImageFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-    const value = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Não foi possível ler a imagem selecionada."));
-      reader.readAsDataURL(file);
-    });
-    setForm((prev) => ({ ...prev, imageUrl: value }));
-    setPreviewImage(value);
+    event.target.value = ""; // allow re-selecting the same file after a failed upload
+    if (!file || !token) return;
+    setUploadingImage(true);
+    try {
+      // Upload to durable storage — never stuff a base64 data URL into the
+      // imageUrl field, it bloats every ad-delivery API response and the
+      // image is never actually persisted anywhere durable.
+      const { imageUrl, previewUrl } = await uploadAdminAdImage(token, file);
+      setForm((prev) => ({ ...prev, imageUrl }));
+      setPreviewImage(previewUrl || "");
+    } catch (err: unknown) {
+      notify(err instanceof Error ? err.message : "Erro ao enviar a imagem.", "error");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   if (!canViewAds) {
@@ -298,11 +306,16 @@ export default function AdminAdsPage() {
             <FormFieldError id="ad-link-error" message={formErrors.link} />
             <input
               value={form.imageUrl}
-              onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((prev) => ({ ...prev, imageUrl: value }));
+                setPreviewImage(value);
+              }}
               placeholder="URL da imagem/banner"
               className={adminFieldClass}
             />
-            <input type="file" accept="image/*" onChange={onImageFile} className={adminFieldClass} />
+            <input type="file" accept="image/*" onChange={onImageFile} disabled={uploadingImage} className={adminFieldClass} />
+            {uploadingImage ? <p className="text-xs text-slate-500">A enviar imagem...</p> : null}
             <input
               type="date"
               required
@@ -445,7 +458,16 @@ export default function AdminAdsPage() {
             setForm((prev) => ({ ...prev, link: value }));
             setFormErrors((prev) => ({ ...prev, link: undefined }));
           }} placeholder="Link URL" className={adminFieldClass} />
-          <input value={form.imageUrl} onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))} placeholder="URL da imagem" className={adminFieldClass} />
+          <input value={form.imageUrl} onChange={(e) => {
+            const value = e.target.value;
+            setForm((prev) => ({ ...prev, imageUrl: value }));
+            setPreviewImage(value);
+          }} placeholder="URL da imagem" className={adminFieldClass} />
+          <input type="file" accept="image/*" onChange={onImageFile} disabled={uploadingImage} className={adminFieldClass} />
+          {uploadingImage ? <p className="text-xs text-slate-500 md:col-span-2">A enviar imagem...</p> : null}
+          {previewImage ? (
+            <Image src={previewImage} alt="Pré-visualização do anúncio" width={240} height={96} className="mt-1 h-24 w-auto rounded-xl border border-slate-200 object-contain p-1 md:col-span-2" unoptimized />
+          ) : null}
           <FormFieldError id="edit-ad-link-error" message={formErrors.link} />
           <input type="date" value={form.startDate} onChange={(e) => {
             const value = e.target.value;

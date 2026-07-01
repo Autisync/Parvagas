@@ -13,10 +13,11 @@ import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
 import { track } from "@/lib/analytics";
 
-type Job = {
+export type Job = {
   _id: string;
   title: string;
   companyId?: { name?: string; industry?: string; logo?: string; verified?: boolean } | string;
+  externalCompanyName?: string | null;
   location?: string;
   workMode?: string;
   mode?: string;
@@ -57,7 +58,10 @@ const categoryColor: Record<string, string> = {
   Comercial: "bg-amber-50 text-amber-700",
 };
 
-function companyName(job: Job): string {
+export function companyName(job: Job): string {
+  // Aggregated/scraped jobs are owned by a synthetic "Parvagas Aggregator"
+  // company record — prefer the real hiring company name when present.
+  if (job.externalCompanyName) return job.externalCompanyName;
   if (job.companyId && typeof job.companyId === "object") return job.companyId.name || "Empresa";
   return "Empresa";
 }
@@ -344,7 +348,7 @@ function VagasDisponiveisContent() {
                       <h2 className="text-lg font-bold leading-snug">{job.title}</h2>
                       <p className="flex items-center gap-1.5 text-sm text-gray-500">
                         {name}
-                        {job.companyId && typeof job.companyId === "object" && job.companyId.verified && (
+                        {!job.externalCompanyName && job.companyId && typeof job.companyId === "object" && job.companyId.verified && (
                           <span className="app-badge app-badge-success" title="Empresa verificada">
                             <CheckBadgeIcon className="h-3.5 w-3.5" /> Verificada
                           </span>

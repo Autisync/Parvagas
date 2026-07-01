@@ -199,6 +199,19 @@ function SignUpContent() {
       );
       const encodedEmail = encodeURIComponent(email.trim());
       track("register_success", { role: selectedRole });
+      if (newsletterOptIn) {
+        // Best-effort: never block the signup success flow on this.
+        getRecaptchaToken("newsletter_subscribe")
+          .then((token) =>
+            apiFetch("/newsletter/subscribe", {
+              method: "POST",
+              suppressGlobalErrors: true,
+              headers: token ? { "x-captcha-token": token } : undefined,
+              body: JSON.stringify({ email: email.trim(), source: "signup" }),
+            }),
+          )
+          .catch(() => {/* non-critical */});
+      }
       router.replace(`/Signup/success?role=${selectedRole}&email=${encodedEmail}`);
       return;
     } catch (err: unknown) {

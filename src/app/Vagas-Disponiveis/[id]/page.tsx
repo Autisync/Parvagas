@@ -30,6 +30,7 @@ type Job = {
   languages?: string[];
   source?: string | null;
   sourceUrl?: string | null;
+  externalCompanyName?: string | null;
   companyId?: {
     _id?: string;
     name?: string;
@@ -55,7 +56,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!job) return { title: "Vaga não encontrada" };
 
   const company = job.companyId && typeof job.companyId === "object" ? job.companyId : null;
-  const companyName = company?.name ?? "Empresa";
+  const companyName = job.externalCompanyName || company?.name || "Empresa";
   const title = `${job.title} — ${companyName}`;
   const description = job.description
     ? job.description.replace(/<[^>]+>/g, "").slice(0, 155)
@@ -96,7 +97,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   }
 
   const company = job.companyId && typeof job.companyId === "object" ? job.companyId : null;
-  const companyName = company?.name ?? dict.jobDetail.companyFallback;
+  const companyName = job.externalCompanyName || company?.name || dict.jobDetail.companyFallback;
   const mode = job.workMode || "";
 
   const jobLd = {
@@ -109,8 +110,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     hiringOrganization: {
       "@type": "Organization",
       name: companyName,
-      ...(company?.website ? { sameAs: company.website } : {}),
-      ...(company?.logo ? { logo: company.logo } : {}),
+      ...(!job.externalCompanyName && company?.website ? { sameAs: company.website } : {}),
+      ...(!job.externalCompanyName && company?.logo ? { logo: company.logo } : {}),
     },
     jobLocation: {
       "@type": "Place",
@@ -139,7 +140,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <div className="lg:col-span-2 space-y-8">
             <div>
               <div className="flex items-center gap-4 mb-4">
-                {company?.logo ? (
+                {!job.externalCompanyName && company?.logo ? (
                   <Image src={company.logo} alt={`Logo ${companyName}`} width={56} height={56} className="h-14 w-14 rounded-2xl border border-gray-200 object-cover" unoptimized />
                 ) : (
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center text-red-700 font-bold text-lg">
@@ -149,11 +150,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <div>
                   <h1 className="text-3xl font-bold">{job.title}</h1>
                   <p className="mt-0.5 flex flex-wrap items-center gap-2 text-gray-500">
-                    <span>{companyName}{company?.industry ? ` · ${company.industry}` : ""}</span>
-                    {company?.verified && (
+                    <span>{companyName}{!job.externalCompanyName && company?.industry ? ` · ${company.industry}` : ""}</span>
+                    {!job.externalCompanyName && company?.verified && (
                       <span className="app-badge app-badge-success" title="Empresa verificada pela Parvagas">✓ Empresa verificada</span>
                     )}
-                    {company?.angolanizacao && (
+                    {!job.externalCompanyName && company?.angolanizacao && (
                       <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200" title="Empresa que cumpre a regra de 70% de mão-de-obra nacional">
                         🇦🇴 Angolanização 70%
                       </span>
@@ -248,7 +249,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               </dl>
             </div>
 
-            {company && (company.description || company.size || company.website) && (
+            {!job.externalCompanyName && company && (company.description || company.size || company.website) && (
               <div className="app-card p-5">
                 <h3 className="font-bold text-lg mb-3">{dict.jobDetail.company}</h3>
                 {company.description && <p className="text-sm text-gray-600 mb-3 leading-relaxed">{company.description}</p>}
@@ -266,7 +267,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               {dict.jobDetail.applyNow}
             </Link>
 
-            {company?.whatsapp ? (
+            {!job.externalCompanyName && company?.whatsapp ? (
               <a
                 href={`https://wa.me/${String(company.whatsapp).replace(/[^0-9]/g, "")}?text=${encodeURIComponent(`Olá, tenho interesse na vaga "${job.title}" na ${company?.name || "vossa empresa"} (via Parvagas).`)}`}
                 target="_blank"

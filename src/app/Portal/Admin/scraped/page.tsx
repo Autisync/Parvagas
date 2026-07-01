@@ -27,6 +27,7 @@ export default function AdminScrapedPage() {
   const [newCompany, setNewCompany] = useState("");
   const [newLocation, setNewLocation] = useState("");
   const [newSourceUrl, setNewSourceUrl] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("pending");
   const [page, setPage] = useState(1);
@@ -43,6 +44,7 @@ export default function AdminScrapedPage() {
   const [editCompany, setEditCompany] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editSourceUrl, setEditSourceUrl] = useState("");
+  const [editDeadline, setEditDeadline] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
 
@@ -109,12 +111,16 @@ export default function AdminScrapedPage() {
     try {
       await authFetch("/admin/scraped-jobs", token, {
         method: "POST",
-        body: JSON.stringify({ title: newTitle, company: newCompany, location: newLocation, sourceUrl: newSourceUrl }),
+        body: JSON.stringify({
+          title: newTitle, company: newCompany, location: newLocation, sourceUrl: newSourceUrl,
+          applicationDeadline: newDeadline || null,
+        }),
       });
       setNewTitle("");
       setNewCompany("");
       setNewLocation("");
       setNewSourceUrl("");
+      setNewDeadline("");
       await load();
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao criar scraped job."));
@@ -137,6 +143,7 @@ export default function AdminScrapedPage() {
         company: editCompany,
         location: editLocation,
         sourceUrl: editSourceUrl,
+        applicationDeadline: editDeadline || null,
       });
       setNotice("Scraped job atualizado com sucesso.");
       await load();
@@ -232,6 +239,10 @@ export default function AdminScrapedPage() {
           <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Empresa/Fonte" required className={adminFieldClass} />
           <input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Local" className={adminFieldClass} />
           <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} placeholder="URL de origem" className={adminFieldClass} />
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Prazo de candidatura (opcional)</span>
+            <input type="date" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} className={adminFieldClass} />
+          </label>
         </div>
         <button type="submit" className="mt-3 rounded-xl bg-red-600 px-3 py-2 text-xs font-semibold text-white">Criar scraped job</button>
       </form>
@@ -297,6 +308,7 @@ export default function AdminScrapedPage() {
                 <th className="px-3 py-3">Empresa</th>
                 <th className="px-3 py-3">Local</th>
                 <th className="px-3 py-3">Fonte</th>
+                <th className="px-3 py-3">Prazo</th>
                 <th className="px-3 py-3">Data</th>
                 <th className="px-3 py-3">Ações</th>
               </tr>
@@ -316,10 +328,11 @@ export default function AdminScrapedPage() {
                   <td className="px-3 py-3 text-slate-700">{job.company || "--"}</td>
                   <td className="px-3 py-3 text-slate-700">{job.location || "--"}</td>
                   <td className="px-3 py-3 text-slate-700">{job.source || "Manual"}</td>
+                  <td className="px-3 py-3 text-slate-500">{job.applicationDeadline ? toDateLabel(job.applicationDeadline) : "--"}</td>
                   <td className="px-3 py-3 text-slate-500">{toDateLabel(job.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => { setSelectedJob(job); setModalNote(""); setEditTitle(job.title || ""); setEditCompany(job.company || ""); setEditLocation(job.location || ""); setEditSourceUrl(job.sourceUrl || ""); }} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
+                      <button type="button" onClick={() => { setSelectedJob(job); setModalNote(""); setEditTitle(job.title || ""); setEditCompany(job.company || ""); setEditLocation(job.location || ""); setEditSourceUrl(job.sourceUrl || ""); setEditDeadline(job.applicationDeadline ? job.applicationDeadline.slice(0, 10) : ""); }} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
                       <button type="button" onClick={() => review(job._id, "approved", true)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Aprovar</button>
                       <button type="button" onClick={() => review(job._id, "rejected", false)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">Rejeitar</button>
                       {deleteConfirmId === job._id ? (
@@ -373,6 +386,10 @@ export default function AdminScrapedPage() {
               <input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} className={adminFieldClass} placeholder="Empresa" />
               <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className={adminFieldClass} placeholder="Localização" />
               <input value={editSourceUrl} onChange={(e) => setEditSourceUrl(e.target.value)} className={adminFieldClass} placeholder="URL de origem" />
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Prazo de candidatura</span>
+                <input type="date" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className={adminFieldClass} />
+              </label>
               <div>
                 <button type="button" onClick={saveEdit} disabled={busy === selectedJob._id} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Salvar edição</button>
               </div>
@@ -380,6 +397,7 @@ export default function AdminScrapedPage() {
             <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
               <p><span className="font-semibold">Empresa/Fonte:</span> {selectedJob.company || "--"}</p>
               <p><span className="font-semibold">Local:</span> {selectedJob.location || "--"}</p>
+              <p><span className="font-semibold">Prazo de candidatura:</span> {selectedJob.applicationDeadline ? toDateLabel(selectedJob.applicationDeadline) : "-- (usa validade de 45 dias por defeito)"}</p>
               <p><span className="font-semibold">Criado:</span> {toDateLabel(selectedJob.createdAt)}</p>
             </div>
           </div>

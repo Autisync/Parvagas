@@ -175,6 +175,7 @@ export type ScrapedRecord = {
   sourceUrl?: string;
   status?: string;
   duplicateOf?: string | null;
+  applicationDeadline?: string | null;
   createdAt?: string;
 };
 
@@ -371,6 +372,16 @@ export async function downloadCsv(path: string, token: string, fileName: string)
 
 export async function fetchAdminAds(token: string) {
   return authFetch<{ ads: AdCampaignRecord[] }>("/admin/ads", token);
+}
+
+export async function uploadAdminAdImage(token: string, file: File) {
+  const form = new FormData();
+  form.append("image", file);
+  return authFetch<{ imageUrl: string; previewUrl: string | null }>("/admin/ads/upload-image", token, {
+    method: "POST",
+    body: form,
+    suppressGlobalErrors: true,
+  });
 }
 
 export async function createAdminAd(token: string, payload: Partial<AdCampaignRecord>) {
