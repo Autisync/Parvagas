@@ -18,6 +18,7 @@ export type Job = {
   title: string;
   companyId?: { name?: string; industry?: string; logo?: string; verified?: boolean } | string;
   externalCompanyName?: string | null;
+  externalCompanyLogo?: string | null;
   location?: string;
   workMode?: string;
   mode?: string;
@@ -67,6 +68,7 @@ export function companyName(job: Job): string {
 }
 
 function companyLogo(job: Job): string | null {
+  if (job.externalCompanyLogo) return job.externalCompanyLogo;
   if (job.companyId && typeof job.companyId === "object") return job.companyId.logo || null;
   return null;
 }

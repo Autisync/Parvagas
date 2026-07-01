@@ -315,6 +315,7 @@ class Job(Base, TimestampMixin):
     source = Column(String(100), nullable=True)
     source_url = Column(String(1000), nullable=True)
     external_company_name = Column(String(255), nullable=True)
+    external_company_logo_url = Column(Text, nullable=True)
 
     company = relationship("Company", foreign_keys=[company_id])
 
@@ -435,6 +436,12 @@ class ScrapedJob(Base, TimestampMixin):
     # admin — distinct from `expires_at`, which is our internal 45-day shelf
     # life fallback used when the source doesn't provide one.
     application_deadline = Column(DateTime, nullable=True)
+    # Structured content so published listings match (or beat) the source's
+    # depth instead of collapsing everything into one short blurb.
+    responsibilities = Column(Text, nullable=True)  # JSON array of strings
+    requirements = Column(Text, nullable=True)      # JSON array of strings
+    company_logo_url = Column(Text, nullable=True)
+    company_website = Column(String(500), nullable=True)
 
 
 class Plan(Base, TimestampMixin):

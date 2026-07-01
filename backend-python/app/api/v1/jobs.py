@@ -77,6 +77,7 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
         # Real hiring company for aggregated/scraped listings — companyId always
         # points at the synthetic "Parvagas Aggregator" company for these.
         "externalCompanyName": getattr(job, "external_company_name", None),
+        "externalCompanyLogo": StorageService.resolve_public_url(getattr(job, "external_company_logo_url", None)),
     }
     if detail:
         payload.update(

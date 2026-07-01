@@ -20,6 +20,10 @@ import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 
+function linesToList(text: string): string[] {
+  return text.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
 export default function AdminScrapedPage() {
   const { token } = useAuth("admin");
   const [jobs, setJobs] = useState<ScrapedRecord[]>([]);
@@ -45,6 +49,11 @@ export default function AdminScrapedPage() {
   const [editLocation, setEditLocation] = useState("");
   const [editSourceUrl, setEditSourceUrl] = useState("");
   const [editDeadline, setEditDeadline] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editResponsibilities, setEditResponsibilities] = useState("");
+  const [editRequirements, setEditRequirements] = useState("");
+  const [editCompanyLogoUrl, setEditCompanyLogoUrl] = useState("");
+  const [editCompanyWebsite, setEditCompanyWebsite] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
 
@@ -133,6 +142,21 @@ export default function AdminScrapedPage() {
     await applyReview([id], status, publishAsPublicJob, reviewNote);
   };
 
+  const openEdit = (job: ScrapedRecord) => {
+    setSelectedJob(job);
+    setModalNote("");
+    setEditTitle(job.title || "");
+    setEditCompany(job.company || "");
+    setEditLocation(job.location || "");
+    setEditSourceUrl(job.sourceUrl || "");
+    setEditDeadline(job.applicationDeadline ? job.applicationDeadline.slice(0, 10) : "");
+    setEditDescription(job.description || "");
+    setEditResponsibilities((job.responsibilities || []).join("\n"));
+    setEditRequirements((job.requirements || []).join("\n"));
+    setEditCompanyLogoUrl(job.companyLogoUrl || "");
+    setEditCompanyWebsite(job.companyWebsite || "");
+  };
+
   const saveEdit = async () => {
     if (!token || !selectedJob) return;
     setBusy(selectedJob._id);
@@ -144,6 +168,11 @@ export default function AdminScrapedPage() {
         location: editLocation,
         sourceUrl: editSourceUrl,
         applicationDeadline: editDeadline || null,
+        description: editDescription,
+        responsibilities: linesToList(editResponsibilities),
+        requirements: linesToList(editRequirements),
+        companyLogoUrl: editCompanyLogoUrl || null,
+        companyWebsite: editCompanyWebsite || null,
       });
       setNotice("Scraped job atualizado com sucesso.");
       await load();
@@ -332,7 +361,7 @@ export default function AdminScrapedPage() {
                   <td className="px-3 py-3 text-slate-500">{toDateLabel(job.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => { setSelectedJob(job); setModalNote(""); setEditTitle(job.title || ""); setEditCompany(job.company || ""); setEditLocation(job.location || ""); setEditSourceUrl(job.sourceUrl || ""); setEditDeadline(job.applicationDeadline ? job.applicationDeadline.slice(0, 10) : ""); }} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
+                      <button type="button" onClick={() => openEdit(job)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
                       <button type="button" onClick={() => review(job._id, "approved", true)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Aprovar</button>
                       <button type="button" onClick={() => review(job._id, "rejected", false)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">Rejeitar</button>
                       {deleteConfirmId === job._id ? (
@@ -389,6 +418,20 @@ export default function AdminScrapedPage() {
               <label className="grid gap-1 text-xs text-slate-600">
                 <span>Prazo de candidatura</span>
                 <input type="date" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className={adminFieldClass} />
+              </label>
+              <input value={editCompanyLogoUrl} onChange={(e) => setEditCompanyLogoUrl(e.target.value)} className={adminFieldClass} placeholder="URL do logo da empresa" />
+              <input value={editCompanyWebsite} onChange={(e) => setEditCompanyWebsite(e.target.value)} className={adminFieldClass} placeholder="Website da empresa" />
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Descrição completa (cole o texto integral do anúncio original)</span>
+                <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={5} className={`${adminFieldClass} resize-y`} placeholder="Descrição completa da vaga" />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Responsabilidades (uma por linha)</span>
+                <textarea value={editResponsibilities} onChange={(e) => setEditResponsibilities(e.target.value)} rows={4} className={`${adminFieldClass} resize-y`} placeholder={"Realizar análises...\nDesenvolver modelos..."} />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Qualificações / Requisitos (um por linha)</span>
+                <textarea value={editRequirements} onChange={(e) => setEditRequirements(e.target.value)} rows={4} className={`${adminFieldClass} resize-y`} placeholder={"Licenciatura em...\nMínimo de 5 anos..."} />
               </label>
               <div>
                 <button type="button" onClick={saveEdit} disabled={busy === selectedJob._id} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Salvar edição</button>

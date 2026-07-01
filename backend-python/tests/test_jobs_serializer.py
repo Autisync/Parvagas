@@ -29,6 +29,7 @@ def _fake_job(**over):
         expires_at=None, published_at=None, created_at=datetime(2026, 1, 1),
         company=_fake_company(),
         external_company_name=None,
+        external_company_logo_url=None,
     )
     base.update(over)
     return SimpleNamespace(**base)
@@ -82,3 +83,13 @@ def test_serialize_job_exposes_external_company_name_for_aggregated_jobs():
 def test_serialize_job_external_company_name_defaults_to_none():
     out = serialize_job(_fake_job())
     assert out["externalCompanyName"] is None
+
+
+def test_serialize_job_exposes_external_company_logo_for_aggregated_jobs():
+    out = serialize_job(_fake_job(external_company_logo_url="https://cdn.example.com/webcor-logo.png"))
+    assert out["externalCompanyLogo"] == "https://cdn.example.com/webcor-logo.png"
+
+
+def test_serialize_job_external_company_logo_defaults_to_none():
+    out = serialize_job(_fake_job())
+    assert out["externalCompanyLogo"] is None

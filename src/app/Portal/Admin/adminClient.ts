@@ -176,6 +176,11 @@ export type ScrapedRecord = {
   status?: string;
   duplicateOf?: string | null;
   applicationDeadline?: string | null;
+  description?: string | null;
+  responsibilities?: string[];
+  requirements?: string[];
+  companyLogoUrl?: string | null;
+  companyWebsite?: string | null;
   createdAt?: string;
 };
 

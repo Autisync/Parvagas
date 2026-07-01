@@ -15,6 +15,7 @@ type Job = {
   title: string;
   description?: string;
   responsibilities?: string[];
+  requirements?: string[];
   requiredSkills?: string[];
   preferredSkills?: string[];
   location?: string;
@@ -31,6 +32,7 @@ type Job = {
   source?: string | null;
   sourceUrl?: string | null;
   externalCompanyName?: string | null;
+  externalCompanyLogo?: string | null;
   companyId?: {
     _id?: string;
     name?: string;
@@ -111,7 +113,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       "@type": "Organization",
       name: companyName,
       ...(!job.externalCompanyName && company?.website ? { sameAs: company.website } : {}),
-      ...(!job.externalCompanyName && company?.logo ? { logo: company.logo } : {}),
+      ...(job.externalCompanyLogo ? { logo: job.externalCompanyLogo } : !job.externalCompanyName && company?.logo ? { logo: company.logo } : {}),
     },
     jobLocation: {
       "@type": "Place",
@@ -140,8 +142,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <div className="lg:col-span-2 space-y-8">
             <div>
               <div className="flex items-center gap-4 mb-4">
-                {!job.externalCompanyName && company?.logo ? (
-                  <Image src={company.logo} alt={`Logo ${companyName}`} width={56} height={56} className="h-14 w-14 rounded-2xl border border-gray-200 object-cover" unoptimized />
+                {job.externalCompanyLogo || (!job.externalCompanyName && company?.logo) ? (
+                  <Image src={job.externalCompanyLogo || company!.logo!} alt={`Logo ${companyName}`} width={56} height={56} className="h-14 w-14 rounded-2xl border border-gray-200 object-cover" unoptimized />
                 ) : (
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-red-100 to-red-200 flex items-center justify-center text-red-700 font-bold text-lg">
                     {companyName.slice(0, 2).toUpperCase()}
@@ -183,6 +185,20 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <h2 className="text-xl font-bold mb-3">{dict.jobDetail.responsibilities}</h2>
                 <ul className="space-y-2">
                   {job.responsibilities.map((r, i) => (
+                    <li key={i} className="flex gap-2 text-gray-700">
+                      <span className="text-red-500 mt-0.5">▸</span>
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {job.requirements && job.requirements.length > 0 && (
+              <section>
+                <h2 className="text-xl font-bold mb-3">{dict.jobDetail.requirements}</h2>
+                <ul className="space-y-2">
+                  {job.requirements.map((r, i) => (
                     <li key={i} className="flex gap-2 text-gray-700">
                       <span className="text-red-500 mt-0.5">▸</span>
                       <span>{r}</span>

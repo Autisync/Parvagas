@@ -164,6 +164,7 @@ export type Dictionary = {
     breadcrumbJobs: string;
     aboutJob: string;
     responsibilities: string;
+    requirements: string;
     requiredSkills: string;
     preferredSkills: string;
     summary: string;
@@ -488,6 +489,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       breadcrumbJobs: "Vagas",
       aboutJob: "Sobre a vaga",
       responsibilities: "Responsabilidades",
+      requirements: "Qualificações",
       requiredSkills: "Competências obrigatórias",
       preferredSkills: "Competências valorizadas",
       summary: "Resumo",
@@ -810,6 +812,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       breadcrumbJobs: "Jobs",
       aboutJob: "About this role",
       responsibilities: "Responsibilities",
+      requirements: "Qualifications",
       requiredSkills: "Required skills",
       preferredSkills: "Preferred skills",
       summary: "Summary",

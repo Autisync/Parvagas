@@ -803,6 +803,29 @@ async def admin_companies(
     }
 
 
+def _json_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        return [str(v) for v in parsed] if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
+def _list_to_json(value: Any) -> str | None:
+    """Accept either a JSON array or newline/line-separated text (admin
+    textareas send plain text — one bullet per line) and normalise to a
+    JSON array string, dropping blank lines."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        items = [str(v).strip() for v in value if str(v).strip()]
+    else:
+        items = [line.strip() for line in str(value).splitlines() if line.strip()]
+    return json.dumps(items, ensure_ascii=False) if items else None
+
+
 def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
     return {
         "_id": s.id,
@@ -816,6 +839,11 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "duplicateOf": s.duplicate_of,
         "publishedJobId": s.published_job_id,
         "applicationDeadline": s.application_deadline.isoformat() if s.application_deadline else None,
+        "description": s.description,
+        "responsibilities": _json_list(s.responsibilities),
+        "requirements": _json_list(s.requirements),
+        "companyLogoUrl": StorageService.resolve_public_url(s.company_logo_url),
+        "companyWebsite": s.company_website,
         "createdAt": s.created_at.isoformat() if s.created_at else None,
     }
 
@@ -891,6 +919,10 @@ async def admin_create_scraped(
         source_url=source_url,
         description=str(payload.get("description", "")).strip() or None,
         application_deadline=_parse_date(payload.get("applicationDeadline") or payload.get("deadline")),
+        responsibilities=_list_to_json(payload.get("responsibilities")),
+        requirements=_list_to_json(payload.get("requirements")),
+        company_logo_url=str(payload.get("companyLogoUrl", "")).strip() or None,
+        company_website=str(payload.get("companyWebsite", "")).strip() or None,
         status="pending",
         content_hash=chash,
         last_seen_at=datetime.utcnow(),
@@ -923,6 +955,18 @@ async def admin_update_scraped(
     if "applicationDeadline" in payload:
         s.application_deadline = _parse_date(payload.get("applicationDeadline"))
         changed.append("applicationDeadline")
+    if "responsibilities" in payload:
+        s.responsibilities = _list_to_json(payload.get("responsibilities"))
+        changed.append("responsibilities")
+    if "requirements" in payload:
+        s.requirements = _list_to_json(payload.get("requirements"))
+        changed.append("requirements")
+    if "companyLogoUrl" in payload:
+        s.company_logo_url = str(payload.get("companyLogoUrl") or "").strip() or None
+        changed.append("companyLogoUrl")
+    if "companyWebsite" in payload:
+        s.company_website = str(payload.get("companyWebsite") or "").strip() or None
+        changed.append("companyWebsite")
     # Keep the dedup hash in sync if identifying fields changed.
     if {"title", "company", "location"} & set(changed):
         s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)
@@ -953,10 +997,12 @@ async def admin_review_scraped(
             job = Job(
                 company_id=co.id, title=s.title, description=s.description,
                 location=s.location, category=s.category,
+                responsibilities=s.responsibilities, requirements=s.requirements,
                 status="approved", visibility="public",
                 published_at=datetime.utcnow(),
                 source=s.source, source_url=s.source_url,
                 external_company_name=s.company_name,
+                external_company_logo_url=s.company_logo_url,
                 expires_at=expires_at,
             )
             db.add(job)
