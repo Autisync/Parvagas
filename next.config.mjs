@@ -8,12 +8,12 @@
 // upgrading insecure requests.
 const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://recaptcha.net https://plausible.io https://va.vercel-scripts.com",
-    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://recaptcha.net https://plausible.io https://va.vercel-scripts.com https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "connect-src 'self' https:",
-    "frame-src 'self' https://www.google.com https://recaptcha.net https://www.youtube.com https://www.youtube-nocookie.com",
+    "frame-src 'self' https://www.google.com https://recaptcha.net https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
