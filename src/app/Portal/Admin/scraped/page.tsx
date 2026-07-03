@@ -44,6 +44,7 @@ export default function AdminScrapedPage() {
   const [bulkNote, setBulkNote] = useState("");
   const [selectedJob, setSelectedJob] = useState<ScrapedRecord | null>(null);
   const [modalNote, setModalNote] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editCompany, setEditCompany] = useState("");
   const [editLocation, setEditLocation] = useState("");
@@ -155,6 +156,13 @@ export default function AdminScrapedPage() {
     setEditRequirements((job.requirements || []).join("\n"));
     setEditCompanyLogoUrl(job.companyLogoUrl || "");
     setEditCompanyWebsite(job.companyWebsite || "");
+    setScheduleAt(job.scheduledPublishAt ? job.scheduledPublishAt.slice(0, 16) : "");
+  };
+
+  const scheduleReview = async () => {
+    if (!selectedJob || !scheduleAt) return;
+    const iso = new Date(scheduleAt).toISOString();
+    await applyReview([selectedJob._id], "schedule", false, modalNote, iso);
   };
 
   const saveEdit = async () => {
@@ -200,7 +208,13 @@ export default function AdminScrapedPage() {
     }
   };
 
-  const applyReview = async (ids: string[], status: "approved" | "rejected" | "duplicate" | "archived", publishAsPublicJob = false, reviewNote = "") => {
+  const applyReview = async (
+    ids: string[],
+    status: "approved" | "rejected" | "duplicate" | "archived" | "schedule",
+    publishAsPublicJob = false,
+    reviewNote = "",
+    scheduledPublishAt?: string,
+  ) => {
     if (!token || ids.length === 0) return;
     setBusy(ids[0]);
     setError("");
@@ -210,7 +224,7 @@ export default function AdminScrapedPage() {
         ids.map((id) =>
           authFetch(`/admin/scraped-jobs/${id}/review`, token, {
             method: "PATCH",
-            body: JSON.stringify({ status, reviewNote, publishAsPublicJob }),
+            body: JSON.stringify({ status, reviewNote, publishAsPublicJob, scheduledPublishAt }),
           })
         )
       );
@@ -281,6 +295,7 @@ export default function AdminScrapedPage() {
         <select value={filter} onChange={(e) => { setFilter(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass}>
           <option value="pending">Pendentes</option>
           <option value="approved">Aprovadas</option>
+          <option value="scheduled">Agendadas</option>
           <option value="rejected">Rejeitadas</option>
           <option value="all">Todas</option>
         </select>
@@ -351,6 +366,9 @@ export default function AdminScrapedPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{job.title || "Vaga importada"}</p>
                         <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(String(job.status || "pending"))}`}>{job.status || "pending"}</span>
+                        {job.status === "scheduled" && job.scheduledPublishAt ? (
+                          <p className="mt-1 text-xs font-medium text-indigo-700">Agendado para {toDateLabel(job.scheduledPublishAt)}</p>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -400,6 +418,19 @@ export default function AdminScrapedPage() {
               <button disabled={busy === selectedJob._id} onClick={() => applyReview([selectedJob._id], "duplicate", false, modalNote)} className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50">Marcar duplicado</button>
               <button disabled={busy === selectedJob._id} onClick={() => applyReview([selectedJob._id], "archived", false, modalNote)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Arquivar</button>
             </div>
+            <div className="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-3">
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Agendar publicação para</span>
+                <input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} className={adminFieldClass} />
+              </label>
+              <button
+                disabled={busy === selectedJob._id || !scheduleAt}
+                onClick={scheduleReview}
+                className="rounded-xl border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-800 disabled:opacity-50"
+              >
+                Aprovar + agendar
+              </button>
+            </div>
           </div>
         ) : undefined}
       >
@@ -441,6 +472,9 @@ export default function AdminScrapedPage() {
               <p><span className="font-semibold">Empresa/Fonte:</span> {selectedJob.company || "--"}</p>
               <p><span className="font-semibold">Local:</span> {selectedJob.location || "--"}</p>
               <p><span className="font-semibold">Prazo de candidatura:</span> {selectedJob.applicationDeadline ? toDateLabel(selectedJob.applicationDeadline) : "-- (usa validade de 45 dias por defeito)"}</p>
+              {selectedJob.status === "scheduled" && selectedJob.scheduledPublishAt ? (
+                <p><span className="font-semibold">Agendado para:</span> {toDateLabel(selectedJob.scheduledPublishAt)}</p>
+              ) : null}
               <p><span className="font-semibold">Criado:</span> {toDateLabel(selectedJob.createdAt)}</p>
             </div>
           </div>

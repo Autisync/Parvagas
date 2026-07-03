@@ -121,6 +121,7 @@ describe("statusBadgeClass", () => {
     ["needs_more_info", "amber"],
     ["under_review", "amber"],
     ["submitted", "amber"],
+    ["scheduled", "indigo"],
     ["super-admin", "red"],
     ["moderator", "sky"],
     ["inactive", "slate"],

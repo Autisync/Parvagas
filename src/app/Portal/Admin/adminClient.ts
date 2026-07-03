@@ -176,6 +176,7 @@ export type ScrapedRecord = {
   status?: string;
   duplicateOf?: string | null;
   applicationDeadline?: string | null;
+  scheduledPublishAt?: string | null;
   description?: string | null;
   responsibilities?: string[];
   requirements?: string[];
@@ -335,6 +336,7 @@ export function statusBadgeClass(status: string) {
   if (s === "super-admin") return "bg-red-100 text-red-800 border-red-200";
   if (s === "moderator") return "bg-sky-100 text-sky-800 border-sky-200";
   if (["approved", "verified", "published", "active"].includes(s)) return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  if (s === "scheduled") return "bg-indigo-100 text-indigo-800 border-indigo-200";
   if (["rejected", "archived", "suspended"].includes(s)) return "bg-rose-100 text-rose-800 border-rose-200";
   if (["pending", "submitted", "under_review", "pending_company_approval", "pending_platform_review", "needs_more_info", "pending_verification"].includes(s)) {
     return "bg-amber-100 text-amber-800 border-amber-200";
