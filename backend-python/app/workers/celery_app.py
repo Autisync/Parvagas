@@ -32,6 +32,12 @@ celery.conf.task_queues = (
     Queue('emails', exchange=default_exchange, routing_key='emails'),
     Queue('parsing', exchange=default_exchange, routing_key='parsing'),
     Queue('cleanup', exchange=default_exchange, routing_key='cleanup'),
+    # Isolated from the queues above on purpose: scraping is the one workload
+    # here with unbounded external-network variance (slow/hanging sources,
+    # bursty volume). A dedicated low-concurrency worker consumes only this
+    # queue (see docker-compose.prod.yml) so it can never starve web-facing
+    # email/CV-parsing capacity — see task-level rate/time limits in tasks.py.
+    Queue('scraping', exchange=default_exchange, routing_key='scraping'),
 )
 
 # Default routing
@@ -45,6 +51,8 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_templated_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
+    'app.workers.tasks.scrape_external_jobs': {'queue': 'scraping'},
+    'app.workers.tasks.expire_stale_aggregated_jobs': {'queue': 'scraping'},
 }
 
 # Periodic schedules (run a `celery beat` process alongside the worker).

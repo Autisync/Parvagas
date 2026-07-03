@@ -398,7 +398,17 @@ def _parse_scraped_deadline(value) -> "datetime | None":
         return None
 
 
-@celery.task(name='app.workers.tasks.scrape_external_jobs')
+@celery.task(
+    name='app.workers.tasks.scrape_external_jobs',
+    # Runs on its own low-priority queue/worker (see celery_app.py) so a heavy
+    # or slow scrape run can never starve web-facing tasks (emails, CV
+    # parsing) of worker capacity — this is the guardrail against the earlier
+    # host-resource-exhaustion incident. rate_limit throttles bursts against
+    # source sites; soft/time_limit bound a single run's wall-clock cost.
+    rate_limit='6/m',
+    soft_time_limit=8 * 60,
+    time_limit=10 * 60,
+)
 def scrape_external_jobs() -> dict:
     """Fetch jobs from configured external sources into the ScrapedJob queue (pending review)."""
     from app.models import ScrapedJob
