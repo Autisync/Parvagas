@@ -536,6 +536,40 @@ def expire_stale_aggregated_jobs() -> dict:
         db.close()
 
 
+@celery.task(name='app.workers.tasks.publish_scheduled_scraped_jobs')
+def publish_scheduled_scraped_jobs() -> dict:
+    """Publish ScrapedJob rows an admin approved-and-scheduled, once their
+    scheduled_publish_at time arrives."""
+    from app.models import ScrapedJob
+    from app.api.v1.admin import _publish_scraped_job
+
+    db = SessionLocal()
+    published = 0
+    try:
+        now = datetime.utcnow()
+        due = (
+            db.query(ScrapedJob)
+            .filter(ScrapedJob.status == "scheduled", ScrapedJob.scheduled_publish_at.isnot(None),
+                    ScrapedJob.scheduled_publish_at <= now)
+            .all()
+        )
+        for s in due:
+            if s.published_job_id:
+                continue  # already published somehow — don't double-publish
+            _publish_scraped_job(db, s)
+            published += 1
+        db.commit()
+        if published:
+            logger.info(f"publish_scheduled_scraped_jobs: published {published} scheduled job(s)")
+        return {"published": published}
+    except Exception as e:
+        logger.error(f"publish_scheduled_scraped_jobs failed: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 @celery.task(name='app.workers.tasks.cleanup_expired_tokens')
 def cleanup_expired_tokens() -> dict:
     """Cleanup expired verification and password reset tokens."""

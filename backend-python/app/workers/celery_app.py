@@ -53,6 +53,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
     'app.workers.tasks.scrape_external_jobs': {'queue': 'scraping'},
     'app.workers.tasks.expire_stale_aggregated_jobs': {'queue': 'scraping'},
+    'app.workers.tasks.publish_scheduled_scraped_jobs': {'queue': 'scraping'},
 }
 
 # Periodic schedules (run a `celery beat` process alongside the worker).
@@ -76,5 +77,10 @@ celery.conf.beat_schedule = {
     'expire-stale-aggregated-jobs': {
         'task': 'app.workers.tasks.expire_stale_aggregated_jobs',
         'schedule': crontab(hour=4, minute=30),  # 04:30 UTC daily
+    },
+    # Sweep for admin-scheduled scraped jobs whose publish time has arrived.
+    'publish-scheduled-scraped-jobs': {
+        'task': 'app.workers.tasks.publish_scheduled_scraped_jobs',
+        'schedule': crontab(minute='*/15'),
     },
 }

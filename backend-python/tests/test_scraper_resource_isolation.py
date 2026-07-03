@@ -21,6 +21,11 @@ def test_expire_stale_aggregated_jobs_routed_to_scraping_queue():
     assert route == {"queue": "scraping"}
 
 
+def test_publish_scheduled_scraped_jobs_routed_to_scraping_queue():
+    route = celery_app.celery.conf.task_routes["app.workers.tasks.publish_scheduled_scraped_jobs"]
+    assert route == {"queue": "scraping"}
+
+
 def test_scrape_external_jobs_has_bounded_time_limits():
     task = celery_app.celery.tasks["app.workers.tasks.scrape_external_jobs"]
     assert task.soft_time_limit is not None
