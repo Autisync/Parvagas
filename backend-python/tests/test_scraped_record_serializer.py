@@ -13,6 +13,7 @@ def _fake_scraped(**over):
         source_url="https://angoemprego.com/vagas/credit-analyst-manager/",
         status="pending", duplicate_of=None, published_job_id=None,
         application_deadline=None,
+        scheduled_publish_at=None,
         description="Vaga para Credit Analyst Manager no Webcor Group.",
         responsibilities=json.dumps(["Realizar análises financeiras", "Avaliar risco de crédito"]),
         requirements=json.dumps(["Licenciatura em Finanças", "Mínimo de 5 anos de experiência"]),
@@ -43,6 +44,16 @@ def test_to_scraped_record_handles_missing_structured_content():
     assert out["requirements"] == []
     assert out["companyLogoUrl"] is None
     assert out["companyWebsite"] is None
+
+
+def test_to_scraped_record_exposes_scheduled_publish_at():
+    out = _to_scraped_record(_fake_scraped(scheduled_publish_at=datetime(2026, 8, 1, 9, 0)))
+    assert out["scheduledPublishAt"] == "2026-08-01T09:00:00"
+
+
+def test_to_scraped_record_scheduled_publish_at_defaults_to_none():
+    out = _to_scraped_record(_fake_scraped())
+    assert out["scheduledPublishAt"] is None
 
 
 def _fake_job(**over):

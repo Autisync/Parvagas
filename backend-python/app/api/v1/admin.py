@@ -839,6 +839,7 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "duplicateOf": s.duplicate_of,
         "publishedJobId": s.published_job_id,
         "applicationDeadline": s.application_deadline.isoformat() if s.application_deadline else None,
+        "scheduledPublishAt": s.scheduled_publish_at.isoformat() if s.scheduled_publish_at else None,
         "description": s.description,
         "responsibilities": _json_list(s.responsibilities),
         "requirements": _json_list(s.requirements),
@@ -887,15 +888,49 @@ def _sync_scraped_edit_to_job(job: Job, s: ScrapedJob, changed_fields: list[str]
         job.expires_at = _resolve_scraped_job_expiry(s.application_deadline, datetime.utcnow())
 
 
-def _aggregator_company(db: Session, admin: User) -> Company:
-    """Synthetic company that owns published scraped jobs."""
+def _aggregator_company(db: Session, admin: User | None = None) -> Company:
+    """Synthetic company that owns published scraped jobs.
+
+    `admin` is optional so the scheduled-publish sweep (a background task
+    with no request-scoped current_user) can still create the aggregator
+    company on its first-ever use, falling back to any admin account.
+    """
     co = db.query(Company).filter(Company.name == "Parvagas Aggregator").first()
     if not co:
-        co = Company(owner_user_id=admin.id, name="Parvagas Aggregator", status="active",
+        owner = admin or db.query(User).filter(User.role == UserRole.admin).first()
+        co = Company(owner_user_id=owner.id if owner else None, name="Parvagas Aggregator", status="active",
                      description="Vagas agregadas de fontes externas.")
         db.add(co)
         db.flush()
     return co
+
+
+def _publish_scraped_job(db: Session, s: ScrapedJob, admin: User | None = None) -> Job:
+    """Create the live Job for an approved/scheduled ScrapedJob and link them.
+
+    Shared by the immediate-approve path and the scheduled-publish sweep so
+    both create the exact same Job shape.
+    """
+    co = _aggregator_company(db, admin)
+    expires_at = _resolve_scraped_job_expiry(s.application_deadline, datetime.utcnow())
+    job = Job(
+        company_id=co.id, title=s.title, description=s.description,
+        location=s.location, category=s.category,
+        responsibilities=s.responsibilities, requirements=s.requirements,
+        status="approved", visibility="public",
+        published_at=datetime.utcnow(),
+        source=s.source, source_url=s.source_url,
+        external_company_name=s.company_name,
+        external_company_logo_url=s.company_logo_url,
+        expires_at=expires_at,
+    )
+    db.add(job)
+    db.flush()
+    s.published_job_id = job.id
+    s.status = "approved"
+    if not s.expires_at:
+        s.expires_at = datetime.utcnow() + timedelta(days=45)
+    return job
 
 
 @router.get("/scraped-jobs")
@@ -1030,24 +1065,17 @@ async def admin_review_scraped(
     if decision in {"approve", "approved", "publish", "published"}:
         s.status = "approved"
         if not s.published_job_id:
-            co = _aggregator_company(db, admin)
-            expires_at = _resolve_scraped_job_expiry(s.application_deadline, datetime.utcnow())
-            job = Job(
-                company_id=co.id, title=s.title, description=s.description,
-                location=s.location, category=s.category,
-                responsibilities=s.responsibilities, requirements=s.requirements,
-                status="approved", visibility="public",
-                published_at=datetime.utcnow(),
-                source=s.source, source_url=s.source_url,
-                external_company_name=s.company_name,
-                external_company_logo_url=s.company_logo_url,
-                expires_at=expires_at,
-            )
-            db.add(job)
-            db.flush()
-            s.published_job_id = job.id
-            if not s.expires_at:
-                s.expires_at = datetime.utcnow() + timedelta(days=45)
+            _publish_scraped_job(db, s, admin)
+    elif decision == "schedule":
+        scheduled_at = _parse_date(payload.get("scheduledPublishAt"))
+        if not scheduled_at:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="scheduledPublishAt is required")
+        if scheduled_at <= datetime.utcnow():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="scheduledPublishAt must be in the future")
+        if s.published_job_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already published")
+        s.status = "scheduled"
+        s.scheduled_publish_at = scheduled_at
     elif decision in {"reject", "rejected"}:
         s.status = "rejected"
     elif decision == "duplicate":
