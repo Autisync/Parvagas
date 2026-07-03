@@ -427,7 +427,7 @@ def _scrape_budget_exhausted(ingested: int, started_at: datetime, now: datetime)
 def scrape_external_jobs() -> dict:
     """Fetch jobs from configured external sources into the ScrapedJob queue (pending review)."""
     from app.models import ScrapedJob
-    from app.services.scraper_service import get_adapters, content_hash, classify_audience_lane
+    from app.services.scraper_service import get_adapters, content_hash, classify_audience_lane, assess_scraped_job_quality
 
     adapters = get_adapters()
     if not adapters:
@@ -470,12 +470,17 @@ def scrape_external_jobs() -> dict:
                         existing.application_deadline = new_deadline
                     skipped += 1
                     continue
+                quality_score, quality_flags = assess_scraped_job_quality(
+                    title, it.get("description"), it.get("company"),
+                )
                 db.add(ScrapedJob(
                     title=title, company_name=it.get("company"), location=it.get("location"),
                     category=it.get("category"), description=it.get("description"),
                     source=it.get("source"), source_url=it.get("sourceUrl"),
                     application_deadline=_parse_scraped_deadline(it.get("deadline")),
                     audience_lane=classify_audience_lane(title, it.get("category"), it.get("description")),
+                    quality_score=quality_score,
+                    quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
                     status="pending", content_hash=chash, last_seen_at=now,
                 ))
                 ingested += 1

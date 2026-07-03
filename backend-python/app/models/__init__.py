@@ -451,6 +451,13 @@ class ScrapedJob(Base, TimestampMixin):
     # daily intake is actually spanning different audiences, not clustering
     # on whatever one source happens to publish that day.
     audience_lane = Column(String(30), nullable=True, index=True)
+    # Quality/completeness gate — reuses the fraud-signal pattern from
+    # companies._spam_assessment plus thin-content checks (missing company,
+    # too-short description, no responsibilities/requirements captured), so
+    # low-quality intake is visibly flagged for admins rather than silently
+    # published looking identical to a fully-curated listing.
+    quality_score = Column(Integer, nullable=False, default=0)
+    quality_flags = Column(Text, nullable=True)  # JSON array of reasons
 
 
 class Plan(Base, TimestampMixin):

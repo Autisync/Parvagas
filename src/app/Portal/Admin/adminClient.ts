@@ -178,6 +178,8 @@ export type ScrapedRecord = {
   applicationDeadline?: string | null;
   scheduledPublishAt?: string | null;
   audienceLane?: string | null;
+  qualityScore?: number;
+  qualityFlags?: string[];
   description?: string | null;
   responsibilities?: string[];
   requirements?: string[];

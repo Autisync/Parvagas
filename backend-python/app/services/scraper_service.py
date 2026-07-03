@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -74,6 +75,58 @@ def classify_audience_lane(title: str | None, category: str | None, description:
         if any(kw in haystack for kw in keywords):
             return lane
     return None
+
+
+# Same fraud-signal patterns companies._spam_assessment uses for
+# company-submitted jobs — scraped content is exposed to the same regional
+# scam patterns (WhatsApp-only contact, upfront "registration fees", etc).
+_SCAM_PATTERNS = [
+    (r"whatsapp|telegram|\+?\d{9,}", "contacto direto fora da plataforma"),
+    (r"taxa|pagamento adiantado|deposito|inscri[çc][aã]o paga|pague", "pede pagamento ao candidato"),
+    (r"ganhe .* (kz|usd|\$)|renda (rapida|extra|garantida)", "promessa de renda irrealista"),
+    (r"trabalh[ae] (em )?casa sem experiencia", "isco genérico de trabalho em casa"),
+]
+
+MIN_QUALITY_DESCRIPTION_CHARS = 60
+
+
+def assess_scraped_job_quality(
+    title: str | None,
+    description: str | None,
+    company_name: str | None,
+    has_responsibilities: bool = False,
+    has_requirements: bool = False,
+) -> tuple[int, list[str]]:
+    """Quality/completeness gate for scraped jobs — thin content (a 1-2
+    sentence blurb, no company, no structured content) is flagged for admins
+    instead of silently looking identical to a fully-curated listing.
+    Non-destructive: this scores and flags, it never blocks ingestion —
+    admins still make the call, same as the existing Job moderation queue.
+    """
+    score, flags = 0, []
+    haystack = " ".join(filter(None, [title, description])).lower()
+    for pattern, label in _SCAM_PATTERNS:
+        if re.search(pattern, haystack):
+            score += 25
+            flags.append(label)
+
+    if not (company_name or "").strip():
+        score += 20
+        flags.append("sem nome de empresa")
+
+    desc = (description or "").strip()
+    if not desc:
+        score += 30
+        flags.append("sem descrição")
+    elif len(desc) < MIN_QUALITY_DESCRIPTION_CHARS:
+        score += 20
+        flags.append("descrição muito curta")
+
+    if not has_responsibilities and not has_requirements:
+        score += 10
+        flags.append("sem responsabilidades/requisitos")
+
+    return min(score, 100), flags
 
 
 def _robots_ok(url: str) -> bool:

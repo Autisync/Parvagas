@@ -15,6 +15,8 @@ def _fake_scraped(**over):
         application_deadline=None,
         scheduled_publish_at=None,
         audience_lane=None,
+        quality_score=0,
+        quality_flags=None,
         description="Vaga para Credit Analyst Manager no Webcor Group.",
         responsibilities=json.dumps(["Realizar análises financeiras", "Avaliar risco de crédito"]),
         requirements=json.dumps(["Licenciatura em Finanças", "Mínimo de 5 anos de experiência"]),
@@ -120,3 +122,17 @@ def test_to_scraped_record_exposes_audience_lane():
 def test_to_scraped_record_audience_lane_defaults_to_none():
     out = _to_scraped_record(_fake_scraped())
     assert out["audienceLane"] is None
+
+
+def test_to_scraped_record_exposes_quality_score_and_flags():
+    out = _to_scraped_record(_fake_scraped(
+        quality_score=40, quality_flags=json.dumps(["sem descrição"]),
+    ))
+    assert out["qualityScore"] == 40
+    assert out["qualityFlags"] == ["sem descrição"]
+
+
+def test_to_scraped_record_quality_defaults_to_zero_and_empty():
+    out = _to_scraped_record(_fake_scraped())
+    assert out["qualityScore"] == 0
+    assert out["qualityFlags"] == []

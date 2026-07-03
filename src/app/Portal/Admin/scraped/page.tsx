@@ -385,6 +385,14 @@ export default function AdminScrapedPage() {
                             {AUDIENCE_LANE_LABELS[job.audienceLane] || job.audienceLane}
                           </span>
                         ) : null}
+                        {(job.qualityScore || 0) > 0 ? (
+                          <span
+                            className="ml-1 mt-1 inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                            title={(job.qualityFlags || []).join(", ")}
+                          >
+                            ⚠ Qualidade baixa
+                          </span>
+                        ) : null}
                         {job.status === "scheduled" && job.scheduledPublishAt ? (
                           <p className="mt-1 text-xs font-medium text-indigo-700">Agendado para {toDateLabel(job.scheduledPublishAt)}</p>
                         ) : null}
@@ -493,6 +501,9 @@ export default function AdminScrapedPage() {
               <p><span className="font-semibold">Prazo de candidatura:</span> {selectedJob.applicationDeadline ? toDateLabel(selectedJob.applicationDeadline) : "-- (usa validade de 45 dias por defeito)"}</p>
               {selectedJob.status === "scheduled" && selectedJob.scheduledPublishAt ? (
                 <p><span className="font-semibold">Agendado para:</span> {toDateLabel(selectedJob.scheduledPublishAt)}</p>
+              ) : null}
+              {(selectedJob.qualityFlags || []).length > 0 ? (
+                <p><span className="font-semibold text-amber-800">⚠ Sinais de qualidade:</span> {selectedJob.qualityFlags!.join(", ")}</p>
               ) : null}
               <p><span className="font-semibold">Criado:</span> {toDateLabel(selectedJob.createdAt)}</p>
             </div>

@@ -24,7 +24,7 @@ from app.models import (
     ScrapedJob, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
-from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane
+from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality
 from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
@@ -841,6 +841,8 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "applicationDeadline": s.application_deadline.isoformat() if s.application_deadline else None,
         "scheduledPublishAt": s.scheduled_publish_at.isoformat() if s.scheduled_publish_at else None,
         "audienceLane": s.audience_lane,
+        "qualityScore": s.quality_score or 0,
+        "qualityFlags": _json_list(s.quality_flags),
         "description": s.description,
         "responsibilities": _json_list(s.responsibilities),
         "requirements": _json_list(s.requirements),
@@ -997,6 +999,12 @@ async def admin_create_scraped(
     category = str(payload.get("category", "")).strip() or None
     description = str(payload.get("description", "")).strip() or None
     audience_lane = str(payload.get("audienceLane", "")).strip() or classify_audience_lane(title, category, description)
+    responsibilities_json = _list_to_json(payload.get("responsibilities"))
+    requirements_json = _list_to_json(payload.get("requirements"))
+    quality_score, quality_flags = assess_scraped_job_quality(
+        title, description, company_name,
+        has_responsibilities=bool(responsibilities_json), has_requirements=bool(requirements_json),
+    )
     s = ScrapedJob(
         title=title, company_name=company_name, location=location,
         category=category,
@@ -1004,11 +1012,13 @@ async def admin_create_scraped(
         source_url=source_url,
         description=description,
         application_deadline=_parse_date(payload.get("applicationDeadline") or payload.get("deadline")),
-        responsibilities=_list_to_json(payload.get("responsibilities")),
-        requirements=_list_to_json(payload.get("requirements")),
+        responsibilities=responsibilities_json,
+        requirements=requirements_json,
         company_logo_url=str(payload.get("companyLogoUrl", "")).strip() or None,
         company_website=str(payload.get("companyWebsite", "")).strip() or None,
         audience_lane=audience_lane,
+        quality_score=quality_score,
+        quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
         status="pending",
         content_hash=chash,
         last_seen_at=datetime.utcnow(),
@@ -1059,6 +1069,16 @@ async def admin_update_scraped(
     # Keep the dedup hash in sync if identifying fields changed.
     if {"title", "company", "location"} & set(changed):
         s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)
+    # Re-run the quality gate whenever curation touches its inputs — an admin
+    # pasting in the full description/requirements should visibly clear the
+    # "thin content" flags instead of them sticking from the original scrape.
+    if {"title", "description", "company", "responsibilities", "requirements"} & set(changed):
+        quality_score, quality_flags = assess_scraped_job_quality(
+            s.title, s.description, s.company_name,
+            has_responsibilities=bool(s.responsibilities), has_requirements=bool(s.requirements),
+        )
+        s.quality_score = quality_score
+        s.quality_flags = json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None
     # Curation happens after publish too (admins fill in the full description/
     # requirements post-approval) — without this, edits only ever touched the
     # ScrapedJob row and the live public listing stayed stuck at whatever was
