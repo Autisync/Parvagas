@@ -426,7 +426,7 @@ class ScrapedJob(Base, TimestampMixin):
     location = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
-    status = Column(String(30), nullable=False, default="pending", index=True)  # pending|approved|rejected|duplicate|archived|expired
+    status = Column(String(30), nullable=False, default="pending", index=True)  # pending|approved|scheduled|rejected|duplicate|archived|expired
     duplicate_of = Column(String(36), nullable=True)
     published_job_id = Column(String(36), nullable=True)
     content_hash = Column(String(64), nullable=True, index=True)  # sha256(title|company|location) for dedup
@@ -442,6 +442,10 @@ class ScrapedJob(Base, TimestampMixin):
     requirements = Column(Text, nullable=True)      # JSON array of strings
     company_logo_url = Column(Text, nullable=True)
     company_website = Column(String(500), nullable=True)
+    # Set when an admin approves but chooses to publish later rather than
+    # immediately — a periodic sweep (publish_scheduled_scraped_jobs) creates
+    # the live Job once this time arrives.
+    scheduled_publish_at = Column(DateTime, nullable=True)
 
 
 class Plan(Base, TimestampMixin):
