@@ -48,6 +48,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_application_received_email': {'queue': 'emails'},
     'app.workers.tasks.send_application_status_email': {'queue': 'emails'},
     'app.workers.tasks.send_newsletter_confirmation_email': {'queue': 'emails'},
+    'app.workers.tasks.dispatch_scraped_jobs_digest': {'queue': 'emails'},
     'app.workers.tasks.send_templated_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
@@ -61,6 +62,10 @@ celery.conf.beat_schedule = {
     'job-alert-digests-daily': {
         'task': 'app.workers.tasks.dispatch_job_alert_digests',
         'schedule': crontab(hour=7, minute=0),  # 07:00 UTC daily
+    },
+    'scraped-jobs-digest-daily': {
+        'task': 'app.workers.tasks.dispatch_scraped_jobs_digest',
+        'schedule': crontab(hour=7, minute=30),  # 07:30 UTC daily
     },
     'subscription-expiry-reminders-daily': {
         'task': 'app.workers.tasks.dispatch_subscription_expiry_reminders',

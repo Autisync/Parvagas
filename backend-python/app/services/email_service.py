@@ -573,6 +573,23 @@ class EmailService:
         )
 
     @staticmethod
+    def send_scraped_jobs_digest_email(email: str, pending_count: int) -> bool:
+        """Daily nudge so scraped jobs don't pile up unreviewed. Caller is
+        responsible for not sending this when pending_count is 0."""
+        body = f"""
+        <p style="margin:0 0 14px;">
+            Há <strong>{pending_count}</strong> vaga{"s" if pending_count != 1 else ""} raspada{"s" if pending_count != 1 else ""}
+            à espera de revisão no painel de curadoria.
+        </p>
+        """
+        return EmailService._compose_and_send(
+            email, f"{settings.BRAND_NAME} — {pending_count} vaga(s) raspada(s) por rever",
+            "Vagas por rever", body,
+            "Rever vagas raspadas", f"{EmailService._base_url()}/Portal/Admin/scraped?filter=pending",
+            preheader=f"{pending_count} vaga(s) aguardam a sua revisão.",
+        )
+
+    @staticmethod
     def send_admin_job_reported_email(email: str, job_title: str, reason: str = "", reporter: str = "") -> bool:
         who = f" por {escape(reporter)}" if reporter else ""
         reason_html = f'<p style="margin:0 0 14px;">Motivo indicado: {escape(reason)}</p>' if reason else ""
