@@ -14,6 +14,7 @@ def _fake_scraped(**over):
         status="pending", duplicate_of=None, published_job_id=None,
         application_deadline=None,
         scheduled_publish_at=None,
+        audience_lane=None,
         description="Vaga para Credit Analyst Manager no Webcor Group.",
         responsibilities=json.dumps(["Realizar análises financeiras", "Avaliar risco de crédito"]),
         requirements=json.dumps(["Licenciatura em Finanças", "Mínimo de 5 anos de experiência"]),
@@ -109,3 +110,13 @@ def test_sync_does_not_touch_expiry_when_deadline_unchanged():
     s = _fake_scraped(application_deadline=datetime(2026, 12, 1))
     _sync_scraped_edit_to_job(job, s, changed_fields=["title"])
     assert job.expires_at == datetime(2026, 1, 1)
+
+
+def test_to_scraped_record_exposes_audience_lane():
+    out = _to_scraped_record(_fake_scraped(audience_lane="entry_level"))
+    assert out["audienceLane"] == "entry_level"
+
+
+def test_to_scraped_record_audience_lane_defaults_to_none():
+    out = _to_scraped_record(_fake_scraped())
+    assert out["audienceLane"] is None

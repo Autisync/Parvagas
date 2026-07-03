@@ -24,7 +24,7 @@ from app.models import (
     ScrapedJob, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
-from app.services.scraper_service import content_hash as scraped_content_hash
+from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane
 from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
@@ -840,6 +840,7 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "publishedJobId": s.published_job_id,
         "applicationDeadline": s.application_deadline.isoformat() if s.application_deadline else None,
         "scheduledPublishAt": s.scheduled_publish_at.isoformat() if s.scheduled_publish_at else None,
+        "audienceLane": s.audience_lane,
         "description": s.description,
         "responsibilities": _json_list(s.responsibilities),
         "requirements": _json_list(s.requirements),
@@ -950,7 +951,23 @@ async def admin_scraped_jobs(
         query = query.filter(ScrapedJob.title.ilike(f"%{keyword.strip()}%"))
     total = query.count()
     rows = query.order_by(ScrapedJob.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
-    return {"scrapedJobs": [_to_scraped_record(r) for r in rows], "pagination": _pagination(page, limit, total)}
+    return {
+        "scrapedJobs": [_to_scraped_record(r) for r in rows],
+        "pagination": _pagination(page, limit, total),
+        # Diversity signal: are pending listings spanning different audiences,
+        # or clustering on whatever one source published today?
+        "laneCounts": _pending_lane_counts(db),
+    }
+
+
+def _pending_lane_counts(db: Session) -> dict[str, int]:
+    rows = (
+        db.query(ScrapedJob.audience_lane, func.count(ScrapedJob.id))
+        .filter(ScrapedJob.status == "pending")
+        .group_by(ScrapedJob.audience_lane)
+        .all()
+    )
+    return {(lane or "unclassified"): count for lane, count in rows}
 
 
 @router.post("/scraped-jobs")
@@ -977,17 +994,21 @@ async def admin_create_scraped(
         db.commit()
         db.refresh(dup)
         return {"scraped": _to_scraped_record(dup), "duplicate": True}
+    category = str(payload.get("category", "")).strip() or None
+    description = str(payload.get("description", "")).strip() or None
+    audience_lane = str(payload.get("audienceLane", "")).strip() or classify_audience_lane(title, category, description)
     s = ScrapedJob(
         title=title, company_name=company_name, location=location,
-        category=str(payload.get("category", "")).strip() or None,
+        category=category,
         source=str(payload.get("source", "")).strip() or None,
         source_url=source_url,
-        description=str(payload.get("description", "")).strip() or None,
+        description=description,
         application_deadline=_parse_date(payload.get("applicationDeadline") or payload.get("deadline")),
         responsibilities=_list_to_json(payload.get("responsibilities")),
         requirements=_list_to_json(payload.get("requirements")),
         company_logo_url=str(payload.get("companyLogoUrl", "")).strip() or None,
         company_website=str(payload.get("companyWebsite", "")).strip() or None,
+        audience_lane=audience_lane,
         status="pending",
         content_hash=chash,
         last_seen_at=datetime.utcnow(),
@@ -1032,6 +1053,9 @@ async def admin_update_scraped(
     if "companyWebsite" in payload:
         s.company_website = str(payload.get("companyWebsite") or "").strip() or None
         changed.append("companyWebsite")
+    if "audienceLane" in payload:
+        s.audience_lane = str(payload.get("audienceLane") or "").strip() or None
+        changed.append("audienceLane")
     # Keep the dedup hash in sync if identifying fields changed.
     if {"title", "company", "location"} & set(changed):
         s.content_hash = scraped_content_hash(s.title, s.company_name, s.location)

@@ -446,6 +446,11 @@ class ScrapedJob(Base, TimestampMixin):
     # immediately — a periodic sweep (publish_scheduled_scraped_jobs) creates
     # the live Job once this time arrives.
     scheduled_publish_at = Column(DateTime, nullable=True)
+    # Coarse audience segment (entry_level|skilled_trade|professional|remote),
+    # auto-classified on ingestion — lets admins see at a glance whether the
+    # daily intake is actually spanning different audiences, not clustering
+    # on whatever one source happens to publish that day.
+    audience_lane = Column(String(30), nullable=True, index=True)
 
 
 class Plan(Base, TimestampMixin):

@@ -41,6 +41,41 @@ def content_hash(title: str | None, company: str | None, location: str | None) -
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
+# Ordered so the first lane whose keywords match wins — professional/remote
+# terms take priority over generic entry-level phrasing that can co-occur
+# (e.g. "estágio para engenheiro" should read as professional, not entry).
+_AUDIENCE_LANE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("remote", ("remoto", "remote", "trabalho a partir de casa", "home office", "teletrabalho")),
+    ("professional", (
+        "licenciatura", "mestrado", "engenheiro", "engenheira", "gestor", "gestora",
+        "diretor", "diretora", "advogado", "advogada", "contabilista", "arquiteto",
+        "médico", "médica", "analista", "consultor", "consultora",
+    )),
+    ("skilled_trade", (
+        "eletricista", "canalizador", "soldador", "mecânico", "mecânica", "carpinteiro",
+        "pedreiro", "pintor", "técnico de", "técnica de", "motorista", "condutor",
+    )),
+    ("entry_level", (
+        "sem experiência", "auxiliar", "operário", "operária", "ajudante", "estágio",
+        "estagiário", "aprendiz", "servente", "empacotador",
+    )),
+]
+
+
+def classify_audience_lane(title: str | None, category: str | None, description: str | None) -> str | None:
+    """Best-effort audience-segment tag from free text — lets admins see
+    whether daily intake actually spans different audiences instead of
+    clustering on whichever source happened to publish that day. Returns
+    None (unclassified) rather than guessing when nothing matches."""
+    haystack = " ".join(filter(None, [title, category, description])).lower()
+    if not haystack.strip():
+        return None
+    for lane, keywords in _AUDIENCE_LANE_KEYWORDS:
+        if any(kw in haystack for kw in keywords):
+            return lane
+    return None
+
+
 def _robots_ok(url: str) -> bool:
     try:
         parts = urlparse(url)

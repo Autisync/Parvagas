@@ -177,6 +177,7 @@ export type ScrapedRecord = {
   duplicateOf?: string | null;
   applicationDeadline?: string | null;
   scheduledPublishAt?: string | null;
+  audienceLane?: string | null;
   description?: string | null;
   responsibilities?: string[];
   requirements?: string[];
@@ -311,8 +312,18 @@ export async function fetchCompanies(token: string, params: Record<string, strin
 }
 
 export async function fetchScraped(token: string, params: Record<string, string | number | undefined> = {}) {
-  return authFetch<Paginated<"scrapedJobs", ScrapedRecord>>(`/admin/scraped-jobs${listQuery(params)}`, token);
+  return authFetch<Paginated<"scrapedJobs", ScrapedRecord> & { laneCounts?: Record<string, number> }>(
+    `/admin/scraped-jobs${listQuery(params)}`, token,
+  );
 }
+
+export const AUDIENCE_LANE_LABELS: Record<string, string> = {
+  entry_level: "Sem experiência",
+  skilled_trade: "Ofício qualificado",
+  professional: "Profissional",
+  remote: "Remoto",
+  unclassified: "Não classificado",
+};
 
 export async function fetchAuditLogs(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"auditLogs", AuditLogRecord>>(`/admin/audit-logs${listQuery(params)}`, token);

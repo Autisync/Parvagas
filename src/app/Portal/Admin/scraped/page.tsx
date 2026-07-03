@@ -10,6 +10,7 @@ import {
   runAdminScraper,
   statusBadgeClass,
   toDateLabel,
+  AUDIENCE_LANE_LABELS,
   type ScrapedRecord,
   type Pagination,
 } from "../adminClient";
@@ -37,6 +38,7 @@ export default function AdminScrapedPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(15);
   const [pagination, setPagination] = useState<Pagination | undefined>();
+  const [laneCounts, setLaneCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -75,6 +77,7 @@ export default function AdminScrapedPage() {
       const res = await fetchScraped(token, { page, limit, keyword: search, status: filter });
       setJobs(res.scrapedJobs || []);
       setPagination(res.pagination);
+      setLaneCounts(res.laneCounts || {});
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar scraped jobs."));
     } finally {
@@ -301,6 +304,17 @@ export default function AdminScrapedPage() {
         </select>
       </AdminFilterBar>
 
+      {Object.keys(laneCounts).length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Diversidade (pendentes)</span>
+          {Object.entries(laneCounts).map(([lane, count]) => (
+            <span key={lane} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">
+              {AUDIENCE_LANE_LABELS[lane] || lane}: {count}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       {jobs.length > 0 ? (
         <section className="mt-5 app-card p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -366,6 +380,11 @@ export default function AdminScrapedPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{job.title || "Vaga importada"}</p>
                         <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(String(job.status || "pending"))}`}>{job.status || "pending"}</span>
+                        {job.audienceLane ? (
+                          <span className="ml-1 mt-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            {AUDIENCE_LANE_LABELS[job.audienceLane] || job.audienceLane}
+                          </span>
+                        ) : null}
                         {job.status === "scheduled" && job.scheduledPublishAt ? (
                           <p className="mt-1 text-xs font-medium text-indigo-700">Agendado para {toDateLabel(job.scheduledPublishAt)}</p>
                         ) : null}
