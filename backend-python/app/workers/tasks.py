@@ -1,5 +1,6 @@
 """Celery tasks for async operations."""
 import json
+import os
 from datetime import datetime
 from urllib.parse import quote
 from celery.exceptions import SoftTimeLimitExceeded
@@ -398,6 +399,20 @@ def _parse_scraped_deadline(value) -> "datetime | None":
         return None
 
 
+# Per-run ingestion budget — "as much volume as possible" is bounded here,
+# not left unbounded, so a single scrape run can't outgrow the resources
+# reserved for it (see the dedicated 'scraping' queue/worker in celery_app.py).
+SCRAPER_MAX_INGEST_PER_RUN = int(os.getenv("SCRAPER_MAX_INGEST_PER_RUN", "200"))
+SCRAPER_RUN_BUDGET_SECONDS = int(os.getenv("SCRAPER_RUN_BUDGET_SECONDS", "300"))
+
+
+def _scrape_budget_exhausted(ingested: int, started_at: datetime, now: datetime) -> bool:
+    """True once the run should stop pulling in more sources/items."""
+    if ingested >= SCRAPER_MAX_INGEST_PER_RUN:
+        return True
+    return (now - started_at).total_seconds() >= SCRAPER_RUN_BUDGET_SECONDS
+
+
 @celery.task(
     name='app.workers.tasks.scrape_external_jobs',
     # Runs on its own low-priority queue/worker (see celery_app.py) so a heavy
@@ -422,15 +437,25 @@ def scrape_external_jobs() -> dict:
     db = SessionLocal()
     ingested = 0
     skipped = 0
+    sources_processed = 0
+    budget_hit = False
+    started_at = datetime.utcnow()
     try:
         now = datetime.utcnow()
         for adapter in adapters:
+            if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow()):
+                budget_hit = True
+                break
+            sources_processed += 1
             try:
                 items = adapter.fetch()
             except Exception as e:
                 logger.warning(f"scraper source '{adapter.name}' failed: {e}")
                 continue
             for it in items:
+                if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow()):
+                    budget_hit = True
+                    break
                 title = (it.get("title") or "").strip()
                 if not title:
                     continue
@@ -454,8 +479,23 @@ def scrape_external_jobs() -> dict:
                 ))
                 ingested += 1
             db.commit()
-        logger.info(f"scrape_external_jobs: {ingested} ingested, {skipped} skipped from {len(adapters)} source(s)")
-        return {"sources": len(adapters), "ingested": ingested, "skipped": skipped}
+            if budget_hit:
+                break
+        if budget_hit:
+            logger.info(
+                f"scrape_external_jobs: run budget exhausted after {sources_processed}/{len(adapters)} "
+                f"source(s) — {ingested} ingested, {skipped} skipped so far"
+            )
+        else:
+            logger.info(f"scrape_external_jobs: {ingested} ingested, {skipped} skipped from {len(adapters)} source(s)")
+        return {
+            "sources": len(adapters), "sourcesProcessed": sources_processed,
+            "ingested": ingested, "skipped": skipped, "budgetExhausted": budget_hit,
+        }
+    except SoftTimeLimitExceeded:
+        # Keep whatever was already committed per-source; don't lose the run entirely.
+        logger.warning(f"scrape_external_jobs: soft time limit hit — {ingested} ingested before cutoff")
+        return {"sources": len(adapters), "ingested": ingested, "skipped": skipped, "budgetExhausted": True}
     except Exception as e:
         logger.error(f"scrape_external_jobs failed: {str(e)}")
         db.rollback()

@@ -65,10 +65,13 @@ celery.conf.beat_schedule = {
         'task': 'app.workers.tasks.dispatch_subscription_expiry_reminders',
         'schedule': crontab(hour=8, minute=0),  # 08:00 UTC daily
     },
-    # Job aggregation: fetch external sources every 6h, expire stale daily.
+    # Job aggregation: fetch external sources every 2h (was 6h) for higher
+    # daily volume; each run is still budget-capped (SCRAPER_MAX_INGEST_PER_RUN
+    # / SCRAPER_RUN_BUDGET_SECONDS) and isolated to its own low-priority
+    # worker, so more frequent runs don't add host resource risk.
     'scrape-external-jobs': {
         'task': 'app.workers.tasks.scrape_external_jobs',
-        'schedule': crontab(minute=0, hour='*/6'),
+        'schedule': crontab(minute=0, hour='*/2'),
     },
     'expire-stale-aggregated-jobs': {
         'task': 'app.workers.tasks.expire_stale_aggregated_jobs',

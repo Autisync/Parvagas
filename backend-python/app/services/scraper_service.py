@@ -30,7 +30,9 @@ logger = get_logger(__name__)
 
 USER_AGENT = os.getenv("SCRAPER_USER_AGENT", "Parvagas-Bot/1.0 (+https://parvagas.pt/robots.txt)")
 _REQUEST_TIMEOUT = float(os.getenv("SCRAPER_TIMEOUT", "12"))
-_MAX_PER_SOURCE = int(os.getenv("SCRAPER_MAX_PER_SOURCE", "50"))
+# Per-source cap — raised from the original 50 now that ingestion is bounded
+# by an overall per-run budget (see tasks.scrape_external_jobs), not just this.
+_MAX_PER_SOURCE = int(os.getenv("SCRAPER_MAX_PER_SOURCE", "100"))
 
 
 def content_hash(title: str | None, company: str | None, location: str | None) -> str:
