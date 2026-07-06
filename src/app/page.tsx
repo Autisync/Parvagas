@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SponsoredAdSlot from "./components/SponsoredAdSlot";
+import HomeCarousel, { CarouselSlide } from "./components/HomeCarousel";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
@@ -75,45 +76,51 @@ export default async function Home() {
   const { featuredJobs, featuredCareerPosts } = await getHomepageData();
   const dict = await getServerDictionary();
 
+  const heroSlides: CarouselSlide[] = [
+    {
+      eyebrow: dict.home.eyebrow,
+      title: dict.home.title,
+      description: dict.home.subtitle,
+      ctaHref: "/Submission/",
+      ctaLabel: dict.home.ctaCreateProfile,
+    },
+    {
+      eyebrow: dict.home.eyebrow,
+      title: dict.home.onboardingTitle,
+      description: dict.home.onboardingDesc,
+      note: dict.home.onboardingBonus,
+      ctaHref: "/Submission/",
+      ctaLabel: dict.home.ctaCreateProfile,
+    },
+    {
+      eyebrow: dict.home.eyebrow,
+      title: dict.home.hiringTitle,
+      description: dict.home.hiringDesc,
+      ctaHref: "/Signup",
+      ctaLabel: dict.home.hiringCta,
+    },
+    {
+      eyebrow: dict.home.eyebrow,
+      title: dict.home.featuredJobsTitle,
+      description: dict.home.subtitle,
+      ctaHref: "/Vagas-Disponiveis/",
+      ctaLabel: dict.home.ctaViewJobs,
+    },
+  ];
+
   return (
     <div className="bg-white text-gray-900">
       <Header />
 
-      {/* Hero */}
+      {/* Hero carousel */}
       <section className="pt-12 pb-16 px-6 bg-gradient-to-b from-red-50 to-white">
-        <div className="mx-auto max-w-6xl text-center pv-animate-in">
-          <p className="text-sm uppercase tracking-[0.2em] text-red-600 font-semibold">{dict.home.eyebrow}</p>
-          <h1 className="mt-4 text-balance text-4xl sm:text-6xl font-bold leading-tight">
-            {dict.home.title}
-          </h1>
-          <p className="mt-6 text-pretty text-lg text-gray-700 max-w-3xl mx-auto">
-            {dict.home.subtitle}
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/Submission/" className="app-btn-primary px-6 py-3">
-              {dict.home.ctaCreateProfile}
-            </Link>
-            <Link href="/Vagas-Disponiveis/" className="app-btn-secondary px-6 py-3">
-              {dict.home.ctaViewJobs}
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="py-14 px-6">
-        <div className="mx-auto max-w-6xl grid gap-6 pv-stagger md:grid-cols-2">
-          <article className="app-card p-8">
-            <h2 className="text-2xl font-bold text-red-600">{dict.home.onboardingTitle}</h2>
-            <p className="mt-3 text-gray-700">{dict.home.onboardingDesc}</p>
-            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-              {dict.home.onboardingBonus}
-            </p>
-          </article>
-          <article className="app-card p-8">
-            <h2 className="text-2xl font-bold text-red-600">{dict.home.hiringTitle}</h2>
-            <p className="mt-3 text-gray-700">{dict.home.hiringDesc}</p>
-          </article>
+        <div className="mx-auto max-w-6xl pv-animate-in">
+          <HomeCarousel
+            slides={heroSlides}
+            prevLabel={dict.home.carouselPrev}
+            nextLabel={dict.home.carouselNext}
+            slideLabels={heroSlides.map((_, i) => dict.home.carouselSlideLabel(i + 1))}
+          />
         </div>
       </section>
 

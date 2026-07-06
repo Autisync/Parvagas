@@ -27,6 +27,7 @@ export type Dictionary = {
     onboardingBonus: string;
     hiringTitle: string;
     hiringDesc: string;
+    hiringCta: string;
     featuredJobsTitle: string;
     viewAll: string;
     noFeaturedJobs: string;
@@ -37,6 +38,9 @@ export type Dictionary = {
     adsTitle: string;
     adsDesc: string;
     adsNote: string;
+    carouselPrev: string;
+    carouselNext: string;
+    carouselSlideLabel: (n: number) => string;
   };
   jobsList: {
     eyebrow: string;
@@ -357,6 +361,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       onboardingBonus: "🎁 Bónus: preencha o seu perfil e descarregue um CV em formato profissional (ATS), pronto para outras candidaturas.",
       hiringTitle: "Contratação para Empresas",
       hiringDesc: "Crie conta empresarial, valide a empresa e publique vagas públicas ou privadas com rastreio de candidaturas.",
+      hiringCta: "Criar Conta Empresarial",
       featuredJobsTitle: "Vagas em Destaque",
       viewAll: "Ver todas",
       noFeaturedJobs: "Sem vagas em destaque de momento.",
@@ -367,6 +372,9 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       adsTitle: "Espaços de Anúncios",
       adsDesc: "Campanhas manuais para banner da home, listagem de vagas, detalhe da vaga e cartões patrocinados.",
       adsNote: "Sem checkout online. Gestão comercial totalmente manual pelo admin.",
+      carouselPrev: "Slide anterior",
+      carouselNext: "Próximo slide",
+      carouselSlideLabel: (n: number) => `Ir para o slide ${n}`,
     },
     jobsList: {
       eyebrow: "Parvagas Angola",
@@ -681,6 +689,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       onboardingBonus: "🎁 Bonus: fill out your profile and download a professional, ATS-ready CV for other applications.",
       hiringTitle: "Hiring for Companies",
       hiringDesc: "Create a company account, verify your company, and publish public or private jobs with applicant tracking.",
+      hiringCta: "Create a Company Account",
       featuredJobsTitle: "Featured Jobs",
       viewAll: "View all",
       noFeaturedJobs: "No featured jobs at the moment.",
@@ -691,6 +700,9 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       adsTitle: "Ad Placements",
       adsDesc: "Manual campaigns for homepage banners, job listings, job details, and sponsored cards.",
       adsNote: "No online checkout. Commercial operations are managed manually by admins.",
+      carouselPrev: "Previous slide",
+      carouselNext: "Next slide",
+      carouselSlideLabel: (n: number) => `Go to slide ${n}`,
     },
     jobsList: {
       eyebrow: "Parvagas Angola",
