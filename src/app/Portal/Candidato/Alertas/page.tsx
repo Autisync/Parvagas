@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { track } from "@/lib/analytics";
@@ -159,6 +160,18 @@ export default function AlertasPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900">Alertas de Emprego</h1>
         <p className="mt-2 text-slate-600">Crie, edite e elimine alertas para receber oportunidades relevantes.</p>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-sm text-slate-600">
+          Além de alertas por email, pode escolher áreas de interesse para candidatura automática (em breve).
+        </p>
+        <Link
+          href="/Portal/Candidato/CV-e-Documentos"
+          className="shrink-0 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-50"
+        >
+          Ver em CV e Documentos
+        </Link>
       </div>
 
       {error ? <div className="mb-4"><InlineErrorState onAction={fetchAlerts} /></div> : null}

@@ -189,6 +189,18 @@ export default function VagasRecomendadasPage() {
 
       {error ? <div className="mb-4"><InlineErrorState /></div> : null}
 
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-sm text-slate-600">
+          Quer que candidaturas a estas áreas sejam feitas automaticamente no futuro?
+        </p>
+        <Link
+          href="/Portal/Candidato/CV-e-Documentos"
+          className="shrink-0 rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-50"
+        >
+          Definir candidatura automática
+        </Link>
+      </div>
+
       <DecisionDashboard
         className="mb-6"
         title="Dashboard de decisao"

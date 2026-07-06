@@ -83,6 +83,7 @@ export default async function Home() {
       description: dict.home.subtitle,
       ctaHref: "/Submission/",
       ctaLabel: dict.home.ctaCreateProfile,
+      illustration: "hero",
     },
     {
       eyebrow: dict.home.eyebrow,
@@ -91,6 +92,7 @@ export default async function Home() {
       note: dict.home.onboardingBonus,
       ctaHref: "/Submission/",
       ctaLabel: dict.home.ctaCreateProfile,
+      illustration: "onboarding",
     },
     {
       eyebrow: dict.home.eyebrow,
@@ -98,6 +100,7 @@ export default async function Home() {
       description: dict.home.hiringDesc,
       ctaHref: "/Signup",
       ctaLabel: dict.home.hiringCta,
+      illustration: "hiring",
     },
     {
       eyebrow: dict.home.eyebrow,
@@ -105,6 +108,7 @@ export default async function Home() {
       description: dict.home.subtitle,
       ctaHref: "/Vagas-Disponiveis/",
       ctaLabel: dict.home.ctaViewJobs,
+      illustration: "jobs",
     },
   ];
 

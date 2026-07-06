@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+
+export type CarouselIllustration = "hero" | "onboarding" | "hiring" | "jobs";
 
 export type CarouselSlide = {
   eyebrow?: string;
@@ -10,9 +12,78 @@ export type CarouselSlide = {
   note?: string;
   ctaHref: string;
   ctaLabel: string;
+  illustration: CarouselIllustration;
 };
 
 const AUTO_ADVANCE_MS = 6000;
+
+function SlideIllustration({ kind }: { kind: CarouselIllustration }) {
+  const common = "h-full w-full";
+  switch (kind) {
+    case "onboarding":
+      return (
+        <svg viewBox="0 0 240 240" className={common} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="120" cy="120" r="110" fill="var(--pv-illus-bg, #FEF2F2)" />
+          <rect x="70" y="52" width="100" height="136" rx="14" fill="#FFFFFF" stroke="#FCA5A5" strokeWidth="3" />
+          <rect x="88" y="76" width="64" height="10" rx="5" fill="#F87171" />
+          <rect x="88" y="98" width="64" height="7" rx="3.5" fill="#FCA5A5" />
+          <rect x="88" y="114" width="44" height="7" rx="3.5" fill="#FCA5A5" />
+          <rect x="88" y="140" width="64" height="7" rx="3.5" fill="#FECACA" />
+          <rect x="88" y="156" width="52" height="7" rx="3.5" fill="#FECACA" />
+          <circle cx="168" cy="168" r="26" fill="#DC2626" />
+          <path d="M158 168l7 7 15-15" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+    case "hiring":
+      return (
+        <svg viewBox="0 0 240 240" className={common} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="120" cy="120" r="110" fill="var(--pv-illus-bg, #FEF2F2)" />
+          <rect x="62" y="70" width="60" height="118" rx="6" fill="#FFFFFF" stroke="#FCA5A5" strokeWidth="3" />
+          <rect x="118" y="46" width="66" height="142" rx="6" fill="#FFFFFF" stroke="#F87171" strokeWidth="3" />
+          {[0, 1, 2, 3].map((row) => (
+            <g key={`l-${row}`}>
+              <rect x="74" y={86 + row * 20} width="12" height="12" fill="#FCA5A5" />
+              <rect x="98" y={86 + row * 20} width="12" height="12" fill="#FECACA" />
+            </g>
+          ))}
+          {[0, 1, 2, 3, 4].map((row) => (
+            <g key={`r-${row}`}>
+              <rect x="130" y={64 + row * 20} width="14" height="14" fill="#F87171" />
+              <rect x="156" y={64 + row * 20} width="14" height="14" fill="#FCA5A5" />
+            </g>
+          ))}
+          <rect x="86" y="150" width="24" height="38" rx="2" fill="#DC2626" />
+        </svg>
+      );
+    case "jobs":
+      return (
+        <svg viewBox="0 0 240 240" className={common} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="120" cy="120" r="110" fill="var(--pv-illus-bg, #FEF2F2)" />
+          <rect x="56" y="96" width="128" height="82" rx="12" fill="#FFFFFF" stroke="#FCA5A5" strokeWidth="3" />
+          <path d="M92 96v-14a12 12 0 0112-12h32a12 12 0 0112 12v14" fill="none" stroke="#F87171" strokeWidth="6" strokeLinecap="round" />
+          <rect x="56" y="122" width="128" height="14" fill="#FEE2E2" />
+          <rect x="108" y="118" width="24" height="22" rx="4" fill="#DC2626" />
+          <circle cx="184" cy="72" r="22" fill="#DC2626" />
+          <path d="M177 72l5 5 10-11" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+    case "hero":
+    default:
+      return (
+        <svg viewBox="0 0 240 240" className={common} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="120" cy="120" r="110" fill="var(--pv-illus-bg, #FEF2F2)" />
+          <circle cx="88" cy="96" r="30" fill="#FECACA" />
+          <circle cx="88" cy="96" r="30" fill="none" stroke="#F87171" strokeWidth="3" />
+          <circle cx="160" cy="120" r="24" fill="#FCA5A5" />
+          <circle cx="160" cy="120" r="24" fill="none" stroke="#DC2626" strokeWidth="3" />
+          <path d="M88 126v18M160 144v14" stroke="#F87171" strokeWidth="4" strokeLinecap="round" />
+          <path d="M60 176c6-20 24-30 28-30s22 10 28 30" fill="none" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
+          <path d="M132 186c5-16 18-24 28-24s23 8 28 24" fill="none" stroke="#F87171" strokeWidth="5" strokeLinecap="round" />
+          <path d="M112 92l14 14 24-24" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+  }
+}
 
 export default function HomeCarousel({
   slides,
@@ -41,8 +112,6 @@ export default function HomeCarousel({
     return () => clearInterval(timer);
   }, [paused, count]);
 
-  const trackRef = useRef<HTMLDivElement>(null);
-
   return (
     <div
       className="relative overflow-hidden rounded-3xl border border-red-100 bg-white/60 shadow-sm"
@@ -50,26 +119,34 @@ export default function HomeCarousel({
       onMouseLeave={() => setPaused(false)}
     >
       <div
-        ref={trackRef}
         className="flex transition-transform duration-500 ease-out"
         style={{ transform: `translateX(-${active * 100}%)` }}
       >
         {slides.map((slide, index) => (
-          <div key={index} className="w-full flex-shrink-0 px-8 py-12 text-center sm:px-16" aria-hidden={index !== active}>
-            {slide.eyebrow && (
-              <p className="text-sm uppercase tracking-[0.2em] text-red-600 font-semibold">{slide.eyebrow}</p>
-            )}
-            <h2 className="mt-4 text-balance text-3xl sm:text-4xl font-bold leading-tight">{slide.title}</h2>
-            <p className="mt-4 text-pretty text-base sm:text-lg text-gray-700 max-w-2xl mx-auto">{slide.description}</p>
-            {slide.note && (
-              <p className="mt-4 inline-block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-                {slide.note}
-              </p>
-            )}
-            <div className="mt-8">
-              <Link href={slide.ctaHref} className="app-btn-primary px-6 py-3">
-                {slide.ctaLabel}
-              </Link>
+          <div
+            key={index}
+            className="grid w-full flex-shrink-0 grid-cols-1 items-center gap-6 px-8 py-12 sm:px-12 md:grid-cols-2 md:gap-10 md:py-14"
+            aria-hidden={index !== active}
+          >
+            <div className="text-center md:text-left">
+              {slide.eyebrow && (
+                <p className="text-sm uppercase tracking-[0.2em] text-red-600 font-semibold">{slide.eyebrow}</p>
+              )}
+              <h2 className="mt-4 text-balance text-3xl sm:text-4xl font-bold leading-tight">{slide.title}</h2>
+              <p className="mt-4 text-pretty text-base sm:text-lg text-gray-700 max-w-xl mx-auto md:mx-0">{slide.description}</p>
+              {slide.note && (
+                <p className="mt-4 inline-block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                  {slide.note}
+                </p>
+              )}
+              <div className="mt-8">
+                <Link href={slide.ctaHref} className="app-btn-primary px-6 py-3">
+                  {slide.ctaLabel}
+                </Link>
+              </div>
+            </div>
+            <div className="mx-auto h-40 w-40 shrink-0 sm:h-52 sm:w-52 md:mx-0 md:h-60 md:w-60">
+              <SlideIllustration kind={slide.illustration} />
             </div>
           </div>
         ))}

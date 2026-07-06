@@ -19,6 +19,7 @@ import {
   BellIcon,
   DocumentIcon,
   CogIcon,
+  RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
 
 type DashboardStats = {
@@ -197,13 +198,19 @@ export default function CandidatoDashboard() {
         />
       </div>
 
-      {/* Settings Card */}
-      <div className="pt-4">
+      {/* Settings + auto-apply preferences */}
+      <div className="grid gap-6 pt-4 sm:grid-cols-2">
         <DashboardCard
           href="/Portal/Candidato/Definicoes"
           icon={<CogIcon className="h-6 w-6" />}
           title={dict.portal.candidate.settings}
           description="Gerencie preferências de notificações e privacidade"
+        />
+        <DashboardCard
+          href="/Portal/Candidato/CV-e-Documentos"
+          icon={<RocketLaunchIcon className="h-6 w-6" />}
+          title="Candidatura automática"
+          description="Escolha áreas de interesse e active o preenchimento automático (em breve)"
         />
       </div>
     </div>

@@ -148,6 +148,26 @@ const SKILL_SUGGESTIONS = ["React", "Node.js", "TypeScript", "Excel", "Power BI"
 const LANGUAGE_SUGGESTIONS = ["Português", "Inglês", "Francês", "Espanhol"];
 const CERT_SUGGESTIONS = ["AWS", "Scrum", "CCNA", "Google UX", "PMI"];
 
+const JOB_CATEGORIES = [
+  "Tecnologia",
+  "Energia",
+  "Saude",
+  "Banca e Financas",
+  "Logistica",
+  "Recursos Humanos",
+  "Comercial",
+];
+
+const categoryLabels: Record<string, string> = {
+  Tecnologia: "Tecnologia",
+  Energia: "Energia",
+  Saude: "Saúde",
+  "Banca e Financas": "Banca e Finanças",
+  Logistica: "Logística",
+  "Recursos Humanos": "Recursos Humanos",
+  Comercial: "Comercial",
+};
+
 const DEFAULT_EXPERIENCE: ExperienceItem = {
   jobTitle: "",
   company: "",
@@ -218,6 +238,43 @@ export default function CvDocumentosPage() {
   const [generating, setGenerating] = useState(false);
 
   const [exporting, setExporting] = useState<string | null>(null);
+
+  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
+  const [autoApplyOptIn, setAutoApplyOptIn] = useState(false);
+  const [savingAutoApply, setSavingAutoApply] = useState(false);
+  const [autoApplyMsg, setAutoApplyMsg] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch<{ profile: { preferredJobCategories?: string[]; autoApplyOptIn?: boolean } }>("/candidates/profile", token)
+      .then((d) => {
+        setPreferredCategories(d.profile?.preferredJobCategories || []);
+        setAutoApplyOptIn(Boolean(d.profile?.autoApplyOptIn));
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const toggleCategory = (category: string) => {
+    setPreferredCategories((prev) =>
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
+    );
+  };
+
+  const saveAutoApplyPrefs = async (nextCategories: string[], nextOptIn: boolean) => {
+    setSavingAutoApply(true);
+    setAutoApplyMsg("");
+    try {
+      await authFetch("/candidates/profile", token!, {
+        method: "PATCH",
+        body: JSON.stringify({ preferredJobCategories: nextCategories, autoApplyOptIn: nextOptIn }),
+      });
+      setAutoApplyMsg("Preferências de área guardadas.");
+    } catch (err: unknown) {
+      setAutoApplyMsg((err as Error).message || "Erro ao guardar preferências de área.");
+    } finally {
+      setSavingAutoApply(false);
+    }
+  };
 
   const handleExport = async (format: "pdf" | "docx" | "json") => {
     if (!token) return;
@@ -665,6 +722,68 @@ export default function CvDocumentosPage() {
             <p className="text-xs text-gray-500">CV perfis gerados</p>
             <p className="mt-1 text-2xl font-bold text-slate-800">{profiles.length}</p>
           </div>
+        </div>
+
+        {/* Auto-apply preferences (preference capture — automation ships later, as a paid feature) */}
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Candidatura automática por área</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Escolha as áreas de emprego do seu interesse. Quando o preenchimento automático de candidaturas
+                for lançado, usaremos este CV e o seu perfil para se candidatar automaticamente a vagas compatíveis nestas áreas.
+              </p>
+              <p className="mt-2 inline-block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
+                🚀 Em breve — funcionalidade paga. Por agora só guardamos as suas preferências.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoApplyOptIn;
+                setAutoApplyOptIn(next);
+                saveAutoApplyPrefs(preferredCategories, next);
+              }}
+              disabled={savingAutoApply}
+              aria-label="Activar candidatura automática (preferência)"
+              className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${autoApplyOptIn ? "bg-red-600" : "bg-slate-200"}`}
+            >
+              <span className={`m-0.5 inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${autoApplyOptIn ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {JOB_CATEGORIES.map((category) => {
+              const selected = preferredCategories.includes(category);
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => toggleCategory(category)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    selected
+                      ? "border-red-600 bg-red-50 text-red-700"
+                      : "border-slate-200 text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  {categoryLabels[category] || category}
+                </button>
+              );
+            })}
+          </div>
+
+          {autoApplyMsg ? (
+            <p className={`mt-3 text-sm ${autoApplyMsg.toLowerCase().includes("erro") ? "text-red-600" : "text-green-600"}`}>{autoApplyMsg}</p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => saveAutoApplyPrefs(preferredCategories, autoApplyOptIn)}
+            disabled={savingAutoApply}
+            className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+          >
+            {savingAutoApply ? "A guardar..." : "Guardar áreas de interesse"}
+          </button>
         </div>
 
         <div
