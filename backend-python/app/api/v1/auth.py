@@ -10,7 +10,7 @@ from app.api.deps import get_current_user
 from app.core.observability import limiter
 from app.core.security import hash_token, hash_password
 from app.services.notification_service import send_sms
-from app.models import User, UserRole, OtpCode, CompanyInvite, CompanyMember, AuditLog
+from app.models import User, UserRole, OtpCode, CompanyInvite, CompanyMember, AuditLog, EmailVerificationToken
 from app.schemas import (
     UserRegisterRequest, UserLoginRequest, AuthTokenResponse,
     UserResponse, EmailVerificationRequest, ResendVerificationRequest,
@@ -28,6 +28,29 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Minimum time between verification-email sends for the SAME account. The
+# @limiter.limit("5/hour") on the resend endpoint is per-IP, so it doesn't
+# stop someone from hammering a single victim's inbox from different IPs —
+# this closes that gap independent of where the request comes from.
+VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
+
+
+def _verification_resend_wait_seconds(db: Session, user: User, now: datetime | None = None) -> int:
+    """Seconds a caller must still wait before another verification email can
+    be sent to this user (0 if none / cooldown already elapsed)."""
+    now = now or datetime.utcnow()
+    last = (
+        db.query(EmailVerificationToken)
+        .filter(EmailVerificationToken.user_id == user.id)
+        .order_by(EmailVerificationToken.created_at.desc())
+        .first()
+    )
+    if not last:
+        return 0
+    elapsed = (now - last.created_at).total_seconds()
+    remaining = VERIFICATION_RESEND_COOLDOWN_SECONDS - elapsed
+    return max(0, int(remaining))
 
 
 def _audit(db: Session, *, action: str, user, ip: str | None = None, extra: dict | None = None) -> None:
@@ -189,7 +212,14 @@ async def resend_verification_email(
         
         if user.email_verified:
             return {"message": "This email is already verified."}
-        
+
+        wait_seconds = _verification_resend_wait_seconds(db, user)
+        if wait_seconds > 0:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Aguarde {wait_seconds}s antes de pedir um novo email de verificação.",
+            )
+
         # Create new verification token
         raw_token = AuthService.create_verification_token(db, user)
         
@@ -197,7 +227,9 @@ async def resend_verification_email(
         send_verification_email.delay(str(user.id), raw_token)
         
         return {"message": "Verification email sent. Please check your inbox."}
-    
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Resend verification error: {str(e)}")
         return {"message": "If an account exists with this email, a verification link has been sent."}

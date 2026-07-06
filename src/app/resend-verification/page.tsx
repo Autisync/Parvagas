@@ -7,6 +7,7 @@ import { apiFetchRaw } from "@/lib/api";
 type ResendResponse = {
   success?: boolean;
   message?: string;
+  detail?: string;
   error?: {
     message?: string;
   };
@@ -24,7 +25,7 @@ export default function ResendVerificationPage() {
     setMessage("");
 
     if (!email.trim()) {
-      setError("Please enter your email.");
+      setError("Indique o seu e-mail.");
       return;
     }
 
@@ -38,11 +39,11 @@ export default function ResendVerificationPage() {
       });
       const body = (await res.json().catch(() => ({}))) as ResendResponse;
       if (!res.ok) {
-        throw new Error(body?.error?.message || body?.message || "We could not resend the verification email right now.");
+        throw new Error(body?.error?.message || body?.message || body?.detail || "Não foi possível reenviar o email de verificação.");
       }
-      setMessage(body?.message || "If an account exists, a verification email has been sent.");
+      setMessage(body?.message || "Se existir uma conta com este email, foi enviado um novo link de verificação.");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "We could not resend the verification email right now.");
+      setError(err instanceof Error ? err.message : "Não foi possível reenviar o email de verificação.");
     } finally {
       setLoading(false);
     }
@@ -51,18 +52,18 @@ export default function ResendVerificationPage() {
   return (
     <main className="mx-auto max-w-xl px-4 py-20">
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">Resend verification email</h1>
-        <p className="mt-2 text-sm text-slate-600">Enter your account email and we will send a new verification link.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Reenviar email de verificação</h1>
+        <p className="mt-2 text-sm text-slate-600">Indique o email da sua conta e enviamos um novo link de verificação.</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-700">Email</span>
+            <span className="mb-1 block text-slate-700">E-mail</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              placeholder="you@example.com"
+              placeholder="voce@exemplo.com"
             />
           </label>
 
@@ -74,13 +75,13 @@ export default function ResendVerificationPage() {
             disabled={loading}
             className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
           >
-            {loading ? "Sending..." : "Resend email"}
+            {loading ? "A enviar..." : "Reenviar email"}
           </button>
         </form>
 
         <div className="mt-6">
           <Link href="/Login?role=candidate" className="text-sm font-semibold text-red-600 hover:text-red-700">
-            Back to sign in
+            Voltar ao login
           </Link>
         </div>
       </div>

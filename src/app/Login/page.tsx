@@ -45,6 +45,7 @@ type FirstLoginResetChallenge = {
 type ResendVerificationResponse = {
   success?: boolean;
   message?: string;
+  detail?: string;
 };
 
 type AuthRole = "candidate" | "company";
@@ -243,7 +244,7 @@ function LoginContent() {
                 .then(async (response) => {
                   const resendBody = (await response.json().catch(() => ({}))) as ResendVerificationResponse;
                   if (!response.ok) {
-                    throw new Error(resendBody.message || "Não foi possível reenviar o email de verificação.");
+                    throw new Error(resendBody.message || resendBody.detail || "Não foi possível reenviar o email de verificação.");
                   }
                   showFeedback({
                     variant: "success",
