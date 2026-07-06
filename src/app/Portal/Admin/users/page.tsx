@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchUsers, fetchAdminMe, statusBadgeClass, toDateLabel, type UserRecord, type AdminLevel, type Pagination } from "../adminClient";
+import { fetchUsers, fetchAdminMe, runVerificationBackfill, statusBadgeClass, toDateLabel, type UserRecord, type AdminLevel, type Pagination } from "../adminClient";
 import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
@@ -33,7 +33,31 @@ export default function AdminUsersPage() {
   // so we can prompt for a reason via the modal instead of window.prompt.
   const [quickSuspend, setQuickSuspend] = useState<{ user: UserRecord; suspended: boolean } | null>(null);
   const [quickReason, setQuickReason] = useState("");
+  const [backfillBusy, setBackfillBusy] = useState(false);
   const { notify } = useAppNotifier();
+
+  const backfillVerification = async () => {
+    if (!token) return;
+    setBackfillBusy(true);
+    try {
+      const preview = await runVerificationBackfill(token, true);
+      if (preview.totalUnverified === 0) {
+        notify("Não há contas por verificar.", "success");
+        return;
+      }
+      const confirmed = window.confirm(
+        `${preview.totalUnverified} conta(s) por verificar — ${preview.skippedCooldown} aguardam o intervalo mínimo entre envios.\n` +
+        `Enviar email de verificação a ${preview.sent} conta(s) agora?`,
+      );
+      if (!confirmed) return;
+      const result = await runVerificationBackfill(token, false);
+      notify(`Enviados ${result.sent} email(s) de verificação (${result.skippedCooldown} aguardam intervalo).`, "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao enviar emails de verificação."), "error");
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
 
   const {
     selectedIds,
@@ -173,7 +197,19 @@ export default function AdminUsersPage() {
         eyebrow="Acessos"
         title="Gestão de Utilizadores"
         description="Monitorize perfis, papéis e estado de acesso com uma vista operacional clara."
-        action={<span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Permissões: {level}</span>}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={backfillVerification}
+              disabled={backfillBusy}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {backfillBusy ? "A verificar..." : "Reenviar verificação a contas pendentes"}
+            </button>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">Permissões: {level}</span>
+          </div>
+        }
       />
 
       {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}

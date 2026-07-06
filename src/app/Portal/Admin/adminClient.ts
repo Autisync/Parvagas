@@ -301,6 +301,20 @@ export async function fetchUsers(token: string, params: Record<string, string | 
   return authFetch<Paginated<"users", UserRecord>>(`/admin/users${listQuery(params)}`, token);
 }
 
+export type VerificationBackfillResult = {
+  totalUnverified: number;
+  sent: number;
+  skippedCooldown: number;
+  dryRun: boolean;
+};
+
+export async function runVerificationBackfill(token: string, dryRun: boolean) {
+  return authFetch<VerificationBackfillResult>("/admin/users/verification-backfill", token, {
+    method: "POST",
+    body: JSON.stringify({ dryRun }),
+  });
+}
+
 export async function fetchJobs(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"jobs", JobRecord>>(`/admin/jobs${listQuery(params)}`, token);
 }

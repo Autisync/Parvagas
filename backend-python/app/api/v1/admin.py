@@ -535,6 +535,47 @@ async def admin_users(
     }
 
 
+@router.post("/users/verification-backfill")
+async def admin_verification_backfill(
+    payload: dict[str, Any] = {},
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One-off (safely re-runnable) bulk send: verification emails for every
+    currently-registered-but-unverified account. Respects the same
+    per-account cooldown as the self-serve resend endpoint, so calling this
+    repeatedly (e.g. to catch stragglers) never double-sends within the
+    cooldown window."""
+    admin = _ensure_admin(current_user)
+    from app.api.v1.auth import _verification_resend_wait_seconds
+    from app.services.auth_service import AuthService
+    from app.workers.tasks import send_verification_email
+
+    dry_run = bool(payload.get("dryRun", False))
+    unverified = db.query(User).filter(User.email_verified.is_(False)).all()
+
+    sent, skipped_cooldown = 0, 0
+    for user in unverified:
+        if _verification_resend_wait_seconds(db, user) > 0:
+            skipped_cooldown += 1
+            continue
+        if not dry_run:
+            raw_token = AuthService.create_verification_token(db, user)
+            send_verification_email.delay(str(user.id), raw_token)
+        sent += 1
+
+    _record_admin_event(
+        actor=admin, action="users.verification_backfill", resource_type="user", resource_id=None,
+        details={"totalUnverified": len(unverified), "sent": sent, "skippedCooldown": skipped_cooldown, "dryRun": dry_run},
+    )
+    return {
+        "totalUnverified": len(unverified),
+        "sent": sent,
+        "skippedCooldown": skipped_cooldown,
+        "dryRun": dry_run,
+    }
+
+
 @router.patch("/users/{user_id}/suspend")
 async def admin_suspend_user(
     user_id: str,
