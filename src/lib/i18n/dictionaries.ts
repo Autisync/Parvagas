@@ -24,6 +24,7 @@ export type Dictionary = {
     ctaViewJobs: string;
     onboardingTitle: string;
     onboardingDesc: string;
+    onboardingBonus: string;
     hiringTitle: string;
     hiringDesc: string;
     featuredJobsTitle: string;
@@ -353,6 +354,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       ctaViewJobs: "Ver Vagas Disponíveis",
       onboardingTitle: "Onboarding de Candidatos",
       onboardingDesc: "Carregue CV em PDF ou DOCX, revise os dados extraídos por IA e publique o seu perfil profissional em minutos.",
+      onboardingBonus: "🎁 Bónus: preencha o seu perfil e descarregue um CV em formato profissional (ATS), pronto para outras candidaturas.",
       hiringTitle: "Contratação para Empresas",
       hiringDesc: "Crie conta empresarial, valide a empresa e publique vagas públicas ou privadas com rastreio de candidaturas.",
       featuredJobsTitle: "Vagas em Destaque",
@@ -676,6 +678,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       ctaViewJobs: "Browse Open Jobs",
       onboardingTitle: "Candidate Onboarding",
       onboardingDesc: "Upload CV in PDF or DOCX, review AI-extracted details, and publish your profile in minutes.",
+      onboardingBonus: "🎁 Bonus: fill out your profile and download a professional, ATS-ready CV for other applications.",
       hiringTitle: "Hiring for Companies",
       hiringDesc: "Create a company account, verify your company, and publish public or private jobs with applicant tracking.",
       featuredJobsTitle: "Featured Jobs",

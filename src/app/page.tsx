@@ -102,6 +102,9 @@ export default async function Home() {
           <article className="app-card p-8">
             <h2 className="text-2xl font-bold text-red-600">{dict.home.onboardingTitle}</h2>
             <p className="mt-3 text-gray-700">{dict.home.onboardingDesc}</p>
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+              {dict.home.onboardingBonus}
+            </p>
           </article>
           <article className="app-card p-8">
             <h2 className="text-2xl font-bold text-red-600">{dict.home.hiringTitle}</h2>
