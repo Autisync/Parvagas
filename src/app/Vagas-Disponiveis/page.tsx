@@ -158,7 +158,9 @@ function VagasDisponiveisContent() {
         total?: number;
         totalPages?: number;
       }>(`/jobs?${params}`, { suppressGlobalErrors: true });
-      setJobs(data.jobs || []);
+      // Defensive: a single malformed/partial entry in this array must not
+      // crash the whole listing (and with it, every "Apply" link on the page).
+      setJobs((data.jobs || []).filter(Boolean));
       const meta = data.pagination || data;
       setPagination({
         page: meta.page || 1,

@@ -31,7 +31,7 @@ export default function VagasGuardadasPage() {
   useEffect(() => {
     if (!token) return;
     authFetch<{ jobs: SavedJobItem[] }>("/candidates/jobs/saved?page=1&limit=20", token)
-      .then((res) => setItems(res.jobs || []))
+      .then((res) => setItems((res.jobs || []).filter(Boolean)))
       .catch((err: unknown) => setError((err as Error).message || "Erro ao carregar vagas guardadas."))
       .finally(() => setFetching(false));
   }, [token]);

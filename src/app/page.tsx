@@ -55,7 +55,11 @@ async function getHomepageData(): Promise<{
   if (!data) {
     return { featuredJobs: [], featuredCareerPosts: [] };
   }
-  return data;
+  // Defensive: a malformed entry here must not crash the homepage.
+  return {
+    featuredJobs: (data.featuredJobs || []).filter(Boolean),
+    featuredCareerPosts: (data.featuredCareerPosts || []).filter(Boolean),
+  };
 }
 
 function salaryLabel(job: Job): string | null {

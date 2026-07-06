@@ -4,19 +4,29 @@ Serializes the SQLAlchemy ``Job`` model into the Mongo-style shape the Next.js
 frontend expects (``_id``, populated ``companyId``, camelCase fields).
 """
 import json
+import re
+import secrets
+import uuid
+from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import get_settings
+from app.core.observability import limiter
+from app.core.security import hash_password
 from app.db.session import get_db
-from app.models import Job, Company, CareerPost
+from app.models import CandidateProfile, CVUpload, Job, Company, CareerPost, User, UserRole
 from app.content import career_posts
+from app.services.auth_service import AuthService
 from app.services.storage_service import StorageService
+from app.workers.tasks import parse_cv, send_verification_email
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+settings = get_settings()
 router = APIRouter(tags=["jobs"])
 
 # Statuses considered live/visible on the public site.
@@ -364,3 +374,127 @@ async def public_career_post_detail(slug: str, db: Session = Depends(get_db)):
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado")
     return {"post": post}
+
+
+_CV_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+}
+
+
+def _split_name(full_name: str) -> tuple[str, str]:
+    parts = full_name.strip().split(None, 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return parts[0] if parts else full_name, ""
+
+
+def _store_upload(file_content: bytes, original_name: str) -> str:
+    safe_suffix = Path(original_name or "documento").name.replace("/", "_").replace("\\", "_") or "documento"
+    file_name = f"{uuid.uuid4()}_{safe_suffix}"
+    return StorageService.save_file(file_content, file_name)
+
+
+@router.post("/public/cv-submissions")
+@limiter.limit("5/hour")
+async def submit_spontaneous_cv(
+    request: Request,
+    fullName: str = Form(""),
+    email: str = Form(""),
+    cellphoneContact: str = Form(""),
+    city: str = Form(""),
+    residencialAddress: str = Form(""),
+    qualification: str = Form(""),
+    profession: str = Form(""),
+    personalStatement: str = Form(""),
+    cv: UploadFile = File(...),
+    extraDocument: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    """Public "Criar Perfil por CV" entry point (homepage → /Submission).
+
+    Guest, no-login CV drop: finds or creates a candidate account, upserts the
+    base profile, stores the CV and kicks off the existing async parser so the
+    profile gets auto-filled the same way an authenticated /cv/upload does.
+    """
+    full_name = fullName.strip()
+    email_norm = email.strip().lower()
+    if not full_name or not email_norm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome completo e email são obrigatórios.")
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email_norm):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email inválido.")
+    if cv.content_type not in _CV_MIME_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato inválido. Use PDF ou DOCX.")
+
+    max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+    cv_bytes = await cv.read()
+    if len(cv_bytes) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Ficheiro demasiado grande. Tamanho máximo: {settings.MAX_UPLOAD_MB} MB.",
+        )
+
+    user = db.query(User).filter(User.email == email_norm).first()
+    is_new_user = user is None
+    if user and user.role != UserRole.candidate:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este email já está associado a outro tipo de conta.")
+
+    if not user:
+        generated_password = secrets.token_urlsafe(18)
+        user = User(email=email_norm, full_name=full_name, password_hash=hash_password(generated_password), role=UserRole.candidate)
+        db.add(user)
+        db.flush()
+
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user.id).first()
+    first_name, last_name = _split_name(full_name)
+    if not profile:
+        profile = CandidateProfile(user_id=user.id)
+        db.add(profile)
+    profile.first_name = first_name
+    profile.last_name = last_name
+    profile.phone = cellphoneContact.strip() or profile.phone
+    profile.location = (city or residencialAddress).strip() or profile.location
+    profile.job_title = profession.strip() or profile.job_title
+    profile.professional_summary = personalStatement.strip() or profile.professional_summary
+    db.flush()
+
+    cv_path = _store_upload(cv_bytes, cv.filename or "cv")
+    cv_upload = CVUpload(
+        candidate_id=profile.id,
+        file_name=cv.filename or "cv",
+        file_path=cv_path,
+        file_size=len(cv_bytes),
+        mime_type=cv.content_type,
+        parse_status="pending",
+        is_primary=True,
+    )
+    db.add(cv_upload)
+
+    if extraDocument is not None and extraDocument.filename:
+        extra_bytes = await extraDocument.read()
+        if extra_bytes and len(extra_bytes) <= max_bytes:
+            extra_path = _store_upload(extra_bytes, extraDocument.filename)
+            db.add(CVUpload(
+                candidate_id=profile.id,
+                file_name=extraDocument.filename,
+                file_path=extra_path,
+                file_size=len(extra_bytes),
+                mime_type=extraDocument.content_type or "application/octet-stream",
+                parse_status="not_applicable",
+                is_primary=False,
+            ))
+
+    db.commit()
+    db.refresh(cv_upload)
+
+    parse_cv.delay(str(cv_upload.id))
+
+    if is_new_user:
+        raw_token = AuthService.create_verification_token(db, user)
+        send_verification_email.delay(str(user.id), raw_token)
+
+    return {
+        "success": True,
+        "message": "CV submetido com sucesso. A equipa Parvagas irá analisar a informação.",
+    }

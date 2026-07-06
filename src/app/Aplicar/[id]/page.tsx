@@ -101,7 +101,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
             authFetch<{ documents?: CvDocument[] }>("/candidates/cv/documents", t, { suppressGlobalErrors: true }),
           ]);
           if (!mounted) return;
-          const docs = docsRes.documents || [];
+          const docs = (docsRes.documents || []).filter(Boolean);
           setSavedCvs(docs);
           setCandidateForm((prev) => ({
             ...prev,

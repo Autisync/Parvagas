@@ -248,7 +248,7 @@ export default function CVForm() {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body?.error || t.submitError);
+        throw new Error(body?.error || body?.detail || t.submitError);
       }
 
       setStatus({ type: "success", message: t.successMessage });
