@@ -163,6 +163,8 @@ def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfi
         "preferredJobType": getattr(profile, "preferred_job_type", None) or "",
         "expectedSalaryAoa": getattr(profile, "expected_salary_aoa", None),
         "availability": getattr(profile, "availability", None) or "",
+        "preferredJobCategories": _coerce_list(_json_load(getattr(profile, "preferred_job_categories", None), [])),
+        "autoApplyOptIn": bool(getattr(profile, "auto_apply_opt_in", False)),
         "hasCompletedOnboarding": bool(profile.has_completed_onboarding),
         "hasSeenTutorial": bool(profile.has_seen_tutorial),
     }
@@ -238,6 +240,14 @@ def _apply_profile_payload(profile: CandidateProfile, current_user: User, payloa
             profile.expected_salary_aoa = salary_val if (salary_val is None or salary_val >= 0) else None
         except (TypeError, ValueError):
             profile.expected_salary_aoa = None
+
+    # Auto-apply preferences (preference capture only — see model comment).
+    if "preferredJobCategories" in payload or "preferred_job_categories" in payload:
+        categories = payload.get("preferredJobCategories") if "preferredJobCategories" in payload else payload.get("preferred_job_categories")
+        profile.preferred_job_categories = _json_dump(_coerce_list(categories))
+    if "autoApplyOptIn" in payload or "auto_apply_opt_in" in payload:
+        opt_in = payload.get("autoApplyOptIn") if "autoApplyOptIn" in payload else payload.get("auto_apply_opt_in")
+        profile.auto_apply_opt_in = bool(opt_in)
 
 
 @router.get("/profile")

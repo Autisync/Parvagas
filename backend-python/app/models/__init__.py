@@ -94,6 +94,12 @@ class CandidateProfile(Base, TimestampMixin):
     expected_salary_aoa = Column(Integer, nullable=True)     # monthly expectation, AOA
     availability = Column(String(50), nullable=True)         # imediata | 1_semana | ...
 
+    # Auto-apply preferences (added 2026-07-06). auto_apply_opt_in only records
+    # candidate intent today — the matching/auto-submission engine itself is a
+    # future paid feature and is not implemented yet.
+    preferred_job_categories = Column(Text, nullable=True)   # JSON array of category strings
+    auto_apply_opt_in = Column(Boolean, nullable=False, default=False)
+
     # Onboarding
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_seen_tutorial = Column(Boolean, nullable=False, default=False)
