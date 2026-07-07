@@ -131,25 +131,31 @@ function VagasDisponiveisContent() {
           Rotativo: "Rotativo",
         };
 
-  const fetchJobs = useCallback(async (
-    page = 1,
-    filters: Record<string, string> = emptyFilters,
-    updateUrl = true
-  ) => {
+  const buildQuery = useCallback((page: number, filters: Record<string, string>) => {
+    const params = new URLSearchParams({ page: String(page), limit: "12" });
+    if (filters.keyword) params.set("keyword", filters.keyword);
+    if (filters.location) params.set("provinceCity", filters.location);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.workMode) params.set("workMode", filters.workMode);
+    if (filters.contractType) params.set("contractType", filters.contractType);
+    if (filters.seniority) params.set("seniority", filters.seniority);
+    if (filters.salaryMin) params.set("salaryMin", filters.salaryMin);
+    if (filters.datePosted) params.set("datePostedDays", filters.datePosted);
+    if (filters.sort && filters.sort !== "recent") params.set("sort", filters.sort);
+    return params;
+  }, []);
+
+  // Pure data fetch — never touches the URL. The URL (searchParams) is the
+  // single source of truth for what to fetch; see the effect below. Callers
+  // that change filters/page must go through `navigate()`, not this function
+  // directly, or the fetch driven by the resulting searchParams change would
+  // duplicate this one (previously fired every search/page click twice, with
+  // no request cancellation — a source of flicker and stale-result races).
+  const fetchJobs = useCallback(async (page: number, filters: Record<string, string>) => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page), limit: "12" });
-      if (filters.keyword) params.set("keyword", filters.keyword);
-      if (filters.location) params.set("provinceCity", filters.location);
-      if (filters.category) params.set("category", filters.category);
-      if (filters.workMode) params.set("workMode", filters.workMode);
-      if (filters.contractType) params.set("contractType", filters.contractType);
-      if (filters.seniority) params.set("seniority", filters.seniority);
-      if (filters.salaryMin) params.set("salaryMin", filters.salaryMin);
-      if (filters.datePosted) params.set("datePostedDays", filters.datePosted);
-      if (filters.sort && filters.sort !== "recent") params.set("sort", filters.sort);
-      if (updateUrl) router.push(`/Vagas-Disponiveis?${params.toString()}`);
+      const params = buildQuery(page, filters);
       const data = await apiFetch<{
         jobs?: Job[];
         pagination?: PaginationMeta;
@@ -173,7 +179,13 @@ function VagasDisponiveisContent() {
     } finally {
       setLoading(false);
     }
-  }, [router, dict.jobsList.loadError]);
+  }, [buildQuery, dict.jobsList.loadError]);
+
+  // The only place a filter/page change should be requested from — updates
+  // the URL, and the effect below (the single fetch trigger) reacts to it.
+  const navigate = useCallback((page: number, filters: Record<string, string>) => {
+    router.push(`/Vagas-Disponiveis?${buildQuery(page, filters).toString()}`);
+  }, [router, buildQuery]);
 
   useEffect(() => {
     const initialFilters = {
@@ -201,7 +213,7 @@ function VagasDisponiveisContent() {
       setShowFilters(true);
     }
     setApplied(initialFilters);
-    fetchJobs(initialPage, initialFilters, false);
+    fetchJobs(initialPage, initialFilters);
   }, [fetchJobs, searchParams]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -209,11 +221,11 @@ function VagasDisponiveisContent() {
     const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort };
     setApplied(f);
     track("job_search", { province: location || "all", category: category || "all" });
-    fetchJobs(1, f);
+    navigate(1, f);
   };
 
   const goPage = (n: number) => {
-    fetchJobs(n, applied);
+    navigate(n, applied);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -290,7 +302,7 @@ function VagasDisponiveisContent() {
               </button>
               <label className="flex items-center gap-2 text-sm text-gray-600">
                 Ordenar:
-                <select className="app-input w-auto py-1.5" value={sort} onChange={e => { setSort(e.target.value); const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort: e.target.value }; setApplied(f); fetchJobs(1, f); }} aria-label="Ordenar resultados">
+                <select className="app-input w-auto py-1.5" value={sort} onChange={e => { setSort(e.target.value); const f = { keyword, location, category, workMode, contractType, seniority, salaryMin, datePosted, sort: e.target.value }; setApplied(f); navigate(1, f); }} aria-label="Ordenar resultados">
                   <option value="recent">Mais recentes</option>
                   <option value="salary">Maior salário</option>
                   <option value="relevance">Relevância</option>

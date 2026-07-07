@@ -73,12 +73,24 @@ export default function PortalVagasDisponiveisPage() {
   // Debounce search query to avoid API calls on every keystroke
   const debouncedQuery = useDebounce(query, 400);
 
+  // The "Remoto/Hibrido", "Com salario", etc. chips filter client-side (the
+  // backend has no server-side query param for most of them). Paginating by
+  // the API's per-page slice of 10 while filtering that slice locally meant
+  // a filtered view could show 0 results on a page while pagination still
+  // claimed more pages existed (the count came from the unfiltered API
+  // total). When a filter is active, fetch a much larger page instead and
+  // paginate the filtered results client-side, so "page X of Y" always
+  // matches what's actually being filtered.
+  const hasActiveFilter = viewFilter !== "all";
+  const CLIENT_PAGE_SIZE = 10;
+  const FETCH_LIMIT = hasActiveFilter ? 50 : CLIENT_PAGE_SIZE;
+  const fetchPage = hasActiveFilter ? 1 : page;
+
   // Fetch jobs from API with pagination
-  const { data: jobsData, isLoading, error } = usePublicJobs(page, 10, { keyword: debouncedQuery });
+  const { data: jobsData, isLoading, error } = usePublicJobs(fetchPage, FETCH_LIMIT, { keyword: debouncedQuery });
 
   const jobs = useMemo(() => (jobsData?.jobs || []).filter(Boolean), [jobsData]);
   const total = jobsData?.total || 0;
-  const totalPages = jobsData?.totalPages || 1;
 
   const dashboard = useMemo(() => {
     const remoteOrHybrid = jobs.filter((item) => {
@@ -116,6 +128,15 @@ export default function PortalVagasDisponiveisPage() {
       return true;
     });
   }, [jobs, viewFilter]);
+
+  // Server pagination when browsing unfiltered; client pagination over the
+  // filtered set when a view filter is active (see FETCH_LIMIT above).
+  const totalPages = hasActiveFilter
+    ? Math.max(1, Math.ceil(filteredJobs.length / CLIENT_PAGE_SIZE))
+    : (jobsData?.totalPages || 1);
+  const paginatedJobs = hasActiveFilter
+    ? filteredJobs.slice((page - 1) * CLIENT_PAGE_SIZE, page * CLIENT_PAGE_SIZE)
+    : filteredJobs;
 
   // Reset to page 1 when search or viewFilter changes
   useEffect(() => {
@@ -311,7 +332,7 @@ export default function PortalVagasDisponiveisPage() {
         {!isLoading && (
           <div className="mt-8 grid gap-4">
             {filteredJobs.length === 0 && <p className="text-gray-500 text-center py-12">Nenhuma vaga encontrada para os filtros atuais.</p>}
-            {filteredJobs.map((job) => (
+            {paginatedJobs.map((job) => (
               <article key={job._id} className="rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between gap-4">
                   <div>

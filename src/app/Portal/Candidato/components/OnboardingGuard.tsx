@@ -84,7 +84,15 @@ function GuardInner({ children }: { children: React.ReactNode }) {
 
 export default function OnboardingGuard({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<>{children}</>}>
+    // Fallback must NOT render `children` — Next.js briefly renders this
+    // fallback during the client-side bailout `useSearchParams()` requires,
+    // which mounted the same `children` element tree here and then again
+    // inside `GuardInner` a moment later. Two mounts of the same subtree at
+    // different fiber positions within milliseconds of each other is what
+    // caused a production "insertBefore" NotFoundError crash on this route
+    // (React's commit phase tries to move/insert a DOM node relative to a
+    // sibling that a still-in-flight prior commit already detached).
+    <Suspense fallback={null}>
       <GuardInner>{children}</GuardInner>
     </Suspense>
   );
