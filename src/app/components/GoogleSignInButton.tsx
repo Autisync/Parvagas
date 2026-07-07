@@ -111,10 +111,10 @@ export default function GoogleSignInButton({
           email: u.email,
           role: u.role,
           name: u.fullName || u.full_name,
-          hasCompletedOnboarding: u.hasCompletedOnboarding ?? false,
-          hasSeenTutorial: u.hasSeenTutorial ?? false,
-          hasSeenEmpresaTutorial: u.hasSeenEmpresaTutorial ?? false,
-          companyStatus: u.companyStatus,
+          hasCompletedOnboarding: u.hasCompletedOnboarding ?? u.has_completed_onboarding ?? false,
+          hasSeenTutorial: u.hasSeenTutorial ?? u.has_seen_tutorial ?? false,
+          hasSeenEmpresaTutorial: u.hasSeenEmpresaTutorial ?? u.has_seen_empresa_tutorial ?? false,
+          companyStatus: u.companyStatus ?? u.company_status,
         });
         router.replace(portalRoute(u.role));
       } catch (err) {

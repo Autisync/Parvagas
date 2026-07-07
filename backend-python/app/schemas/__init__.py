@@ -26,14 +26,27 @@ class UserLoginRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    """User response."""
+    """User response.
+
+    has_completed_onboarding / has_seen_tutorial / has_seen_empresa_tutorial /
+    company_status / company_team_role live on CandidateProfile/Company/
+    CompanyMember, not on User — they are None unless explicitly populated by
+    a helper (e.g. AuthService.build_user_response) that looks up the related
+    row. A bare ``UserResponse.model_validate(user)`` leaves them None, so
+    frontend code must not assume they are always present for every caller.
+    """
     id: str
     email: str
     full_name: str
     role: str
     admin_level: Optional[str] = None
     email_verified: bool
-    
+    has_completed_onboarding: Optional[bool] = None
+    has_seen_tutorial: Optional[bool] = None
+    has_seen_empresa_tutorial: Optional[bool] = None
+    company_status: Optional[str] = None
+    company_team_role: Optional[str] = None
+
     class Config:
         from_attributes = True
 

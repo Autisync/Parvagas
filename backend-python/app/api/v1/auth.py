@@ -167,7 +167,7 @@ async def login(
         return {
             "access_token": token,
             "token_type": "bearer",
-            "user": UserResponse.model_validate(user)
+            "user": UserResponse.model_validate(AuthService.build_user_response(db, user))
         }
 
     except HTTPException:
@@ -339,7 +339,7 @@ async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
 
 
 @router.post("/first-login-reset", response_model=AuthTokenResponse)
@@ -354,13 +354,13 @@ async def first_login_reset(payload: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_friendly_auth_detail(str(getattr(e, "detail", e))))
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return the authenticated user's profile."""
-    return UserResponse.model_validate(current_user)
+    return UserResponse.model_validate(AuthService.build_user_response(db, current_user))
 
 
 @router.post("/logout", response_model=MessageResponse)
@@ -447,7 +447,7 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
         user=user, ip=_ip, extra={"method": "otp", "new_user": is_new_user},
     )
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(user)}
+    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
 
 
 _GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
@@ -520,6 +520,6 @@ async def google_login(request: Request, payload: dict, db: Session = Depends(ge
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": UserResponse.model_validate(user),
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
         "isNewUser": is_new_user,
     }

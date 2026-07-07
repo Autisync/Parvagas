@@ -3,9 +3,9 @@ import re
 
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.models import Company, User, UserRole, EmailVerificationToken, PasswordResetToken
+from app.models import CandidateProfile, Company, CompanyMember, User, UserRole, EmailVerificationToken, PasswordResetToken
 from app.core.security import (
-    hash_password, verify_password, create_access_token, 
+    hash_password, verify_password, create_access_token,
     create_verification_token, hash_token
 )
 from app.core.errors import (
@@ -232,6 +232,44 @@ class AuthService:
         
         return user
     
+    @staticmethod
+    def build_user_response(db: Session, user: User) -> dict:
+        """Assemble the login/me payload, including the onboarding/tutorial
+        flags the frontend needs to decide whether to force the wizard.
+
+        These flags live on CandidateProfile/Company/CompanyMember, not on
+        User itself — a bare ``UserResponse.model_validate(user)`` leaves them
+        None, which the frontend was treating as "not completed yet" on every
+        login (the onboarding screen kept reappearing for already-onboarded
+        candidates). Every auth endpoint that returns a user must go through
+        this helper instead of validating the bare ORM object.
+        """
+        payload = {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role.value if hasattr(user.role, "value") else user.role,
+            "admin_level": user.admin_level,
+            "email_verified": user.email_verified,
+        }
+
+        if user.role == UserRole.candidate:
+            profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user.id).first()
+            payload["has_completed_onboarding"] = bool(profile.has_completed_onboarding) if profile else False
+            payload["has_seen_tutorial"] = bool(profile.has_seen_tutorial) if profile else False
+        elif user.role == UserRole.company:
+            company = db.query(Company).filter(Company.owner_user_id == user.id).first()
+            member = None
+            if not company:
+                member = db.query(CompanyMember).filter(CompanyMember.user_id == user.id).first()
+                if member:
+                    company = db.query(Company).filter(Company.id == member.company_id).first()
+            payload["has_seen_empresa_tutorial"] = bool(company.has_seen_tutorial) if company else False
+            payload["company_status"] = company.status if company else None
+            payload["company_team_role"] = "owner" if (company and not member) else (member.role if member else None)
+
+        return payload
+
     @staticmethod
     def create_access_token(user: User) -> str:
         """Create JWT access token for user."""

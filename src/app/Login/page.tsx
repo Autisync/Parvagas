@@ -29,10 +29,15 @@ type LoginResponse = {
     fullName?: string;
     admin_level?: "super-admin" | "moderator";
     adminLevel?: "super-admin" | "moderator";
+    company_team_role?: "owner" | "manager" | "recruiter" | "viewer";
     companyTeamRole?: "owner" | "manager" | "recruiter" | "viewer";
+    has_completed_onboarding?: boolean;
     hasCompletedOnboarding?: boolean;
+    has_seen_tutorial?: boolean;
     hasSeenTutorial?: boolean;
+    has_seen_empresa_tutorial?: boolean;
     hasSeenEmpresaTutorial?: boolean;
+    company_status?: "inactive" | "pending_verification" | "active" | "rejected";
     companyStatus?: "inactive" | "pending_verification" | "active" | "rejected";
   };
 };
@@ -300,12 +305,12 @@ function LoginContent() {
         email: data.user.email,
         role: data.user.role,
         adminLevel: data.user.adminLevel || data.user.admin_level,
-        companyTeamRole: data.user.companyTeamRole,
+        companyTeamRole: data.user.companyTeamRole || data.user.company_team_role,
         name: data.user.fullName || data.user.full_name,
-        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
-        hasSeenTutorial: data.user.hasSeenTutorial ?? false,
-        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
-        companyStatus: data.user.companyStatus,
+        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? data.user.has_completed_onboarding ?? true,
+        hasSeenTutorial: data.user.hasSeenTutorial ?? data.user.has_seen_tutorial ?? false,
+        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
+        companyStatus: data.user.companyStatus || data.user.company_status,
       });
       router.replace(portalRoute(data.user.role));
       return;
@@ -380,12 +385,12 @@ function LoginContent() {
         id: userId,
         email: data.user.email,
         role: data.user.role,
-        companyTeamRole: data.user.companyTeamRole,
+        companyTeamRole: data.user.companyTeamRole || data.user.company_team_role,
         name: data.user.fullName || data.user.full_name,
-        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? true,
-        hasSeenTutorial: data.user.hasSeenTutorial ?? false,
-        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? false,
-        companyStatus: data.user.companyStatus,
+        hasCompletedOnboarding: data.user.hasCompletedOnboarding ?? data.user.has_completed_onboarding ?? true,
+        hasSeenTutorial: data.user.hasSeenTutorial ?? data.user.has_seen_tutorial ?? false,
+        hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
+        companyStatus: data.user.companyStatus || data.user.company_status,
       });
       router.replace(portalRoute(data.user.role));
       return;
