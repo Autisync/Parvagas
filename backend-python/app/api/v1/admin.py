@@ -889,6 +889,7 @@ def _to_scraped_record(s: ScrapedJob) -> dict[str, Any]:
         "requirements": _json_list(s.requirements),
         "companyLogoUrl": StorageService.resolve_public_url(s.company_logo_url),
         "companyWebsite": s.company_website,
+        "contactEmail": s.contact_email,
         "createdAt": s.created_at.isoformat() if s.created_at else None,
     }
 
@@ -913,6 +914,7 @@ _SCRAPED_TO_JOB_FIELD_MAP = {
     "requirements": ("requirements", "requirements"),
     "company": ("external_company_name", "company_name"),
     "companyLogoUrl": ("external_company_logo_url", "company_logo_url"),
+    "contactEmail": ("external_contact_email", "contact_email"),
 }
 
 
@@ -966,6 +968,7 @@ def _publish_scraped_job(db: Session, s: ScrapedJob, admin: User | None = None) 
         source=s.source, source_url=s.source_url,
         external_company_name=s.company_name,
         external_company_logo_url=s.company_logo_url,
+        external_contact_email=s.contact_email,
         expires_at=expires_at,
     )
     db.add(job)
@@ -1057,6 +1060,7 @@ async def admin_create_scraped(
         requirements=requirements_json,
         company_logo_url=str(payload.get("companyLogoUrl", "")).strip() or None,
         company_website=str(payload.get("companyWebsite", "")).strip() or None,
+        contact_email=str(payload.get("contactEmail", "")).strip().lower() or None,
         audience_lane=audience_lane,
         quality_score=quality_score,
         quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
@@ -1104,6 +1108,9 @@ async def admin_update_scraped(
     if "companyWebsite" in payload:
         s.company_website = str(payload.get("companyWebsite") or "").strip() or None
         changed.append("companyWebsite")
+    if "contactEmail" in payload:
+        s.contact_email = str(payload.get("contactEmail") or "").strip().lower() or None
+        changed.append("contactEmail")
     if "audienceLane" in payload:
         s.audience_lane = str(payload.get("audienceLane") or "").strip() or None
         changed.append("audienceLane")

@@ -50,6 +50,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [guestTrackingUrl, setGuestTrackingUrl] = useState<string | null>(null);
 
   const [token, setToken] = useState<string | null>(null);
   const [accountRole, setAccountRole] = useState<string | null>(null);
@@ -199,7 +200,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
       formData.append("cv", guestForm.cv);
 
       const captchaToken = await getRecaptchaToken("apply");
-      await uploadWithProgress({
+      const result = await uploadWithProgress<{ trackingUrl?: string }>({
         path: `/public/jobs/${job._id}/quick-apply`,
         formData,
         captchaToken,
@@ -207,6 +208,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
       });
       notify("Candidatura rápida submetida. Enviámos instruções para o seu email.", "success");
       setGuestForm((prev) => ({ ...prev, cv: null, coverLetter: "" }));
+      setGuestTrackingUrl(result?.trackingUrl || null);
       setSubmitted(true);
       setCelebrate(true);
       track("apply_success");
@@ -246,10 +248,27 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
                   ? `A sua candidatura para ${job.title} foi submetida com sucesso. A empresa será notificada.`
                   : "A sua candidatura foi submetida com sucesso. A empresa será notificada."}
               </p>
+              {mode === "guest" && guestTrackingUrl ? (
+                <div className="mx-auto mt-5 max-w-md rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-slate-700">
+                  <p className="font-semibold text-slate-900">Sem conta? Guarde este link.</p>
+                  <p className="mt-1">
+                    Enviámos-lhe também por email um link único para acompanhar o estado desta candidatura a
+                    qualquer momento.
+                  </p>
+                  <Link href={guestTrackingUrl} className="mt-2 inline-block break-all font-semibold text-red-700 hover:underline">
+                    {guestTrackingUrl}
+                  </Link>
+                </div>
+              ) : null}
               <div className="mt-7 flex flex-wrap justify-center gap-3">
                 {mode === "candidate" ? (
                   <Link href="/Portal/Candidato/Candidaturas" className="app-btn-primary px-5 py-2.5 text-sm">
                     Ver as minhas candidaturas
+                  </Link>
+                ) : null}
+                {mode === "guest" && guestTrackingUrl ? (
+                  <Link href={guestTrackingUrl} className="app-btn-primary px-5 py-2.5 text-sm">
+                    Acompanhar candidatura
                   </Link>
                 ) : null}
                 <Link href="/Vagas-Disponiveis" className="app-btn-secondary px-5 py-2.5 text-sm">

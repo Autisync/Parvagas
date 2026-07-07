@@ -191,6 +191,12 @@ class JobApplication(Base, TimestampMixin):
     cv_file_path = Column(String(500), nullable=True)
     saved_cv_document_id = Column(String(36), nullable=True)
 
+    # Lets a guest applicant (no account) check this one application's status
+    # without logging in — issued at submission time, sent in the
+    # confirmation email. Authenticated candidates track via the portal
+    # instead, so this stays null for those applications.
+    tracking_token = Column(String(64), nullable=True, unique=True, index=True)
+
 
 class JobMatchProposal(Base, TimestampMixin):
     """A candidate-reviewable auto-apply match, produced by the periodic
@@ -344,6 +350,13 @@ class Job(Base, TimestampMixin):
     source_url = Column(String(1000), nullable=True)
     external_company_name = Column(String(255), nullable=True)
     external_company_logo_url = Column(Text, nullable=True)
+    # Real hiring company's inbox for jobs with no Parvagas company account
+    # (aggregated/scraped listings, admin-set). When present, new applications
+    # are emailed straight there instead of only reaching an internal admin.
+    external_contact_email = Column(String(255), nullable=True)
+    # Lets that no-account employer view applications for THIS job without
+    # logging in — issued once, sent in the notification email.
+    employer_access_token = Column(String(64), nullable=True, unique=True, index=True)
 
     company = relationship("Company", foreign_keys=[company_id])
 
@@ -451,6 +464,9 @@ class ScrapedJob(Base, TimestampMixin):
     source_url = Column(String(1000), nullable=True)
     title = Column(String(255), nullable=False)
     company_name = Column(String(255), nullable=True)
+    # Admin-curated contact inbox for the real hiring company (mirrored onto
+    # Job.external_contact_email on publish/edit — see _SCRAPED_TO_JOB_FIELD_MAP).
+    contact_email = Column(String(255), nullable=True)
     location = Column(String(255), nullable=True)
     category = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)

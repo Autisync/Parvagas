@@ -8,8 +8,8 @@ type UploadOptions = {
   onProgress?: (progress: number) => void;
 };
 
-export function uploadWithProgress({ path, formData, token, captchaToken, onProgress }: UploadOptions) {
-  return new Promise<void>((resolve, reject) => {
+export function uploadWithProgress<T = unknown>({ path, formData, token, captchaToken, onProgress }: UploadOptions) {
+  return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", apiUrl(path));
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
@@ -24,7 +24,11 @@ export function uploadWithProgress({ path, formData, token, captchaToken, onProg
     xhr.onload = () => {
       onProgress?.(100);
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
+        try {
+          resolve(JSON.parse(xhr.responseText || "{}") as T);
+        } catch {
+          resolve({} as T);
+        }
         return;
       }
 

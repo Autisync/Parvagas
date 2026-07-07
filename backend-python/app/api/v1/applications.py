@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import (
     CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, User, UserRole,
@@ -45,21 +47,47 @@ router = APIRouter(tags=["applications"])
 
 
 def _notify_company_new_applicant(db: Session, company_id: str, job_id: str, candidate_name: str) -> None:
-    """Email the company owner that a new candidate applied. Never blocks the apply."""
+    """Notify the employer that a new candidate applied. Never blocks the apply.
+
+    Two independent notification paths, since a job's `company_id` always
+    resolves to a real Company row (aggregated/scraped jobs point at the
+    synthetic "Parvagas Aggregator" company) but the REAL hiring company for
+    those postings usually has no Parvagas account at all:
+      - The resolved company's owner (if any) gets the normal portal-style
+        notification — keeps admin visibility into aggregator-job activity.
+      - `job.external_contact_email` (admin-curated, when set) additionally
+        gets a dedicated email with a no-login "view applications for this
+        job" link, since that's the only way this employer can ever see it.
+    """
     try:
-        company = db.query(Company).filter(Company.id == company_id).first() if company_id else None
-        if not company or not company.owner_user_id:
-            return
-        owner = db.query(User).filter(User.id == company.owner_user_id).first()
-        if not owner or not owner.email:
-            return
         job = db.query(Job).filter(Job.id == job_id).first()
-        send_templated_email.delay("send_new_applicant_email", {
-            "email": owner.email,
-            "recruiter_name": owner.full_name or "",
-            "candidate_name": candidate_name or "Candidato",
-            "job_title": job.title if job else "",
-        })
+
+        company = db.query(Company).filter(Company.id == company_id).first() if company_id else None
+        if company and company.owner_user_id:
+            owner = db.query(User).filter(User.id == company.owner_user_id).first()
+            if owner and owner.email:
+                send_templated_email.delay("send_new_applicant_email", {
+                    "email": owner.email,
+                    "recruiter_name": owner.full_name or "",
+                    "candidate_name": candidate_name or "Candidato",
+                    "job_title": job.title if job else "",
+                })
+
+        if job and job.external_contact_email:
+            if not job.employer_access_token:
+                job.employer_access_token = secrets.token_urlsafe(32)
+                db.commit()
+            base = (get_settings().FRONTEND_URL or "https://parvagas.pt").rstrip("/")
+            view_url = f"{base}/Empresa/Candidaturas-Externas/{job.id}?token={job.employer_access_token}"
+            claim_url = f"{base}/Signup?role=company"
+            send_templated_email.delay("send_external_employer_new_applicant_email", {
+                "email": job.external_contact_email,
+                "company_name": job.external_company_name or "",
+                "candidate_name": candidate_name or "Candidato",
+                "job_title": job.title if job else "",
+                "view_url": view_url,
+                "claim_url": claim_url,
+            })
     except Exception as e:
         logger.warning(f"Could not enqueue new-applicant email: {e}")
 
@@ -229,17 +257,108 @@ async def submit_quick_apply(
         status="submitted",
         cv_file_path=cv_file_path,
         saved_cv_document_id=None,
+        # No account exists to track this from — a token link is the only
+        # way this applicant can ever check their status again.
+        tracking_token=secrets.token_urlsafe(32),
     )
     db.add(application)
     db.commit()
     db.refresh(application)
 
-    send_application_received_email.delay(applicant_email, full_name, job_id)
+    base = (get_settings().FRONTEND_URL or "https://parvagas.pt").rstrip("/")
+    tracking_url = f"{base}/Candidaturas/Acompanhar?token={application.tracking_token}"
+    send_application_received_email.delay(applicant_email, full_name, job_id, tracking_url)
     _notify_company_new_applicant(db, application.company_id, job_id, full_name)
 
     return {
         "message": "Quick apply submitted successfully.",
+        "trackingUrl": tracking_url,
         "applicationId": application.id,
+    }
+
+
+# ── No-account tracking (guest applicants + employers without a company account) ──
+
+@router.get("/public/applications/track")
+async def track_guest_application(token: str, db: Session = Depends(get_db)):
+    """Let a guest (no-account) applicant check their own application status
+    using the token link emailed to them at submission time. No auth — the
+    token itself is the credential, scoped to exactly one application."""
+    token = (token or "").strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token em falta")
+    app_row = db.query(JobApplication).filter(JobApplication.tracking_token == token).first()
+    if not app_row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidatura não encontrada")
+
+    job = db.query(Job).filter(Job.id == app_row.job_id).first()
+    company_name = None
+    if job:
+        company_name = job.external_company_name
+        if not company_name and job.company_id:
+            company = db.query(Company).filter(Company.id == job.company_id).first()
+            company_name = company.name if company else None
+
+    status_label, status_message = EmailService._STATUS_COPY.get(
+        app_row.status, ("Candidatura recebida", "A sua candidatura foi recebida e será analisada em breve.")
+    )
+    return {
+        "application": {
+            "_id": app_row.id,
+            "status": app_row.status,
+            "statusLabel": status_label,
+            "statusMessage": status_message,
+            "submittedAt": app_row.created_at.isoformat() if app_row.created_at else None,
+            "job": {"_id": job.id, "title": job.title, "location": job.location} if job else None,
+            "companyName": company_name,
+        }
+    }
+
+
+@router.get("/public/jobs/{job_id}/applications")
+async def view_external_job_applications(job_id: str, token: str, db: Session = Depends(get_db)):
+    """Let a real hiring company with no Parvagas account view every
+    application received for one specific job, using the token link emailed
+    to them. No auth — the token is scoped to exactly this job."""
+    token = (token or "").strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token em falta")
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job or not job.employer_access_token or job.employer_access_token != token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada")
+
+    rows = (
+        db.query(JobApplication)
+        .filter(JobApplication.job_id == job_id)
+        .order_by(JobApplication.created_at.desc())
+        .all()
+    )
+    applications = []
+    for a in rows:
+        cv_url = None
+        if a.cv_file_path:
+            cv_url = StorageService.signed_url(a.cv_file_path)
+        elif a.candidate_user_id:
+            profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == a.candidate_user_id).first()
+            latest_cv = (
+                db.query(CVUpload).filter(CVUpload.candidate_id == profile.id).order_by(CVUpload.created_at.desc()).first()
+                if profile else None
+            )
+            cv_url = StorageService.signed_url(latest_cv.file_path) if latest_cv else None
+        applications.append({
+            "_id": a.id,
+            "fullName": a.applicant_full_name,
+            "email": a.applicant_email,
+            "phone": a.applicant_phone,
+            "location": a.applicant_location,
+            "coverLetter": a.cover_letter,
+            "status": a.status,
+            "cvUrl": cv_url,
+            "submittedAt": a.created_at.isoformat() if a.created_at else None,
+        })
+    return {
+        "job": {"_id": job.id, "title": job.title, "companyName": job.external_company_name},
+        "applications": applications,
     }
 
 

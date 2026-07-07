@@ -135,13 +135,14 @@ def send_welcome_email(self, user_id: str) -> bool:
     retry_jitter=True,
     retry_kwargs={"max_retries": 5},
 )
-def send_application_received_email(self, email: str, full_name: str, job_id: str) -> bool:
+def send_application_received_email(self, email: str, full_name: str, job_id: str, tracking_url: str = "") -> bool:
     """Send application acknowledgement email task."""
     try:
         success = EmailService.send_application_received_email(
             email=email,
             full_name=full_name,
             job_id=job_id,
+            tracking_url=tracking_url,
         )
 
         if not success:

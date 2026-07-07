@@ -185,6 +185,7 @@ export type ScrapedRecord = {
   requirements?: string[];
   companyLogoUrl?: string | null;
   companyWebsite?: string | null;
+  contactEmail?: string | null;
   createdAt?: string;
 };
 

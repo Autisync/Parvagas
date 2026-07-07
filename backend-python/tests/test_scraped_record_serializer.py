@@ -22,6 +22,7 @@ def _fake_scraped(**over):
         requirements=json.dumps(["Licenciatura em Finanças", "Mínimo de 5 anos de experiência"]),
         company_logo_url="https://cdn.example.com/webcor-logo.png",
         company_website="https://webcorgroup.com",
+        contact_email=None,
         created_at=datetime(2026, 6, 25),
     )
     base.update(over)

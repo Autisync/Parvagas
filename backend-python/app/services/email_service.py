@@ -223,8 +223,14 @@ class EmailService:
             return False
 
     @staticmethod
-    def send_application_received_email(email: str, full_name: str, job_id: str) -> bool:
-        """Send acknowledgement after a job application is submitted."""
+    def send_application_received_email(email: str, full_name: str, job_id: str, tracking_url: str = "") -> bool:
+        """Send acknowledgement after a job application is submitted.
+
+        `tracking_url` is set only for guest (no-account) applicants — it's a
+        token link to a public status page, since they have no portal to log
+        into. Candidates with an account get the normal "see your portal"
+        copy instead.
+        """
         try:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
@@ -232,17 +238,24 @@ class EmailService:
 
             job_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Vagas-Disponiveis/{job_id}"
             subject = f"{settings.BRAND_NAME} — Candidatura recebida"
+            if tracking_url:
+                tracking_line = f'<p style="margin:0 0 14px;">Como não tem conta, use este link para acompanhar o estado da sua candidatura a qualquer momento: <a href="{tracking_url}" style="color:{settings.BRAND_PRIMARY_COLOR};">acompanhar candidatura</a>.</p>'
+                action_text, action_url = "Acompanhar candidatura", tracking_url
+            else:
+                tracking_line = '<p style="margin:0 0 14px;">Pode acompanhar o estado das suas candidaturas no seu portal.</p>'
+                action_text, action_url = "Ver a vaga", job_url
+
             body_html = f"""
             <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
             <p style="margin:0 0 14px;">Recebemos a sua candidatura. A equipa de recrutamento vai analisar o seu perfil e será notificado/a sempre que houver uma atualização.</p>
-            <p style="margin:0 0 14px;">Pode acompanhar o estado das suas candidaturas no seu portal.</p>
+            {tracking_line}
             """
 
             html_content = EmailService._build_email_html(
                 title="Candidatura recebida",
                 body_html=body_html,
-                action_text="Ver a vaga",
-                action_url=job_url,
+                action_text=action_text,
+                action_url=action_url,
                 preheader="Recebemos a sua candidatura.",
             )
 
@@ -453,6 +466,35 @@ class EmailService:
             "Nova candidatura recebida", body,
             "Ver candidaturas", f"{base}/Portal/Empresa/Candidaturas",
             preheader=f"{candidate_name or 'Um candidato'} candidatou-se a {job_title or 'a sua vaga'}.",
+        )
+
+    @staticmethod
+    def send_external_employer_new_applicant_email(
+        email: str, company_name: str, candidate_name: str, job_title: str, view_url: str, claim_url: str,
+    ) -> bool:
+        """Notify a real hiring company that has no Parvagas account when a
+        candidate applies to one of their (aggregated/scraped) postings.
+
+        `view_url` is a token link to a read-only list of every application
+        received for this specific job — no login required. `claim_url`
+        offers to convert this into a real company account so future
+        applications land in a proper dashboard instead of an inbox.
+        """
+        body = f"""
+        <p style="margin:0 0 14px;">Olá,</p>
+        <p style="margin:0 0 14px;">Recebeu uma nova candidatura para uma vaga publicada no {escape(settings.BRAND_NAME)}.</p>
+        <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Candidato</p>
+        <p style="margin:0 0 12px; font-weight:600; color:#18181b;">{escape(candidate_name or 'Candidato')}</p>
+        <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
+        <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{escape(job_title or 'a sua vaga')}</p>
+        <p style="margin:0 0 14px;">Pode ver todas as candidaturas recebidas para esta vaga através do link abaixo — não precisa de criar conta.</p>
+        <p style="margin:0 0 14px;">Se preferir gerir as suas vagas e candidaturas num painel completo (respostas, estados, histórico), pode <a href="{claim_url}" style="color:{settings.BRAND_PRIMARY_COLOR};">criar uma conta de empresa gratuita</a> a qualquer momento.</p>
+        """
+        return EmailService._compose_and_send(
+            email, f"{settings.BRAND_NAME} — Nova candidatura: {job_title or 'vaga'}",
+            "Nova candidatura recebida", body,
+            "Ver candidaturas desta vaga", view_url,
+            preheader=f"{candidate_name or 'Um candidato'} candidatou-se a {job_title or 'a sua vaga'} no {settings.BRAND_NAME}.",
         )
 
     @staticmethod

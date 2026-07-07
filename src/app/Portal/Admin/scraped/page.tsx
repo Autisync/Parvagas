@@ -57,6 +57,7 @@ export default function AdminScrapedPage() {
   const [editRequirements, setEditRequirements] = useState("");
   const [editCompanyLogoUrl, setEditCompanyLogoUrl] = useState("");
   const [editCompanyWebsite, setEditCompanyWebsite] = useState("");
+  const [editContactEmail, setEditContactEmail] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
 
@@ -159,6 +160,7 @@ export default function AdminScrapedPage() {
     setEditRequirements((job.requirements || []).join("\n"));
     setEditCompanyLogoUrl(job.companyLogoUrl || "");
     setEditCompanyWebsite(job.companyWebsite || "");
+    setEditContactEmail(job.contactEmail || "");
     setScheduleAt(job.scheduledPublishAt ? job.scheduledPublishAt.slice(0, 16) : "");
   };
 
@@ -184,6 +186,7 @@ export default function AdminScrapedPage() {
         requirements: linesToList(editRequirements),
         companyLogoUrl: editCompanyLogoUrl || null,
         companyWebsite: editCompanyWebsite || null,
+        contactEmail: editContactEmail || null,
       });
       setNotice("Scraped job atualizado com sucesso.");
       await load();
@@ -479,6 +482,16 @@ export default function AdminScrapedPage() {
               </label>
               <input value={editCompanyLogoUrl} onChange={(e) => setEditCompanyLogoUrl(e.target.value)} className={adminFieldClass} placeholder="URL do logo da empresa" />
               <input value={editCompanyWebsite} onChange={(e) => setEditCompanyWebsite(e.target.value)} className={adminFieldClass} placeholder="Website da empresa" />
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Email de contacto da empresa (esta empresa não tem conta Parvagas — as candidaturas são-lhe enviadas por email para este endereço)</span>
+                <input
+                  type="email"
+                  value={editContactEmail}
+                  onChange={(e) => setEditContactEmail(e.target.value)}
+                  className={adminFieldClass}
+                  placeholder="rh@empresa.com"
+                />
+              </label>
               <label className="grid gap-1 text-xs text-slate-600">
                 <span>Descrição completa (cole o texto integral do anúncio original)</span>
                 <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={5} className={`${adminFieldClass} resize-y`} placeholder="Descrição completa da vaga" />
