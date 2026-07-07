@@ -783,3 +783,49 @@ def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
         return {"success": False, "error": str(e)}
     finally:
         db.close()
+
+
+@celery.task(name='app.workers.tasks.generate_auto_apply_proposals')
+def generate_auto_apply_proposals() -> dict:
+    """Periodic sweep: for every opted-in, eligible candidate, score newly
+    published jobs in their chosen categories and create review proposals
+    for the ones that clear the match threshold. Never submits an
+    application itself — see app.services.auto_apply_service module docstring
+    for why this stays a "propose then approve" queue."""
+    from app.models import CandidateProfile
+    from app.services.auto_apply_service import (
+        candidate_is_eligible, expire_stale_proposals, generate_proposals_for_candidate,
+    )
+    from app.services.notification_service import create_notification
+
+    db = SessionLocal()
+    candidates_scanned = 0
+    proposals_created = 0
+    try:
+        expired = expire_stale_proposals(db)
+
+        profiles = db.query(CandidateProfile).filter(CandidateProfile.auto_apply_opt_in.is_(True)).all()
+        for profile in profiles:
+            if not candidate_is_eligible(db, profile):
+                continue
+            candidates_scanned += 1
+            new_proposals = generate_proposals_for_candidate(db, profile)
+            if new_proposals:
+                proposals_created += len(new_proposals)
+                create_notification(
+                    db, profile.user_id, type="auto_apply_proposals",
+                    title=f"{len(new_proposals)} nova(s) sugestão(ões) de candidatura",
+                    body="Reveja e aprove candidaturas sugeridas com base no seu perfil.",
+                    link="/Portal/Candidato/CV-e-Documentos",
+                )
+        return {
+            "candidates_scanned": candidates_scanned,
+            "proposals_created": proposals_created,
+            "proposals_expired": expired,
+        }
+    except Exception as e:
+        logger.error(f"Failed to generate auto-apply proposals: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()

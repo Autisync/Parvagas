@@ -17,10 +17,10 @@ from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, Job, JobAlert, SavedJob, User, UserRole
+from app.models import CVUpload, CandidateProfile, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
 from app.services.cv_export_service import to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
-from app.workers.tasks import parse_cv
+from app.workers.tasks import parse_cv, send_application_received_email
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -968,3 +968,124 @@ async def duplicate_cv_profile(profile_id: str, current_user: User = Depends(get
 @router.delete("/cv-profiles/{profile_id}")
 async def delete_cv_profile(profile_id: str, current_user: User = Depends(get_current_user)):
     return {"deleted": True, "id": profile_id}
+
+
+# ── Auto-apply proposals (propose-then-approve review queue) ────────────────
+# A periodic sweep (app.workers.tasks.generate_auto_apply_proposals) scores
+# jobs against opted-in candidates and drops proposals here. Nothing is ever
+# submitted to an employer until the candidate explicitly approves one.
+
+def _serialize_proposal(proposal: JobMatchProposal, job: Job | None) -> dict[str, Any]:
+    return {
+        "_id": proposal.id,
+        "jobId": proposal.job_id,
+        "job": serialize_job(job) if job else None,
+        "matchScore": proposal.match_score,
+        "matchReasons": _json_load(proposal.match_reasons, []),
+        "status": proposal.status,
+        "createdAt": proposal.created_at.isoformat() if proposal.created_at else None,
+        "reviewedAt": proposal.reviewed_at.isoformat() if proposal.reviewed_at else None,
+    }
+
+
+@router.get("/auto-apply/proposals")
+async def list_auto_apply_proposals(
+    status_filter: str = Query(default="pending", alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List this candidate's auto-apply proposals (default: pending review)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    q = db.query(JobMatchProposal).filter(JobMatchProposal.candidate_id == profile.id)
+    if status_filter and status_filter != "all":
+        q = q.filter(JobMatchProposal.status == status_filter)
+    proposals = q.order_by(JobMatchProposal.match_score.desc(), JobMatchProposal.created_at.desc()).limit(50).all()
+
+    job_ids = [p.job_id for p in proposals]
+    jobs_by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(job_ids)).all()} if job_ids else {}
+
+    return {"proposals": [_serialize_proposal(p, jobs_by_id.get(p.job_id)) for p in proposals]}
+
+
+@router.post("/auto-apply/proposals/{proposal_id}/approve")
+async def approve_auto_apply_proposal(
+    proposal_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Candidate approves a proposal: submits the real application using
+    their saved profile/CV. This is the only place an auto-apply proposal
+    ever turns into an actual JobApplication."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    proposal = (
+        db.query(JobMatchProposal)
+        .filter(JobMatchProposal.id == proposal_id, JobMatchProposal.candidate_id == profile.id)
+        .first()
+    )
+    if not proposal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
+    if proposal.status != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Esta proposta já foi revista")
+
+    job = db.query(Job).filter(Job.id == proposal.job_id).first()
+    if not job or job.status not in PUBLIC_JOB_STATUSES:
+        proposal.status = "expired"
+        proposal.reviewed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Esta vaga já não está disponível")
+
+    latest_cv = _latest_cv_document(db, profile)
+    application = JobApplication(
+        job_id=job.id,
+        company_id=job.company_id,
+        candidate_user_id=current_user.id,
+        applicant_full_name=current_user.full_name,
+        applicant_email=current_user.email,
+        applicant_phone=profile.phone,
+        applicant_location=profile.location,
+        profile_source="auto_apply",
+        status="submitted",
+        saved_cv_document_id=latest_cv["_id"] if latest_cv else None,
+    )
+    db.add(application)
+    proposal.status = "approved"
+    proposal.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(application)
+    proposal.resulting_application_id = application.id
+    db.commit()
+
+    send_application_received_email.delay(current_user.email, current_user.full_name, job.id)
+
+    return {"message": "Candidatura submetida com sucesso.", "applicationId": application.id}
+
+
+@router.post("/auto-apply/proposals/{proposal_id}/dismiss")
+async def dismiss_auto_apply_proposal(
+    proposal_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Candidate declines a proposal — it will not be re-proposed."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    proposal = (
+        db.query(JobMatchProposal)
+        .filter(JobMatchProposal.id == proposal_id, JobMatchProposal.candidate_id == profile.id)
+        .first()
+    )
+    if not proposal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
+    if proposal.status != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Esta proposta já foi revista")
+
+    proposal.status = "dismissed"
+    proposal.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"message": "Proposta dispensada."}

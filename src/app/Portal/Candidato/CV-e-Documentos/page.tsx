@@ -109,6 +109,22 @@ type GeneratedCvProfile = {
   updatedAt?: string;
 };
 
+type AutoApplyProposal = {
+  _id: string;
+  jobId: string;
+  job?: {
+    _id: string;
+    title?: string;
+    location?: string;
+    workMode?: string;
+    companyId?: { name?: string } | string;
+  } | null;
+  matchScore: number;
+  matchReasons: string[];
+  status: string;
+  createdAt?: string;
+};
+
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const PARSE_POLL_INTERVAL_MS = 2500;
 const PARSE_POLL_TIMEOUT_MS = 120000;
@@ -244,6 +260,23 @@ export default function CvDocumentosPage() {
   const [savingAutoApply, setSavingAutoApply] = useState(false);
   const [autoApplyMsg, setAutoApplyMsg] = useState("");
 
+  const [proposals, setProposals] = useState<AutoApplyProposal[]>([]);
+  const [loadingProposals, setLoadingProposals] = useState(false);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+
+  const loadProposals = useCallback(async () => {
+    if (!token) return;
+    setLoadingProposals(true);
+    try {
+      const data = await authFetch<{ proposals: AutoApplyProposal[] }>("/candidates/auto-apply/proposals?status=pending", token);
+      setProposals(data.proposals || []);
+    } catch {
+      // Non-critical — the rest of the page still works without this list.
+    } finally {
+      setLoadingProposals(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!token) return;
     authFetch<{ profile: { preferredJobCategories?: string[]; autoApplyOptIn?: boolean } }>("/candidates/profile", token)
@@ -252,7 +285,8 @@ export default function CvDocumentosPage() {
         setAutoApplyOptIn(Boolean(d.profile?.autoApplyOptIn));
       })
       .catch(() => {});
-  }, [token]);
+    loadProposals();
+  }, [token, loadProposals]);
 
   const toggleCategory = (category: string) => {
     setPreferredCategories((prev) =>
@@ -273,6 +307,20 @@ export default function CvDocumentosPage() {
       setAutoApplyMsg((err as Error).message || "Erro ao guardar preferências de área.");
     } finally {
       setSavingAutoApply(false);
+    }
+  };
+
+  const reviewProposal = async (proposalId: string, action: "approve" | "dismiss") => {
+    setReviewingId(proposalId);
+    setAutoApplyMsg("");
+    try {
+      await authFetch(`/candidates/auto-apply/proposals/${proposalId}/${action}`, token!, { method: "POST" });
+      setProposals((prev) => prev.filter((p) => p._id !== proposalId));
+      setAutoApplyMsg(action === "approve" ? "Candidatura submetida com sucesso." : "Sugestão dispensada.");
+    } catch (err: unknown) {
+      setAutoApplyMsg((err as Error).message || "Erro ao rever a sugestão.");
+    } finally {
+      setReviewingId(null);
     }
   };
 
@@ -724,17 +772,18 @@ export default function CvDocumentosPage() {
           </div>
         </div>
 
-        {/* Auto-apply preferences (preference capture — automation ships later, as a paid feature) */}
+        {/* Auto-apply: precise multi-signal matching, candidate always approves before submission */}
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-slate-900">Candidatura automática por área</p>
               <p className="mt-0.5 text-xs text-slate-500">
-                Escolha as áreas de emprego do seu interesse. Quando o preenchimento automático de candidaturas
-                for lançado, usaremos este CV e o seu perfil para se candidatar automaticamente a vagas compatíveis nestas áreas.
+                Escolha as áreas de emprego do seu interesse. Vamos analisar vagas novas nessas áreas — comparando
+                competências, experiência, salário e localização com o seu perfil — e sugerir-lhe as mais compatíveis
+                abaixo. <strong>Nenhuma candidatura é submetida sem a sua aprovação.</strong>
               </p>
               <p className="mt-2 inline-block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
-                🚀 Em breve — funcionalidade paga. Por agora só guardamos as suas preferências.
+                🚀 Funcionalidade paga (em breve). Por agora, revê e aprova sugestões gratuitamente.
               </p>
             </div>
             <button
@@ -784,6 +833,69 @@ export default function CvDocumentosPage() {
           >
             {savingAutoApply ? "A guardar..." : "Guardar áreas de interesse"}
           </button>
+
+          {autoApplyOptIn && (
+            <div className="mt-6 border-t border-slate-100 pt-5">
+              <h3 className="text-sm font-bold text-slate-900">Sugestões de candidatura para rever</h3>
+              {loadingProposals ? (
+                <p className="mt-2 text-sm text-slate-500">A carregar sugestões...</p>
+              ) : proposals.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">
+                  Sem sugestões de momento. Verificamos vagas novas nas suas áreas periodicamente.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {proposals.map((proposal) => {
+                    const company =
+                      proposal.job?.companyId && typeof proposal.job.companyId === "object"
+                        ? proposal.job.companyId.name
+                        : "Empresa";
+                    const busy = reviewingId === proposal._id;
+                    return (
+                      <article key={proposal._id} className="rounded-xl border border-slate-200 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{proposal.job?.title || "Vaga"}</p>
+                            <p className="text-xs text-slate-500">
+                              {company} {proposal.job?.location ? `• ${proposal.job.location}` : ""}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700">
+                            {proposal.matchScore}% compatível
+                          </span>
+                        </div>
+                        {proposal.matchReasons?.length > 0 && (
+                          <ul className="mt-2 space-y-0.5 text-xs text-slate-600">
+                            {proposal.matchReasons.map((reason, i) => (
+                              <li key={i}>• {reason}</li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => reviewProposal(proposal._id, "approve")}
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {busy ? "A processar..." : "Aprovar e candidatar"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => reviewProposal(proposal._id, "dismiss")}
+                            className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            Dispensar
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div

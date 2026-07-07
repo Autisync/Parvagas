@@ -88,4 +88,11 @@ celery.conf.beat_schedule = {
         'task': 'app.workers.tasks.publish_scheduled_scraped_jobs',
         'schedule': crontab(minute='*/15'),
     },
+    # Auto-apply: score new jobs for opted-in candidates into a review queue.
+    # Every 6h — frequent enough to surface fresh postings quickly without
+    # scanning the whole job table on every worker tick.
+    'generate-auto-apply-proposals': {
+        'task': 'app.workers.tasks.generate_auto_apply_proposals',
+        'schedule': crontab(minute=0, hour='*/6'),
+    },
 }

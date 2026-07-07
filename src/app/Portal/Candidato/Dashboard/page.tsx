@@ -210,7 +210,7 @@ export default function CandidatoDashboard() {
           href="/Portal/Candidato/CV-e-Documentos"
           icon={<RocketLaunchIcon className="h-6 w-6" />}
           title="Candidatura automática"
-          description="Escolha áreas de interesse e active o preenchimento automático (em breve)"
+          description="Reveja sugestões de vagas compatíveis e aprove candidaturas com um clique"
         />
       </div>
     </div>

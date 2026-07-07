@@ -134,8 +134,8 @@ export default function DefinicoesPage() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-900">Candidatura automática por área</p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Escolha as áreas de emprego do seu interesse e active o preenchimento automático de candidaturas
-            (em breve, funcionalidade paga) a partir de CV e Documentos.
+            Escolha as áreas de emprego do seu interesse e reveja sugestões de vagas compatíveis para aprovar,
+            a partir de CV e Documentos.
           </p>
         </div>
         <Link

@@ -164,7 +164,7 @@ export default function AlertasPage() {
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-sm text-slate-600">
-          Além de alertas por email, pode escolher áreas de interesse para candidatura automática (em breve).
+          Além de alertas por email, pode escolher áreas de interesse e rever sugestões de candidatura para aprovar.
         </p>
         <Link
           href="/Portal/Candidato/CV-e-Documentos"

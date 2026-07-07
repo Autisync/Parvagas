@@ -192,6 +192,28 @@ class JobApplication(Base, TimestampMixin):
     saved_cv_document_id = Column(String(36), nullable=True)
 
 
+class JobMatchProposal(Base, TimestampMixin):
+    """A candidate-reviewable auto-apply match, produced by the periodic
+    matching sweep (see app.services.auto_apply_service). Nothing is ever
+    submitted to an employer until the candidate explicitly approves the
+    proposal — this is a "propose then approve" queue, not a silent
+    auto-submit, by design (see PLANO_EXECUCAO_MERCADO.md / auto-apply
+    research notes: candidate intent must stay an explicit, auditable act)."""
+    __tablename__ = "job_match_proposals"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False, index=True)
+    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, index=True)
+
+    match_score = Column(Integer, nullable=False, default=0)
+    match_reasons = Column(Text, nullable=True)  # JSON array of human-readable reason strings
+
+    # pending | approved | dismissed | expired
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    resulting_application_id = Column(String(36), nullable=True)
+
+
 class AdCampaign(Base, TimestampMixin):
     """Ad campaign model used by admin and public placements."""
     __tablename__ = "ad_campaigns"
