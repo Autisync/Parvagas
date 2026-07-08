@@ -51,23 +51,25 @@ checklist below is green.
 - **Remaining before fully green:** the fixtures are hand-authored from each platform's documented public API shape, not a captured real response (no live network access when written) — before pointing this at a real employer's board, verify field names against an actual live response and adjust if the docs drifted. No dedicated queue-routing/slow-endpoint tests written this phase (pre-existing infra, reused unchanged by the new adapters).
 - **Depends on:** nothing (independent of Phase 0, ran in parallel as planned). **Exit:** Point 3 checklist green (Unit ✅ with the fixture caveat noted; Integration/E2E mostly pre-existing/unverified-this-phase).
 
-### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research)
-- New endpoints + paid-tier gate + the `interview-prep` / `cover` / `deep` Llama modes.
-- **Depends on:** Phase 0 and the paid-tier entitlement check existing. **Exit:** Point 4 checklist green.
+### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research) 🔴 blocked — needs a product decision
+- **Blocked:** this phase assumed "the paid-tier entitlement check existing." It doesn't. `Subscription`/`Plan`/`Transaction` in `app/models/__init__.py` are explicitly company-side only (`Subscription.company_id`, "A company's active plan" / "Employer subscription... plan") — there is no candidate-side billing or entitlement concept anywhere in this codebase to gate against.
+- Building this requires product decisions this plan can't make on its own: is there a candidate paywall at all, or is Phase 4 free-for-now like auto-apply currently is; if paid, what's the price/plan shape and which local payment rail (the existing `Transaction` model already supports Multicaixa Express/Unitel Money/bank reference — presumably reusable, but that's a call for whoever owns pricing); does entitlement live on `User`/`CandidateProfile` directly or a new `CandidateSubscription` table mirroring the company one.
+- **Not started.** Do not build a placeholder/guessed paywall — implementing this without those answers risks locking in the wrong shape (auto-apply's own plan explicitly deferred exactly this kind of "future paid feature" decision rather than guessing, for the same reason).
+- **Depends on:** Phase 0 (done) + a product decision on candidate paid-tier structure (open). **Exit:** blocked until that decision is made.
 
 ### Phase 5 — Regression + release gate
 - Run the Point 5 regression checklist and the full "definition of done" gate before enabling any flag in production.
 
 ### Sequencing summary
 
-| Phase | Work | Depends on | Llama? | Parallelizable |
-|-------|------|-----------|--------|----------------|
-| 0 | Shared LLM service layer | — | — | — |
-| 1 | Auto-apply Llama scoring | 0 | yes | with 3 |
-| 2 | ATS CV keyword injection | 0 | yes | with 3 |
-| 3 | Portal-scanning adapters | — | no | with 0/1/2/4 |
-| 4 | Premium AI tools | 0 + paid gate | yes | with 3 |
-| 5 | Regression + release | 1–4 | — | — |
+| Phase | Work | Status | Depends on | Llama? | Parallelizable |
+|-------|------|--------|-----------|--------|----------------|
+| 0 | Shared LLM service layer | ✅ done | — | — | — |
+| 1 | Auto-apply Llama scoring | 🟡 mostly done | 0 | yes | with 3 |
+| 2 | ATS CV keyword injection | 🟡 mostly done | 0 | yes | with 3 |
+| 3 | Portal-scanning adapters | 🟡 mostly done | — | no | with 0/1/2/4 |
+| 4 | Premium AI tools | 🔴 blocked — needs candidate paid-tier decision | 0 + paid gate (doesn't exist) | yes | with 3 |
+| 5 | Regression + release | not started | 1–4 | — | — |
 
 ---
 
