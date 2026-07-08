@@ -46,9 +46,10 @@ checklist below is green.
 - **Remaining before fully green:** truncation/length test for very long profiles, a real browser check that exported PDFs still render correctly, and an ATS-text-extraction check against real (live-model) injected content — the last one needs Ollama access this sandbox doesn't have.
 - **Depends on:** Phase 0. **Exit:** Point 2 checklist green (currently: Unit ✅, hallucination guard ✅, Ollama-down degradation ✅; length/visual/ATS-extraction checks still open).
 
-### Phase 3 — Point 3: Portal-scanning adapters  *(parallel track — no Llama)*
-- Add an adapter framework + Greenhouse / Ashby / Lever adapters driven by `SCRAPER_SOURCES`, each with a saved-response fixture.
-- **Depends on:** nothing (independent of Phase 0). **Exit:** Point 3 checklist green.
+### Phase 3 — Point 3: Portal-scanning adapters  *(parallel track — no Llama)* 🟡 mostly done
+- Adapter framework already existed (`SourceAdapter` base class + `_normalise()` + `_ADAPTERS` registry) — added `GreenhouseAdapter`, `LeverAdapter`, `AshbyAdapter` to it, each configurable via `SCRAPER_SOURCES` with `{"type": "greenhouse"|"lever"|"ashby", "url": "<bare token/slug/board-name OR full API URL>"}`.
+- **Remaining before fully green:** the fixtures are hand-authored from each platform's documented public API shape, not a captured real response (no live network access when written) — before pointing this at a real employer's board, verify field names against an actual live response and adjust if the docs drifted. No dedicated queue-routing/slow-endpoint tests written this phase (pre-existing infra, reused unchanged by the new adapters).
+- **Depends on:** nothing (independent of Phase 0, ran in parallel as planned). **Exit:** Point 3 checklist green (Unit ✅ with the fixture caveat noted; Integration/E2E mostly pre-existing/unverified-this-phase).
 
 ### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research)
 - New endpoints + paid-tier gate + the `interview-prep` / `cover` / `deep` Llama modes.
@@ -141,16 +142,16 @@ config, per-portal adapters (Greenhouse/Ashby/Lever + generic JSON/RSS), the
 dedicated `celery-worker-scraper` queue, admin scraped-jobs review UI.
 
 ### Unit
-- [ ] Each new adapter parses a **saved fixture** of that portal's real response into the normalized `ScrapedJob` shape (title, company, location, description, url) — fixture-driven, no live network
-- [ ] Malformed/empty feed → adapter returns `[]`, never throws
-- [ ] Dedup by `content_hash` still prevents the same listing being ingested twice across sources
-- [ ] Per-run budget caps (`SCRAPER_MAX_INGEST_PER_RUN`, `SCRAPER_RUN_BUDGET_SECONDS`) still enforced with multiple sources configured
+- [x] Each new adapter parses a **saved fixture** of that portal's real response into the normalized `ScrapedJob` shape (title, company, location, description, url) — fixture-driven, no live network — `tests/test_scraper_portal_adapters.py` (Greenhouse/Lever/Ashby, 13 tests). **Caveat:** fixtures are hand-authored from each platform's documented public API shape, not captured from a real live response (no network access when written) — verify field names against a real board's actual response before enabling in production.
+- [x] Malformed/empty feed → adapter returns `[]`, never throws — covered per adapter (malformed JSON, unreachable, wrong top-level shape)
+- [x] Dedup by `content_hash` still prevents the same listing being ingested twice across sources — unaffected by this change: `content_hash()` operates on the normalized output every adapter (old and new) produces via the shared `_normalise()` helper, so pre-existing dedup coverage applies unchanged
+- [x] Per-run budget caps (`SCRAPER_MAX_INGEST_PER_RUN`, `SCRAPER_RUN_BUDGET_SECONDS`) still enforced with multiple sources configured — unaffected: caps are enforced in `tasks.scrape_external_jobs` generically over whatever `get_adapters()` returns, and the new adapters reuse the same `_MAX_PER_SOURCE` cap as the existing ones
 
 ### Integration / E2E
-- [ ] `scrape_external_jobs` runs on the `scraping` queue only (doesn't starve email/parsing workers) — verify routing
-- [ ] A configured source with a hanging/slow endpoint is time-boxed and doesn't block the run
-- [ ] Newly scraped jobs land in admin review with quality score/flags; publishing one creates a live `Job` with the real hiring company + `external_contact_email` carried over
-- [ ] `SCRAPER_SOURCES` empty/unset → task no-ops cleanly (current production state), doesn't error
+- [ ] `scrape_external_jobs` runs on the `scraping` queue only (doesn't starve email/parsing workers) — pre-existing routing, unaffected by this change; not re-verified here
+- [ ] A configured source with a hanging/slow endpoint is time-boxed and doesn't block the run — pre-existing `_get()` timeout/backoff applies to new adapters too (they all call `_get()`), but no dedicated test written this phase
+- [ ] Newly scraped jobs land in admin review with quality score/flags; publishing one creates a live `Job` with the real hiring company + `external_contact_email` carried over — pre-existing pipeline, unaffected; not re-verified here
+- [x] `SCRAPER_SOURCES` empty/unset → task no-ops cleanly (current production state), doesn't error — `get_adapters()` returns `[]` for empty/unset env (pre-existing, plus `test_get_adapters_ignores_unknown_type` for the adjacent "unknown type" case)
 
 ---
 

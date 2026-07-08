@@ -7,11 +7,17 @@ User-Agent, respects robots.txt, and backs off on errors.
 
 Configure via env SCRAPER_SOURCES — a JSON array, e.g.:
   [{"type":"json","name":"MyBoard","url":"https://api.board.com/jobs","category":"Tech"},
-   {"type":"rss","name":"FeedX","url":"https://feedx.com/jobs.rss"}]
+   {"type":"rss","name":"FeedX","url":"https://feedx.com/jobs.rss"},
+   {"type":"greenhouse","name":"Acme","url":"acme"},
+   {"type":"lever","name":"Acme","url":"acme"},
+   {"type":"ashby","name":"Acme","url":"acme"}]
 
 JSON adapter expects a list of objects (or {"jobs":[...]}) with keys like
 title/company/location/category/description/url. RSS adapter reads item
-title/description/link.
+title/description/link. Greenhouse/Lever/Ashby adapters talk to each
+platform's public job-board API directly — `url` can be a bare board
+token/company slug/board name, or a full API URL (see each adapter's
+docstring for the exact endpoint and expected shape).
 """
 from __future__ import annotations
 
@@ -238,7 +244,141 @@ class RSSAdapter(SourceAdapter):
         return out
 
 
-_ADAPTERS = {"json": JSONFeedAdapter, "rss": RSSAdapter}
+class GreenhouseAdapter(SourceAdapter):
+    """Greenhouse Job Board public API (no auth). `url` may be either a bare
+    board token (e.g. "acme") or the full API URL — bare tokens are expanded
+    to https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true.
+
+    NOTE: field shape is based on Greenhouse's documented public job-board
+    API, not a live-verified response (no network access when this adapter
+    was written) — verify against a real board once one is configured in
+    SCRAPER_SOURCES, per TEST_PLAN_CAREER_OPS.md Phase 3.
+    """
+
+    def _api_url(self) -> str:
+        if self.url.startswith("http"):
+            return self.url
+        return f"https://boards-api.greenhouse.io/v1/boards/{self.url}/jobs?content=true"
+
+    def fetch(self) -> list[dict[str, Any]]:
+        body = _get(self._api_url())
+        if not body:
+            return []
+        try:
+            data = json.loads(body)
+        except Exception:
+            logger.warning("Greenhouse JSON parse failed for %s", self.url)
+            return []
+        jobs = data.get("jobs") if isinstance(data, dict) else None
+        if not isinstance(jobs, list):
+            return []
+        out = []
+        for job in jobs[:_MAX_PER_SOURCE]:
+            if not isinstance(job, dict):
+                continue
+            location = job.get("location")
+            location_name = location.get("name") if isinstance(location, dict) else location
+            departments = job.get("departments")
+            dept_name = departments[0].get("name") if isinstance(departments, list) and departments and isinstance(departments[0], dict) else None
+            out.append(self._normalise({
+                "title": job.get("title"),
+                "company": job.get("company_name"),
+                "location": location_name,
+                "category": dept_name,
+                "description": job.get("content"),
+                "url": job.get("absolute_url"),
+            }))
+        return [o for o in out if o["title"]]
+
+
+class LeverAdapter(SourceAdapter):
+    """Lever Postings public API (no auth). `url` may be either a bare
+    company slug (e.g. "acme") or the full API URL — bare slugs are expanded
+    to https://api.lever.co/v0/postings/{slug}?mode=json.
+
+    NOTE: field shape based on Lever's documented public postings API, not
+    live-verified (see GreenhouseAdapter docstring for the same caveat).
+    """
+
+    def _api_url(self) -> str:
+        if self.url.startswith("http"):
+            return self.url
+        return f"https://api.lever.co/v0/postings/{self.url}?mode=json"
+
+    def fetch(self) -> list[dict[str, Any]]:
+        body = _get(self._api_url())
+        if not body:
+            return []
+        try:
+            data = json.loads(body)
+        except Exception:
+            logger.warning("Lever JSON parse failed for %s", self.url)
+            return []
+        if not isinstance(data, list):
+            return []
+        out = []
+        for posting in data[:_MAX_PER_SOURCE]:
+            if not isinstance(posting, dict):
+                continue
+            categories = posting.get("categories") or {}
+            out.append(self._normalise({
+                "title": posting.get("text"),
+                "location": categories.get("location") if isinstance(categories, dict) else None,
+                "category": categories.get("team") if isinstance(categories, dict) else None,
+                "description": posting.get("descriptionPlain") or posting.get("description"),
+                "deadline": posting.get("applicationDeadline"),
+                "url": posting.get("hostedUrl"),
+            }))
+        return [o for o in out if o["title"]]
+
+
+class AshbyAdapter(SourceAdapter):
+    """Ashby Job Board public API (no auth). `url` may be either a bare
+    board name (e.g. "acme") or the full API URL — bare names are expanded
+    to https://api.ashbyhq.com/posting-api/job-board/{name}.
+
+    NOTE: field shape based on Ashby's documented public job-board API, not
+    live-verified (see GreenhouseAdapter docstring for the same caveat).
+    """
+
+    def _api_url(self) -> str:
+        if self.url.startswith("http"):
+            return self.url
+        return f"https://api.ashbyhq.com/posting-api/job-board/{self.url}"
+
+    def fetch(self) -> list[dict[str, Any]]:
+        body = _get(self._api_url())
+        if not body:
+            return []
+        try:
+            data = json.loads(body)
+        except Exception:
+            logger.warning("Ashby JSON parse failed for %s", self.url)
+            return []
+        jobs = data.get("jobs") if isinstance(data, dict) else None
+        if not isinstance(jobs, list):
+            return []
+        out = []
+        for job in jobs[:_MAX_PER_SOURCE]:
+            if not isinstance(job, dict):
+                continue
+            out.append(self._normalise({
+                "title": job.get("title"),
+                "location": job.get("location"),
+                "category": job.get("department"),
+                "description": job.get("descriptionPlain") or job.get("descriptionHtml"),
+                "url": job.get("jobUrl") or job.get("applyUrl"),
+            }))
+        return [o for o in out if o["title"]]
+
+
+_ADAPTERS = {
+    "json": JSONFeedAdapter,
+    "rss": RSSAdapter,
+    "greenhouse": GreenhouseAdapter,
+    "lever": LeverAdapter,
+    "ashby": AshbyAdapter,
+}
 
 
 def get_adapters() -> list[SourceAdapter]:
