@@ -15,7 +15,11 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models import CandidateProfile, CVUpload, Job, JobApplication, JobMatchProposal
+from app.services import llm_service
+
+settings = get_settings()
 
 PUBLIC_JOB_STATUSES = ("approved", "published", "active")
 
@@ -127,6 +131,69 @@ def score_job_for_candidate(profile: CandidateProfile, job: Job) -> tuple[int, l
     return min(score, 100), reasons
 
 
+_LLM_SCORING_SYSTEM_PROMPT = (
+    "You score how well a candidate fits a job for a job board's auto-apply "
+    "matcher. You are given the candidate's profile facts, the job's facts, "
+    "and a baseline heuristic score. Adjust the score only where the facts "
+    "justify it and write 2-4 short reasons in PORTUGUESE (pt-AO). "
+    "Ground every reason strictly in the facts given — never invent skills, "
+    "employers, or requirements that aren't present. "
+    "Return ONLY a JSON object: {\"score\": <int 0-100>, \"reasons\": [<string>, ...]}."
+)
+
+
+def _llm_refine_score(
+    profile: CandidateProfile, job: Job, heuristic_score: int, heuristic_reasons: list[str],
+) -> tuple[int, list[str]]:
+    """Optional Llama refinement pass over the deterministic score (Phase 1,
+    TEST_PLAN_CAREER_OPS.md). Falls back to the heuristic result unchanged on
+    any failure — disabled flag, LLM unavailable, or a malformed/out-of-range
+    response — so this can never make matching *less* reliable than before.
+    """
+    if not settings.AUTO_APPLY_LLM_SCORING_ENABLED:
+        return heuristic_score, heuristic_reasons
+
+    fallback = {"score": heuristic_score, "reasons": heuristic_reasons}
+    user_prompt = json.dumps({
+        "candidate": {
+            "skills": _json_list(profile.skills),
+            "years_of_experience": profile.years_of_experience,
+            "expected_salary_aoa": profile.expected_salary_aoa,
+            "preferred_job_type": profile.preferred_job_type,
+            "location": profile.location,
+        },
+        "job": {
+            "title": job.title,
+            "category": job.category,
+            "required_skills": _json_list(job.required_skills),
+            "required_experience_years": job.required_experience_years,
+            "salary_min": job.salary_min,
+            "salary_max": job.salary_max,
+            "work_mode": job.work_mode,
+            "location": job.location,
+        },
+        "baseline_heuristic_score": heuristic_score,
+        "baseline_heuristic_reasons": heuristic_reasons,
+    }, ensure_ascii=False)
+
+    try:
+        result = llm_service.chat_json(_LLM_SCORING_SYSTEM_PROMPT, user_prompt, fallback=fallback)
+    except Exception:  # noqa: BLE001 — defense in depth: chat_json shouldn't
+        # raise, but a bug here must never take down the whole candidate's
+        # proposal sweep (see module docstring: auto-apply must never crash).
+        return heuristic_score, heuristic_reasons
+
+    score = result.get("score")
+    reasons = result.get("reasons")
+    if not isinstance(score, (int, float)) or not isinstance(reasons, list):
+        return heuristic_score, heuristic_reasons
+    reasons = [str(r).strip() for r in reasons if str(r).strip()]
+    if not reasons:
+        return heuristic_score, heuristic_reasons
+
+    return max(0, min(int(score), 100)), reasons
+
+
 def generate_proposals_for_candidate(db: Session, profile: CandidateProfile) -> list[JobMatchProposal]:
     """Score newly published/updated jobs in the candidate's chosen categories
     and create proposals for the ones that clear MATCH_THRESHOLD. Never
@@ -177,6 +244,11 @@ def generate_proposals_for_candidate(db: Session, profile: CandidateProfile) -> 
         if job.id in exclude_ids:
             continue
         score, reasons = score_job_for_candidate(profile, job)
+        if score < MATCH_THRESHOLD:
+            continue
+        # Refine only jobs that already clear the heuristic threshold — keeps
+        # LLM calls off the (much larger) set of obviously-poor matches.
+        score, reasons = _llm_refine_score(profile, job, score, reasons)
         if score < MATCH_THRESHOLD:
             continue
         proposal = JobMatchProposal(

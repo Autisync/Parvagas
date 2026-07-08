@@ -112,6 +112,12 @@ class Settings(BaseSettings):
     LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
     LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", 20))
 
+    # Per-feature flags for Llama-backed features (TEST_PLAN_CAREER_OPS.md) —
+    # ship dark, enable per cohort once staging-verified. Each feature already
+    # falls back to its non-LLM behavior on any failure regardless of this
+    # flag; the flag controls whether the LLM is called at all.
+    AUTO_APPLY_LLM_SCORING_ENABLED: bool = os.getenv("AUTO_APPLY_LLM_SCORING_ENABLED", "false").lower() == "true"
+
     # CV parsing queue and guardrails
     CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))
     CV_PARSE_MAX_JOBS_PER_USER_PER_DAY: int = int(os.getenv("CV_PARSE_MAX_JOBS_PER_USER_PER_DAY", 10))

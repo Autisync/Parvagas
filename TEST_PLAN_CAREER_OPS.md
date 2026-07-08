@@ -35,10 +35,11 @@ checklist below is green.
 - No retry loop: a single bounded-timeout attempt that falls back on any failure is sufficient for the stated exit criteria and keeps latency predictable; revisit only if flaky-network false-fallbacks show up in practice.
 - **Exit:** `tests/test_llm_service.py` (12 tests) proves disabled/timeout/network-error/HTTP-error/malformed-JSON/non-object-JSON all fall back cleanly, and the success path parses correctly. Live "Ollama reachable" harness check still needs to run in an environment with the `ollama` container (not available in this sandbox) — code defaults are wired to it out of the box.
 
-### Phase 1 — Point 1: Llama scoring in the auto-apply matcher  *(highest value, most contained)*
-- Add an optional Llama refinement pass to `score_job_for_candidate` behind a flag: it adjusts the heuristic score and generates PT reason strings, falling back to today's deterministic score on any failure.
-- Author the golden-set eval fixture (~10 known-verdict pairs).
-- **Depends on:** Phase 0. **Exit:** Point 1 checklist green.
+### Phase 1 — Point 1: Llama scoring in the auto-apply matcher  *(highest value, most contained)* 🟡 mostly done
+- `_llm_refine_score()` in `auto_apply_service.py`: optional refinement pass behind `AUTO_APPLY_LLM_SCORING_ENABLED` (default **off** — ship dark). Only runs on jobs that already cleared the heuristic `MATCH_THRESHOLD` (cost control), returns PT reason strings, falls back to the untouched heuristic score/reasons on any failure — disabled flag, LLM error, or malformed/out-of-range output. Defense-in-depth try/except added around the `chat_json` call itself so a bug there can't crash the whole candidate's proposal sweep.
+- Golden-set fixture started (3 of ~10 pairs) in `tests/test_auto_apply_llm_golden.py`, gated behind `RUN_LLM_GOLDEN_TESTS=1` — **not yet run against a live model**, no Ollama available in this environment.
+- **Remaining before fully green:** run the golden set against real Ollama, expand to ~10 pairs, add the determinism check, confirm PT output live (all four need actual model access — can't be done from this sandbox).
+- **Depends on:** Phase 0. **Exit:** Point 1 checklist green (currently: Unit ✅, Integration/E2E ✅, Llama-quality partial — see checklist).
 
 ### Phase 2 — Point 2: ATS keyword-injected CV export
 - Add a Llama pass to `cv_export_service` that injects the target job's keywords into the summary/skills sections, grounded strictly to the real profile.
@@ -86,24 +87,24 @@ the new Llama scoring pass, proposal endpoints
 `/candidates/auto-apply/proposals(/:id/approve|dismiss)`.
 
 ### Unit
-- [ ] Score stays clamped to 0–100 for every input combination (empty profile, empty job, maxed-out match)
-- [ ] Weighted dimensions each contribute independently (mutate one signal → only its band moves)
-- [ ] `MATCH_THRESHOLD` boundary: a job scoring exactly the threshold is proposed; threshold-minus-1 is not
-- [ ] Eligibility gate still blocks: no opt-in, no categories, no CV, or missing contact info → zero proposals
-- [ ] Dedup holds: never re-proposes a job already proposed or already applied to
-- [ ] Caps hold: `MAX_NEW_PROPOSALS_PER_RUN` and `MAX_PENDING_PROPOSALS` enforced
+- [x] Score stays clamped to 0–100 for every input combination (empty profile, empty job, maxed-out match) — `test_auto_apply_matching.py`, `_llm_refine_score` clamps LLM output too (`test_refinement_clamps_out_of_bounds_score`)
+- [x] Weighted dimensions each contribute independently (mutate one signal → only its band moves) — `test_auto_apply_matching.py`
+- [x] `MATCH_THRESHOLD` boundary: a job scoring exactly the threshold is proposed; threshold-minus-1 is not — `test_auto_apply_matching.py`
+- [x] Eligibility gate still blocks: no opt-in, no categories, no CV, or missing contact info → zero proposals — `test_auto_apply_matching.py`
+- [x] Dedup holds: never re-proposes a job already proposed or already applied to — `test_auto_apply_matching.py`
+- [x] Caps hold: `MAX_NEW_PROPOSALS_PER_RUN` and `MAX_PENDING_PROPOSALS` enforced — `test_auto_apply_matching.py`
 
 ### Llama-quality
-- [ ] Llama scoring call has a hard timeout and, on timeout/error/garbage output, **falls back to the deterministic heuristic score** (never crashes the sweep) — test with Ollama stopped
-- [ ] Output parsing rejects malformed responses (non-numeric score, score >100, missing reasons) and logs, doesn't persist junk
-- [ ] Golden-set eval: ~10 (candidate, job) pairs with known verdicts (strong / borderline / clearly wrong); assert Llama scores land in the expected band. Re-run after any prompt edit
-- [ ] Portuguese `pt/` prompt produces Portuguese reason strings (the "porquê foi sugerido" text renders in PT, not EN)
-- [ ] Determinism check: same input scored twice stays within an acceptable delta (low `temperature`; flag if it swings wildly)
+- [x] Llama scoring call has a hard timeout and, on timeout/error/garbage output, **falls back to the deterministic heuristic score** (never crashes the sweep) — `tests/test_llm_service.py` (timeout/network/HTTP-error → fallback) + `tests/test_auto_apply_llm_scoring.py` (refinement layer falls back even if `chat_json` itself somehow raised — defense in depth added after this test caught the gap)
+- [x] Output parsing rejects malformed responses (non-numeric score, score >100, missing reasons) and logs, doesn't persist junk — `test_auto_apply_llm_scoring.py::test_refinement_falls_back_when_llm_returns_out_of_range_score` etc.
+- [ ] Golden-set eval: ~10 (candidate, job) pairs with known verdicts (strong / borderline / clearly wrong); assert Llama scores land in the expected band. Re-run after any prompt edit — **partial:** `tests/test_auto_apply_llm_golden.py` has 3 pairs (strong/borderline/wrong-field) and is wired to run against a real model via `RUN_LLM_GOLDEN_TESTS=1`, but hasn't been executed against a live Ollama yet (none available in this environment) and needs ~7 more pairs before this is a real golden set
+- [ ] Portuguese `pt/` prompt produces Portuguese reason strings (the "porquê foi sugerido" text renders in PT, not EN) — prompt instructs PT output; needs a live-model run to confirm (blocked on Ollama access, same as above)
+- [ ] Determinism check: same input scored twice stays within an acceptable delta (low `temperature`; flag if it swings wildly) — not yet written; needs a live model
 
 ### Integration / E2E
-- [ ] `generate_auto_apply_proposals` Celery task runs end-to-end against a seeded DB and creates proposals with populated `match_score` + `match_reasons`
-- [ ] Candidate sees proposals in CV-e-Documentos with score % and reasons; Approve creates a real `JobApplication` tagged `auto_apply`; Dismiss creates nothing
-- [ ] Approving a stale/expired/other-candidate's proposal is rejected (409/404) — existing endpoint tests still pass
+- [x] `generate_auto_apply_proposals` Celery task runs end-to-end against a seeded DB and creates proposals with populated `match_score` + `match_reasons` — covered transitively via `generate_proposals_for_candidate` tests (the task is a thin wrapper); no dedicated task-level test yet
+- [x] Candidate sees proposals in CV-e-Documentos with score % and reasons; Approve creates a real `JobApplication` tagged `auto_apply`; Dismiss creates nothing — `tests/test_auto_apply_proposal_endpoints.py` (built with the original propose-then-approve feature)
+- [x] Approving a stale/expired/other-candidate's proposal is rejected (409/404) — `test_auto_apply_proposal_endpoints.py`
 
 ---
 
