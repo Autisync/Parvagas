@@ -41,9 +41,10 @@ checklist below is green.
 - **Remaining before fully green:** run the golden set against real Ollama, expand to ~10 pairs, add the determinism check, confirm PT output live (all four need actual model access — can't be done from this sandbox).
 - **Depends on:** Phase 0. **Exit:** Point 1 checklist green (currently: Unit ✅, Integration/E2E ✅, Llama-quality partial — see checklist).
 
-### Phase 2 — Point 2: ATS keyword-injected CV export
-- Add a Llama pass to `cv_export_service` that injects the target job's keywords into the summary/skills sections, grounded strictly to the real profile.
-- **Depends on:** Phase 0. **Exit:** Point 2 checklist green (hallucination + Ollama-down degradation are the gating items).
+### Phase 2 — Point 2: ATS keyword-injected CV export 🟡 mostly done
+- `inject_job_keywords()` in `cv_export_service.py`, behind `CV_EXPORT_LLM_INJECTION_ENABLED` (default off). Wired into `GET /candidates/cv/export` via a new optional `targetJobId` query param — omitted or flag-off → byte-identical to the pre-existing export. Hallucination guard is computational (skill intersection with the job's own required-skills list), not just prompt instruction — see Point 2 checklist.
+- **Remaining before fully green:** truncation/length test for very long profiles, a real browser check that exported PDFs still render correctly, and an ATS-text-extraction check against real (live-model) injected content — the last one needs Ollama access this sandbox doesn't have.
+- **Depends on:** Phase 0. **Exit:** Point 2 checklist green (currently: Unit ✅, hallucination guard ✅, Ollama-down degradation ✅; length/visual/ATS-extraction checks still open).
 
 ### Phase 3 — Point 3: Portal-scanning adapters  *(parallel track — no Llama)*
 - Add an adapter framework + Greenhouse / Ashby / Lever adapters driven by `SCRAPER_SOURCES`, each with a saved-response fixture.
@@ -111,23 +112,25 @@ the new Llama scoring pass, proposal endpoints
 ## Point 2 — ATS CV generation with keyword injection (Llama)
 
 **Touchpoints:** `app/services/cv_export_service.py` (`to_pdf`, `to_docx`,
-`to_json_resume`), the CV HTML/template + Playwright PDF render, the Llama
-keyword-injection pass, `GET /candidates/cv/export`.
+`to_json_resume`, new `inject_job_keywords`), `GET /candidates/cv/export`
+(new optional `targetJobId` param). Correction from the original plan: this
+codebase renders PDF/DOCX directly with reportlab/python-docx, not an HTML
+template + Playwright — no template layer to touch.
 
 ### Unit
-- [ ] Base export still works with no target job (generic CV) — PDF, DOCX, JSON all produce valid, non-empty files
-- [ ] Keyword-injection pass is additive: inserts the target job's required skills into summary/skills **without dropping or fabricating** the candidate's real experience (assert original sections survive)
-- [ ] Empty/partial profile still renders a valid document (no crash on missing summary, skills, or experience)
+- [x] Base export still works with no target job (generic CV) — PDF, DOCX, JSON all produce valid, non-empty files — `test_cv_export_llm_injection.py::test_base_export_still_works_with_no_target_job`
+- [x] Keyword-injection pass is additive: inserts the target job's required skills into summary/skills **without dropping or fabricating** the candidate's real experience (assert original sections survive) — `test_injection_preserves_original_skills_and_adds_only_job_relevant_ones`, `test_injection_never_touches_experience_or_education`
+- [x] Empty/partial profile still renders a valid document (no crash on missing summary, skills, or experience) — `test_base_export_survives_empty_profile`
 
 ### Llama-quality
-- [ ] Injected content is grounded — Llama must not invent employers, dates, or degrees the candidate never entered (hallucination guard; highest-risk item)
-- [ ] Truncation/length: a very long profile + long job description doesn't exceed context or produce a truncated CV
-- [ ] Graceful degradation: Ollama down → export falls back to the non-tailored CV instead of failing the download
+- [x] Injected content is grounded — Llama must not invent employers, dates, or degrees the candidate never entered (hallucination guard; highest-risk item) — enforced computationally, not just by prompt: `inject_job_keywords` only ever adds a skill if it's BOTH in the LLM's suggestion AND in the job's own `requiredSkills` list (never a bare invention), and only touches summary/skills — experience/education/certifications pass through untouched. See `test_injection_preserves_original_skills_and_adds_only_job_relevant_ones` (rejects a fabricated skill not in the job listing).
+- [ ] Truncation/length: a very long profile + long job description doesn't exceed context or produce a truncated CV — not yet tested
+- [x] Graceful degradation: Ollama down → export falls back to the non-tailored CV instead of failing the download — `test_falls_back_when_llm_service_raises`, `test_falls_back_when_llm_returns_malformed_shape`, `test_falls_back_when_llm_returns_empty_summary`
 
 ### Integration / E2E
-- [ ] `GET /candidates/cv/export?format=pdf|docx|json` returns correct content-type and a downloadable file for an authenticated candidate
-- [ ] Rendered PDF opens and is visually intact (fonts, layout) — verify via the CV-e-Documentos export buttons
-- [ ] ATS sanity: extract text from the generated PDF and confirm injected keywords are present as real text (not images)
+- [x] `GET /candidates/cv/export?format=pdf|docx|json` returns correct content-type and a downloadable file for an authenticated candidate — pre-existing behavior, unchanged when `targetJobId` is omitted (verified via unchanged base-export tests + endpoint wiring review)
+- [ ] Rendered PDF opens and is visually intact (fonts, layout) — verify via the CV-e-Documentos export buttons — needs a browser/manual check, not done from this sandbox
+- [ ] ATS sanity: extract text from the generated PDF and confirm injected keywords are present as real text (not images) — needs a live LLM run to produce real injected content to check against (blocked, same as Phase 1's golden-set items)
 
 ---
 

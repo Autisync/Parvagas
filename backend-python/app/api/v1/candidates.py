@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models import CVUpload, CandidateProfile, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
-from app.services.cv_export_service import to_docx, to_pdf, to_json_resume
+from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
 from app.workers.tasks import parse_cv, send_application_received_email
 
@@ -558,10 +558,17 @@ async def delete_candidate_cv_document(
 @router.get("/cv/export")
 async def export_candidate_cv(
     format: str = Query(default="pdf", pattern="^(pdf|docx|json)$"),
+    targetJobId: str | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export the candidate's saved profile as a formatted CV (PDF, DOCX, or JSON-Resume)."""
+    """Export the candidate's saved profile as a formatted CV (PDF, DOCX, or JSON-Resume).
+
+    `targetJobId` is optional — when given, the summary/skills are lightly
+    tailored toward that job via Llama (see cv_export_service.inject_job_keywords),
+    behind CV_EXPORT_LLM_INJECTION_ENABLED. Omitted or disabled → unchanged
+    export, exactly as before.
+    """
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
 
@@ -592,6 +599,11 @@ async def export_candidate_cv(
         "workExperience": _jl(profile.work_experience, []),
         "education": _jl(profile.education, []),
     }
+
+    if targetJobId:
+        target_job = db.query(Job).filter(Job.id == targetJobId).first()
+        if target_job:
+            profile_dict = inject_job_keywords(profile_dict, serialize_job(target_job))
 
     safe_name = (current_user.full_name or "cv").replace(" ", "_").lower()
 

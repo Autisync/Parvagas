@@ -117,6 +117,7 @@ class Settings(BaseSettings):
     # falls back to its non-LLM behavior on any failure regardless of this
     # flag; the flag controls whether the LLM is called at all.
     AUTO_APPLY_LLM_SCORING_ENABLED: bool = os.getenv("AUTO_APPLY_LLM_SCORING_ENABLED", "false").lower() == "true"
+    CV_EXPORT_LLM_INJECTION_ENABLED: bool = os.getenv("CV_EXPORT_LLM_INJECTION_ENABLED", "false").lower() == "true"
 
     # CV parsing queue and guardrails
     CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))

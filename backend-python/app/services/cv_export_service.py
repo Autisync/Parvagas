@@ -10,9 +10,86 @@ import io
 import json
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.services import llm_service
 
 logger = get_logger(__name__)
+settings = get_settings()
+
+_INJECTION_SYSTEM_PROMPT = (
+    "You tailor a candidate's CV summary for a specific target job. You may "
+    "ONLY rephrase and re-emphasize the candidate's OWN existing summary and "
+    "experience to surface relevance to the job — you must NEVER invent "
+    "employers, job titles, dates, degrees, certifications, or skills the "
+    "candidate doesn't already have. If unsure, keep the original wording. "
+    "Write in the same language as the candidate's existing summary. "
+    "Return ONLY a JSON object: "
+    "{\"professionalSummary\": <string>, \"suggestedSkills\": [<string>, ...]}. "
+    "suggestedSkills must be keywords from the job's required_skills list "
+    "that genuinely match the candidate's stated skills/experience — never "
+    "skills the candidate has no evidence of."
+)
+
+
+def inject_job_keywords(profile: dict[str, Any], job: dict[str, Any] | None) -> dict[str, Any]:
+    """Optionally tailor `profile` toward `job` via Llama (Phase 2,
+    TEST_PLAN_CAREER_OPS.md). Returns a NEW dict — never mutates the input.
+
+    Grounding safeguards (the highest-risk item for this feature):
+      - No job given, or the flag is off, or the LLM call fails/returns a
+        malformed shape → returns the original profile completely unchanged.
+      - The candidate's original skills are always preserved in full; the
+        LLM can only ADD skills, and only ones that are both in its
+        suggestion AND in the job's own required_skills list, so nothing
+        wholly invented can be added — it must already be something the
+        job is asking for, not a fabrication.
+      - Only the summary text and skills list are touched — work_experience,
+        education, certifications, and every other section pass through
+        byte-for-byte from the original profile.
+    """
+    if not job or not settings.CV_EXPORT_LLM_INJECTION_ENABLED:
+        return profile
+
+    original_summary = _s(profile.get("professionalSummary") or profile.get("summary"))
+    original_skills = _list(profile.get("skills"))
+    job_required_skills = _list(job.get("requiredSkills") or job.get("required_skills"))
+
+    fallback = {"professionalSummary": original_summary, "suggestedSkills": []}
+    user_prompt = json.dumps({
+        "candidate_summary": original_summary,
+        "candidate_skills": original_skills,
+        "candidate_experience_titles": [
+            _s(item.get("jobTitle") or item.get("title")) for item in (profile.get("workExperience") or []) if isinstance(item, dict)
+        ],
+        "target_job_title": job.get("title"),
+        "target_job_category": job.get("category"),
+        "required_skills": job_required_skills,
+    }, ensure_ascii=False)
+
+    try:
+        result = llm_service.chat_json(_INJECTION_SYSTEM_PROMPT, user_prompt, fallback=fallback)
+    except Exception:  # noqa: BLE001 — never let this break a CV download
+        return profile
+
+    new_summary = result.get("professionalSummary")
+    suggested = result.get("suggestedSkills")
+    if not isinstance(new_summary, str) or not new_summary.strip() or not isinstance(suggested, list):
+        return profile
+
+    # Grounding gate: only accept suggested skills the job itself lists AND
+    # that aren't already present — never anything the LLM invented outright.
+    job_required_lower = {s.lower() for s in job_required_skills}
+    existing_lower = {s.lower() for s in original_skills}
+    accepted_new_skills = [
+        str(s).strip() for s in suggested
+        if str(s).strip() and str(s).strip().lower() in job_required_lower and str(s).strip().lower() not in existing_lower
+    ]
+
+    tailored = dict(profile)
+    tailored["professionalSummary"] = new_summary.strip()
+    tailored["skills"] = original_skills + accepted_new_skills
+    return tailored
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
