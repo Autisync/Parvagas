@@ -119,6 +119,14 @@ class Settings(BaseSettings):
     AUTO_APPLY_LLM_SCORING_ENABLED: bool = os.getenv("AUTO_APPLY_LLM_SCORING_ENABLED", "false").lower() == "true"
     CV_EXPORT_LLM_INJECTION_ENABLED: bool = os.getenv("CV_EXPORT_LLM_INJECTION_ENABLED", "false").lower() == "true"
 
+    # Candidate premium AI tools (interview prep, cover letter, company
+    # snapshot — app.api.v1.candidate_premium). Master ship-free switch:
+    # while this is false (the default), EVERY candidate has access
+    # regardless of CandidateSubscription rows — no pricing has been decided
+    # yet, so this ships as a free feature. Flip to true once a real plan
+    # exists to start enforcing app.services.candidate_billing_service.
+    CANDIDATE_PREMIUM_ENABLED: bool = os.getenv("CANDIDATE_PREMIUM_ENABLED", "false").lower() == "true"
+
     # CV parsing queue and guardrails
     CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))
     CV_PARSE_MAX_JOBS_PER_USER_PER_DAY: int = int(os.getenv("CV_PARSE_MAX_JOBS_PER_USER_PER_DAY", 10))

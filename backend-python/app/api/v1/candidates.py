@@ -17,9 +17,11 @@ from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
+from app.models import CVUpload, CandidateProfile, Company, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
+from app.services.candidate_billing_service import candidate_has_premium_access
 from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
+from app.services import llm_service
 from app.workers.tasks import parse_cv, send_application_received_email
 
 logger = get_logger(__name__)
@@ -1101,3 +1103,177 @@ async def dismiss_auto_apply_proposal(
     db.commit()
 
     return {"message": "Proposta dispensada."}
+
+
+# ── Premium AI tools (Phase 4, TEST_PLAN_CAREER_OPS.md) ─────────────────────
+# Ships as a FREE feature today — see candidate_billing_service module
+# docstring. Nothing here changes behavior until CANDIDATE_PREMIUM_ENABLED
+# is flipped on, which requires a pricing decision this code doesn't make.
+
+def _require_premium_access(db: Session, current_user: User) -> None:
+    if not candidate_has_premium_access(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Esta funcionalidade requer uma subscrição activa.",
+        )
+
+
+def _load_public_job_or_404(db: Session, job_id: str) -> Job:
+    job = db.query(Job).filter(Job.id == job_id, Job.status.in_(PUBLIC_JOB_STATUSES)).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vaga não encontrada")
+    return job
+
+
+_INTERVIEW_PREP_SYSTEM_PROMPT = (
+    "You write STAR-format (Situation, Task, Action, Result) interview practice "
+    "stories for a candidate preparing for a specific job. You may ONLY use the "
+    "candidate's own work experience given below — you must NEVER invent "
+    "employers, projects, responsibilities, or outcomes they didn't state. If "
+    "the candidate has too little experience listed to build a genuine story, "
+    "say so instead of inventing one. Write in Portuguese unless the candidate's "
+    "own text is in English. Return ONLY JSON: "
+    "{\"stories\": [{\"situation\": <string>, \"task\": <string>, \"action\": <string>, \"result\": <string>}]}"
+)
+
+_COVER_LETTER_SYSTEM_PROMPT = (
+    "You write a short, genuine cover letter for a candidate applying to a "
+    "specific job. You may ONLY reference the candidate's own summary, skills, "
+    "and experience given below and the job's real title/company/requirements "
+    "— NEVER invent employers, dates, degrees, or achievements. Write in "
+    "Portuguese unless the candidate's own text is in English. Return ONLY "
+    "JSON: {\"coverLetter\": <string>}"
+)
+
+_COMPANY_SNAPSHOT_SYSTEM_PROMPT = (
+    "You turn a small set of already-verified facts about a company into a "
+    "short, readable snapshot for a job candidate. You may ONLY restate the "
+    "facts given below in clearer prose — you have no other knowledge of this "
+    "company and must NEVER add facts, history, funding, size, or reputation "
+    "claims that aren't in the input. If little is known, say so plainly "
+    "instead of filling gaps. Write in Portuguese. Return ONLY JSON: "
+    "{\"snapshot\": <string>}"
+)
+
+
+@router.post("/premium/interview-prep")
+async def generate_interview_prep(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """STAR-format interview stories built strictly from the candidate's own
+    work experience — never fabricated. Free while CANDIDATE_PREMIUM_ENABLED
+    is off (see module note above)."""
+    _ensure_candidate_user(current_user)
+    _require_premium_access(db, current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    job_id = str(payload.get("jobId") or "").strip()
+    if not job_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="jobId é obrigatório")
+    job = _load_public_job_or_404(db, job_id)
+
+    experience = _json_load(profile.work_experience, [])
+    if not isinstance(experience, list) or not experience:
+        return {"stories": [], "unavailable": True, "reason": "Sem experiência profissional registada no perfil."}
+
+    user_prompt = json.dumps({
+        "candidate_experience": experience,
+        "candidate_skills": _coerce_list(_json_load(profile.skills, [])),
+        "target_job_title": job.title,
+        "target_job_category": job.category,
+        "target_job_required_skills": _coerce_list(_json_load(job.required_skills, [])),
+    }, ensure_ascii=False)
+
+    try:
+        result = llm_service.chat_json(_INTERVIEW_PREP_SYSTEM_PROMPT, user_prompt, fallback={"stories": []})
+    except Exception:  # noqa: BLE001 — never fail the request over an LLM hiccup
+        result = {"stories": []}
+
+    stories = result.get("stories")
+    if not isinstance(stories, list) or not stories:
+        return {"stories": [], "unavailable": True, "reason": "Não foi possível gerar sugestões neste momento."}
+
+    return {"stories": stories, "unavailable": False}
+
+
+@router.post("/premium/cover-letter")
+async def generate_cover_letter(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Grounded cover-letter draft for a specific job. Free while
+    CANDIDATE_PREMIUM_ENABLED is off (see module note above)."""
+    _ensure_candidate_user(current_user)
+    _require_premium_access(db, current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    job_id = str(payload.get("jobId") or "").strip()
+    if not job_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="jobId é obrigatório")
+    job = _load_public_job_or_404(db, job_id)
+
+    user_prompt = json.dumps({
+        "candidate_summary": profile.professional_summary or "",
+        "candidate_skills": _coerce_list(_json_load(profile.skills, [])),
+        "candidate_experience": _json_load(profile.work_experience, []),
+        "target_job_title": job.title,
+        "target_job_category": job.category,
+        "target_job_required_skills": _coerce_list(_json_load(job.required_skills, [])),
+    }, ensure_ascii=False)
+
+    try:
+        result = llm_service.chat_json(_COVER_LETTER_SYSTEM_PROMPT, user_prompt, fallback={"coverLetter": ""})
+    except Exception:  # noqa: BLE001
+        result = {"coverLetter": ""}
+
+    cover_letter = result.get("coverLetter")
+    if not isinstance(cover_letter, str) or not cover_letter.strip():
+        return {"coverLetter": "", "unavailable": True, "reason": "Não foi possível gerar uma carta neste momento."}
+
+    return {"coverLetter": cover_letter.strip(), "unavailable": False}
+
+
+@router.get("/premium/company-snapshot/{job_id}")
+async def get_company_snapshot(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Company snapshot built ONLY from facts already in our own database
+    (Company/Job rows) — never invented external knowledge about the real
+    company. Free while CANDIDATE_PREMIUM_ENABLED is off (see module note)."""
+    _ensure_candidate_user(current_user)
+    _require_premium_access(db, current_user)
+    job = _load_public_job_or_404(db, job_id)
+
+    company_name = getattr(job, "external_company_name", None)
+    facts: dict[str, Any] = {"name": company_name, "website": None, "description": None, "activeJobs": None}
+    if job.company_id:
+        company = db.query(Company).filter(Company.id == job.company_id).first()
+        if company and company.name != "Parvagas Aggregator":
+            facts["name"] = company.name
+            facts["website"] = company.website
+            facts["description"] = company.description
+            facts["activeJobs"] = db.query(Job).filter(
+                Job.company_id == company.id, Job.status.in_(PUBLIC_JOB_STATUSES)
+            ).count()
+
+    if not facts["name"]:
+        return {"snapshot": "", "facts": facts, "unavailable": True, "reason": "Sem informação suficiente sobre esta empresa."}
+
+    try:
+        result = llm_service.chat_json(
+            _COMPANY_SNAPSHOT_SYSTEM_PROMPT,
+            json.dumps({"known_facts": facts}, ensure_ascii=False),
+            fallback={"snapshot": ""},
+        )
+    except Exception:  # noqa: BLE001
+        result = {"snapshot": ""}
+
+    snapshot = result.get("snapshot")
+    if not isinstance(snapshot, str) or not snapshot.strip():
+        # No prose available — the raw facts are still real and useful.
+        return {"snapshot": "", "facts": facts, "unavailable": True, "reason": "Resumo indisponível; ver dados em bruto."}
+
+    return {"snapshot": snapshot.strip(), "facts": facts, "unavailable": False}

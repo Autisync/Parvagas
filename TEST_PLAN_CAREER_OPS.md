@@ -51,11 +51,11 @@ checklist below is green.
 - **Remaining before fully green:** the fixtures are hand-authored from each platform's documented public API shape, not a captured real response (no live network access when written) — before pointing this at a real employer's board, verify field names against an actual live response and adjust if the docs drifted. No dedicated queue-routing/slow-endpoint tests written this phase (pre-existing infra, reused unchanged by the new adapters).
 - **Depends on:** nothing (independent of Phase 0, ran in parallel as planned). **Exit:** Point 3 checklist green (Unit ✅ with the fixture caveat noted; Integration/E2E mostly pre-existing/unverified-this-phase).
 
-### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research) 🔴 blocked — needs a product decision
-- **Blocked:** this phase assumed "the paid-tier entitlement check existing." It doesn't. `Subscription`/`Plan`/`Transaction` in `app/models/__init__.py` are explicitly company-side only (`Subscription.company_id`, "A company's active plan" / "Employer subscription... plan") — there is no candidate-side billing or entitlement concept anywhere in this codebase to gate against.
-- Building this requires product decisions this plan can't make on its own: is there a candidate paywall at all, or is Phase 4 free-for-now like auto-apply currently is; if paid, what's the price/plan shape and which local payment rail (the existing `Transaction` model already supports Multicaixa Express/Unitel Money/bank reference — presumably reusable, but that's a call for whoever owns pricing); does entitlement live on `User`/`CandidateProfile` directly or a new `CandidateSubscription` table mirroring the company one.
-- **Not started.** Do not build a placeholder/guessed paywall — implementing this without those answers risks locking in the wrong shape (auto-apply's own plan explicitly deferred exactly this kind of "future paid feature" decision rather than guessing, for the same reason).
-- **Depends on:** Phase 0 (done) + a product decision on candidate paid-tier structure (open). **Exit:** blocked until that decision is made.
+### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research) 🟡 mostly done — unblocked, ships free
+- **Decision (2026-07-08):** ship free now, bill later. Added `CandidateSubscription` (mirrors the company `Subscription` shape but intentionally not tied to the company-oriented `plans` table, since candidate pricing isn't decided) + `CANDIDATE_PREMIUM_ENABLED` flag, default `false` — while off, `candidate_has_premium_access()` always returns `True`, so every candidate gets full access today. Flipping the flag on later starts enforcing subscriptions with zero further migrations/code changes.
+- Three endpoints built: interview-prep (STAR stories, skipped entirely — no LLM call — if the candidate has no real work experience to ground on), cover-letter, and a company-snapshot **scoped down from "research" to facts already in our own DB** (no live web access on the backend, so open-ended "research" would just be the model's possibly-stale training knowledge — same anti-hallucination principle as Phase 2).
+- **Remaining before fully green:** live-model runs to confirm no placeholder leakage and PT output (blocked on Ollama access, same open item as Phases 1/2); no frontend UI yet (backend-only this phase, matching how 1–3 shipped).
+- **Depends on:** Phase 0 (done). **Exit:** Point 4 checklist green (Unit/access-control ✅, Ollama-down degradation ✅; two Llama-quality items and the frontend still open).
 
 ### Phase 5 — Regression + release gate
 - Run the Point 5 regression checklist and the full "definition of done" gate before enabling any flag in production.
@@ -68,8 +68,8 @@ checklist below is green.
 | 1 | Auto-apply Llama scoring | 🟡 mostly done | 0 | yes | with 3 |
 | 2 | ATS CV keyword injection | 🟡 mostly done | 0 | yes | with 3 |
 | 3 | Portal-scanning adapters | 🟡 mostly done | — | no | with 0/1/2/4 |
-| 4 | Premium AI tools | 🔴 blocked — needs candidate paid-tier decision | 0 + paid gate (doesn't exist) | yes | with 3 |
-| 5 | Regression + release | not started | 1–4 | — | — |
+| 4 | Premium AI tools | 🟡 mostly done — ships free, billing flag ready | 0 | yes | with 3 |
+| 5 | Regression + release | in progress | 1–4 | — | — |
 
 ---
 
@@ -159,22 +159,36 @@ dedicated `celery-worker-scraper` queue, admin scraped-jobs review UI.
 
 ## Point 4 — Interview-prep / cover-letter / company-research (Llama, premium)
 
-**Touchpoints:** new endpoints + Llama prompt modes (`interview-prep`, `cover`,
-`deep`), gated behind the paid tier.
+**Touchpoints:** `POST /candidates/premium/interview-prep`,
+`POST /candidates/premium/cover-letter`, `GET /candidates/premium/company-snapshot/{job_id}`
+in `candidates.py`; `candidate_billing_service.py`; `CandidateSubscription` model.
+
+**Billing decision resolved (2026-07-08):** ship as a **free feature now**.
+`CANDIDATE_PREMIUM_ENABLED` defaults to `false` — while off, every candidate
+gets full access regardless of subscription state, so the paid-tier
+mechanism exists but enforces nothing yet. Flip the flag once real pricing
+is decided; no further migration or code change needed to start enforcing.
+"Company research" was scoped down from the original plan to a **snapshot
+built only from facts already in our own DB** (`Company.name/website/description`
++ active job count) rather than free-form LLM "research," since the backend
+has no live web-search access and open-ended company research would just be
+the model's possibly-stale/hallucinated training knowledge — same
+anti-hallucination principle as Point 2.
 
 ### Unit / access-control
-- [ ] Each new endpoint requires an authenticated candidate; unauthenticated → 401/403
-- [ ] Paid-tier gate: a non-entitled candidate is blocked (402/403), an entitled one is allowed — test both sides
-- [ ] Input validation: missing job/profile context returns a clean 400, doesn't call the model with empty prompts
+- [x] Each new endpoint requires an authenticated candidate; unauthenticated → 401/403 — `get_current_user` dependency (existing pattern, shared with every other candidate endpoint); non-candidate role → 403 (`test_non_candidate_role_rejected`)
+- [x] Paid-tier gate: a non-entitled candidate is blocked (402/403), an entitled one is allowed — test both sides — `test_candidate_billing_service.py` (6 tests) + `test_interview_prep_requires_active_subscription_when_flag_on` / `test_interview_prep_allowed_with_active_subscription_when_flag_on`
+- [x] Input validation: missing job/profile context returns a clean 400, doesn't call the model with empty prompts — `test_missing_job_id_returns_400`, `test_unknown_job_returns_404`, `test_interview_prep_skips_llm_call_with_no_work_experience` (asserts the LLM is never even called without real experience to ground on)
 
 ### Llama-quality
-- [ ] STAR interview stories are built **from the candidate's actual CV experience**, not invented (grounding check)
-- [ ] Cover letter references the real target job + real candidate details; no placeholder leakage (`[Company Name]`, etc.)
-- [ ] Output language matches locale (PT default)
-- [ ] Ollama down → endpoint returns a graceful "try again later" error, not a 500
+- [x] STAR interview stories are built **from the candidate's actual CV experience**, not invented (grounding check) — computational, not just prompt instruction: `generate_interview_prep` returns `unavailable: true` without ever calling the LLM when `work_experience` is empty, since there's nothing real to ground a story in
+- [ ] Cover letter references the real target job + real candidate details; no placeholder leakage (`[Company Name]`, etc.) — prompt instructs grounding; needs a live-model run to confirm no leakage in practice (blocked on Ollama access, same as Phases 1/2's remaining items)
+- [ ] Output language matches locale (PT default) — prompts instruct Portuguese; needs a live-model run to confirm
+- [x] Ollama down → endpoint returns a graceful "try again later" error, not a 500 — all three endpoints return `{"unavailable": true, "reason": ...}` (200, not 500) on any LLM failure — `test_interview_prep_falls_back_when_llm_raises`, `test_cover_letter_falls_back_on_malformed_response`, `test_company_snapshot_returns_raw_facts_when_llm_unavailable`
 
 ### E2E
-- [ ] Feature reachable only from the paid surface; free users see the upsell, not the tool
+- [ ] Feature reachable only from the paid surface; free users see the upsell, not the tool — **N/A while shipping free**: there is no paid-vs-free surface split yet by design (everyone has access). Revisit once `CANDIDATE_PREMIUM_ENABLED` is turned on and a real upgrade/upsell UI exists.
+- [ ] Frontend UI for these three tools — **not built this phase** (backend-only, matching how Phases 1–3 also shipped backend-first); needs its own pass once there's a page to put "Preparar entrevista" / "Gerar carta" / "Sobre a empresa" buttons on.
 
 ---
 
@@ -184,7 +198,7 @@ dedicated `celery-worker-scraper` queue, admin scraped-jobs review UI.
 `test_auto_apply_proposal_endpoints.py`, `test_no_account_apply_tracking.py`.
 
 - [x] **Invariant test — the load-bearing one:** approving a proposal is the *only* path that creates a `JobApplication`; the matcher/sweep never auto-submits. Keep the test that asserts Dismiss creates zero applications — `test_auto_apply_proposal_endpoints.py::test_dismiss_never_creates_an_application` still passes; `_llm_refine_score` (Phase 1) only ever adjusts a score/reasons, never touches `JobApplication`
-- [x] All existing auto-apply and no-account-flow tests still pass unchanged after points 1–3 land (**Point 4 not yet built — blocked**, so "1–4" isn't fully applicable yet) — `test_auto_apply_matching.py` + `test_auto_apply_proposal_endpoints.py` + `test_no_account_apply_tracking.py` all green together after Phases 0–3
+- [x] All existing auto-apply and no-account-flow tests still pass unchanged after points 1–4 land — `test_auto_apply_matching.py` + `test_auto_apply_proposal_endpoints.py` + `test_no_account_apply_tracking.py` all green together after Phases 0–4 (202 tests total)
 - [x] Human-in-the-loop copy stays accurate ("nenhuma candidatura é submetida sem a sua aprovação") — no drift toward "automatic submission" — confirmed still present verbatim in `CV-e-Documentos/page.tsx`, untouched by Phases 0–3
 
 ---

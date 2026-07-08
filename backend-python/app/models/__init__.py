@@ -529,6 +529,30 @@ class Subscription(Base, TimestampMixin):
     current_period_end = Column(DateTime, nullable=True)
 
 
+class CandidateSubscription(Base, TimestampMixin):
+    """A candidate's premium-tier subscription (interview prep, cover letter,
+    company snapshot — see app.api.v1.candidate_premium).
+
+    Deliberately NOT tied to the `plans` table above (that table's shape —
+    price/currency/features — was designed for employer job-posting plans;
+    candidate pricing hasn't been decided yet). `plan_code` is a free-form
+    label for whenever a real plan is defined; only `status` +
+    `current_period_end` are load-bearing for the entitlement check today.
+    Enforcement itself is gated by settings.CANDIDATE_PREMIUM_ENABLED — see
+    app.services.candidate_billing_service. While that flag is off (the
+    default), every candidate has access regardless of this table's
+    contents, so premium AI tools ship as a free feature until pricing is
+    decided and the flag is flipped.
+    """
+    __tablename__ = "candidate_subscriptions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    plan_code = Column(String(50), nullable=True)
+    status = Column(String(20), nullable=False, default="active")  # active|expired|cancelled
+    current_period_end = Column(DateTime, nullable=True)
+
+
 class Transaction(Base, TimestampMixin):
     """Payment record (local rails: Multicaixa Express, Unitel Money, bank reference)."""
     __tablename__ = "transactions"
