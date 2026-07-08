@@ -8,6 +8,7 @@ import Breadcrumbs from "@/app/components/ui/Breadcrumbs";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
 import ReportJobButton from "./ReportJobButton";
+import JobPrepPanel from "./JobPrepPanel";
 import TrackOnMount from "@/app/components/TrackOnMount";
 
 type Job = {
@@ -294,6 +295,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 Candidatar via WhatsApp
               </a>
             ) : null}
+
+            <JobPrepPanel jobId={job._id} />
 
             <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
 

@@ -47,9 +47,10 @@ checklist below is green.
 - **Depends on:** Phase 0. **Exit:** Point 2 checklist green (currently: Unit ✅, hallucination guard ✅, Ollama-down degradation ✅; length/visual/ATS-extraction checks still open).
 
 ### Phase 3 — Point 3: Portal-scanning adapters  *(parallel track — no Llama)* 🟡 mostly done
-- Adapter framework already existed (`SourceAdapter` base class + `_normalise()` + `_ADAPTERS` registry) — added `GreenhouseAdapter`, `LeverAdapter`, `AshbyAdapter` to it, each configurable via `SCRAPER_SOURCES` with `{"type": "greenhouse"|"lever"|"ashby", "url": "<bare token/slug/board-name OR full API URL>"}`.
-- **Remaining before fully green:** the fixtures are hand-authored from each platform's documented public API shape, not a captured real response (no live network access when written) — before pointing this at a real employer's board, verify field names against an actual live response and adjust if the docs drifted. No dedicated queue-routing/slow-endpoint tests written this phase (pre-existing infra, reused unchanged by the new adapters).
-- **Depends on:** nothing (independent of Phase 0, ran in parallel as planned). **Exit:** Point 3 checklist green (Unit ✅ with the fixture caveat noted; Integration/E2E mostly pre-existing/unverified-this-phase).
+- Adapter framework already existed (`SourceAdapter` base class + `_normalise()` + `_ADAPTERS` registry) — added `GreenhouseAdapter`, `LeverAdapter`, `CareerjetAdapter` to it, each configurable via `SCRAPER_SOURCES`.
+- **Angola-local research (2026-07-08):** replaced the originally-planned `AshbyAdapter` after actually researching Angola job platforms instead of guessing — see Point 3's "Adapter update" note above for what was found (Careerjet verified + real caveat about republishing terms; Jobartis/emprego.co.ao have no discoverable public API).
+- **Remaining before fully green:** Greenhouse/Lever fixtures still need field-name verification against a real live response before production use. Careerjet needs its partner terms actually reviewed before enabling. No dedicated queue-routing/slow-endpoint tests written this phase (pre-existing infra, reused unchanged).
+- **Depends on:** nothing (independent of Phase 0, ran in parallel as planned). **Exit:** Point 3 checklist green (Unit ✅ with fixture/ToS caveats noted; Integration/E2E mostly pre-existing/unverified-this-phase).
 
 ### Phase 4 — Point 4: Premium AI tools (interview-prep, cover letter, company research) 🟡 mostly done — unblocked, ships free
 - **Decision (2026-07-08):** ship free now, bill later. Added `CandidateSubscription` (mirrors the company `Subscription` shape but intentionally not tied to the company-oriented `plans` table, since candidate pricing isn't decided) + `CANDIDATE_PREMIUM_ENABLED` flag, default `false` — while off, `candidate_has_premium_access()` always returns `True`, so every candidate gets full access today. Flipping the flag on later starts enforcing subscriptions with zero further migrations/code changes.
@@ -132,7 +133,8 @@ template + Playwright — no template layer to touch.
 
 ### Integration / E2E
 - [x] `GET /candidates/cv/export?format=pdf|docx|json` returns correct content-type and a downloadable file for an authenticated candidate — pre-existing behavior, unchanged when `targetJobId` is omitted (verified via unchanged base-export tests + endpoint wiring review)
-- [ ] Rendered PDF opens and is visually intact (fonts, layout) — verify via the CV-e-Documentos export buttons — needs a browser/manual check, not done from this sandbox
+- [x] **Frontend wired (2026-07-08):** CV-e-Documentos export section has a "Vaga alvo" selector (candidate's saved jobs) that appends `targetJobId` to the export request; the job detail page (`JobPrepPanel`) also offers "CV adaptado" PDF/DOCX downloads scoped to that specific job. `tsc`/`vitest` pass; not yet exercised against a live backend from this sandbox.
+- [ ] Rendered PDF opens and is visually intact (fonts, layout) — verify via the CV-e-Documentos export buttons — needs a browser/manual check against a live backend, see the step-by-step test script below
 - [ ] ATS sanity: extract text from the generated PDF and confirm injected keywords are present as real text (not images) — needs a live LLM run to produce real injected content to check against (blocked, same as Phase 1's golden-set items)
 
 ---
@@ -140,11 +142,27 @@ template + Playwright — no template layer to touch.
 ## Point 3 — Portal-scanning configs (no Llama)
 
 **Touchpoints:** `app/workers/tasks.py::scrape_external_jobs`, `SCRAPER_SOURCES`
-config, per-portal adapters (Greenhouse/Ashby/Lever + generic JSON/RSS), the
+config, per-portal adapters (Greenhouse/Lever/Careerjet + generic JSON/RSS), the
 dedicated `celery-worker-scraper` queue, admin scraped-jobs review UI.
 
+**Adapter update (2026-07-08):** swapped `AshbyAdapter` for `CareerjetAdapter`
+after research — Ashby had no evidence of Angola relevance. Researched real
+Angola-local job platforms (Jobartis, emprego.co.ao, angolaemprego.com)
+before touching this: none expose a discoverable public API or per-job feed
+(angolaemprego.com's `/feed/` is real but publishes daily-roundup articles,
+not one item per job). Careerjet is the one option verified against
+official docs (careerjet.com/partners/api) to actually serve Angola
+(careerjet.co.ao) with a documented JSON API — but **it's a live search
+proxy meant for embedding search boxes, not a bulk-export feed, and using
+it to republish listings onto our own board wasn't confirmed to comply
+with their partner terms.** Read `CareerjetAdapter`'s docstring and
+Careerjet's actual partner agreement before enabling it in production.
+Greenhouse/Lever are kept — not Angola-native, but real coverage for the
+multinational employers (oil & gas majors, global consultancies) who
+actively hire in Angola through them.
+
 ### Unit
-- [x] Each new adapter parses a **saved fixture** of that portal's real response into the normalized `ScrapedJob` shape (title, company, location, description, url) — fixture-driven, no live network — `tests/test_scraper_portal_adapters.py` (Greenhouse/Lever/Ashby, 13 tests). **Caveat:** fixtures are hand-authored from each platform's documented public API shape, not captured from a real live response (no network access when written) — verify field names against a real board's actual response before enabling in production.
+- [x] Each new adapter parses a **saved fixture** of that portal's real response into the normalized `ScrapedJob` shape (title, company, location, description, url) — fixture-driven, no live network — `tests/test_scraper_portal_adapters.py` (Greenhouse/Lever/Careerjet, 15 tests). **Caveat:** Greenhouse/Lever fixtures are hand-authored from documented public API shape, not a captured live response — verify field names against a real board before enabling. The Careerjet fixture is built from their officially-documented response schema (verified via docs, not memory), which is a stronger basis, but still not a captured live response.
 - [x] Malformed/empty feed → adapter returns `[]`, never throws — covered per adapter (malformed JSON, unreachable, wrong top-level shape)
 - [x] Dedup by `content_hash` still prevents the same listing being ingested twice across sources — unaffected by this change: `content_hash()` operates on the normalized output every adapter (old and new) produces via the shared `_normalise()` helper, so pre-existing dedup coverage applies unchanged
 - [x] Per-run budget caps (`SCRAPER_MAX_INGEST_PER_RUN`, `SCRAPER_RUN_BUDGET_SECONDS`) still enforced with multiple sources configured — unaffected: caps are enforced in `tasks.scrape_external_jobs` generically over whatever `get_adapters()` returns, and the new adapters reuse the same `_MAX_PER_SOURCE` cap as the existing ones
@@ -187,8 +205,8 @@ anti-hallucination principle as Point 2.
 - [x] Ollama down → endpoint returns a graceful "try again later" error, not a 500 — all three endpoints return `{"unavailable": true, "reason": ...}` (200, not 500) on any LLM failure — `test_interview_prep_falls_back_when_llm_raises`, `test_cover_letter_falls_back_on_malformed_response`, `test_company_snapshot_returns_raw_facts_when_llm_unavailable`
 
 ### E2E
-- [ ] Feature reachable only from the paid surface; free users see the upsell, not the tool — **N/A while shipping free**: there is no paid-vs-free surface split yet by design (everyone has access). Revisit once `CANDIDATE_PREMIUM_ENABLED` is turned on and a real upgrade/upsell UI exists.
-- [ ] Frontend UI for these three tools — **not built this phase** (backend-only, matching how Phases 1–3 also shipped backend-first); needs its own pass once there's a page to put "Preparar entrevista" / "Gerar carta" / "Sobre a empresa" buttons on.
+- [ ] Feature reachable only from the paid surface; free users see the upsell, not the tool — **N/A while shipping free**: there is no paid-vs-free surface split yet by design (everyone has access). Revisit once `CANDIDATE_PREMIUM_ENABLED` is turned on and a real upgrade/upsell UI exists (the 402 response is already there for the frontend to catch and show an upsell once that UI is built).
+- [x] **Frontend built (2026-07-08):** `JobPrepPanel` on the job detail page (candidates only) has "Preparar entrevista" / "Carta de apresentação" / "Sobre a empresa" buttons calling the three endpoints, rendering results inline with the `unavailable`/`reason` fallback message shown when the LLM has nothing to return. `tsc`/`vitest` pass; not yet exercised against a live backend from this sandbox.
 
 ---
 

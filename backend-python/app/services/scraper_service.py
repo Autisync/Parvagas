@@ -10,14 +10,28 @@ Configure via env SCRAPER_SOURCES — a JSON array, e.g.:
    {"type":"rss","name":"FeedX","url":"https://feedx.com/jobs.rss"},
    {"type":"greenhouse","name":"Acme","url":"acme"},
    {"type":"lever","name":"Acme","url":"acme"},
-   {"type":"ashby","name":"Acme","url":"acme"}]
+   {"type":"careerjet","name":"Careerjet Angola","url":"<your affid>","category":"Tecnologia"}]
 
 JSON adapter expects a list of objects (or {"jobs":[...]}) with keys like
 title/company/location/category/description/url. RSS adapter reads item
-title/description/link. Greenhouse/Lever/Ashby adapters talk to each
-platform's public job-board API directly — `url` can be a bare board
-token/company slug/board name, or a full API URL (see each adapter's
-docstring for the exact endpoint and expected shape).
+title/description/link. Greenhouse/Lever talk to each platform's public
+job-board API directly — `url` can be a bare board token/company slug, or a
+full API URL — and are relevant to the Angola market via the multinational
+employers who post through them, not because the platforms are Angola-native
+(see GreenhouseAdapter's docstring). CareerjetAdapter is the one adapter here
+verified against official docs to actually serve the Angola market
+(careerjet.co.ao) — READ ITS DOCSTRING before enabling: it's a live search
+proxy, not a bulk-export feed, and using it to republish listings onto our
+own board wasn't confirmed to comply with Careerjet's partner terms.
+
+Angola-native boards (Jobartis, emprego.co.ao, angolaemprego.com's listing
+pages) were checked and do NOT currently expose a discoverable public
+API/JSON-LD/RSS feed for their job listings (angolaemprego.com's own
+/feed/ endpoint exists but publishes daily-roundup articles, not one item
+per job, so the generic RSS adapter above can point at it but won't produce
+clean per-job records) — building a scraper for those would mean fragile
+HTML-selector scraping that needs to be verified against their live markup
+by someone with browser access, which this module doesn't attempt.
 """
 from __future__ import annotations
 
@@ -249,6 +263,12 @@ class GreenhouseAdapter(SourceAdapter):
     board token (e.g. "acme") or the full API URL — bare tokens are expanded
     to https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true.
 
+    Relevant to the Angola market via the MULTINATIONAL employers who post
+    through it (oil & gas majors, global consultancies, tech companies with
+    Angola offices) — not an Angola-native platform itself. See
+    CareerjetAdapter's docstring below for what was actually verified as
+    Angola-local, and the module docstring for what wasn't.
+
     NOTE: field shape is based on Greenhouse's documented public job-board
     API, not a live-verified response (no network access when this adapter
     was written) — verify against a real board once one is configured in
@@ -296,6 +316,8 @@ class LeverAdapter(SourceAdapter):
     company slug (e.g. "acme") or the full API URL — bare slugs are expanded
     to https://api.lever.co/v0/postings/{slug}?mode=json.
 
+    Same "multinational employer, not Angola-native" note as GreenhouseAdapter.
+
     NOTE: field shape based on Lever's documented public postings API, not
     live-verified (see GreenhouseAdapter docstring for the same caveat).
     """
@@ -332,28 +354,53 @@ class LeverAdapter(SourceAdapter):
         return [o for o in out if o["title"]]
 
 
-class AshbyAdapter(SourceAdapter):
-    """Ashby Job Board public API (no auth). `url` may be either a bare
-    board name (e.g. "acme") or the full API URL — bare names are expanded
-    to https://api.ashbyhq.com/posting-api/job-board/{name}.
+class CareerjetAdapter(SourceAdapter):
+    """Careerjet public search API — verified against official docs
+    (https://www.careerjet.com/partners/api/, official Python client at
+    github.com/careerjet/careerjet-api-client-python) rather than guessed
+    from memory. Careerjet operates a dedicated Angola site
+    (careerjet.co.ao), making this the one adapter in this module that's
+    actually confirmed to serve the Angola job market specifically.
 
-    NOTE: field shape based on Ashby's documented public job-board API, not
-    live-verified (see GreenhouseAdapter docstring for the same caveat).
+    IMPORTANT — read before enabling: Careerjet's API is a live SEARCH
+    PROXY meant for embedding a search box on a partner's site (it requires
+    the end-visitor's own IP/user-agent per request), not a bulk-export
+    feed meant for harvesting-and-republishing listings onto a third-party
+    board. Using it to populate Parvagas's own catalogue may not comply
+    with Careerjet's partner terms — that wasn't reviewed here. Get an
+    affiliate ID and read their actual partner agreement before turning
+    this on in SCRAPER_SOURCES; it's provided verified-and-ready, not
+    pre-approved for this use case.
+
+    `url` holds the affiliate ID (`affid`) issued by Careerjet on partner
+    signup — required, there is no anonymous/keyless access. `category`
+    doubles as the search keywords (e.g. "Tecnologia"); results are always
+    scoped to location=Angola.
     """
 
-    def _api_url(self) -> str:
-        if self.url.startswith("http"):
-            return self.url
-        return f"https://api.ashbyhq.com/posting-api/job-board/{self.url}"
+    _ENDPOINT = "https://search.api.careerjet.net/v4/query"
 
     def fetch(self) -> list[dict[str, Any]]:
-        body = _get(self._api_url())
+        if not self.url:
+            logger.warning("CareerjetAdapter %s has no affid configured; skipping", self.name)
+            return []
+        params = {
+            "affid": self.url,
+            "user_ip": "127.0.0.1",
+            "user_agent": USER_AGENT,
+            "url": "https://parvagas.pt/Vagas-Disponiveis",
+            "location": "Angola",
+            "keywords": self.category or "",
+            "pagesize": str(_MAX_PER_SOURCE),
+        }
+        query = "&".join(f"{k}={v}" for k, v in params.items() if v)
+        body = _get(f"{self._ENDPOINT}?{query}")
         if not body:
             return []
         try:
             data = json.loads(body)
         except Exception:
-            logger.warning("Ashby JSON parse failed for %s", self.url)
+            logger.warning("Careerjet JSON parse failed for %s", self.name)
             return []
         jobs = data.get("jobs") if isinstance(data, dict) else None
         if not isinstance(jobs, list):
@@ -364,10 +411,10 @@ class AshbyAdapter(SourceAdapter):
                 continue
             out.append(self._normalise({
                 "title": job.get("title"),
-                "location": job.get("location"),
-                "category": job.get("department"),
-                "description": job.get("descriptionPlain") or job.get("descriptionHtml"),
-                "url": job.get("jobUrl") or job.get("applyUrl"),
+                "company": job.get("company"),
+                "location": job.get("locations"),
+                "description": job.get("description"),
+                "url": job.get("url"),
             }))
         return [o for o in out if o["title"]]
 
@@ -377,7 +424,7 @@ _ADAPTERS = {
     "rss": RSSAdapter,
     "greenhouse": GreenhouseAdapter,
     "lever": LeverAdapter,
-    "ashby": AshbyAdapter,
+    "careerjet": CareerjetAdapter,
 }
 
 

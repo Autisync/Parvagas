@@ -254,6 +254,8 @@ export default function CvDocumentosPage() {
   const [generating, setGenerating] = useState(false);
 
   const [exporting, setExporting] = useState<string | null>(null);
+  const [targetJobId, setTargetJobId] = useState("");
+  const [savedJobOptions, setSavedJobOptions] = useState<{ id: string; title: string }[]>([]);
 
   const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
   const [autoApplyOptIn, setAutoApplyOptIn] = useState(false);
@@ -286,6 +288,14 @@ export default function CvDocumentosPage() {
       })
       .catch(() => {});
     loadProposals();
+    authFetch<{ jobs: { job?: { _id: string; title?: string } }[] }>("/candidates/jobs/saved?page=1&limit=20", token)
+      .then((d) => {
+        const options = (d.jobs || [])
+          .filter((item): item is { job: { _id: string; title?: string } } => Boolean(item.job?._id))
+          .map((item) => ({ id: item.job._id, title: item.job.title || "Vaga" }));
+        setSavedJobOptions(options);
+      })
+      .catch(() => {});
   }, [token, loadProposals]);
 
   const toggleCategory = (category: string) => {
@@ -329,7 +339,8 @@ export default function CvDocumentosPage() {
     setExporting(format);
     setError("");
     try {
-      const res = await authFetchRaw(`/candidates/cv/export?format=${format}`, token);
+      const jobParam = targetJobId ? `&targetJobId=${encodeURIComponent(targetJobId)}` : "";
+      const res = await authFetchRaw(`/candidates/cv/export?format=${format}${jobParam}`, token);
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(err.detail || "Erro ao exportar CV.");
@@ -964,6 +975,19 @@ export default function CvDocumentosPage() {
               <p className="mt-1 text-xs text-slate-600">
                 Descarregue o seu perfil guardado como CV formatado.
               </p>
+              <label className="mt-3 block text-xs text-slate-600">
+                Adaptar para uma vaga guardada (opcional)
+                <select
+                  className="mt-1 block w-full max-w-xs rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                  value={targetJobId}
+                  onChange={(e) => setTargetJobId(e.target.value)}
+                >
+                  <option value="">CV genérico (sem vaga alvo)</option>
+                  {savedJobOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.title}</option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="flex flex-wrap gap-2">
               {(["pdf", "docx", "json"] as const).map((fmt) => (
