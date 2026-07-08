@@ -183,9 +183,9 @@ dedicated `celery-worker-scraper` queue, admin scraped-jobs review UI.
 **Touchpoints:** existing `test_auto_apply_matching.py`,
 `test_auto_apply_proposal_endpoints.py`, `test_no_account_apply_tracking.py`.
 
-- [ ] **Invariant test — the load-bearing one:** approving a proposal is the *only* path that creates a `JobApplication`; the matcher/sweep never auto-submits. Keep the test that asserts Dismiss creates zero applications
-- [ ] All existing auto-apply and no-account-flow tests still pass unchanged after points 1–4 land
-- [ ] Human-in-the-loop copy stays accurate ("nenhuma candidatura é submetida sem a sua aprovação") — no drift toward "automatic submission"
+- [x] **Invariant test — the load-bearing one:** approving a proposal is the *only* path that creates a `JobApplication`; the matcher/sweep never auto-submits. Keep the test that asserts Dismiss creates zero applications — `test_auto_apply_proposal_endpoints.py::test_dismiss_never_creates_an_application` still passes; `_llm_refine_score` (Phase 1) only ever adjusts a score/reasons, never touches `JobApplication`
+- [x] All existing auto-apply and no-account-flow tests still pass unchanged after points 1–3 land (**Point 4 not yet built — blocked**, so "1–4" isn't fully applicable yet) — `test_auto_apply_matching.py` + `test_auto_apply_proposal_endpoints.py` + `test_no_account_apply_tracking.py` all green together after Phases 0–3
+- [x] Human-in-the-loop copy stays accurate ("nenhuma candidatura é submetida sem a sua aprovação") — no drift toward "automatic submission" — confirmed still present verbatim in `CV-e-Documentos/page.tsx`, untouched by Phases 0–3
 
 ---
 
