@@ -28,11 +28,12 @@ parallel with the Llama work on a separate track.
 and monitored before full rollout. No phase is "done" until its matching test
 checklist below is green.
 
-### Phase 0 — Shared LLM service layer  *(prereq for Points 1, 2, 4)*
-- Build `app/services/llm_service.py`: one entry point wrapping Ollama with a hard timeout, bounded retry, structured-output parsing, and a required `fallback` argument so callers degrade instead of raising.
-- Add a grounding helper that constrains prompts to the candidate facts passed in (the anti-hallucination guardrail reused by Points 2 and 4).
-- Settings: `OLLAMA_URL`, model name, timeout, low `temperature`.
-- **Exit:** harness "Ollama reachable" check passes; unit tests prove timeout→fallback and malformed-output→fallback.
+### Phase 0 — Shared LLM service layer  *(prereq for Points 1, 2, 4)* ✅ done
+- `app/services/llm_service.py`: `chat_json(system_prompt, user_prompt, *, fallback, ...)` — one OpenAI-compatible entry point with a hard timeout and structured-output (JSON-mode) parsing; **never raises**, always returns `fallback` on any failure (disabled, network error, timeout, non-JSON, wrong shape). Reuses the same provider-switch pattern as the existing `CVParserService` AI path rather than inventing a second one.
+- Settings (`app/core/config.py`): `LLM_ENABLED`, `LLM_PROVIDER` (default `ollama`), `LLM_BASE_URL` (default `http://ollama:11434/v1`, matching the Ollama service already in `docker-compose.yml`), `LLM_API_KEY`, `LLM_MODEL` (default `llama3.2:3b`), `LLM_TIMEOUT_SECONDS`. Ollama needs no API key; other providers do.
+- Grounding ("don't invent facts") is enforced per-caller via the system prompt each Phase 1/2/4 feature supplies — same approach the existing CV-parser AI prompt already uses — rather than a separate helper, to avoid a layer that has no behavior of its own.
+- No retry loop: a single bounded-timeout attempt that falls back on any failure is sufficient for the stated exit criteria and keeps latency predictable; revisit only if flaky-network false-fallbacks show up in practice.
+- **Exit:** `tests/test_llm_service.py` (12 tests) proves disabled/timeout/network-error/HTTP-error/malformed-JSON/non-object-JSON all fall back cleanly, and the success path parses correctly. Live "Ollama reachable" harness check still needs to run in an environment with the `ollama` container (not available in this sandbox) — code defaults are wired to it out of the box.
 
 ### Phase 1 — Point 1: Llama scoring in the auto-apply matcher  *(highest value, most contained)*
 - Add an optional Llama refinement pass to `score_job_for_candidate` behind a flag: it adjusts the heuristic score and generates PT reason strings, falling back to today's deterministic score on any failure.

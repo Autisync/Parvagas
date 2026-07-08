@@ -99,6 +99,19 @@ class Settings(BaseSettings):
     CV_PARSER_AI_SITE_URL: str = os.getenv("CV_PARSER_AI_SITE_URL", FRONTEND_URL)
     CV_PARSER_AI_AZURE_API_VERSION: str = os.getenv("CV_PARSER_AI_AZURE_API_VERSION", "2024-10-21")
 
+    # Shared LLM service (app.services.llm_service) — used by auto-apply scoring,
+    # CV keyword injection, and premium AI tools. Defaults to the self-hosted
+    # Ollama container already in docker-compose (OpenAI-compatible /v1 API,
+    # no API key required), matching the "Llama as AI processor" plan. Point
+    # these at OpenAI/Azure/OpenRouter instead by overriding the env vars —
+    # same provider-switch pattern as CV_PARSER_AI_* above.
+    LLM_ENABLED: bool = os.getenv("LLM_ENABLED", "true").lower() == "true"
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama")
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://ollama:11434/v1")
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llama3.2:3b")
+    LLM_TIMEOUT_SECONDS: int = int(os.getenv("LLM_TIMEOUT_SECONDS", 20))
+
     # CV parsing queue and guardrails
     CV_PARSE_MAX_UPLOAD_MB: int = int(os.getenv("CV_PARSE_MAX_UPLOAD_MB", 5))
     CV_PARSE_MAX_JOBS_PER_USER_PER_DAY: int = int(os.getenv("CV_PARSE_MAX_JOBS_PER_USER_PER_DAY", 10))
