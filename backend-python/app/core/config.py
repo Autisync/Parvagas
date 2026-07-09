@@ -167,12 +167,30 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", FRONTEND_URL)
 
+    # CV Builder (Reactive Resume self-hosted instance)
+    RESUME_BUILDER_URL: str = os.getenv("RESUME_BUILDER_URL", "")
+    # JWT secret shared with the Reactive Resume instance for SSO pass-through.
+    RESUME_BUILDER_SECRET: str = os.getenv("RESUME_BUILDER_SECRET", "")
+
+    # Ollama — free-tier local AI for CV builder (no subscription required).
+    # Runs alongside the stack; paid users fall through to RESUME_AI_* (cloud).
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+    OLLAMA_FREE_TIER_ENABLED: bool = os.getenv("OLLAMA_FREE_TIER_ENABLED", "true").lower() == "true"
+    OLLAMA_TIMEOUT_SECONDS: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
+
+    # Deploy automation (used by admin deploy panel)
+    # Option A: Portainer stack-update webhook (recommended for production).
+    DEPLOY_WEBHOOK_URL: str = os.getenv("DEPLOY_WEBHOOK_URL", "")
+    # Option B: run `git push origin main` from the repo root (dev/simple setups).
+    DEPLOY_GIT_PUSH: bool = os.getenv("DEPLOY_GIT_PUSH", "false").lower() == "true"
+
     # Admin key
     ADMIN_SIGNUP_KEY: str = os.getenv("ADMIN_SIGNUP_KEY", "")
-    SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@autisync.com")
-    SUPER_ADMIN_FULL_NAME: str = os.getenv("SUPER_ADMIN_FULL_NAME", "AutiSync Super Admin")
+    SUPER_ADMIN_EMAIL: str = os.getenv("SUPER_ADMIN_EMAIL", "admin@parvagas.pt")
+    SUPER_ADMIN_FULL_NAME: str = os.getenv("SUPER_ADMIN_FULL_NAME", "Parvagas Super Admin")
     MODERATOR_EMAIL: str = os.getenv("MODERATOR_EMAIL", "")
-    MODERATOR_FULL_NAME: str = os.getenv("MODERATOR_FULL_NAME", "AutiSync Moderator")
+    MODERATOR_FULL_NAME: str = os.getenv("MODERATOR_FULL_NAME", "Parvagas Moderator")
     MODERATOR_SIGNUP_KEY: str = os.getenv("MODERATOR_SIGNUP_KEY", "")
 
     # Observability

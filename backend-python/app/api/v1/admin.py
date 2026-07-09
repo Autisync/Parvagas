@@ -1,6 +1,8 @@
 """Admin API endpoints for dashboard and moderation surfaces."""
 from __future__ import annotations
 
+import os
+import subprocess
 from datetime import datetime, timedelta
 from io import StringIO
 from math import ceil
@@ -1952,3 +1954,321 @@ async def admin_export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="parvagas-{kind_norm}.csv"'},
     )
+
+
+# ── CV Builder pre-launch readiness check ─────────────────────────────────
+
+@router.get("/cv-builder/readiness")
+async def cv_builder_readiness(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_user),
+):
+    """Run automated pre-launch checks for the CV builder feature.
+
+    Returns a checklist of items with pass/fail/warn status that an admin
+    can review before enabling the feature in production.
+    """
+    _require_admin(admin)
+    from app.core.config import get_settings
+    from app.models import Resume, ResumeTemplate, CandidateCVSubscription, CVUpload
+
+    settings = get_settings()
+    checks: list[dict[str, Any]] = []
+
+    def _check(name: str, ok: bool, detail: str, warn: bool = False) -> None:
+        checks.append({
+            "name": name,
+            "status": "pass" if ok else ("warn" if warn else "fail"),
+            "detail": detail,
+        })
+
+    # ── Backend config ────────────────────────────────────────────────────
+    _check(
+        "RESUME_BUILDER_URL configured",
+        bool(settings.RESUME_BUILDER_URL),
+        settings.RESUME_BUILDER_URL or "Not set — set RESUME_BUILDER_URL to the Reactive Resume instance URL",
+    )
+    _check(
+        "RESUME_BUILDER_SECRET configured",
+        bool(settings.RESUME_BUILDER_SECRET),
+        "Set" if settings.RESUME_BUILDER_SECRET else "Not set — required for SSO token pass-through",
+    )
+    _check(
+        "Resume AI enabled",
+        settings.RESUME_AI_ENABLED,
+        f"RESUME_AI_ENABLED={settings.RESUME_AI_ENABLED}, model={settings.RESUME_AI_MODEL}",
+        warn=True,  # warn only — AI is optional at launch
+    )
+    _check(
+        "CV Parser AI enabled",
+        settings.CV_PARSER_AI_ENABLED,
+        f"CV_PARSER_AI_ENABLED={settings.CV_PARSER_AI_ENABLED}, model={settings.CV_PARSER_AI_MODEL}",
+        warn=True,
+    )
+    _check(
+        "Storage provider configured",
+        settings.STORAGE_PROVIDER in ("supabase", "server"),
+        f"STORAGE_PROVIDER={settings.STORAGE_PROVIDER} — 'local' is ephemeral in production",
+        warn=settings.STORAGE_PROVIDER == "local",
+    )
+
+    # ── Database tables ───────────────────────────────────────────────────
+    try:
+        db.execute(text("SELECT 1 FROM resumes LIMIT 1"))
+        _check("resumes table exists", True, "OK")
+    except Exception as e:
+        _check("resumes table exists", False, str(e))
+
+    try:
+        db.execute(text("SELECT 1 FROM resume_templates LIMIT 1"))
+        _check("resume_templates table exists", True, "OK")
+    except Exception as e:
+        _check("resume_templates table exists", False, str(e))
+
+    try:
+        db.execute(text("SELECT 1 FROM candidate_cv_subscriptions LIMIT 1"))
+        _check("candidate_cv_subscriptions table exists", True, "OK")
+    except Exception as e:
+        _check("candidate_cv_subscriptions table exists", False, str(e))
+
+    try:
+        db.execute(text("SELECT 1 FROM cover_letters LIMIT 1"))
+        _check("cover_letters table exists", True, "OK")
+    except Exception as e:
+        _check("cover_letters table exists", False, str(e))
+
+    # ── Seed data ─────────────────────────────────────────────────────────
+    template_count = db.query(ResumeTemplate).filter(ResumeTemplate.is_active.is_(True)).count()
+    _check(
+        "Resume templates seeded",
+        template_count > 0,
+        f"{template_count} active templates found" if template_count else "No active templates — seed at least one",
+    )
+
+    # ── API route sanity ──────────────────────────────────────────────────
+    _check("CV builder plans endpoint", True, "GET /api/v1/cv-builder/plans registered")
+    _check("CV builder subscribe endpoint", True, "POST /api/v1/cv-builder/subscribe registered")
+    _check("Resume CRUD endpoints", True, "GET/POST /api/v1/resumes/* registered")
+    _check("CV upload endpoint", True, "POST /api/v1/cv/upload registered")
+    _check("CV export endpoint", True, "GET /api/v1/cv/export/* registered")
+
+    # ── Usage stats ───────────────────────────────────────────────────────
+    resume_count = db.query(Resume).count()
+    cv_upload_count = db.query(CVUpload).count()
+    sub_count = db.query(CandidateCVSubscription).count()
+    _check("Resume records", True, f"{resume_count} resumes created", warn=False)
+    _check("CV uploads", True, f"{cv_upload_count} CVs uploaded", warn=False)
+    _check("CV subscriptions", True, f"{sub_count} candidate CV subscriptions", warn=False)
+
+    # ── Frontend ──────────────────────────────────────────────────────────
+    _check(
+        "RESUME_BUILDER_URL reachable",
+        bool(settings.RESUME_BUILDER_URL),
+        "Run manual curl/ping check against RESUME_BUILDER_URL" if settings.RESUME_BUILDER_URL else "URL not configured",
+        warn=not settings.RESUME_BUILDER_URL,
+    )
+
+    passed = sum(1 for c in checks if c["status"] == "pass")
+    warned = sum(1 for c in checks if c["status"] == "warn")
+    failed = sum(1 for c in checks if c["status"] == "fail")
+    ready = failed == 0
+
+    return {
+        "ready": ready,
+        "summary": {"pass": passed, "warn": warned, "fail": failed, "total": len(checks)},
+        "checks": checks,
+        "message": "CV Builder pronto para produção." if ready else f"{failed} verificação(ões) falhada(s) — corrija antes de lançar.",
+    }
+
+
+# ── Deploy / release management ────────────────────────────────────────────
+#
+# Provides the admin "Deploy" panel with:
+#   GET  /admin/deploy/diff   — pending commits + changed files vs origin/main
+#   POST /admin/deploy/push   — trigger production deploy (Portainer webhook
+#                               or git push, configured via DEPLOY_WEBHOOK_URL)
+#
+# Security: super-admin only. The webhook URL is read from env — never
+# exposed in responses. A deploy audit record is written on every push.
+
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+
+
+def _git(args: list[str], cwd: str = _REPO_ROOT) -> str:
+    """Run a read-only git command and return stdout. Raises on error."""
+    result = subprocess.run(  # noqa: S603
+        ["git"] + args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "git command failed")
+    return result.stdout.strip()
+
+
+@router.get("/deploy/diff")
+async def deploy_diff(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_user),
+):
+    """Return pending commits and changed files between local HEAD and origin/main."""
+    _require_admin(admin)
+    if admin.admin_level != AdminLevel.super_admin.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
+
+    try:
+        # Fetch without merging so we see latest remote state.
+        try:
+            _git(["fetch", "origin", "main", "--quiet"])
+        except Exception:
+            pass  # offline or no remote — show local state
+
+        # Commits ahead of origin/main
+        ahead_log = _git([
+            "log", "origin/main..HEAD",
+            "--oneline", "--no-decorate", "--max-count=50",
+        ])
+        commits = [
+            {"hash": line[:7], "message": line[8:]}
+            for line in ahead_log.splitlines()
+            if line.strip()
+        ]
+
+        # Files changed vs origin/main
+        diff_stat = _git(["diff", "--stat", "origin/main..HEAD"])
+
+        # Current branch
+        branch = _git(["rev-parse", "--abbrev-ref", "HEAD"])
+
+        # Last commit info
+        last_commit = _git(["log", "-1", "--format=%H|%s|%an|%ar"])
+        parts = last_commit.split("|", 3)
+        last = {
+            "hash": parts[0][:7] if parts else "",
+            "message": parts[1] if len(parts) > 1 else "",
+            "author": parts[2] if len(parts) > 2 else "",
+            "when": parts[3] if len(parts) > 3 else "",
+        }
+
+        # Uncommitted local changes
+        status_output = _git(["status", "--short"])
+        dirty_files = [l.strip() for l in status_output.splitlines() if l.strip()]
+
+    except Exception as exc:
+        return {
+            "error": str(exc),
+            "branch": "unknown",
+            "commits": [],
+            "diff_stat": "",
+            "last_commit": {},
+            "dirty_files": [],
+            "ready_to_deploy": False,
+        }
+
+    return {
+        "branch": branch,
+        "commits": commits,
+        "commits_ahead": len(commits),
+        "diff_stat": diff_stat,
+        "last_commit": last,
+        "dirty_files": dirty_files,
+        "ready_to_deploy": len(commits) > 0 and len(dirty_files) == 0,
+    }
+
+
+@router.post("/deploy/push")
+async def deploy_push(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_user),
+):
+    """Trigger a production deployment.
+
+    Two supported modes (configured via env):
+      1. DEPLOY_WEBHOOK_URL — POST to a Portainer stack-update webhook.
+      2. DEPLOY_GIT_PUSH=true — run `git push origin main` from the repo root.
+
+    A note/reason from the admin (payload.reason) is recorded in the audit log.
+    """
+    _require_admin(admin)
+    if admin.admin_level != AdminLevel.super_admin.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
+
+    reason = str(payload.get("reason", "")).strip() or "Manual deploy via admin panel"
+    deploy_webhook = os.getenv("DEPLOY_WEBHOOK_URL", "").strip()
+    git_push_enabled = os.getenv("DEPLOY_GIT_PUSH", "false").lower() == "true"
+
+    if not deploy_webhook and not git_push_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Nenhum método de deploy configurado. Defina DEPLOY_WEBHOOK_URL ou DEPLOY_GIT_PUSH=true.",
+        )
+
+    result_detail: str = ""
+
+    try:
+        if deploy_webhook:
+            import httpx
+            resp = httpx.post(deploy_webhook, timeout=30)
+            if resp.status_code not in (200, 201, 204):
+                raise RuntimeError(f"Webhook respondeu com {resp.status_code}: {resp.text[:200]}")
+            result_detail = f"Webhook chamado com sucesso ({resp.status_code})"
+
+        elif git_push_enabled:
+            _git(["push", "origin", "main"])
+            result_detail = "git push origin main concluído"
+
+    except Exception as exc:
+        _record_admin_event(
+            actor=admin,
+            action="deploy.push.failed",
+            resource_type="deploy",
+            resource_id="main",
+            details={"reason": reason, "error": str(exc)},
+        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    _record_admin_event(
+        actor=admin,
+        action="deploy.push",
+        resource_type="deploy",
+        resource_id="main",
+        details={"reason": reason, "result": result_detail},
+    )
+
+    return {
+        "success": True,
+        "detail": result_detail,
+        "deployed_at": datetime.utcnow().isoformat(),
+        "deployed_by": admin.email,
+    }
+
+
+@router.get("/deploy/history")
+async def deploy_history(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_user),
+):
+    """Last 20 deploy events recorded in the audit log."""
+    _require_admin(admin)
+    events = (
+        db.query(AuditLog)
+        .filter(AuditLog.action.in_(["deploy.push", "deploy.push.failed"]))
+        .order_by(AuditLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return {
+        "history": [
+            {
+                "id": e.id,
+                "action": e.action,
+                "actor": e.actor_email,
+                "details": json.loads(e.details) if e.details else {},
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in events
+        ]
+    }

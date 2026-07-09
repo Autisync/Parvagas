@@ -1,39 +1,161 @@
-# Traefik dynamic config for Parvagas (FILE provider — Traefik ignores labels).
+# Traefik dynamic config for Parvagas (FILE provider — fallback when Docker
+# labels are not used or the Docker provider is disabled on Traefik).
 #
 # DEPLOY: copy onto the server as /home/autisync/infra/traefik/dynamic/parvagas.yml
 # Traefik watches that folder (watch: true) and reloads automatically.
 #
-# Routes (both backed by the parvagas-backend stack on the "proxy" network):
-#   api.parvagas.pt     -> backend FastAPI  (alias parvagas-backend-api:8000)
-#   storage.parvagas.pt -> MinIO S3 API     (alias parvagas-storage:9000)
+# ┌──────────────────────────────────────────────────────────────────────────────────┐
+# │  ENVIRONMENT    DOMAIN                    SERVICE                      PORT      │
+# ├──────────────────────────────────────────────────────────────────────────────────┤
+# │  Production     parvagas.pt               Next.js frontend    (CDN/Vercel)       │
+# │  Production     api.parvagas.pt           FastAPI REST API                8000   │
+# │  Production     api.parvagas.pt/ws        WebSocket Service               8001   │
+# │  Production     cv.parvagas.pt            CV Builder                      3000   │
+# │  Production     storage.parvagas.pt       MinIO S3                        9000   │
+# ├──────────────────────────────────────────────────────────────────────────────────┤
+# │  Development    dev.parvagas.pt           Next.js dev frontend (CDN/Vercel)     │
+# │  Development    dev-api.parvagas.pt       Dev REST API                   8000   │
+# │  Development    dev-api.parvagas.pt/ws    Dev WebSocket                  8001   │
+# │  Development    dev-cv.parvagas.pt        Dev CV Builder                 3000   │
+# │  Development    dev-storage.parvagas.pt   Dev MinIO                      9000   │
+# └──────────────────────────────────────────────────────────────────────────────────┘
 #
-# Prereqs: Cloudflare A records for api.parvagas.pt and storage.parvagas.pt -> server.
+# DNS: Cloudflare A records — all hosts point to the same server IP (wildcard).
+#   Production: *.parvagas.pt
+#   Development: dev-*.parvagas.pt
 
 http:
   routers:
+    # ──────────────────────────────────────────────────────────────────────────────
+    # PRODUCTION ROUTERS
+    # ──────────────────────────────────────────────────────────────────────────────
+
     parvagas-api:
-      rule: "Host(`api.parvagas.pt`)"
-      entryPoints:
-        - websecure
+      rule: "Host(`api.parvagas.pt`) && PathPrefix(`/api`)"
+      entryPoints: [websecure]
       service: parvagas-api
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - strip-api-prefix
+
+    parvagas-websocket:
+      rule: "Host(`api.parvagas.pt`) && Path(`/ws`)"
+      entryPoints: [websecure]
+      service: parvagas-websocket
+      tls:
+        certResolver: letsencrypt
+
+    parvagas-cv:
+      rule: "Host(`cv.parvagas.pt`)"
+      entryPoints: [websecure]
+      service: parvagas-cv
       tls:
         certResolver: letsencrypt
 
     parvagas-storage:
       rule: "Host(`storage.parvagas.pt`)"
-      entryPoints:
-        - websecure
+      entryPoints: [websecure]
       service: parvagas-storage
       tls:
         certResolver: letsencrypt
 
+    # ──────────────────────────────────────────────────────────────────────────────
+    # DEVELOPMENT ROUTERS (dev-* subdomains)
+    # ──────────────────────────────────────────────────────────────────────────────
+
+    dev-parvagas-api:
+      rule: "Host(`dev-api.parvagas.pt`) && PathPrefix(`/api`)"
+      entryPoints: [websecure]
+      service: dev-parvagas-api
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - strip-api-prefix
+
+    dev-parvagas-websocket:
+      rule: "Host(`dev-api.parvagas.pt`) && Path(`/ws`)"
+      entryPoints: [websecure]
+      service: dev-parvagas-websocket
+      tls:
+        certResolver: letsencrypt
+
+    dev-parvagas-cv:
+      rule: "Host(`dev-cv.parvagas.pt`)"
+      entryPoints: [websecure]
+      service: dev-parvagas-cv
+      tls:
+        certResolver: letsencrypt
+
+    dev-parvagas-storage:
+      rule: "Host(`dev-storage.parvagas.pt`)"
+      entryPoints: [websecure]
+      service: dev-parvagas-storage
+      tls:
+        certResolver: letsencrypt
+
   services:
+    # ──────────────────────────────────────────────────────────────────────────────
+    # PRODUCTION SERVICES
+    # ──────────────────────────────────────────────────────────────────────────────
+
     parvagas-api:
       loadBalancer:
         servers:
-          - url: "http://parvagas-backend-api:8000"
+          - url: "http://parvagas-backend-python:8000"
+
+    parvagas-websocket:
+      loadBalancer:
+        servers:
+          - url: "http://parvagas-websocket-service:8001"
+        sticky:
+          cookie:
+            name: "WSID"
+            secure: true
+            httpOnly: true
+
+    parvagas-cv:
+      loadBalancer:
+        servers:
+          - url: "http://parvagas-cv:3000"
 
     parvagas-storage:
       loadBalancer:
         servers:
-          - url: "http://parvagas-storage:9000"
+          - url: "http://parvagas-minio:9000"
+
+    # ──────────────────────────────────────────────────────────────────────────────
+    # DEVELOPMENT SERVICES
+    # ──────────────────────────────────────────────────────────────────────────────
+
+    dev-parvagas-api:
+      loadBalancer:
+        servers:
+          - url: "http://dev-parvagas-backend-python:8000"
+
+    dev-parvagas-websocket:
+      loadBalancer:
+        servers:
+          - url: "http://dev-parvagas-websocket-service:8001"
+        sticky:
+          cookie:
+            name: "DEV_WSID"
+            secure: true
+            httpOnly: true
+
+    dev-parvagas-cv:
+      loadBalancer:
+        servers:
+          - url: "http://dev-parvagas-cv:3000"
+
+    dev-parvagas-storage:
+      loadBalancer:
+        servers:
+          - url: "http://dev-parvagas-minio:9000"
+
+  middlewares:
+    strip-api-prefix:
+      stripPrefix:
+        prefixes:
+          - /api
+        forceSlash: false

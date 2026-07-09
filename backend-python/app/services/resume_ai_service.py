@@ -66,6 +66,33 @@ class ResumeAIService:
         )
 
     @staticmethod
+    def _ollama_enabled() -> bool:
+        return (
+            settings.OLLAMA_FREE_TIER_ENABLED
+            and bool(settings.OLLAMA_BASE_URL.strip())
+            and bool(settings.OLLAMA_MODEL.strip())
+        )
+
+    @staticmethod
+    def _call_ollama(prompt: str) -> dict[str, Any]:
+        """Call Ollama /api/chat (OpenAI-compatible endpoint) for free-tier users."""
+        url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
+        body = {
+            "model": settings.OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": "You are a resume optimization assistant. Always respond with valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+            "format": "json",
+        }
+        resp = httpx.post(url, json=body, timeout=settings.OLLAMA_TIMEOUT_SECONDS)
+        resp.raise_for_status()
+        data = resp.json()
+        content = data.get("message", {}).get("content", "{}")
+        return json.loads(content)
+
+    @staticmethod
     def _request_parts(prompt: str) -> tuple[str, dict[str, str], dict[str, Any]]:
         provider = ResumeAIService._ai_provider()
         base_url = settings.RESUME_AI_BASE_URL.rstrip("/")
@@ -133,8 +160,9 @@ class ResumeAIService:
             return None
 
     @staticmethod
-    def score_resume(resume: Resume, profile: CandidateProfile | None) -> dict[str, Any]:
-        if ResumeAIService._ai_enabled():
+    def score_resume(resume: Resume, profile: CandidateProfile | None, use_free_tier: bool = False) -> dict[str, Any]:
+        # Cloud AI — paid subscribers (RESUME_AI_ENABLED + API key)
+        if ResumeAIService._ai_enabled() and not use_free_tier:
             ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
             ai_result = ResumeAIService._call_ai(ai_prompt)
             if ai_result:
@@ -145,14 +173,33 @@ class ResumeAIService:
                     "formatting_score": float(ai_result.get("formatting_score", 0.0)),
                     "ats_score": float(ai_result.get("ats_score", 0.0)),
                     "metadata": ai_result.get("metadata", {}),
-                    "source": "ai",
+                    "source": "ai_cloud",
                 }
+
+        # Ollama — free tier (self-hosted LLM, limited but functional)
+        if ResumeAIService._ollama_enabled():
+            try:
+                ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
+                ai_result = ResumeAIService._call_ollama(ai_prompt)
+                if ai_result:
+                    return {
+                        "overall_score": float(ai_result.get("overall_score", 0.0)),
+                        "skills_score": float(ai_result.get("skills_score", 0.0)),
+                        "experience_score": float(ai_result.get("experience_score", 0.0)),
+                        "formatting_score": float(ai_result.get("formatting_score", 0.0)),
+                        "ats_score": float(ai_result.get("ats_score", 0.0)),
+                        "metadata": ai_result.get("metadata", {}),
+                        "source": "ai_ollama",
+                    }
+            except Exception:
+                pass  # fall through to heuristic
 
         return ResumeAIService._heuristic_score(resume, profile)
 
     @staticmethod
-    def rewrite_resume(resume: Resume, profile: CandidateProfile | None, tone: str, instructions: str | None) -> dict[str, Any]:
-        if ResumeAIService._ai_enabled():
+    def rewrite_resume(resume: Resume, profile: CandidateProfile | None, tone: str, instructions: str | None, use_free_tier: bool = False) -> dict[str, Any]:
+        # Cloud AI — paid subscribers
+        if ResumeAIService._ai_enabled() and not use_free_tier:
             prompt = ResumeAIService._build_ai_prompt_for_rewrite(resume, profile, tone, instructions)
             ai_result = ResumeAIService._call_ai(prompt)
             if ai_result:
@@ -160,8 +207,23 @@ class ResumeAIService:
                     "title": str(ai_result.get("title", resume.title)).strip() or resume.title,
                     "summary": str(ai_result.get("summary", resume.summary or "")).strip(),
                     "notes": str(ai_result.get("notes", "AI rewrite completed.")),
-                    "source": "ai",
+                    "source": "ai_cloud",
                 }
+
+        # Ollama — free tier
+        if ResumeAIService._ollama_enabled():
+            try:
+                prompt = ResumeAIService._build_ai_prompt_for_rewrite(resume, profile, tone, instructions)
+                ai_result = ResumeAIService._call_ollama(prompt)
+                if ai_result:
+                    return {
+                        "title": str(ai_result.get("title", resume.title)).strip() or resume.title,
+                        "summary": str(ai_result.get("summary", resume.summary or "")).strip(),
+                        "notes": str(ai_result.get("notes", "Rewrite via Ollama (free tier).")),
+                        "source": "ai_ollama",
+                    }
+            except Exception:
+                pass
 
         return {
             "title": resume.title,

@@ -3,11 +3,26 @@
 #
 # Runs everything on your server: Postgres + Redis + MinIO (object storage) +
 # FastAPI backend + Celery worker/beat + a nightly Postgres backup.
-# No Supabase. The frontend stays hosted separately (parvagas.pt).
+# No Supabase. The frontend stays hosted separately.
 #
-# Routed via your Traefik FILE provider (deploy/traefik/dynamic/parvagas.yml):
-#   api.parvagas.pt     -> backend  (network alias: parvagas-backend-api:8000)
-#   storage.parvagas.pt -> minio    (network alias: parvagas-storage:9000)
+# Frontend Deployment Options:
+#   a) Vercel (recommended):  https://parvagas.vercel.app
+#      • Set FRONTEND_URL=https://parvagas.vercel.app
+#      • Set CORS_ORIGIN=https://parvagas.vercel.app,https://parvagas.pt
+#      • Deploy Vercel environment variables (see VERCEL_DOCKER_SETUP.md)
+#   
+#   b) Self-hosted on same server: https://parvagas.pt
+#      • Set FRONTEND_URL=https://parvagas.pt
+#      • Set CORS_ORIGIN=https://parvagas.pt,https://www.parvagas.pt
+#
+# Routing: Traefik Docker-label provider (preferred).
+#   api.parvagas.pt      → backend-python :8000
+#   cv.parvagas.pt       → cv-builder :3000
+#   storage.parvagas.pt  → minio :9000
+#
+# The legacy FILE provider config (deploy/traefik/dynamic/parvagas.yml) still
+# works as a fallback — labels take precedence when the Docker provider is
+# enabled on your Traefik instance.
 #
 # All ${VARS} come from Portainer's stack "Environment variables" (paste .env.prod).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -21,7 +36,7 @@ x-backend-env: &backend-env
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
   ADMIN_SIGNUP_KEY: ${ADMIN_SIGNUP_KEY}
   MODERATOR_SIGNUP_KEY: ${MODERATOR_SIGNUP_KEY:-}
-  SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@autisync.com}
+  SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@parvagas.pt}
   # Public URLs / CORS
   FRONTEND_URL: ${FRONTEND_URL:-https://parvagas.pt}
   CORS_ORIGIN: ${CORS_ORIGIN:-https://parvagas.pt,https://www.parvagas.pt}
@@ -62,6 +77,14 @@ x-backend-env: &backend-env
   UPLOAD_DIR: /app/uploads
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
   WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+  # CV Builder + Ollama
+  RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
+  RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET}
+  CV_HOST: ${CV_HOST:-cv.parvagas.pt}
+  # Ollama (free-tier AI)
+  OLLAMA_BASE_URL: http://ollama:11434
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+  OLLAMA_FREE_TIER_ENABLED: ${OLLAMA_FREE_TIER_ENABLED:-true}
   # Default "*" disables TrustedHostMiddleware. The app sits behind Cloudflare +
   # Traefik, which already enforce host-based routing, and the container
   # healthcheck calls in via Host: localhost. Restricting this to a single host
@@ -112,6 +135,15 @@ services:
       traefik-net:
         aliases:
           - parvagas-storage
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
+      - traefik.http.routers.parvagas-storage.rule=Host(`${STORAGE_HOST:-storage.parvagas.pt}`)
+      - traefik.http.routers.parvagas-storage.entrypoints=websecure
+      - traefik.http.routers.parvagas-storage.tls=true
+      - traefik.http.routers.parvagas-storage.tls.certresolver=letsencrypt
+      - traefik.http.routers.parvagas-storage.service=parvagas-storage-svc
+      - traefik.http.services.parvagas-storage-svc.loadbalancer.server.port=9000
 
   # One-shot: create the bucket on first boot (idempotent), then exit.
   minio-init:
@@ -135,6 +167,7 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
+      target: api-service
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
@@ -148,11 +181,56 @@ services:
       traefik-net:
         aliases:
           - parvagas-backend-api
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
+      - traefik.http.routers.parvagas-backend.rule=Host(`${API_HOST:-api.parvagas.pt}`)
+      - traefik.http.routers.parvagas-backend.entrypoints=websecure
+      - traefik.http.routers.parvagas-backend.tls=true
+      - traefik.http.routers.parvagas-backend.tls.certresolver=letsencrypt
+      - traefik.http.routers.parvagas-backend.service=parvagas-backend-svc
+      - traefik.http.services.parvagas-backend-svc.loadbalancer.server.port=8000
     volumes:
       - python_uploads:/app/uploads
       - python_logs:/app/logs
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── WebSocket Service (Real-time updates — /ws endpoint) ────────────────
+  websocket-service:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+      target: websocket-service
+    container_name: parvagas-websocket
+    restart: unless-stopped
+    user: "0:0"
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      default: {}
+      traefik-net:
+        aliases:
+          - parvagas-websocket
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
+      - traefik.http.routers.parvagas-ws.rule=Host(`${API_HOST:-api.parvagas.pt}`) && PathPrefix(`/ws`)
+      - traefik.http.routers.parvagas-ws.entrypoints=websecure
+      - traefik.http.routers.parvagas-ws.tls=true
+      - traefik.http.routers.parvagas-ws.tls.certresolver=letsencrypt
+      - traefik.http.routers.parvagas-ws.service=parvagas-ws-svc
+      - traefik.http.services.parvagas-ws-svc.loadbalancer.server.port=8001
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -224,6 +302,77 @@ services:
       redis:
         condition: service_healthy
 
+  # ── CV Builder (Reactive Resume — cv.parvagas.pt) ─────────────────────────
+  cv-builder:
+    build:
+      context: ./reactive-resume
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
+      AUTH_SECRET: ${RESUME_BUILDER_SECRET}
+      STORAGE_PROVIDER: minio
+      STORAGE_ENDPOINT: minio
+      STORAGE_PORT: "9000"
+      STORAGE_REGION: ${S3_REGION:-us-east-1}
+      STORAGE_BUCKET: reactive-resume
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      STORAGE_USE_SSL: "false"
+      STORAGE_SKIP_BUCKET_CHECK: "false"
+      STORAGE_URL_PREFIX: ${S3_ENDPOINT_URL:-https://storage.parvagas.pt}/reactive-resume
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parvagas}
+      ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET}
+      REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET}}
+      PUBLIC_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
+      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder"
+      NEXT_PUBLIC_APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
+      MAIL_FROM: ${SMTP_FROM:-noreply@parvagas.pt}
+      SMTP_URL: smtp://${SMTP_USER:-}:${SMTP_PASS:-}@${SMTP_HOST}:${SMTP_PORT:-587}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      default: {}
+      traefik-net:
+        aliases:
+          - parvagas-cv
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
+      - traefik.http.routers.parvagas-cv.rule=Host(`${CV_HOST:-cv.parvagas.pt}`)
+      - traefik.http.routers.parvagas-cv.entrypoints=websecure
+      - traefik.http.routers.parvagas-cv.tls=true
+      - traefik.http.routers.parvagas-cv.tls.certresolver=letsencrypt
+      - traefik.http.routers.parvagas-cv.service=parvagas-cv-svc
+      - traefik.http.services.parvagas-cv-svc.loadbalancer.server.port=3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
+      start_period: 40s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Ollama (free-tier AI for CV builder — no subscription required) ────────
+  # Powers the embedded CV assistant on parvagas.pt for free/limited-tier users.
+  # Paid subscribers use the cloud AI (RESUME_AI_ENABLED=true + API key).
+  # Pull model after first deploy: docker exec parvagas-ollama-1 ollama pull qwen2.5:3b
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    mem_limit: ${OLLAMA_MEM_LIMIT:-4g}
+    cpus: "${OLLAMA_CPUS:-2.0}"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   # Nightly Postgres backups (your durability safety net). Dumps to the pg_backups
   # volume; keeps 7 daily / 4 weekly / 6 monthly. Copy them off-server periodically.
   pg-backup:
@@ -257,3 +406,4 @@ volumes:
   python_uploads:
   python_logs:
   pg_backups:
+  ollama_data:

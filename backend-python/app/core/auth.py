@@ -53,6 +53,24 @@ def validate_token(token: str) -> tuple[dict[str, Any] | None, str | None]:
     return claims, None
 
 
+def verify_token(token: str) -> dict[str, Any]:
+    """Verify a JWT token and return claims, raising an exception if invalid.
+    
+    Args:
+        token: JWT token string
+        
+    Returns:
+        Token claims dictionary
+        
+    Raises:
+        ValueError: If token is invalid or expired
+    """
+    claims, error = validate_token(token)
+    if error or not claims:
+        raise ValueError(f"Token validation failed: {error or 'Unknown error'}")
+    return claims
+
+
 def _validate_auth0_token(token: str) -> dict[str, Any]:
     """Validate Auth0 JWT using JWKS signature and standard claims checks."""
     domain = (settings.AUTH0_DOMAIN or "").strip()

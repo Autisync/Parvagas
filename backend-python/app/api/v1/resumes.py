@@ -35,6 +35,7 @@ from app.schemas import (
     ResumeUpdateRequest,
 )
 from app.services.resume_ai_service import ResumeAIService
+from app.models import CandidateCVSubscription
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -242,7 +243,14 @@ async def score_resume(
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
-    score_data = ResumeAIService.score_resume(resume, profile)
+    # Free-tier candidates get Ollama; paid get cloud AI.
+    _cv_sub = (db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id,
+                CandidateCVSubscription.status == "active")
+        .order_by(CandidateCVSubscription.created_at.desc()).first())
+    use_free_tier = not _cv_sub or _cv_sub.plan_tier == "free"
+
+    score_data = ResumeAIService.score_resume(resume, profile, use_free_tier=use_free_tier)
     _save_resume_score(db, profile, resume, score_data)
 
     return ResumeScoreResponse(
@@ -267,7 +275,14 @@ async def rewrite_resume(
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
-    rewrite_result = ResumeAIService.rewrite_resume(resume, profile, payload.tone or "professional", payload.instructions)
+    # Free-tier candidates get Ollama (limited); paid get cloud AI (full rewrite).
+    _cv_sub2 = (db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id,
+                CandidateCVSubscription.status == "active")
+        .order_by(CandidateCVSubscription.created_at.desc()).first())
+    use_free_tier = not _cv_sub2 or _cv_sub2.plan_tier == "free"
+
+    rewrite_result = ResumeAIService.rewrite_resume(resume, profile, payload.tone or "professional", payload.instructions, use_free_tier=use_free_tier)
     notes = rewrite_result.get("notes", "Resume rewrite completed.")
 
     _create_resume_version(db, resume, current_user.id, notes)

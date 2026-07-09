@@ -17,7 +17,10 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.api.deps import get_current_user
-from app.models import Company, Plan, Subscription, Transaction, User, UserRole
+from app.models import (
+    CandidateCVSubscription, CandidateProfile,
+    Company, Plan, Subscription, Transaction, User, UserRole,
+)
 from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
 
@@ -188,3 +191,204 @@ async def confirm_payment(reference: str, db: Session = Depends(get_db), current
     if tx.status == "paid":
         return {"transaction": {"_id": tx.id, "reference": reference, "status": "paid"}, "activated": True}
     return _activate(db, tx)
+
+
+# ── Candidate CV Builder subscription ──────────────────────────────────────
+#
+# Three tiers (AOA pricing for Angola market):
+#   free     – 1 resume, basic templates, no AI
+#   pro      – 3 resumes, all templates, AI score, PDF export  (15 000 AOA/month)
+#   premium  – Unlimited resumes, AI rewrite, cover letters,   (30 000 AOA/month)
+#              auto-apply queue, priority support
+#
+# Payment flow mirrors the company subscription flow (manual → bank reference →
+# admin/webhook confirms → subscription activates).
+
+_CV_BUILDER_PLANS = [
+    {
+        "tier": "free", "name": "CV Grátis", "price": 0, "interval": "month",
+        "features": ["1 CV", "Modelos básicos", "Download PDF"],
+        "limits": {"max_resumes": 1, "ai_score": False, "ai_rewrite": False,
+                   "cover_letters": False, "auto_apply": False},
+    },
+    {
+        "tier": "pro", "name": "CV Pro", "price": 15000, "interval": "month",
+        "features": ["3 CVs", "Todos os modelos", "Pontuação ATS por IA",
+                     "Export PDF e DOCX", "Carta de apresentação"],
+        "limits": {"max_resumes": 3, "ai_score": True, "ai_rewrite": False,
+                   "cover_letters": True, "auto_apply": False},
+    },
+    {
+        "tier": "premium", "name": "CV Premium", "price": 30000, "interval": "month",
+        "features": ["CVs ilimitados", "IA rewrite completo", "Fila auto-candidatura",
+                     "Suporte prioritário", "Todas as funcionalidades Pro"],
+        "limits": {"max_resumes": -1, "ai_score": True, "ai_rewrite": True,
+                   "cover_letters": True, "auto_apply": True},
+    },
+]
+
+
+@router.get("/cv-builder/plans")
+async def list_cv_builder_plans():
+    """Public CV Builder plan catalogue."""
+    return {"plans": _CV_BUILDER_PLANS}
+
+
+@router.get("/cv-builder/subscription")
+async def my_cv_builder_subscription(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the candidate's current CV builder subscription tier."""
+    profile = db.query(CandidateProfile).filter(
+        CandidateProfile.user_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de candidato não encontrado")
+
+    sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id)
+        .order_by(CandidateCVSubscription.created_at.desc())
+        .first()
+    )
+
+    # Default to free if no subscription record yet.
+    tier = sub.plan_tier if sub and sub.status == "active" else "free"
+    plan_info = next((p for p in _CV_BUILDER_PLANS if p["tier"] == tier), _CV_BUILDER_PLANS[0])
+
+    return {
+        "subscription": {
+            "_id": sub.id if sub else None,
+            "status": sub.status if sub else "active",
+            "tier": tier,
+            "plan": plan_info,
+            "currentPeriodEnd": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
+        }
+    }
+
+
+@router.post("/cv-builder/subscribe")
+async def subscribe_cv_builder(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Subscribe a candidate to a CV Builder plan.
+
+    Free tier activates immediately. Paid tiers follow the manual payment-reference
+    flow used by company subscriptions.
+    """
+    tier = str(payload.get("tier", "free")).strip().lower()
+    plan_info = next((p for p in _CV_BUILDER_PLANS if p["tier"] == tier), None)
+    if not plan_info:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plano inválido")
+
+    profile = db.query(CandidateProfile).filter(
+        CandidateProfile.user_id == current_user.id
+    ).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de candidato não encontrado")
+
+    provider = str(payload.get("provider", "manual")).strip().lower()
+    if provider not in {"manual", "multicaixa", "unitel_money", "bank"}:
+        provider = "manual"
+
+    reference = f"PVCV-{uuid.uuid4().hex[:8].upper()}"
+
+    # Cancel any existing active/pending subscription for this candidate.
+    existing = (
+        db.query(CandidateCVSubscription)
+        .filter(
+            CandidateCVSubscription.candidate_profile_id == profile.id,
+            CandidateCVSubscription.status.in_(["active", "pending"]),
+        )
+        .all()
+    )
+    for e in existing:
+        e.status = "cancelled"
+
+    sub = CandidateCVSubscription(
+        candidate_profile_id=profile.id,
+        plan_tier=tier,
+        status="pending" if plan_info["price"] > 0 else "active",
+        current_period_end=datetime.utcnow() + timedelta(days=30) if plan_info["price"] == 0 else None,
+        transaction_reference=reference if plan_info["price"] > 0 else None,
+    )
+    db.add(sub)
+
+    # Record a transaction for paid plans.
+    if plan_info["price"] > 0:
+        tx = Transaction(
+            amount=plan_info["price"], currency="AOA",
+            provider=provider, reference=reference, status="pending",
+            kind="subscription",
+        )
+        db.add(tx)
+
+    db.commit()
+    db.refresh(sub)
+
+    if plan_info["price"] == 0:
+        return {
+            "activated": True,
+            "subscription": {"tier": tier, "status": "active"},
+        }
+
+    # Paid: send payment instructions email.
+    try:
+        if current_user.email:
+            send_templated_email.delay("send_payment_instructions_email", {
+                "email": current_user.email,
+                "company_name": current_user.full_name,
+                "plan_name": plan_info["name"],
+                "amount": plan_info["price"],
+                "currency": "AOA",
+                "reference": reference,
+            })
+    except Exception as e:
+        logger.warning(f"Could not enqueue CV builder payment email: {e}")
+
+    instr: dict[str, Any] = {"reference": reference, "amount": plan_info["price"], "currency": "AOA"}
+    if provider == "multicaixa":
+        instr["message"] = f"Pague {plan_info['price']} AOA via Multicaixa Express — referência {reference}."
+    elif provider == "unitel_money":
+        instr["message"] = f"Pague {plan_info['price']} AOA via Unitel Money — referência {reference}."
+    else:
+        instr["message"] = f"Transfira {plan_info['price']} AOA e indique a referência {reference}."
+
+    return {
+        "activated": False,
+        "subscription": {"tier": tier, "status": "pending"},
+        "transaction": {"reference": reference, "amount": plan_info["price"], "currency": "AOA"},
+        "instructions": instr,
+    }
+
+
+@router.post("/cv-builder/confirm/{reference}")
+async def confirm_cv_builder_payment(
+    reference: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin confirms a CV builder payment — activates the candidate's subscription."""
+    if current_user.role not in (UserRole.admin, UserRole.super_admin):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso de administrador necessário")
+
+    sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.transaction_reference == reference)
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscrição não encontrada")
+
+    sub.status = "active"
+    sub.current_period_end = datetime.utcnow() + timedelta(days=30)
+
+    tx = db.query(Transaction).filter(Transaction.reference == reference).first()
+    if tx:
+        tx.status = "paid"
+
+    db.commit()
+    return {"activated": True, "tier": sub.plan_tier, "reference": reference}

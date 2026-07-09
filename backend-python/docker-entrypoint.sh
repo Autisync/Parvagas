@@ -4,8 +4,8 @@ set -e
 # Alembic is the single source of truth for schema (see docs/adr/ADR-001).
 # The root migration guards every CREATE with has_table, so it is idempotent.
 run_migrations() {
-  echo "[entrypoint] Running alembic upgrade head..."
-  alembic upgrade head
+  echo "[entrypoint] Running alembic upgrade heads..."
+  alembic upgrade heads
 }
 
 # No args → default API server path. Run migrations here (once), then serve.

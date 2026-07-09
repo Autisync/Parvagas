@@ -9,10 +9,6 @@ const CandidateSidebar = dynamic(() => import("./components/CandidateSidebar"), 
   loading: () => <div className="hidden h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block" />,
 });
 
-const CandidateSidebar = dynamic(() => import("./components/CandidateSidebar"), {
-  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
-});
-
 export default function CandidatoLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white">

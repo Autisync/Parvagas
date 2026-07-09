@@ -5,6 +5,7 @@ sentry-sdk[fastapi]==1.45.0
 sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg[binary]==3.3.4
+psycopg2-binary==2.9.9
 pydantic-settings==2.1.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4

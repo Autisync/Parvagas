@@ -359,6 +359,48 @@ export async function fetchLaunchReadiness(token: string, checkServices = false)
   return authFetch<LaunchReadinessResponse>(`/admin/launch-readiness${listQuery({ checkServices: checkServices ? "true" : undefined })}`, token);
 }
 
+// ── Deploy panel ──────────────────────────────────────────────────────────
+
+export type DeployCommit = { hash: string; message: string };
+export type DeployDiff = {
+  branch: string;
+  commits: DeployCommit[];
+  commits_ahead: number;
+  diff_stat: string;
+  last_commit: { hash: string; message: string; author: string; when: string };
+  dirty_files: string[];
+  ready_to_deploy: boolean;
+  error?: string;
+};
+export type DeployResult = {
+  success: boolean;
+  detail: string;
+  deployed_at: string;
+  deployed_by: string;
+};
+export type DeployHistoryItem = {
+  id: string;
+  action: string;
+  actor: string;
+  details: { reason?: string; result?: string; error?: string };
+  created_at: string;
+};
+
+export async function fetchDeployDiff(token: string) {
+  return authFetch<DeployDiff>("/admin/deploy/diff", token);
+}
+
+export async function triggerDeploy(token: string, reason: string) {
+  return authFetch<DeployResult>("/admin/deploy/push", token, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function fetchDeployHistory(token: string) {
+  return authFetch<{ history: DeployHistoryItem[] }>("/admin/deploy/history", token);
+}
+
 export function statusBadgeClass(status: string) {
   const s = String(status || "").toLowerCase();
   if (s === "super-admin") return "bg-red-100 text-red-800 border-red-200";

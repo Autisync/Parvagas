@@ -11,6 +11,7 @@ import {
   HomeIcon, ChartBarIcon, BriefcaseIcon, BuildingOffice2Icon,
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
   ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
+  RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -30,6 +31,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/admin-levels", label: "Super-admin",    hint: "Admins e moderadores",   levels: ["super-admin"],             icon: <ShieldCheckIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/audit",        label: "Auditoria",      hint: "Ações privilegiadas",    levels: ["super-admin"],             icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/exports",      label: "Exportações CSV",hint: "Dados operacionais",     levels: ["super-admin"],             icon: <CloudArrowDownIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/deploy",       label: "Deploy",         hint: "Lançar para produção",   levels: ["super-admin"],             icon: <RocketLaunchIcon className="h-5 w-5" /> },
 ];
 
 export default function AdminSidebar({

@@ -58,6 +58,7 @@ public/uploads/
 
 # vercel
 .vercel
+.pnpm-store/
 
 # typescript
 *.tsbuildinfo

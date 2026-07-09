@@ -316,18 +316,6 @@ class RefreshToken(Base, TimestampMixin):
 
     user = relationship("User")
 
-
-class AuditLog(Base, TimestampMixin):
-    """Audit trail records for RBAC and admin actions."""
-    __tablename__ = "audit_logs"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    action = Column(String(150), nullable=False)
-    entity_type = Column(String(100), nullable=True)
-    entity_id = Column(String(36), nullable=True)
-    details = Column(Text, nullable=True)
-
     user = relationship("User")
 
 
@@ -727,6 +715,22 @@ class Transaction(Base, TimestampMixin):
     reference = Column(String(64), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="pending")  # pending|paid|failed|cancelled
     kind = Column(String(30), nullable=False, default="subscription")  # subscription|featured|post
+
+
+class CandidateCVSubscription(Base, TimestampMixin):
+    """Candidate CV Builder subscription (free | pro | premium tiers)."""
+    __tablename__ = "candidate_cv_subscriptions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False, index=True)
+    # plan_tier: free | pro | premium
+    plan_tier = Column(String(20), nullable=False, default="free")
+    status = Column(String(20), nullable=False, default="active")  # active | expired | cancelled
+    current_period_end = Column(DateTime, nullable=True)
+    # Payment tracking (reuses Transaction.reference)
+    transaction_reference = Column(String(64), nullable=True, index=True)
+
+    candidate_profile = relationship("CandidateProfile")
 
 
 class OtpCode(Base, TimestampMixin):

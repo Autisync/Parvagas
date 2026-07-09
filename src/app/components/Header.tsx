@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
+import { RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
 import { ENABLE_I18N } from "@/config/appConfig";
 
 const Logo = "/icon2.png";
@@ -16,6 +17,8 @@ const isCurrentPath = (pathname: string, href: string) => {
   if (href === "/") return pathname === "/";
   return pathname.startsWith(href.replace(/\/$/, ""));
 };
+
+const isExternalHref = (href: string) => /^https?:\/\//.test(href);
 
 export default function Header() {
   const router = useRouter();
@@ -29,7 +32,66 @@ export default function Header() {
     { name: dict.header.jobs, href: "/Vagas-Disponiveis/" },
     { name: dict.header.companies, href: "/Empresa/" },
     { name: dict.header.career, href: "/Dicas-de-Carreira/" },
+    { name: dict.header.cvBuilder, href: RESUME_BUILDER_URL },
   ];
+
+  const renderNavigationItem = (item: { name: string; href: string }) => {
+    const active = !isExternalHref(item.href) && isCurrentPath(pathname, item.href);
+    const className = `rounded-full px-4 py-2 text-sm font-semibold transition ${
+      active
+        ? "bg-red-600 text-white shadow-md"
+        : "text-slate-700 hover:bg-red-50 hover:text-red-700"
+    }`;
+
+    if (isExternalHref(item.href)) {
+      return (
+        <a
+          key={item.name}
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={className}
+        >
+          {item.name}
+        </a>
+      );
+    }
+
+    return (
+      <Link key={item.name} href={item.href} className={className}>
+        {item.name}
+      </Link>
+    );
+  };
+
+  const renderMobileNavigationItem = (item: { name: string; href: string }) => {
+    const active = !isExternalHref(item.href) && isCurrentPath(pathname, item.href);
+    const className = `block rounded-xl px-4 py-3 text-base font-semibold transition ${
+      active
+        ? "bg-red-600 text-white"
+        : "text-slate-800 hover:bg-red-50 hover:text-red-700"
+    }`;
+
+    if (isExternalHref(item.href)) {
+      return (
+        <a
+          key={item.name}
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={className}
+        >
+          {item.name}
+        </a>
+      );
+    }
+
+    return (
+      <Link key={item.name} href={item.href} className={className}>
+        {item.name}
+      </Link>
+    );
+  };
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -111,22 +173,7 @@ export default function Header() {
               {dict.header.portalMode}
             </span>
           ) : (
-            navigation.map((item) => {
-              const active = isCurrentPath(pathname, item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    active
-                      ? "bg-red-600 text-white shadow-md"
-                      : "text-slate-700 hover:bg-red-50 hover:text-red-700"
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              );
-            })
+            navigation.map(renderNavigationItem)
           )}
         </div>
 
@@ -250,22 +297,7 @@ export default function Header() {
 
           {!isPortalPath && (
             <div className="mt-5 space-y-2">
-              {navigation.map((item) => {
-                const active = isCurrentPath(pathname, item.href);
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`block rounded-xl px-4 py-3 text-base font-semibold transition ${
-                      active
-                        ? "bg-red-600 text-white"
-                        : "text-slate-800 hover:bg-red-50 hover:text-red-700"
-                    }`}
-                  >
-                    {item.name}
-                  </Link>
-                );
-              })}
+              {navigation.map(renderMobileNavigationItem)}
             </div>
           )}
 

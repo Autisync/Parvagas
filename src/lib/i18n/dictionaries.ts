@@ -8,6 +8,7 @@ export type Dictionary = {
     jobs: string;
     companies: string;
     career: string;
+    cvBuilder: string;
     portal: string;
     submitCv: string;
     signOut: string;
@@ -21,6 +22,7 @@ export type Dictionary = {
     title: string;
     subtitle: string;
     ctaCreateProfile: string;
+    ctaCvBuilder: string;
     ctaViewJobs: string;
     onboardingTitle: string;
     onboardingDesc: string;
@@ -342,6 +344,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       jobs: "Vagas",
       companies: "Empresas",
       career: "Carreira",
+      cvBuilder: "Construtor de CV",
       portal: "Portal",
       submitCv: "Submeter CV",
       signOut: "Sair",
@@ -355,6 +358,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       title: "Talentos e Empresas no mesmo portal de recrutamento",
       subtitle: "Candidatos criam perfil a partir do CV com apoio de IA e empresas publicam vagas públicas ou privadas com controlo total.",
       ctaCreateProfile: "Criar Perfil por CV",
+      ctaCvBuilder: "Abrir Construtor de CV",
       ctaViewJobs: "Ver Vagas Disponíveis",
       onboardingTitle: "Onboarding de Candidatos",
       onboardingDesc: "Carregue CV em PDF ou DOCX, revise os dados extraídos por IA e publique o seu perfil profissional em minutos.",
@@ -670,6 +674,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       jobs: "Jobs",
       companies: "Companies",
       career: "Career",
+      cvBuilder: "CV Builder",
       portal: "Portal",
       submitCv: "Submit CV",
       signOut: "Sign out",
@@ -683,6 +688,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       title: "Talent and companies on one recruitment platform",
       subtitle: "Candidates build profiles from CVs with AI assistance, while companies publish public or private jobs with full control.",
       ctaCreateProfile: "Create Profile from CV",
+      ctaCvBuilder: "Open CV Builder",
       ctaViewJobs: "Browse Open Jobs",
       onboardingTitle: "Candidate Onboarding",
       onboardingDesc: "Upload CV in PDF or DOCX, review AI-extracted details, and publish your profile in minutes.",

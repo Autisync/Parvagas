@@ -43,11 +43,12 @@ services:
       retries: 5
       start_period: 15s
 
-  # Python Backend (New)
+  # Python Backend (New) — REST API on port 8000
   backend-python:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
+      target: api-service
     restart: unless-stopped
     user: "0:0"
     env_file:
@@ -96,6 +97,40 @@ services:
       retries: 3
       start_period: 40s
 
+  # WebSocket Service — Real-time updates on port 8001
+  websocket-service:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+      target: websocket-service
+    restart: unless-stopped
+    user: "0:0"
+    env_file:
+      - ./backend-python/.env
+      - ./.env.docker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    volumes:
+      - python_uploads:/app/uploads
+      - python_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   ollama:
     image: ollama/ollama:latest
     mem_limit: 3g
@@ -106,12 +141,52 @@ services:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
-  # Celery Worker (Python)
+
+  # CV Builder — localhost:3050 (Parvagas-branded Reactive Resume)
+  cv-builder:
+    build:
+      context: ./reactive-resume
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3050:3000"
+    environment:
+      APP_URL: http://localhost:3050
+      AUTH_SECRET: local-cv-builder-auth-secret
+      STORAGE_PROVIDER: minio
+      STORAGE_ENDPOINT: minio
+      STORAGE_PORT: "9000"
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: reactive-resume
+      STORAGE_ACCESS_KEY: minioadmin
+      STORAGE_SECRET_KEY: minioadmin
+      STORAGE_USE_SSL: "false"
+      STORAGE_SKIP_BUCKET_CHECK: "false"
+      STORAGE_URL_PREFIX: http://localhost:9000/reactive-resume
+      DATABASE_URL: postgresql://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
+      ACCESS_TOKEN_SECRET: local-cv-builder-secret
+      REFRESH_TOKEN_SECRET: local-cv-builder-refresh
+      PUBLIC_URL: http://localhost:3050
+      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Local)"
+      NEXT_PUBLIC_APP_URL: http://localhost:3050
+      MAIL_FROM: noreply@parvagas.pt
+      SMTP_URL: smtp://mailhog:1025
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - cv-builder
+
+
   celery-worker:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup,scraping
+      target: api-service
+    entrypoint: >
+      /bin/sh -c "RUN_MIGRATIONS=false exec celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup,scraping"
     restart: unless-stopped
     user: "0:0"
     env_file:
@@ -162,7 +237,9 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app beat --loglevel=info
+      target: api-service
+    entrypoint: >
+      /bin/sh -c "RUN_MIGRATIONS=false exec celery -A app.workers.celery_app beat --loglevel=info"
     restart: unless-stopped
     env_file:
       - ./backend-python/.env
@@ -235,4 +312,5 @@ volumes:
   python_uploads:
   python_logs:
   ollama-data:
+  local_cv_data:
 
