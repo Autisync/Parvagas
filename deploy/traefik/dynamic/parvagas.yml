@@ -1,46 +1,49 @@
-# Traefik dynamic config for Parvagas (FILE provider — fallback when Docker
-# labels are not used or the Docker provider is disabled on Traefik).
+# Traefik dynamic config for Parvagas (FILE provider).
 #
 # DEPLOY: copy onto the server as /home/autisync/infra/traefik/dynamic/parvagas.yml
-# Traefik watches that folder (watch: true) and reloads automatically.
+# Traefik watches that folder (watch: true) and reloads automatically — no restart.
 #
-# ┌──────────────────────────────────────────────────────────────────────────────────┐
-# │  ENVIRONMENT    DOMAIN                    SERVICE                      PORT      │
-# ├──────────────────────────────────────────────────────────────────────────────────┤
-# │  Production     parvagas.pt               Next.js frontend    (CDN/Vercel)       │
-# │  Production     api.parvagas.pt           FastAPI REST API                8000   │
-# │  Production     api.parvagas.pt/ws        WebSocket Service               8001   │
-# │  Production     cv.parvagas.pt            CV Builder                      3000   │
-# │  Production     storage.parvagas.pt       MinIO S3                        9000   │
-# ├──────────────────────────────────────────────────────────────────────────────────┤
-# │  Development    dev.parvagas.pt           Next.js dev frontend (CDN/Vercel)     │
-# │  Development    dev-api.parvagas.pt       Dev REST API                   8000   │
-# │  Development    dev-api.parvagas.pt/ws    Dev WebSocket                  8001   │
-# │  Development    dev-cv.parvagas.pt        Dev CV Builder                 3000   │
-# │  Development    dev-storage.parvagas.pt   Dev MinIO                      9000   │
-# └──────────────────────────────────────────────────────────────────────────────────┘
+# SCOPE / SAFETY: this file only defines routers+services for parvagas.pt
+# hosts. Traefik loads every *.yml in the dynamic folder independently —
+# mailcow.yml, portainer.yml, dashboard.yml, etc. are separate files and are
+# never affected by edits here. The letsencrypt certResolver lives in the
+# STATIC config (/traefik.yml), which this file only references, never defines.
 #
-# DNS: Cloudflare A records — all hosts point to the same server IP (wildcard).
-#   Production: *.parvagas.pt
-#   Development: dev-*.parvagas.pt
+# NAMING (2026-07-10 fix): every service URL below must use the network
+# alias the container actually has on the `proxy` network — declared under
+# `networks.traefik-net.aliases` in docker-compose.prod.yml / .dev.yml.
+# A previous version of this file guessed different names
+# (parvagas-backend-python, parvagas-minio, parvagas-websocket-service…),
+# none of which resolve — that was the cause of every api.parvagas.pt 502.
+#
+#   Router host              Service target                         Compose alias source
+#   api.parvagas.pt          http://parvagas-backend-api:8000       backend-python
+#   api.parvagas.pt /ws      http://parvagas-websocket:8001         websocket-service
+#   cv.parvagas.pt           http://parvagas-cv:3000                cv-builder
+#   storage.parvagas.pt      http://parvagas-storage:9000           minio
+#   dev-api.parvagas.pt      http://dev-parvagas-backend-api:8000   (docker-compose.dev.yml)
+#   dev-cv.parvagas.pt       http://dev-parvagas-cv:3000            (docker-compose.dev.yml)
+#   dev-storage.parvagas.pt  http://dev-parvagas-storage:9000       (docker-compose.dev.yml)
+#
+# The api routers use a plain Host() rule — NO PathPrefix(`/api`) and NO
+# strip-prefix middleware. FastAPI mounts its routes at /api/v1/* itself
+# (app/api/v1/router.py: APIRouter(prefix="/api/v1")) and additionally serves
+# /health and /ready at the root. Stripping /api would 404 every request;
+# scoping to PathPrefix(/api) would 404 /health. The /ws router still wins
+# for /ws because Traefik ranks routers by rule length (more specific first).
 
 http:
   routers:
-    # ──────────────────────────────────────────────────────────────────────────────
-    # PRODUCTION ROUTERS
-    # ──────────────────────────────────────────────────────────────────────────────
-
+    # ─────────────────────────── PRODUCTION ────────────────────────────
     parvagas-api:
-      rule: "Host(`api.parvagas.pt`) && PathPrefix(`/api`)"
+      rule: "Host(`api.parvagas.pt`)"
       entryPoints: [websecure]
       service: parvagas-api
       tls:
         certResolver: letsencrypt
-      middlewares:
-        - strip-api-prefix
 
     parvagas-websocket:
-      rule: "Host(`api.parvagas.pt`) && Path(`/ws`)"
+      rule: "Host(`api.parvagas.pt`) && PathPrefix(`/ws`)"
       entryPoints: [websecure]
       service: parvagas-websocket
       tls:
@@ -60,23 +63,13 @@ http:
       tls:
         certResolver: letsencrypt
 
-    # ──────────────────────────────────────────────────────────────────────────────
-    # DEVELOPMENT ROUTERS (dev-* subdomains)
-    # ──────────────────────────────────────────────────────────────────────────────
-
+    # ─────────────────────────── DEVELOPMENT ───────────────────────────
+    # (dev websocket router removed — docker-compose.dev.yml defines no
+    # websocket service, so the old router pointed at a nonexistent host.)
     dev-parvagas-api:
-      rule: "Host(`dev-api.parvagas.pt`) && PathPrefix(`/api`)"
+      rule: "Host(`dev-api.parvagas.pt`)"
       entryPoints: [websecure]
       service: dev-parvagas-api
-      tls:
-        certResolver: letsencrypt
-      middlewares:
-        - strip-api-prefix
-
-    dev-parvagas-websocket:
-      rule: "Host(`dev-api.parvagas.pt`) && Path(`/ws`)"
-      entryPoints: [websecure]
-      service: dev-parvagas-websocket
       tls:
         certResolver: letsencrypt
 
@@ -95,19 +88,16 @@ http:
         certResolver: letsencrypt
 
   services:
-    # ──────────────────────────────────────────────────────────────────────────────
-    # PRODUCTION SERVICES
-    # ──────────────────────────────────────────────────────────────────────────────
-
+    # ─────────────────────────── PRODUCTION ────────────────────────────
     parvagas-api:
       loadBalancer:
         servers:
-          - url: "http://parvagas-backend-python:8000"
+          - url: "http://parvagas-backend-api:8000"
 
     parvagas-websocket:
       loadBalancer:
         servers:
-          - url: "http://parvagas-websocket-service:8001"
+          - url: "http://parvagas-websocket:8001"
         sticky:
           cookie:
             name: "WSID"
@@ -122,26 +112,13 @@ http:
     parvagas-storage:
       loadBalancer:
         servers:
-          - url: "http://parvagas-minio:9000"
+          - url: "http://parvagas-storage:9000"
 
-    # ──────────────────────────────────────────────────────────────────────────────
-    # DEVELOPMENT SERVICES
-    # ──────────────────────────────────────────────────────────────────────────────
-
+    # ─────────────────────────── DEVELOPMENT ───────────────────────────
     dev-parvagas-api:
       loadBalancer:
         servers:
-          - url: "http://dev-parvagas-backend-python:8000"
-
-    dev-parvagas-websocket:
-      loadBalancer:
-        servers:
-          - url: "http://dev-parvagas-websocket-service:8001"
-        sticky:
-          cookie:
-            name: "DEV_WSID"
-            secure: true
-            httpOnly: true
+          - url: "http://dev-parvagas-backend-api:8000"
 
     dev-parvagas-cv:
       loadBalancer:
@@ -151,11 +128,4 @@ http:
     dev-parvagas-storage:
       loadBalancer:
         servers:
-          - url: "http://dev-parvagas-minio:9000"
-
-  middlewares:
-    strip-api-prefix:
-      stripPrefix:
-        prefixes:
-          - /api
-        forceSlash: false
+          - url: "http://dev-parvagas-storage:9000"
