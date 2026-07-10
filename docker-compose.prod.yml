@@ -372,7 +372,9 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:11434/api/tags || exit 1"]
+      # ollama/ollama's image has no curl/wget — `ollama list` is the CLI
+      # that's always present and only succeeds if the server responds.
+      test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
