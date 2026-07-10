@@ -303,10 +303,15 @@ services:
         condition: service_healthy
 
   # ── CV Builder (Reactive Resume — cv.parvagas.pt) ─────────────────────────
+  # Uses the official prebuilt image (docker.io/amruthpillai/reactive-resume)
+  # instead of building from ./reactive-resume: that directory was committed
+  # as a bare gitlink (mode 160000) with no .gitmodules, so it clones as an
+  # empty folder on any fresh checkout — Portainer's `git pull` never had a
+  # Dockerfile to build. If a customized fork/build is ever needed, restore
+  # this as a `build:` block with the source properly vendored into the repo
+  # (not a submodule — Portainer's git-stack integration doesn't fetch those).
   cv-builder:
-    build:
-      context: ./reactive-resume
-      dockerfile: Dockerfile
+    image: amruthpillai/reactive-resume:v5.2.3
     restart: unless-stopped
     environment:
       APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
