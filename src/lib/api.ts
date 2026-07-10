@@ -99,6 +99,7 @@ export function isSessionValid(): boolean {
 
 export type ApiFetchOptions = RequestInit & {
   suppressGlobalErrors?: boolean;
+  suppressConsoleWarnings?: boolean;
 };
 
 export class ApiError extends Error {
@@ -393,7 +394,11 @@ export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Prom
     const remainingMs = Math.max(1, effectiveTimeoutMs - elapsedMs);
     const timeout = setTimeout(() => controller.abort(), remainingMs);
 
-    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+    if (
+      !options?.suppressConsoleWarnings &&
+      process.env.NODE_ENV !== "production" &&
+      typeof window !== "undefined"
+    ) {
       console.info(`[apiFetchRaw] Attempt ${index + 1}/${candidateUrls.length}: ${url}`);
     }
 
@@ -411,7 +416,11 @@ export async function apiFetchRaw(path: string, options?: ApiFetchOptions): Prom
       // If fallback base ports are enabled in dev mode, try the next candidate on connection failures.
       const shouldTryNext =
         index < candidateUrls.length - 1 && !(options?.signal?.aborted === true);
-      if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      if (
+        !options?.suppressConsoleWarnings &&
+        process.env.NODE_ENV !== "production" &&
+        typeof window !== "undefined"
+      ) {
         const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
         console.warn(`[apiFetchRaw] Failed ${url} -> ${reason}`);
       }

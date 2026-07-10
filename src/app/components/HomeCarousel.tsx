@@ -25,7 +25,8 @@ const SLIDE_IMAGES: Record<CarouselIllustration, string> = {
   jobs: "https://images.pexels.com/photos/9841328/pexels-photo-9841328.jpeg",
 };
 
-function SlideImage({ kind, alt }: { kind: CarouselIllustration; alt: string }) {
+function SlideImage({ kind, alt, eager }: { kind: CarouselIllustration; alt: string; eager?: boolean }) {
+  const isPriority = kind === "hero";
   return (
     <Image
       src={SLIDE_IMAGES[kind]}
@@ -33,7 +34,8 @@ function SlideImage({ kind, alt }: { kind: CarouselIllustration; alt: string }) 
       fill
       sizes="(min-width: 768px) 320px, 220px"
       className="object-cover"
-      priority={kind === "hero"}
+      priority={isPriority}
+      loading={isPriority ? undefined : eager ? "eager" : "lazy"}
     />
   );
 }
@@ -99,7 +101,7 @@ export default function HomeCarousel({
               </div>
             </div>
             <div className="relative mx-auto h-48 w-full max-w-xs shrink-0 overflow-hidden rounded-2xl shadow-md sm:h-64 md:mx-0 md:h-72">
-              <SlideImage kind={slide.illustration} alt={slide.title} />
+              <SlideImage kind={slide.illustration} alt={slide.title} eager={index === active} />
             </div>
           </div>
         ))}

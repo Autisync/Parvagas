@@ -30,12 +30,23 @@ export default function SponsoredAdSlot({
   fallbackDescription = "Espaco reservado para campanhas patrocinadas.",
 }: SponsoredAdSlotProps) {
   const [ad, setAd] = useState<AdPayload | null>(null);
+  const hasConfiguredApi = Boolean(String(process.env.NEXT_PUBLIC_API_URL || "").trim());
 
   useEffect(() => {
     let mounted = true;
 
+    // In local frontend-only runs (no API URL configured), skip remote ad fetches
+    // to avoid repeated localhost/127.0.0.1 network failures in the console.
+    if (!hasConfiguredApi) {
+      setAd(null);
+      return () => {
+        mounted = false;
+      };
+    }
+
     apiFetch<AdResponse>(`/ads/placements/${encodeURIComponent(placement)}`, {
       suppressGlobalErrors: true,
+      suppressConsoleWarnings: true,
     })
       .then((res) => {
         if (!mounted) return;
@@ -49,7 +60,7 @@ export default function SponsoredAdSlot({
     return () => {
       mounted = false;
     };
-  }, [placement]);
+  }, [placement, hasConfiguredApi]);
 
   const hasCreative = useMemo(() => Boolean(ad?.imageUrl || ad?.title), [ad?.imageUrl, ad?.title]);
 
