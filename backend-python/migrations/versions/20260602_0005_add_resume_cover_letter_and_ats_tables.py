@@ -151,7 +151,7 @@ def upgrade() -> None:
             sa.Column("stage_id", sa.String(length=36), nullable=False),
             sa.Column("application_id", sa.String(length=36), nullable=True),
             sa.Column("candidate_profile_id", sa.String(length=36), nullable=True),
-            sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("active")),
+            sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'active'")),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
             sa.ForeignKeyConstraint(["stage_id"], ["ats_stages.id"]),
