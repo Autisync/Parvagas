@@ -326,7 +326,16 @@ services:
       STORAGE_USE_SSL: "false"
       STORAGE_SKIP_BUCKET_CHECK: "false"
       STORAGE_URL_PREFIX: ${S3_ENDPOINT_URL:-https://storage.parvagas.pt}/reactive-resume
-      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parvagas}
+      # Reactive Resume's env validator (Zod, strict WHATWG URL parsing) rejects
+      # reserved characters like `#` in the password segment — unlike
+      # backend-python's DATABASE_URL above, which SQLAlchemy parses fine even
+      # with `#` in it (its rfc1738-style parser is more lenient). Rather than
+      # touch the shared POSTGRES_PASSWORD (used everywhere else, working), set
+      # POSTGRES_PASSWORD_URLENC in Portainer to the percent-encoded form of the
+      # same password (e.g. `#` -> `%23`, `!` -> `%21`) if it contains reserved
+      # URL characters. Falls back to the raw password when unset, so this is a
+      # no-op until you actually add the encoded var.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-parvagas}
       ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET}
       REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET}}
       PUBLIC_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
