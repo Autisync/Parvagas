@@ -34,6 +34,8 @@ _delete_resume = resumes_module.delete_resume
 _duplicate_resume = resumes_module.duplicate_resume
 _export_resume = resumes_module.export_resume
 _preview_resume_html = resumes_module.preview_resume_html
+_share_resume = resumes_module.share_resume
+_get_public_resume = resumes_module.get_public_resume
 
 
 @pytest.fixture()
@@ -289,6 +291,71 @@ def test_preview_html_missing_resume_404s(db, monkeypatch):
     user = _make_candidate(db)
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(_preview_resume_html(resume_id=str(uuid.uuid4()), db=db, current_user=user))
+    assert exc_info.value.status_code == 404
+
+
+# --------------------------- share page (Phase B3) -------------------------- #
+
+def test_share_publish_mints_slug_and_public_endpoint_serves_it(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV Público", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    shared = asyncio.run(_share_resume(
+        resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=True), db=db, current_user=user,
+    ))
+    assert shared["is_published"] is True
+    assert shared["share_slug"]
+
+    public = asyncio.run(_get_public_resume(share_slug=shared["share_slug"], db=db))
+    assert public["title"] == "CV Público"
+    assert public["data"]["fullName"] == "Ana Sousa"
+    assert "id" not in public  # render-relevant fields only
+
+
+def test_unpublished_slug_404s_and_slug_survives_republish(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    shared = asyncio.run(_share_resume(
+        resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=True), db=db, current_user=user,
+    ))
+    slug = shared["share_slug"]
+
+    unshared = asyncio.run(_share_resume(
+        resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=False), db=db, current_user=user,
+    ))
+    assert unshared["is_published"] is False
+    assert unshared["share_slug"] == slug  # slug kept so re-publishing restores the same URL
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_get_public_resume(share_slug=slug, db=db))
+    assert exc_info.value.status_code == 404
+
+    republished = asyncio.run(_share_resume(
+        resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=True), db=db, current_user=user,
+    ))
+    assert republished["share_slug"] == slug
+    assert asyncio.run(_get_public_resume(share_slug=slug, db=db))["title"] == "CV"
+
+
+def test_public_endpoint_404s_on_unknown_slug(db):
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_get_public_resume(share_slug="does-not-exist", db=db))
+    assert exc_info.value.status_code == 404
+
+
+def test_share_only_touches_own_resume(db):
+    owner = _make_candidate(db, email="owner@example.com")
+    intruder = _make_candidate(db, email="intruder@example.com")
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=owner,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_share_resume(
+            resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=True), db=db, current_user=intruder,
+        ))
     assert exc_info.value.status_code == 404
 
 

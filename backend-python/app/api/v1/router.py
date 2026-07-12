@@ -18,6 +18,7 @@ router.include_router(candidates.router)
 
 # Resume routes
 router.include_router(resumes.router)
+router.include_router(resumes.public_router)
 
 # Application routes
 router.include_router(applications.router)

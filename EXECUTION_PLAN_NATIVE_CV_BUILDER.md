@@ -394,10 +394,30 @@ one remaining exit condition, deliberately left for you to execute via
       no-backend noise.
 
 ### B3 — Public share page
-- [ ] `GET /public/resumes/{share_slug}` (backend, only `is_published`)
-      + `src/app/cv/[slug]/page.tsx` public render + "Partilhar" toggle in
-      editor (generates slug, copy-link button).
-- [ ] Verify: unpublished slug 404s; published renders without auth.
+- [x] `GET /public/resumes/{share_slug}` — new unauthenticated
+      `public_router` in resumes.py (registered in router.py, matching the
+      /public/cv-submissions and /public/resume-sso/* convention), resolves
+      only `is_published` rows and returns render-relevant fields only
+      (title/data/template_slug — no ids, no draft state). Plus
+      `POST /resumes/{id}/share` toggle: first publish mints a random
+      unique slug (collision-retried); the slug is deliberately KEPT on
+      unpublish so re-publishing restores the same URL — links a candidate
+      already sent around don't rot because they toggled twice.
+      `src/app/cv/[slug]/page.tsx` renders the published CV through the
+      same ResumePreview dispatcher as the editor (template-aware), with a
+      friendly not-found state and a "crie o seu gratuitamente" CTA back to
+      the guest form. Editor header gains the "Partilhar"/"Público" toggle
+      + a copy-link button (navigator.clipboard, `${origin}/cv/{slug}`),
+      with success toasts via the established AppNotifier pattern.
+- [x] Verify: unpublished slug 404s + published renders without auth +
+      slug-survives-republish + ownership isolation — 4 new tests in
+      test_resumes_api.py (26 total there; suite 257 passed/3 skipped).
+      tsc clean, vitest 91 passed. Browser: /cv/test-slug-123 renders the
+      not-found state gracefully with zero console errors (no backend in
+      this sandbox, so the fetch-fails path is the one actually exercised —
+      the published-CV render path is covered by the dispatcher tests from
+      B2 plus the backend endpoint tests). Live published-link check
+      belongs in MANUAL_TEST_GUIDE.md §11's deploy pass.
 
 ### B4 — Versions UI
 - [ ] Version history panel (list `ResumeVersion` rows, view snapshot,

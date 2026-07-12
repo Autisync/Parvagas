@@ -12,7 +12,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import ResumePreview from "../preview/ResumePreview";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, PlusIcon, EyeIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -41,6 +41,7 @@ type Resume = {
   template_id: string | null;
   is_draft: boolean;
   is_published: boolean;
+  share_slug: string | null;
 };
 
 type TemplateOption = {
@@ -112,6 +113,9 @@ export default function ConstrutorCvEditorPage() {
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState(false);
+  const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const [title, setTitle] = useState("");
   const [data, setData] = useState<ResumeData>({});
@@ -143,6 +147,8 @@ export default function ConstrutorCvEditorPage() {
       setTitle(fetched.title);
       setData(fetched.data || {});
       setTemplateId(fetched.template_id || null);
+      setIsPublished(Boolean(fetched.is_published));
+      setShareSlug(fetched.share_slug || null);
       lastSavedJson.current = JSON.stringify({ title: fetched.title, data: fetched.data || {} });
       hydrated.current = true;
     } catch (err: unknown) {
@@ -166,6 +172,35 @@ export default function ConstrutorCvEditorPage() {
   }, [token]);
 
   const templateSlug = templates.find((t) => t.id === templateId)?.slug || null;
+
+  const toggleShare = async () => {
+    if (!token || sharing) return;
+    setSharing(true);
+    try {
+      const updated = await authFetch<Resume>(`/resumes/${resumeId}/share`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ published: !isPublished }),
+      });
+      setIsPublished(Boolean(updated.is_published));
+      setShareSlug(updated.share_slug || null);
+      notify(updated.is_published ? "CV publicado — a ligação está ativa." : "CV despublicado — a ligação foi desativada.", "success");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível alterar a partilha."));
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const copyShareLink = async () => {
+    if (!shareSlug) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/cv/${shareSlug}`);
+      notify("Ligação copiada.", "success");
+    } catch {
+      notify("Não foi possível copiar a ligação.", "error");
+    }
+  };
 
   const selectTemplate = async (template: TemplateOption) => {
     if (!token || template.id === templateId) return;
@@ -343,6 +378,28 @@ export default function ConstrutorCvEditorPage() {
             )}
             {saveState === "error" && <span className="text-red-600">Erro ao guardar</span>}
           </span>
+          <button
+            type="button"
+            onClick={toggleShare}
+            disabled={sharing}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+              isPublished
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <ShareIcon className="h-3.5 w-3.5" /> {sharing ? "…" : isPublished ? "Público" : "Partilhar"}
+          </button>
+          {isPublished && shareSlug && (
+            <button
+              type="button"
+              onClick={copyShareLink}
+              title="Copiar ligação pública"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              <LinkIcon className="h-3.5 w-3.5" /> Copiar ligação
+            </button>
+          )}
           <div className="flex gap-1.5">
             {(["pdf", "docx", "json"] as const).map((fmt) => (
               <button

@@ -13,9 +13,11 @@ to_json_resume expect.
 from __future__ import annotations
 
 import json
+import secrets
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -420,6 +422,69 @@ async def preview_resume_html(
     resume_data = _load_json_field(resume.data) or {}
     html = resume_render_service.render_html(resume_data, _template_slug(db, resume.template_id))
     return Response(content=html, media_type="text/html")
+
+
+class ResumeShareRequest(BaseModel):
+    published: bool
+
+
+@router.post("/{resume_id}/share")
+async def share_resume(
+    resume_id: str,
+    payload: ResumeShareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Toggle a resume's public share page (Phase B3). First publish mints a
+    permanent random share_slug (kept on unpublish so re-publishing restores
+    the same URL — links a candidate already sent around don't rot just
+    because they toggled visibility twice)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    if payload.published and not resume.share_slug:
+        for _ in range(5):  # share_slug is unique — retry on the (unlikely) collision
+            candidate_slug = secrets.token_urlsafe(8)
+            if not db.query(Resume).filter(Resume.share_slug == candidate_slug).first():
+                resume.share_slug = candidate_slug
+                break
+        else:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao gerar ligação. Tente novamente.")
+
+    resume.is_published = payload.published
+    db.commit()
+    db.refresh(resume)
+    return _resume_payload(resume)
+
+
+# Public share page (B3) — its own router so the URL is /public/resumes/…,
+# outside this file's authenticated /resumes prefix, matching the existing
+# /public/cv-submissions and /public/resume-sso/* convention.
+public_router = APIRouter(prefix="/public/resumes", tags=["resumes"])
+
+
+@public_router.get("/{share_slug}")
+async def get_public_resume(
+    share_slug: str,
+    db: Session = Depends(get_db),
+):
+    """Unauthenticated read of a published resume, consumed by the public
+    share page (src/app/cv/[slug]/page.tsx). Only is_published rows resolve;
+    an unpublished/unknown slug is indistinguishable from a missing one.
+    Returns only render-relevant fields — no ids, no draft state."""
+    resume = db.query(Resume).filter(Resume.share_slug == share_slug, Resume.is_published == True).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    return {
+        "title": resume.title,
+        "data": _load_json_field(resume.data) or {},
+        "template_slug": _template_slug(db, resume.template_id),
+        "updated_at": resume.updated_at,
+    }
 
 
 @router.post("/score", response_model=ResumeScoreResponse)
