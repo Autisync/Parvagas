@@ -354,13 +354,44 @@ one remaining exit condition, deliberately left for you to execute via
       against docs but not build-tested; flag as a deploy-time check.
 
 ### B2 — Two visual templates + picker
-- [ ] `moderno` (single column, accent color, sans) and `executivo`
-      (two-column sidebar) as Jinja2+CSS pairs; seed rows updated with
-      real `preview_url` thumbnails.
-- [ ] Template picker in the editor (thumbnail cards, instant preview
-      switch); `impeccable` pass.
-- [ ] A4 print-correctness: margins, page-break rules
-      (`break-inside: avoid` on cards), 2+ page CVs paginate cleanly.
+- [x] `moderno` (single column, red accent bar, left-aligned header — shares
+      the single-column HTML skeleton with ats-classic, CSS-only variation)
+      and `executivo` (two-column: dark sidebar for contact/skills/languages/
+      certifications, main column for summary/experience/education — laid
+      out with a table, deliberately not flexbox, since table layout is the
+      most reliably-paginated multi-column primitive in WeasyPrint) added to
+      `resume_render_service.TEMPLATES`. New migration `20260712_0029` seeds
+      the `executivo` row and un-placeholders `moderno`'s description.
+      **Deviation from the plan text**: `preview_url` stays NULL — the
+      picker draws its thumbnails with CSS instead of loading screenshot
+      files, so thumbnails can never drift stale from the real templates
+      and no image-asset pipeline is needed.
+- [x] Template picker in the editor: thumbnail cards (CSS minis per
+      template) in both the desktop preview pane and the mobile preview
+      sheet. Selection switches the client-side preview instantly
+      (optimistic state update) and PATCHes `template_id` in the
+      background, reverting on failure. New client-side preview mirrors
+      `Moderno.tsx`/`Executivo.tsx` + a `ResumePreview.tsx` dispatcher whose
+      unknown-slug fallback matches `render_html()`'s exactly; the editor's
+      two `AtsClassic` call sites now go through the dispatcher. Also fixed
+      in passing: the frontend `Resume` type was missing `template_id`,
+      which the API had been returning since A1. `impeccable` pass:
+      sandbox-blocked as in A3/A4/A6 (auth wall) — already covered by
+      MANUAL_TEST_GUIDE.md §11's audit step.
+- [x] A4 print-correctness: shared `_PRINT_RULES` block (`@page` A4 margins,
+      `break-inside: avoid` on every experience/education entry — each now
+      wrapped in `<div class="entry">` — and `break-after: avoid` on section
+      headings) prepended to all three templates' CSS, with a test asserting
+      every registered template carries the rules. **Multi-page pagination
+      not visually verified** (needs a real WeasyPrint render — no pango in
+      this sandbox); rules follow WeasyPrint's documented properties, flag
+      for the same deploy-time check as B1's render.
+- [x] Verify: pytest 253 passed/3 skipped (10 render-service tests incl.
+      per-template XSS-escaping + page-break assertions, migration chain
+      still single-head), tsc clean, vitest 91 passed (4 new dispatcher/
+      template tests), browser check — editor route compiles, redirects
+      unauthenticated to /Login, no console/server errors beyond expected
+      no-backend noise.
 
 ### B3 — Public share page
 - [ ] `GET /public/resumes/{share_slug}` (backend, only `is_published`)

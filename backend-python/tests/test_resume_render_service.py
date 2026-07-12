@@ -91,6 +91,43 @@ def test_render_html_falls_back_to_default_template_for_unknown_slug():
     assert html_known == html_unknown
 
 
+def test_moderno_template_renders_all_sections_with_distinct_styling():
+    html = rrs.render_html(_FULL_PROFILE, "moderno")
+    assert "Ana Sousa" in html
+    assert "Experiência Profissional" in html
+    assert "Formação Académica" in html
+    assert "AWS Certified" in html
+    assert html != rrs.render_html(_FULL_PROFILE, "ats-classic")
+    assert "#dc2626" in html  # the moderno accent, proving its CSS was used
+
+
+def test_executivo_template_renders_sidebar_and_main_column():
+    html = rrs.render_html(_FULL_PROFILE, "executivo")
+    assert 'class="side"' in html and 'class="main"' in html
+    assert "Ana Sousa" in html
+    assert "Contacto" in html
+    assert "+244 900 000 000" in html  # individual contact_parts, not the joined line
+    assert "Experiência Profissional" in html
+    assert "AWS Certified" in html
+
+
+def test_every_template_escapes_user_supplied_html():
+    payload = {"fullName": "<script>alert(1)</script>", "certifications": ["<img src=x onerror=alert(1)>"]}
+    for slug in rrs.TEMPLATES:
+        html = rrs.render_html(payload, slug)
+        assert "<script>" not in html, f"unescaped <script> in template {slug}"
+        assert "<img" not in html, f"unescaped <img> in template {slug}"
+
+
+def test_every_template_has_page_break_rules():
+    """A4 print-correctness (plan B2): every template must carry the shared
+    break-inside/break-after rules so multi-page CVs paginate cleanly."""
+    for slug in rrs.TEMPLATES:
+        html = rrs.render_html(_FULL_PROFILE, slug)
+        assert "break-inside: avoid" in html, f"missing break-inside rule in {slug}"
+        assert 'class="entry"' in html, f"entries not wrapped for pagination in {slug}"
+
+
 def test_render_pdf_raises_runtime_error_when_native_libs_unavailable():
     """This sandbox has weasyprint installed but no pango/gobject native
     libs — the realistic "package present, native deps missing" failure

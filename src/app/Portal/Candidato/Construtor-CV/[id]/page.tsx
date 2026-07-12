@@ -11,7 +11,7 @@ import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
-import AtsClassic from "../preview/AtsClassic";
+import ResumePreview from "../preview/ResumePreview";
 import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, PlusIcon, EyeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
@@ -38,8 +38,16 @@ type Resume = {
   title: string;
   summary: string | null;
   data: ResumeData;
+  template_id: string | null;
   is_draft: boolean;
   is_published: boolean;
+};
+
+type TemplateOption = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
 };
 
 const SECTIONS = [
@@ -102,6 +110,8 @@ export default function ConstrutorCvEditorPage() {
   const [activeSection, setActiveSection] = useState<SectionKey>("dados");
   const [exporting, setExporting] = useState<"pdf" | "docx" | "json" | null>(null);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [templateId, setTemplateId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [data, setData] = useState<ResumeData>({});
@@ -132,6 +142,7 @@ export default function ConstrutorCvEditorPage() {
       setResume(fetched);
       setTitle(fetched.title);
       setData(fetched.data || {});
+      setTemplateId(fetched.template_id || null);
       lastSavedJson.current = JSON.stringify({ title: fetched.title, data: fetched.data || {} });
       hydrated.current = true;
     } catch (err: unknown) {
@@ -144,6 +155,33 @@ export default function ConstrutorCvEditorPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Template list is public metadata — load once, failure is non-fatal
+  // (picker simply doesn't render and the default template applies).
+  useEffect(() => {
+    if (!token) return;
+    authFetch<TemplateOption[]>("/resumes/templates", token)
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
+  }, [token]);
+
+  const templateSlug = templates.find((t) => t.id === templateId)?.slug || null;
+
+  const selectTemplate = async (template: TemplateOption) => {
+    if (!token || template.id === templateId) return;
+    const previous = templateId;
+    setTemplateId(template.id); // instant preview switch, before the PATCH lands
+    try {
+      await authFetch(`/resumes/${resumeId}`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template_id: template.id }),
+      });
+    } catch (err: unknown) {
+      setTemplateId(previous);
+      setError(getErrorMessage(err, "Não foi possível mudar o modelo."));
+    }
+  };
 
   // Autosave — one debounced snapshot of {title, data} covers every section,
   // so every editor below just calls setData/setTitle and this handles the
@@ -571,8 +609,11 @@ export default function ConstrutorCvEditorPage() {
             editing. Mobile gets a floating button + full-screen sheet
             instead of a squeezed side-by-side pane, per the UX spec. */}
         <div className="hidden lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-slate-100 lg:p-4">
+          {templates.length > 0 && (
+            <TemplatePicker templates={templates} selectedId={templateId} onSelect={selectTemplate} />
+          )}
           <p className="mb-2 text-center text-xs text-slate-500">Pré-visualização aproximada — o PDF exportado pode variar ligeiramente.</p>
-          <AtsClassic data={data} />
+          <ResumePreview data={data} templateSlug={templateSlug} />
         </div>
       </div>
 
@@ -599,8 +640,11 @@ export default function ConstrutorCvEditorPage() {
             </button>
           </div>
           <div className="p-4">
+            {templates.length > 0 && (
+              <TemplatePicker templates={templates} selectedId={templateId} onSelect={selectTemplate} />
+            )}
             <p className="mb-2 text-center text-xs text-slate-500">Pré-visualização aproximada — o PDF exportado pode variar ligeiramente.</p>
-            <AtsClassic data={data} />
+            <ResumePreview data={data} templateSlug={templateSlug} />
           </div>
         </div>
       )}
@@ -648,6 +692,87 @@ export default function ConstrutorCvEditorPage() {
           <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveEducation}>Guardar</button>
         </div>
       </AddItemModal>
+    </div>
+  );
+}
+
+/** Thumbnail cards for switching the visual template. The minis are drawn
+ * with CSS (no image assets) so they can never drift from the real
+ * templates the way stale preview_url screenshots would. */
+function TemplatePicker({
+  templates,
+  selectedId,
+  onSelect,
+}: {
+  templates: { id: string; name: string; slug: string; description: string | null }[];
+  selectedId: string | null;
+  onSelect: (template: { id: string; name: string; slug: string; description: string | null }) => void;
+}) {
+  return (
+    <div className="mb-3">
+      <p className="mb-1.5 text-xs font-semibold text-slate-600">Modelo</p>
+      <div className="flex gap-2">
+        {templates.map((template) => {
+          const selected = selectedId === template.id || (!selectedId && template.slug === "ats-classic");
+          return (
+            <button
+              key={template.id}
+              type="button"
+              onClick={() => onSelect(template)}
+              title={template.description || template.name}
+              className={`flex-1 rounded-lg border-2 bg-white p-1.5 text-left transition ${
+                selected ? "border-red-500 ring-2 ring-red-100" : "border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <TemplateThumb slug={template.slug} />
+              <p className="mt-1 truncate text-center text-[10px] font-semibold text-slate-700">{template.name}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TemplateThumb({ slug }: { slug: string }) {
+  if (slug === "executivo") {
+    return (
+      <div className="flex h-14 overflow-hidden rounded border border-slate-100">
+        <div className="w-1/3 space-y-0.5 bg-slate-800 p-1">
+          <div className="h-1 w-3/4 rounded bg-slate-400" />
+          <div className="h-0.5 w-full rounded bg-slate-600" />
+          <div className="h-0.5 w-full rounded bg-slate-600" />
+        </div>
+        <div className="flex-1 space-y-0.5 p-1">
+          <div className="h-1 w-1/2 rounded bg-slate-300" />
+          <div className="h-0.5 w-full rounded bg-slate-200" />
+          <div className="h-0.5 w-full rounded bg-slate-200" />
+          <div className="h-0.5 w-5/6 rounded bg-slate-200" />
+        </div>
+      </div>
+    );
+  }
+  if (slug === "moderno") {
+    return (
+      <div className="h-14 space-y-0.5 overflow-hidden rounded border border-slate-100 p-1">
+        <div className="h-1.5 w-1/2 rounded bg-slate-400" />
+        <div className="h-0.5 w-1/3 rounded bg-red-500" />
+        <div className="mt-1 flex items-center gap-0.5">
+          <div className="h-1.5 w-0.5 bg-red-500" />
+          <div className="h-1 w-1/3 rounded bg-slate-300" />
+        </div>
+        <div className="h-0.5 w-full rounded bg-slate-200" />
+        <div className="h-0.5 w-5/6 rounded bg-slate-200" />
+      </div>
+    );
+  }
+  return (
+    <div className="h-14 space-y-0.5 overflow-hidden rounded border border-slate-100 p-1">
+      <div className="mx-auto h-1.5 w-1/2 rounded bg-slate-400" />
+      <div className="mx-auto h-0.5 w-2/3 rounded bg-slate-200" />
+      <div className="mt-1 h-1 w-1/3 rounded bg-red-900/60" />
+      <div className="h-0.5 w-full rounded bg-slate-200" />
+      <div className="h-0.5 w-5/6 rounded bg-slate-200" />
     </div>
   );
 }

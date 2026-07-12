@@ -1,69 +1,15 @@
 "use client";
 
 /**
- * Client-side HTML/CSS render of Resume.data, matching
- * backend-python/app/services/cv_export_service.py's to_pdf() layout as
- * closely as practical (section order, labels, colors) — NOT pixel-perfect
- * (reportlab's typography engine differs from CSS), which is why the editor
- * shows "pré-visualização aproximada" alongside this. Phase B's WeasyPrint
- * templates will close this gap by rendering the same HTML/CSS for both
- * the preview AND the PDF (see EXECUTION_PLAN_NATIVE_CV_BUILDER.md B1).
+ * Client-side mirror of resume_render_service.py's "moderno" template
+ * (_MODERNO_CSS): single column, left-aligned header, red accent bar on
+ * section headings. Same "pré-visualização aproximada" caveat as AtsClassic
+ * until the flag-gated preview.html iframe path takes over.
  */
 
-export type PreviewExperienceItem = {
-  jobTitle?: string;
-  company?: string;
-  location?: string;
-  startDate?: string;
-  endDate?: string;
-  current?: boolean;
-  description?: string;
-};
+import { formatRange, type PreviewData } from "./AtsClassic";
 
-export type PreviewEducationItem = {
-  degree?: string;
-  institution?: string;
-  location?: string;
-  startDate?: string;
-  endDate?: string;
-};
-
-export type PreviewData = {
-  fullName?: string;
-  professionalTitle?: string;
-  jobTitle?: string;
-  email?: string;
-  phone?: string;
-  location?: string;
-  linkedinUrl?: string;
-  professionalSummary?: string;
-  workExperience?: PreviewExperienceItem[];
-  education?: PreviewEducationItem[];
-  hardSkills?: string[];
-  techniques?: string[];
-  tools?: string[];
-  languages?: string[];
-  certifications?: string[];
-  [key: string]: unknown;
-};
-
-export function formatMonth(value?: string): string {
-  if (!value) return "";
-  const match = /^(\d{4})-(\d{2})$/.exec(value);
-  if (match) return `${match[2]}/${match[1]}`;
-  return value;
-}
-
-export function formatRange(start?: string, end?: string, current?: boolean): string {
-  const s = formatMonth(start);
-  const e = current || !end ? "Presente" : formatMonth(end);
-  if (!s && !e) return "";
-  if (!s) return e;
-  if (e === "Presente" && !current && !end) return s;
-  return `${s} – ${e}`;
-}
-
-export default function AtsClassic({ data }: { data: PreviewData }) {
+export default function Moderno({ data }: { data: PreviewData }) {
   const fullName = data.fullName?.trim() || "Nome do Candidato";
   const title = (data.professionalTitle || data.jobTitle || "").trim();
   const contactParts = [data.location, data.phone, data.email, data.linkedinUrl].filter(Boolean) as string[];
@@ -78,10 +24,10 @@ export default function AtsClassic({ data }: { data: PreviewData }) {
 
   return (
     <div className="mx-auto w-full max-w-[210mm] bg-white p-8 text-[13px] leading-snug text-slate-800 shadow-sm" style={{ fontFamily: "Helvetica, Arial, sans-serif" }}>
-      <h1 className="text-center text-2xl font-bold" style={{ color: "#1a1a2e" }}>{fullName}</h1>
-      {title && <p className="mt-1 text-center text-sm" style={{ color: "#555555" }}>{title}</p>}
+      <h1 className="text-3xl font-bold text-slate-900">{fullName}</h1>
+      {title && <p className="mt-0.5 text-sm font-bold text-red-600">{title}</p>}
       {contactParts.length > 0 && (
-        <p className="mt-1 text-center text-xs" style={{ color: "#555555" }}>{contactParts.join("  |  ")}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{contactParts.join("  |  ")}</p>
       )}
 
       {data.professionalSummary?.trim() && (
@@ -98,9 +44,9 @@ export default function AtsClassic({ data }: { data: PreviewData }) {
             return (
               <div key={i} className="mb-2">
                 <p className="text-[12.5px] font-bold text-slate-900">
-                  {companyLoc}{range && <span className="font-normal text-slate-600"> — {range}</span>}
+                  {companyLoc}{range && <span className="font-normal text-slate-500"> — {range}</span>}
                 </p>
-                {exp.jobTitle && <p className="text-[12px] italic" style={{ color: "#555555" }}>{exp.jobTitle}</p>}
+                {exp.jobTitle && <p className="text-[12px] text-red-600">{exp.jobTitle}</p>}
                 {exp.description?.trim() && (
                   <ul className="mt-0.5 list-disc pl-4">
                     {exp.description.split(". ").filter((s) => s.trim()).map((sentence, j) => (
@@ -122,9 +68,9 @@ export default function AtsClassic({ data }: { data: PreviewData }) {
             return (
               <div key={i} className="mb-2">
                 <p className="text-[12.5px] font-bold text-slate-900">
-                  {instLoc}{range && <span className="font-normal text-slate-600"> — {range}</span>}
+                  {instLoc}{range && <span className="font-normal text-slate-500"> — {range}</span>}
                 </p>
-                {edu.degree && <p className="text-[12px] italic" style={{ color: "#555555" }}>{edu.degree}</p>}
+                {edu.degree && <p className="text-[12px] text-red-600">{edu.degree}</p>}
               </div>
             );
           })}
@@ -161,9 +107,8 @@ export default function AtsClassic({ data }: { data: PreviewData }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
-      <h2 className="text-[11px] font-bold tracking-wide" style={{ color: "#8B0000" }}>{title}</h2>
-      <hr className="my-1" style={{ borderColor: "#CCCCCC" }} />
-      {children}
+      <h2 className="border-l-4 border-red-600 pl-2 text-[11px] font-bold uppercase tracking-widest text-slate-900">{title}</h2>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }

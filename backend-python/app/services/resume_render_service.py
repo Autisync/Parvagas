@@ -26,8 +26,17 @@ logger = get_logger(__name__)
 
 _jinja_env = Environment(autoescape=select_autoescape(["html", "xml"]))
 
-_ATS_CLASSIC_CSS = """
+# A4 print-correctness rules shared by every template: each experience/
+# education entry is wrapped in <div class="entry"> so `break-inside: avoid`
+# keeps a header from stranding at the bottom of a page while its bullets
+# spill to the next — the classic multi-page-CV pagination bug.
+_PRINT_RULES = """
   @page { size: A4; margin: 15mm 20mm; }
+  .entry { break-inside: avoid; page-break-inside: avoid; }
+  h2 { break-after: avoid; page-break-after: avoid; }
+"""
+
+_ATS_CLASSIC_CSS = _PRINT_RULES + """
   body { font-family: 'DejaVu Sans', Helvetica, Arial, sans-serif; color: #1a1a2e; font-size: 10.5pt; }
   h1 { text-align: center; font-size: 20pt; margin: 0 0 4pt; color: #1a1a2e; }
   .title { text-align: center; font-size: 11pt; color: #555555; margin: 0 0 2pt; }
@@ -41,7 +50,24 @@ _ATS_CLASSIC_CSS = """
   ul { margin: 0 0 1pt; padding-left: 12pt; }
 """
 
-_ATS_CLASSIC_HTML = """<!doctype html>
+# "Moderno" shares the single-column HTML skeleton — only the CSS differs:
+# left-aligned header, Parvagas-red accent bar on section headings, no hr.
+_MODERNO_CSS = _PRINT_RULES + """
+  body { font-family: 'DejaVu Sans', Helvetica, Arial, sans-serif; color: #1f2937; font-size: 10.5pt; }
+  h1 { text-align: left; font-size: 22pt; margin: 0 0 2pt; color: #111827; }
+  .title { text-align: left; font-size: 11pt; color: #dc2626; font-weight: bold; margin: 0 0 2pt; }
+  .contact { text-align: left; font-size: 8.5pt; color: #6b7280; margin: 0 0 12pt; }
+  h2 { font-size: 10.5pt; color: #111827; margin: 12pt 0 4pt; text-transform: uppercase;
+       letter-spacing: 1pt; border-left: 3pt solid #dc2626; padding-left: 6pt; }
+  hr { display: none; }
+  .entry-header { font-size: 10pt; font-weight: bold; margin: 5pt 0 1pt; color: #111827; }
+  .entry-header .range { font-weight: normal; color: #6b7280; }
+  .entry-sub { font-size: 9pt; color: #dc2626; margin: 0 0 1pt; }
+  p, li { font-size: 9pt; margin: 0 0 1pt; line-height: 1.35; }
+  ul { margin: 0 0 1pt; padding-left: 12pt; }
+"""
+
+_SINGLE_COLUMN_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><style>{{ css | safe }}</style></head>
 <body>
   <h1>{{ full_name }}</h1>
@@ -56,17 +82,21 @@ _ATS_CLASSIC_HTML = """<!doctype html>
   {% if experience %}
   <h2>Experiência Profissional</h2><hr>
   {% for exp in experience %}
+  <div class="entry">
     <p class="entry-header">{{ exp.company_loc }}{% if exp.range %} <span class="range">— {{ exp.range }}</span>{% endif %}</p>
     {% if exp.job_title %}<p class="entry-sub">{{ exp.job_title }}</p>{% endif %}
     {% if exp.bullets %}<ul>{% for b in exp.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+  </div>
   {% endfor %}
   {% endif %}
 
   {% if education %}
   <h2>Formação Académica</h2><hr>
   {% for edu in education %}
+  <div class="entry">
     <p class="entry-header">{{ edu.inst_loc }}{% if edu.range %} <span class="range">— {{ edu.range }}</span>{% endif %}</p>
     {% if edu.degree_field %}<p class="entry-sub">{{ edu.degree_field }}</p>{% endif %}
+  </div>
   {% endfor %}
   {% endif %}
 
@@ -89,12 +119,100 @@ _ATS_CLASSIC_HTML = """<!doctype html>
 </body></html>
 """
 
-# slug -> (html template string, css string). B2 adds "moderno"/"executivo"
-# here; both must keep the same (html, css) tuple shape and the same
+# "Executivo": two-column with a dark sidebar (contact/skills/languages/
+# certifications) and a main column (summary/experience/education). Laid out
+# with a table, not flexbox — table layout is the most reliably-paginated
+# multi-column primitive in WeasyPrint, and it degrades identically in the
+# editor's iframe preview.
+_EXECUTIVO_CSS = _PRINT_RULES + """
+  body { font-family: 'DejaVu Sans', Helvetica, Arial, sans-serif; color: #1f2937; font-size: 10pt; margin: 0; }
+  table.layout { width: 100%; border-collapse: collapse; }
+  td { vertical-align: top; }
+  td.side { width: 34%; background: #1e293b; color: #e2e8f0; padding: 12pt 10pt; }
+  td.main { width: 66%; padding: 12pt 0 12pt 14pt; }
+  h1 { font-size: 18pt; margin: 0 0 2pt; color: #ffffff; }
+  .title { font-size: 10pt; color: #94a3b8; margin: 0 0 10pt; }
+  .side h2 { font-size: 9pt; color: #f8fafc; margin: 10pt 0 3pt; text-transform: uppercase;
+             letter-spacing: 1pt; border-bottom: 0.5pt solid #475569; padding-bottom: 2pt; }
+  .side p, .side li { font-size: 8.5pt; color: #cbd5e1; margin: 0 0 2pt; line-height: 1.35; }
+  .side ul { margin: 0; padding-left: 10pt; }
+  .main h2 { font-size: 10.5pt; color: #1e293b; margin: 10pt 0 3pt; text-transform: uppercase;
+             letter-spacing: 0.5pt; border-bottom: 1pt solid #1e293b; padding-bottom: 2pt; }
+  .entry-header { font-size: 10pt; font-weight: bold; margin: 5pt 0 1pt; }
+  .entry-header .range { font-weight: normal; color: #64748b; }
+  .entry-sub { font-size: 9pt; font-style: italic; color: #64748b; margin: 0 0 1pt; }
+  .main p, .main li { font-size: 9pt; margin: 0 0 1pt; line-height: 1.35; }
+  .main ul { margin: 0 0 1pt; padding-left: 12pt; }
+"""
+
+_EXECUTIVO_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><style>{{ css | safe }}</style></head>
+<body>
+<table class="layout"><tr>
+  <td class="side">
+    <h1>{{ full_name }}</h1>
+    {% if title %}<p class="title">{{ title }}</p>{% endif %}
+
+    {% if contact_parts %}
+    <h2>Contacto</h2>
+    {% for part in contact_parts %}<p>{{ part }}</p>{% endfor %}
+    {% endif %}
+
+    {% if hard_skills or techniques or tools %}
+    <h2>Competências</h2>
+    {% if hard_skills %}<p><b>Hard Skills:</b> {{ hard_skills }}</p>{% endif %}
+    {% if techniques %}<p><b>Técnicas:</b> {{ techniques }}</p>{% endif %}
+    {% if tools %}<p><b>Ferramentas:</b> {{ tools }}</p>{% endif %}
+    {% endif %}
+
+    {% if languages %}
+    <h2>Idiomas</h2>
+    <p>{{ languages }}</p>
+    {% endif %}
+
+    {% if certifications %}
+    <h2>Certificações</h2>
+    <ul>{% for c in certifications %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% endif %}
+  </td>
+  <td class="main">
+    {% if summary %}
+    <h2>Resumo Profissional</h2>
+    <p>{{ summary }}</p>
+    {% endif %}
+
+    {% if experience %}
+    <h2>Experiência Profissional</h2>
+    {% for exp in experience %}
+    <div class="entry">
+      <p class="entry-header">{{ exp.company_loc }}{% if exp.range %} <span class="range">— {{ exp.range }}</span>{% endif %}</p>
+      {% if exp.job_title %}<p class="entry-sub">{{ exp.job_title }}</p>{% endif %}
+      {% if exp.bullets %}<ul>{% for b in exp.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if education %}
+    <h2>Formação Académica</h2>
+    {% for edu in education %}
+    <div class="entry">
+      <p class="entry-header">{{ edu.inst_loc }}{% if edu.range %} <span class="range">— {{ edu.range }}</span>{% endif %}</p>
+      {% if edu.degree_field %}<p class="entry-sub">{{ edu.degree_field }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+  </td>
+</tr></table>
+</body></html>
+"""
+
+# slug -> (html template string, css string). All templates consume the same
 # _context_from_profile() context so the preview=PDF contract holds for
-# every template, not just this default one.
+# every template, not just the default.
 TEMPLATES: dict[str, tuple[str, str]] = {
-    "ats-classic": (_ATS_CLASSIC_HTML, _ATS_CLASSIC_CSS),
+    "ats-classic": (_SINGLE_COLUMN_HTML, _ATS_CLASSIC_CSS),
+    "moderno": (_SINGLE_COLUMN_HTML, _MODERNO_CSS),
+    "executivo": (_EXECUTIVO_HTML, _EXECUTIVO_CSS),
 }
 DEFAULT_TEMPLATE_SLUG = "ats-classic"
 
@@ -108,7 +226,8 @@ def _context_from_profile(profile: dict[str, Any]) -> dict[str, Any]:
     phone = _s(profile.get("phone"))
     location = _s(profile.get("location"))
     linkedin = _s(profile.get("linkedinUrl") or profile.get("linkedin_url"))
-    contact = "  |  ".join(p for p in [location, phone, email, linkedin] if p)
+    contact_parts = [p for p in [location, phone, email, linkedin] if p]
+    contact = "  |  ".join(contact_parts)
 
     summary = _s(profile.get("professionalSummary") or profile.get("professional_summary") or profile.get("summary"))
 
@@ -156,6 +275,7 @@ def _context_from_profile(profile: dict[str, Any]) -> dict[str, Any]:
         "full_name": full_name,
         "title": title,
         "contact": contact,
+        "contact_parts": contact_parts,
         "summary": summary,
         "experience": experience,
         "education": education,
