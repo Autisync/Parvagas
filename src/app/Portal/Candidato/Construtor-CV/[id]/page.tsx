@@ -10,7 +10,8 @@ import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, PlusIcon } from "@heroicons/react/24/outline";
+import AtsClassic from "../preview/AtsClassic";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, PlusIcon, EyeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -98,6 +99,7 @@ export default function ConstrutorCvEditorPage() {
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<SectionKey>("dados");
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
 
   const [title, setTitle] = useState("");
   const [data, setData] = useState<ResumeData>({});
@@ -557,11 +559,43 @@ export default function ConstrutorCvEditorPage() {
           )}
         </div>
 
-        {/* Preview pane — real rendering arrives in A4; placeholder for now */}
-        <div className="hidden rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 lg:flex lg:min-h-[300px] lg:items-center lg:justify-center">
-          <p className="text-center text-sm text-slate-500">Pré-visualização disponível na próxima iteração.<br />Use "Exportar PDF" para ver o resultado atual.</p>
+        {/* Preview pane — desktop only, sticky so it stays visible while
+            editing. Mobile gets a floating button + full-screen sheet
+            instead of a squeezed side-by-side pane, per the UX spec. */}
+        <div className="hidden lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-slate-100 lg:p-4">
+          <p className="mb-2 text-center text-xs text-slate-500">Pré-visualização aproximada — o PDF exportado pode variar ligeiramente.</p>
+          <AtsClassic data={data} />
         </div>
       </div>
+
+      {/* Mobile floating preview trigger */}
+      <button
+        type="button"
+        onClick={() => setMobilePreviewOpen(true)}
+        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg lg:hidden"
+      >
+        <EyeIcon className="h-4 w-4" /> Pré-visualizar
+      </button>
+
+      {mobilePreviewOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-100 lg:hidden">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <span className="text-sm font-semibold text-slate-900">Pré-visualização</span>
+            <button
+              type="button"
+              onClick={() => setMobilePreviewOpen(false)}
+              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500"
+              aria-label="Fechar pré-visualização"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="p-4">
+            <p className="mb-2 text-center text-xs text-slate-500">Pré-visualização aproximada — o PDF exportado pode variar ligeiramente.</p>
+            <AtsClassic data={data} />
+          </div>
+        </div>
+      )}
 
       <AddItemModal
         open={expModalOpen}

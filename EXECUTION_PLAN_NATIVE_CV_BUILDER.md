@@ -166,14 +166,26 @@ design system (red-600 primary on white).
       /Login redirect, so this is flagged, not faked.** tsc clean,
       vitest 78 green.
 
-### A4 — Live preview (client-side)
-- [ ] `src/app/Portal/Candidato/Construtor-CV/preview/AtsClassic.tsx`:
-      HTML/CSS render of `Resume.data` matching the cv_export_service ATS
-      layout closely (it won't be pixel-identical to reportlab output in
-      Phase A — acceptable; note in UI: "pré-visualização aproximada").
-- [ ] Mobile behavior per UX spec (full-screen preview sheet).
-- [ ] Verify: browser workflow at desktop + mobile viewport
-      (`resize_window` preset mobile), `impeccable` pass.
+### A4 — Live preview (client-side) ✅ done
+- [x] `src/app/Portal/Candidato/Construtor-CV/preview/AtsClassic.tsx`:
+      HTML/CSS render of `Resume.data` mirroring `cv_export_service.to_pdf()`'s
+      section order, labels, and colors (#1a1a2e name, #8B0000 section
+      headers, #555555 sub-text) read directly from the reportlab source —
+      not guessed. "Pré-visualização aproximada" note shown alongside it,
+      per the plan.
+- [x] Mobile: floating "Pré-visualizar" button (`lg:hidden`) opening a
+      full-screen sheet with the same preview; desktop gets a sticky
+      third column instead — never side-by-side squeezed, per the UX spec.
+- [x] Verify: browser workflow at desktop + mobile viewport
+      (`resize_window` preset mobile) — zero console/server errors at
+      either size. **`impeccable` still needs a live authenticated
+      session this sandbox can't reach — same flagged limitation as A3,
+      not re-litigated per iteration.** Added 9 real component tests
+      (`@testing-library/react`, already in the repo) covering every
+      section's render/omit logic, date-range formatting including the
+      "Presente" case, and a malformed-data crash guard — this is
+      meaningful coverage the sandbox CAN give, unlike the visual audit.
+      tsc clean, vitest 87 green (78 + 9 new).
 
 ### A5 — Export & guest simplification
 - [ ] Wire export buttons (PDF/DOCX/JSON) in editor + list to
