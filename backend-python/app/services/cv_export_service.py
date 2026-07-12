@@ -139,13 +139,20 @@ def to_json_resume(profile: dict[str, Any]) -> dict[str, Any]:
     first = name_parts[0] if name_parts else ""
     last = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
+    location: dict[str, Any] = {"address": _s(profile.get("location"))}
+    if postcode := _s(profile.get("postcode")):
+        location["postalCode"] = postcode
+    # No separate city/region/countryCode fields exist on CandidateProfile
+    # (just the one free-text "location" string) — left out rather than
+    # guessed, since JSON Resume doesn't require them.
+
     basics: dict[str, Any] = {
         "name": full_name,
         "label": _s(profile.get("professionalTitle") or profile.get("jobTitle") or profile.get("job_title")),
         "email": _s(profile.get("email")),
         "phone": _s(profile.get("phone")),
         "summary": _s(profile.get("professionalSummary") or profile.get("professional_summary") or profile.get("summary")),
-        "location": {"address": _s(profile.get("location"))},
+        "location": location,
         "profiles": [],
     }
     if linkedin := _s(profile.get("linkedinUrl") or profile.get("linkedin_url")):
@@ -211,6 +218,15 @@ def to_json_resume(profile: dict[str, Any]) -> dict[str, Any]:
         "skills": skills_section,
         "languages": languages_section,
         "certificates": [{"name": c} for c in _list(profile.get("certifications"))],
+        # Empty by design — CandidateProfile has no matching fields for these
+        # yet. Present (not omitted) so importers that expect the full JSON
+        # Resume v1 shape (e.g. Reactive Resume) don't choke on missing keys.
+        "awards": [],
+        "volunteer": [],
+        "publications": [],
+        "interests": [],
+        "references": [],
+        "projects": [],
         "meta": {"theme": "parvagas"},
     }
 

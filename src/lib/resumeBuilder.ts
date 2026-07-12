@@ -13,6 +13,23 @@ const RESUME_SSO_CLIENT_ID = String(process.env.NEXT_PUBLIC_RESUME_SSO_CLIENT_ID
 const RESUME_SSO_REDIRECT_URI = String(process.env.NEXT_PUBLIC_RESUME_SSO_REDIRECT_URI || "").trim();
 
 /**
+ * Builds the /oauth/authorize URL for a given handoff code — shared by both
+ * the logged-in flow (buildResumeBuilderSsoUrl) and the guest "build from
+ * scratch" flow (CVBuilderGuestForm), which gets its handoff code from the
+ * public /public/resume-sso/guest-start endpoint instead of the
+ * authenticated one.
+ */
+export function buildAuthorizeUrlFromHandoff(handoffCode: string): string {
+  const authorizeUrl = new URL(apiUrl("/oauth/authorize"));
+  authorizeUrl.searchParams.set("client_id", RESUME_SSO_CLIENT_ID);
+  authorizeUrl.searchParams.set("redirect_uri", RESUME_SSO_REDIRECT_URI);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("scope", "openid profile email");
+  authorizeUrl.searchParams.set("handoff", handoffCode);
+  return authorizeUrl.toString();
+}
+
+/**
  * Builds the URL that hands a logged-in candidate off to the CV builder
  * already authenticated as themselves, via Parvagas's own OIDC bridge
  * (backend-python/app/api/v1/resume_sso.py). Falls back to the plain
@@ -26,13 +43,7 @@ export async function buildResumeBuilderSsoUrl(): Promise<string> {
 
   try {
     const res = await authFetch<{ code: string }>("/resume-sso/handoff", token, { method: "POST" });
-    const authorizeUrl = new URL(apiUrl("/oauth/authorize"));
-    authorizeUrl.searchParams.set("client_id", RESUME_SSO_CLIENT_ID);
-    authorizeUrl.searchParams.set("redirect_uri", RESUME_SSO_REDIRECT_URI);
-    authorizeUrl.searchParams.set("response_type", "code");
-    authorizeUrl.searchParams.set("scope", "openid profile email");
-    authorizeUrl.searchParams.set("handoff", res.code);
-    return authorizeUrl.toString();
+    return buildAuthorizeUrlFromHandoff(res.code);
   } catch {
     return RESUME_BUILDER_URL;
   }

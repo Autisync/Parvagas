@@ -25,20 +25,25 @@ Single-client allow-list (RESUME_SSO_CLIENT_ID/RESUME_SSO_REDIRECT_URI) —
 no OAuth client registry table, since Reactive Resume is the only consumer.
 """
 import json
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.observability import limiter
+from app.core.security import hash_password
 from app.db.session import get_db
-from app.models import AuditLog, OAuthAuthorizationCode, SSOHandoffCode, User
+from app.models import AuditLog, CandidateProfile, OAuthAuthorizationCode, SSOHandoffCode, User, UserRole
+from app.services.auth_service import AuthService
+from app.workers.tasks import send_verification_email
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -83,6 +88,76 @@ async def create_handoff_code(
     ))
     db.commit()
     _audit(db, action="resume_sso.handoff", user_id=current_user.id)
+    return {"code": code, "expiresIn": HANDOFF_TTL_SECONDS}
+
+
+class GuestStartRequest(BaseModel):
+    fullName: str
+    email: str
+
+
+def _split_name(full_name: str) -> tuple[str, str]:
+    parts = full_name.strip().split(None, 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return (parts[0], "") if parts else ("", "")
+
+
+@router.post("/public/resume-sso/guest-start")
+@limiter.limit("5/hour")
+async def guest_start(
+    request: Request,
+    payload: GuestStartRequest,
+    db: Session = Depends(get_db),
+):
+    """"Build a CV from scratch" entry point for visitors with no account —
+    same find-or-create-by-email shadow-account pattern as the sibling guest
+    CV-drop endpoint (POST /public/cv-submissions in jobs.py), but skips the
+    file upload/parse entirely and lands the visitor straight in the CV
+    builder via the same SSO bridge a logged-in candidate uses. The account
+    isn't a dead end — new users get a verification email and can claim a
+    real password later via the existing forgot-password flow, exactly like
+    today's guest CV-drop accounts."""
+    full_name = payload.fullName.strip()
+    email_norm = payload.email.strip().lower()
+    if not full_name or not email_norm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome completo e email são obrigatórios.")
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email_norm):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email inválido.")
+
+    user = db.query(User).filter(User.email == email_norm).first()
+    is_new_user = user is None
+    if user and user.role != UserRole.candidate:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este email já está associado a outro tipo de conta.")
+
+    if not user:
+        generated_password = secrets.token_urlsafe(18)
+        user = User(
+            email=email_norm, full_name=full_name,
+            password_hash=hash_password(generated_password), role=UserRole.candidate,
+        )
+        db.add(user)
+        db.flush()
+
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user.id).first()
+    if not profile:
+        first_name, last_name = _split_name(full_name)
+        profile = CandidateProfile(user_id=user.id, first_name=first_name, last_name=last_name)
+        db.add(profile)
+    db.flush()
+
+    code = secrets.token_urlsafe(32)
+    db.add(SSOHandoffCode(
+        code=code, user_id=user.id,
+        expires_at=datetime.utcnow() + timedelta(seconds=HANDOFF_TTL_SECONDS),
+    ))
+    db.commit()
+
+    if is_new_user:
+        raw_token = AuthService.create_verification_token(db, user)
+        send_verification_email.delay(str(user.id), raw_token)
+
+    _audit(db, action="resume_sso.guest_start", user_id=user.id, extra={"isNewUser": is_new_user})
     return {"code": code, "expiresIn": HANDOFF_TTL_SECONDS}
 
 
