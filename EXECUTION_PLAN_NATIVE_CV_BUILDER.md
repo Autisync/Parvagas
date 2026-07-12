@@ -301,27 +301,57 @@ one remaining exit condition, deliberately left for you to execute via
 ## Phase B — Visual templates via WeasyPrint
 
 ### B1 — WeasyPrint integration (backend)
-- [ ] Add `weasyprint` (v69.x, current stable — verified against official
-      docs 2026-07) to `backend-python/requirements.txt`.
-- [ ] Dockerfile (**Alpine** — note: WeasyPrint's docs cover Debian
-      (`libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0`); the Alpine
-      equivalents are `pango fontconfig` + a real font package
-      (`ttf-dejavu` or `font-noto`). **Verify exact apk names against
-      WeasyPrint docs/Alpine package index at implementation time**; if
-      Alpine fights back, the documented fallback is switching the runtime
-      stage to `python:3.12-slim` and using the verified Debian packages —
-      a contained, single-file change.)
-- [ ] `app/services/resume_render_service.py`: Jinja2 HTML template +
-      shared CSS per template slug → `weasyprint.HTML(string=...).write_pdf()`.
-      Contract: **the same HTML/CSS file pair drives both the frontend
-      preview and the PDF** (frontend fetches the rendered HTML via a new
-      `GET /resumes/{id}/preview.html`, iframe-embedded) — this is what
-      guarantees preview=PDF parity from Phase B on.
-- [ ] Guard: WeasyPrint import behind a feature check; if unavailable,
-      `/resumes/export` falls back to the Phase A reportlab path (ship-dark
-      pattern — never 500 on a rendering dependency).
-- [ ] Tests: render service produces a non-empty PDF for a full and an
-      empty Resume.data; template slug routing; fallback path.
+- [x] Add `weasyprint` (`==69.0`, confirmed current stable via WebFetch of
+      the official docs) to `backend-python/requirements.txt`.
+- [x] Dockerfile (**Alpine**) — verified the *exact* apk names against
+      WeasyPrint's own docs rather than guessing: `so:libgobject-2.0.so.0
+      so:libpango-1.0.so.0 so:libharfbuzz.so.0 so:libharfbuzz-subset0.so.0
+      so:libfontconfig.so.1 so:libpangoft2-1.0.so.0` (virtual packages
+      naming the exact shared objects, Alpine ≥3.17 — this image is newer)
+      plus `ttf-dejavu` for actual font files (confirmed via
+      Kozea/WeasyPrint#677: WeasyPrint crashes outright with zero fonts
+      installed, not just renders blank text — a real, previously-untested
+      risk this session's earlier guess of "pango fontconfig" would have
+      hit). Added to the **runtime** stage only, not the builder — WeasyPrint
+      installs as a pure Python/cffi wheel; the native libs are dlopen()'d
+      at import time, not link time, so `pip install` itself needs nothing
+      extra.
+- [x] `app/services/resume_render_service.py`: Jinja2 HTML template + shared
+      CSS (`ats-classic`, matching the Phase A reportlab/AtsClassic.tsx look)
+      → `weasyprint.HTML(string=...).write_pdf()`. Same template drives both
+      `render_html()` (used by the new `GET /resumes/{id}/preview.html`)
+      and `render_pdf()` — single source, no more hand-maintained-twice
+      layout logic. **Security note not in the original plan text**:
+      resume fields are candidate-supplied free text and B3 will serve this
+      same HTML to unauthenticated visitors, so autoescape had to be
+      explicit (`Environment(autoescape=select_autoescape(...))`, not the
+      bare `jinja2.Template()` this codebase's email_service.py uses
+      elsewhere) — verified with a real `<script>` payload in a test, see
+      below. Also fixed a real bug caught during implementation:
+      `Resume.template_id` is a FK to `ResumeTemplate.id` (a uuid), not the
+      slug `TEMPLATES` is keyed by — passing it straight through would have
+      silently always rendered `ats-classic` regardless of the resume's
+      actual template. Added `_template_slug()` to resolve it.
+- [x] Guard: `RESUME_WEASYPRINT_ENABLED` (default `false`, added to
+      `config.py`/`.env.example` next to the other per-feature flags). The
+      export endpoint's PDF branch tries `resume_render_service.render_pdf()`
+      only when the flag is on, catches any `Exception`, and falls through
+      to the existing `to_pdf()` reportlab call either way — confirmed this
+      isn't hypothetical: this sandbox has weasyprint installed but no
+      pango/gobject native libs, so `render_pdf()` genuinely raises here
+      (normalized to `RuntimeError`, see the render service), and the
+      export endpoint still returns a valid PDF via the fallback.
+- [x] Tests: `tests/test_resume_render_service.py` (6 tests — full-profile
+      section coverage, empty-profile placeholder, malformed-data guard,
+      XSS-escaping, unknown-slug fallback, and the real
+      RuntimeError-on-missing-native-libs behavior observed in this sandbox)
+      plus 4 new tests in `test_resumes_api.py` (export falls back to
+      reportlab with the flag on, preview.html 404s when the flag is off,
+      renders HTML when on, 404s on a missing resume). Full suite: 245
+      passed, 3 skipped (pre-existing, need a live LLM).
+      **Not verified**: a real WeasyPrint PDF render end-to-end (this
+      sandbox has no pango) — the Dockerfile's package list is verified
+      against docs but not build-tested; flag as a deploy-time check.
 
 ### B2 — Two visual templates + picker
 - [ ] `moderno` (single column, accent color, sans) and `executivo`

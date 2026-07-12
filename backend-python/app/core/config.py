@@ -137,6 +137,12 @@ class Settings(BaseSettings):
     # exists to start enforcing app.services.candidate_billing_service.
     CANDIDATE_PREMIUM_ENABLED: bool = os.getenv("CANDIDATE_PREMIUM_ENABLED", "false").lower() == "true"
 
+    # WeasyPrint HTML/CSS-driven resume rendering (EXECUTION_PLAN_NATIVE_
+    # CV_BUILDER.md Phase B) — ship dark: while false, /resumes/{id}/export
+    # and /resumes/{id}/preview.html fall back to the Phase A reportlab
+    # path (to_pdf), which never depends on WeasyPrint/pango being present.
+    RESUME_WEASYPRINT_ENABLED: bool = os.getenv("RESUME_WEASYPRINT_ENABLED", "false").lower() == "true"
+
     # Optional AI-assisted resume scoring and rewrite
     RESUME_AI_ENABLED: bool = os.getenv("RESUME_AI_ENABLED", "false").lower() == "true"
     RESUME_AI_PROVIDER: str = os.getenv("RESUME_AI_PROVIDER", "openai")

@@ -23,13 +23,26 @@ FROM python:3.12-alpine AS runtime
 WORKDIR /app
 
 # Install runtime dependencies
+# WeasyPrint (Phase B resume rendering) needs pango/harfbuzz/fontconfig at
+# import time (loaded via cffi, not linked at pip-install time — that's why
+# these aren't in the builder stage) plus at least one real font, or it
+# crashes outright (Kozea/WeasyPrint#677). Verified against WeasyPrint's own
+# docs for Alpine >=3.17 (this image is newer) — the `so:` entries are
+# virtual packages naming the exact shared objects needed, not dev packages.
 RUN apk add --no-cache \
     postgresql-libs \
     libffi \
     curl \
     tesseract-ocr \
     tesseract-ocr-data-eng \
-    tesseract-ocr-data-por
+    tesseract-ocr-data-por \
+    so:libgobject-2.0.so.0 \
+    so:libpango-1.0.so.0 \
+    so:libharfbuzz.so.0 \
+    so:libharfbuzz-subset.so.0 \
+    so:libfontconfig.so.1 \
+    so:libpangoft2-1.0.so.0 \
+    ttf-dejavu
 
 # Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages

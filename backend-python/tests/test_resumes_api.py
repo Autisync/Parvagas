@@ -33,6 +33,7 @@ _update_resume = resumes_module.update_resume
 _delete_resume = resumes_module.delete_resume
 _duplicate_resume = resumes_module.duplicate_resume
 _export_resume = resumes_module.export_resume
+_preview_resume_html = resumes_module.preview_resume_html
 
 
 @pytest.fixture()
@@ -241,6 +242,54 @@ def test_export_empty_data_does_not_crash(db):
     ))
     response = asyncio.run(_export_resume(resume_id=created["id"], format="pdf", db=db, current_user=user))
     assert response.media_type == "application/pdf"
+
+
+# --------------------------- WeasyPrint (Phase B1) -------------------------- #
+# This sandbox has no pango/gobject native libs (confirmed manually during
+# implementation — a bare `import weasyprint` raises OSError trying to
+# dlopen libgobject), so RESUME_WEASYPRINT_ENABLED=true here always
+# exercises the *fallback* path, not a real WeasyPrint render. That's the
+# behavior actually worth testing: the export endpoint must still return a
+# valid PDF (via reportlab) rather than 500ing when WeasyPrint can't run.
+
+def test_export_pdf_falls_back_to_reportlab_when_weasyprint_unavailable(db, monkeypatch):
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", True)
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    response = asyncio.run(_export_resume(resume_id=created["id"], format="pdf", db=db, current_user=user))
+    assert response.media_type == "application/pdf"
+    assert response.body.startswith(b"%PDF")
+
+
+def test_preview_html_404s_when_weasyprint_disabled(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_preview_resume_html(resume_id=created["id"], db=db, current_user=user))
+    assert exc_info.value.status_code == 404
+
+
+def test_preview_html_renders_when_weasyprint_enabled(db, monkeypatch):
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", True)
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    response = asyncio.run(_preview_resume_html(resume_id=created["id"], db=db, current_user=user))
+    assert response.media_type == "text/html"
+    assert b"Ana Sousa" in response.body
+
+
+def test_preview_html_missing_resume_404s(db, monkeypatch):
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", True)
+    user = _make_candidate(db)
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_preview_resume_html(resume_id=str(uuid.uuid4()), db=db, current_user=user))
+    assert exc_info.value.status_code == 404
 
 
 # ------------------------------ route ordering ----------------------------- #

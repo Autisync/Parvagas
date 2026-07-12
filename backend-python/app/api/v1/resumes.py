@@ -45,9 +45,13 @@ from app.schemas import (
     ResumeTemplateResponse,
     ResumeUpdateRequest,
 )
+from app.core.config import get_settings
 from app.services.resume_ai_service import ResumeAIService
 from app.services.cv_export_service import to_docx, to_json_resume, to_pdf
+from app.services import resume_render_service
 from app.models import CandidateCVSubscription
+
+settings = get_settings()
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/resumes", tags=["resumes"])
@@ -68,6 +72,17 @@ def _ensure_candidate_profile(db: Session, current_user: User) -> CandidateProfi
     db.commit()
     db.refresh(profile)
     return profile
+
+
+def _template_slug(db: Session, template_id: str | None) -> str | None:
+    """resume_render_service.TEMPLATES is keyed by ResumeTemplate.slug
+    (e.g. "ats-classic"), but Resume.template_id stores the FK's uuid — this
+    resolves one to the other. None falls through to the render service's
+    own default."""
+    if not template_id:
+        return None
+    template = db.query(ResumeTemplate).filter(ResumeTemplate.id == template_id).first()
+    return template.slug if template else None
 
 
 def _profile_to_resume_data(current_user: User, profile: CandidateProfile) -> dict[str, Any]:
@@ -358,7 +373,17 @@ async def export_resume(
                 headers={"Content-Disposition": f'attachment; filename="{safe_name}.json"'},
             )
         else:  # pdf
-            data = to_pdf(resume_data)
+            data = None
+            if settings.RESUME_WEASYPRINT_ENABLED:
+                try:
+                    data = resume_render_service.render_pdf(resume_data, _template_slug(db, resume.template_id))
+                except Exception as exc:
+                    # Ship-dark guarantee: a WeasyPrint-specific failure (missing
+                    # pango at runtime, a malformed template) never 500s the
+                    # export — it silently falls through to the Phase A path.
+                    logger.warning(f"WeasyPrint render failed, falling back to reportlab: {exc}")
+            if data is None:
+                data = to_pdf(resume_data)
             return Response(
                 content=data,
                 media_type="application/pdf",
@@ -370,6 +395,31 @@ async def export_resume(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao gerar CV. Tente novamente.",
         )
+
+
+@router.get("/{resume_id}/preview.html")
+async def preview_resume_html(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Same-origin HTML render of a resume, for iframe-embedding in the
+    editor (Phase B) — the same template that drives the PDF export, so the
+    preview and the download can never drift apart the way the Phase A
+    client-side AtsClassic.tsx and the reportlab to_pdf() can. Dark behind
+    RESUME_WEASYPRINT_ENABLED until B2 switches the frontend over to it."""
+    if not settings.RESUME_WEASYPRINT_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    resume_data = _load_json_field(resume.data) or {}
+    html = resume_render_service.render_html(resume_data, _template_slug(db, resume.template_id))
+    return Response(content=html, media_type="text/html")
 
 
 @router.post("/score", response_model=ResumeScoreResponse)

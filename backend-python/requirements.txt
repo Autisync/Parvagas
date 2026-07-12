@@ -27,6 +27,12 @@ rapidfuzz==3.9.3
 langdetect==1.0.9
 # ATS CV generator: PDF export (DOCX already covered by python-docx above).
 reportlab==4.2.2
+# HTML/CSS-driven resume rendering (Phase B) — needs pango/fontconfig at
+# runtime (see Dockerfile's runtime stage); pip install itself doesn't
+# require them since weasyprint loads them via cffi at import time, not
+# link time. Optional at the app level too — gated behind
+# RESUME_WEASYPRINT_ENABLED, falls back to reportlab's to_pdf() above.
+weasyprint==69.0
 slowapi==0.1.9
 jinja2==3.1.2
 python-dotenv==1.0.0
