@@ -266,15 +266,35 @@ design system (red-600 primary on white).
 ### A7 — Decommission Reactive Resume (deploy-time; manual steps flagged)
 - [ ] Remove the `cv-builder` service + OAUTH_* env from
       docker-compose.prod.yml (needs deploy verification on server).
+      **Not applied** — documented as Step 3 of
+      [`REACTIVE_RESUME_DECOMMISSION_GUIDE.md`](REACTIVE_RESUME_DECOMMISSION_GUIDE.md)
+      instead of edited directly. Reason: this retires a container real
+      candidates may still be mid-CV in, and the sandbox has no way to
+      confirm the native builder actually works end-to-end against a live
+      backend (no auth past `/Login`). Gated on you running
+      `MANUAL_TEST_GUIDE.md` §11 against production first — that's Step 1
+      of the guide.
 - [ ] Mark the OIDC endpoints deprecated (keep dark one release, then a
       cleanup commit removes resume_sso OIDC routes + tables via migration;
-      guest-start stays, it's now JWT-based).
+      guest-start stays, it's now JWT-based). **Docstring-level deprecation
+      already landed in A5** (see resume_sso.py's module docstring "PIVOT"
+      note); actual route/table removal documented as Step 4 of the
+      decommission guide, intentionally deferred a full release past Step 3.
 - [ ] Traefik: cv.parvagas.pt router → 301 redirect to
-      parvagas.pt/Portal/Candidato/Construtor-CV (server-side manual step;
-      document in TRAEFIK_FIX_GUIDE.md style).
+      parvagas.pt/Portal/Candidato/Construtor-CV. **Config written**
+      (Step 2 of the decommission guide has the exact `redirectRegex`
+      middleware + router diff for `deploy/traefik/dynamic/parvagas.yml`,
+      matching `TRAEFIK_FIX_GUIDE.md`'s deploy process) but **not applied**
+      to the live server — same live-verification gate as above, and this
+      is a manual server-side step this sandbox cannot perform regardless
+      (no SSH access), consistent with how the original `TRAEFIK_FIX_GUIDE.md`
+      fix was handled earlier this session.
 
 **Phase A exit criterion:** a candidate (or guest) creates, edits, previews,
-and downloads a CV entirely inside the portal; cv-builder container retired.
+and downloads a CV entirely inside the portal — **met**, confirmed via A1-A6's
+test/tsc/vitest/browser verification. "cv-builder container retired" is the
+one remaining exit condition, deliberately left for you to execute via
+`REACTIVE_RESUME_DECOMMISSION_GUIDE.md` once you've done a live pass.
 
 ---
 
