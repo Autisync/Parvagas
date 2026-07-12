@@ -142,17 +142,31 @@ services:
     volumes:
       - ollama-data:/root/.ollama
 
-  # CV Builder — localhost:3050 (Parvagas-branded Reactive Resume)
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Parvagas CV Builder — localhost:3050
   cv-builder:
     build:
       context: ./reactive-resume
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - ./.env.docker
     ports:
-      - "3050:3000"
+      - "3050:3001"
     environment:
+      PORT: "3001"
       APP_URL: http://localhost:3050
-      AUTH_SECRET: local-cv-builder-auth-secret
+      APP_NAME: "Parvagas CV Builder"
+      SUPPORT_EMAIL: suporte@parvagas.pt
+      SUPPORT_URL: https://parvagas.pt
+      AUTH_SECRET: ${CV_BUILDER_AUTH_SECRET:-local-cv-builder-auth-secret-please-change-32chars-min}
+      BETTER_AUTH_SECRET: ${CV_BUILDER_AUTH_SECRET:-local-cv-builder-auth-secret-please-change-32chars-min}
       STORAGE_PROVIDER: minio
       STORAGE_ENDPOINT: minio
       STORAGE_PORT: "9000"
@@ -164,18 +178,32 @@ services:
       STORAGE_SKIP_BUCKET_CHECK: "false"
       STORAGE_URL_PREFIX: http://localhost:9000/reactive-resume
       DATABASE_URL: postgresql://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
-      ACCESS_TOKEN_SECRET: local-cv-builder-secret
-      REFRESH_TOKEN_SECRET: local-cv-builder-refresh
+      ACCESS_TOKEN_SECRET: ${CV_BUILDER_ACCESS_TOKEN_SECRET:-local-cv-builder-access-token-secret-please-change}
+      REFRESH_TOKEN_SECRET: ${CV_BUILDER_REFRESH_TOKEN_SECRET:-local-cv-builder-refresh-token-secret-please-change}
       PUBLIC_URL: http://localhost:3050
       NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Local)"
       NEXT_PUBLIC_APP_URL: http://localhost:3050
-      MAIL_FROM: noreply@parvagas.pt
-      SMTP_URL: smtp://mailhog:1025
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: "Parvagas CV Builder <suporte@parvagas.pt>"
+      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas Account}
+      OAUTH_CLIENT_ID: ${PARVAGAS_OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${PARVAGAS_OAUTH_CLIENT_SECRET:-}
+      OAUTH_DISCOVERY_URL: ${PARVAGAS_OAUTH_DISCOVERY_URL:-}
+      PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-false}
+      PARVAGAS_API_URL: ${PARVAGAS_API_URL:-http://backend-python:8000}
+      PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
+      PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     profiles:
       - cv-builder
 

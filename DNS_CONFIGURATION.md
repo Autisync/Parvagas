@@ -30,9 +30,9 @@
 
 | Subdomain | Type | Content | Proxied | Purpose |
 |-----------|------|---------|---------|---------|
-| `api.dev.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev Backend API |
-| `cv.dev.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev CV Builder |
-| `storage.dev.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev MinIO S3 |
+| `dev-api.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev Backend API |
+| `dev-cv.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev Parvagas CV Builder |
+| `dev-storage.parvagas.pt` | A | 46.224.205.82 | ✓ Auto | Dev MinIO S3 |
 
 **OR use Wildcard:**
 | Record | Type | Content | Proxied | Purpose |
@@ -74,7 +74,7 @@ TTL: Auto
 ### 2. Add A Records for Development (Optional)
 
 ```
-Name: api.dev.parvagas.pt
+Name: dev-api.parvagas.pt
 Type: A
 Content: 46.224.205.82
 Proxied: Yes
@@ -82,7 +82,7 @@ TTL: Auto
 ```
 
 ```
-Name: cv.dev.parvagas.pt
+Name: dev-cv.parvagas.pt
 Type: A
 Content: 46.224.205.82
 Proxied: Yes
@@ -90,7 +90,7 @@ TTL: Auto
 ```
 
 ```
-Name: storage.dev.parvagas.pt
+Name: dev-storage.parvagas.pt
 Type: A
 Content: 46.224.205.82
 Proxied: Yes

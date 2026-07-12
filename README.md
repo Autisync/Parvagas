@@ -287,6 +287,128 @@ docker compose logs -f celery-worker
 Invoke-RestMethod -Uri 'http://localhost:8000/health' -Method Get
 ```
 
+## Parvagas CV Builder (Branding + URLs)
+
+O CV Builder está oficialmente rebatizado como **Parvagas CV Builder**.
+
+### URLs oficiais
+
+- Local: `http://localhost:3050`
+- Development: `https://dev-cv.parvagas.pt`
+- Production: `https://cv.parvagas.pt`
+
+### Variáveis de ambiente essenciais
+
+Backend (Docker):
+
+- `RESUME_BUILDER_URL`
+- `RESUME_BUILDER_SECRET`
+
+Frontend (Next.js / Vercel):
+
+- `NEXT_PUBLIC_RESUME_BUILDER_URL`
+- `NEXT_PUBLIC_CV_BUILDER_URL` (compatibilidade)
+
+CV Builder (SSO + integração com Parvagas API):
+
+- `PARVAGAS_OAUTH_PROVIDER_NAME`
+- `PARVAGAS_OAUTH_CLIENT_ID`
+- `PARVAGAS_OAUTH_CLIENT_SECRET`
+- `PARVAGAS_OAUTH_DISCOVERY_URL`
+- `PARVAGAS_RESUME_SYNC_ENABLED`
+- `PARVAGAS_API_URL`
+- `PARVAGAS_API_KEY` (deve corresponder ao `RESUME_BUILDER_SECRET` no backend)
+- `PARVAGAS_RESUME_SYNC_PATH` (default: `/api/v1/integrations/cv-builder/resumes/sync`)
+
+Analytics (opcional, CV Builder Web):
+
+- `VITE_ANALYTICS_SCRIPT_URL`
+- `VITE_ANALYTICS_DOMAIN`
+
+### Login com conta Parvagas
+
+Callback URL para configurar no provider OAuth:
+
+- `https://cv.parvagas.pt/api/auth/oauth2/callback/custom`
+- `https://dev-cv.parvagas.pt/api/auth/oauth2/callback/custom`
+- `http://localhost:3050/api/auth/oauth2/callback/custom`
+
+Discovery URL (exemplo):
+
+- `https://auth.parvagas.pt/.well-known/openid-configuration`
+
+### Sync de curriculos para a API Parvagas
+
+Endpoint backend implementado:
+
+- `POST /api/v1/integrations/cv-builder/resumes/sync`
+
+Headers esperados:
+
+- `X-Source: parvagas-cv-builder`
+- `Authorization: Bearer <PARVAGAS_API_KEY>` (obrigatorio quando `RESUME_BUILDER_SECRET` estiver definido)
+
+Payload base:
+
+```json
+{
+  "action": "create|update|patch|import|duplicate|delete",
+  "userId": "<id-do-utilizador>",
+  "resumeId": "<id-do-cv>",
+  "resume": { "title": "...", "data": {} }
+}
+```
+
+### Endpoints recomendados por ambiente
+
+Development:
+
+- API: `https://dev-api.parvagas.pt`
+- CV Builder: `https://dev-cv.parvagas.pt`
+- Storage: `https://dev-storage.parvagas.pt`
+
+Production:
+
+- API: `https://api.parvagas.pt`
+- CV Builder: `https://cv.parvagas.pt`
+- Storage: `https://storage.parvagas.pt`
+
+### Como correr com a nova marca
+
+Local:
+
+```bash
+docker compose --profile cv-builder up -d --build --force-recreate cv-builder
+```
+
+Development stack:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build
+```
+
+Production stack:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Verificação rápida
+
+```bash
+curl -I http://localhost:3050
+curl -I https://dev-cv.parvagas.pt
+curl -I https://cv.parvagas.pt
+```
+
+Documentação relacionada:
+
+- `ENV_VARIABLES_REFERENCE.md`
+- `VERCEL_DOCKER_SETUP.md`
+- `VERCEL_FRONTEND_INTEGRATION.md`
+- `PORTAINER_DEPLOYMENT_GUIDE.md`
+- `DNS_CONFIGURATION.md`
+
 ### Resume AI local test
 
 1. Enable AI locally in `backend-python/.env`:

@@ -1986,7 +1986,7 @@ async def cv_builder_readiness(
     _check(
         "RESUME_BUILDER_URL configured",
         bool(settings.RESUME_BUILDER_URL),
-        settings.RESUME_BUILDER_URL or "Not set — set RESUME_BUILDER_URL to the Reactive Resume instance URL",
+        settings.RESUME_BUILDER_URL or "Not set — set RESUME_BUILDER_URL to the Parvagas CV Builder URL",
     )
     _check(
         "RESUME_BUILDER_SECRET configured",

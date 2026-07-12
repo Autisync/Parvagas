@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Parvagas — DEVELOPMENT stack (docker-compose.dev.yml)
 #
-# Runs the full backend + CV builder (Reactive Resume) so new features can be
+# Runs the full backend + Parvagas CV Builder so new features can be
 # tested in a staging environment before any push to production.
 #
 # Usage:
@@ -237,7 +237,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # ── CV Builder (Reactive Resume — Parvagas-branded) ────────────────────────
+  # ── Parvagas CV Builder (dev) ───────────────────────────────────────────────
   #
   # Runs on port 3050 so it doesn't clash with the Next.js dev server (3000).
   # The reactive-resume submodule is built from local source so Parvagas theme
@@ -262,6 +262,10 @@ services:
       - traefik.http.routers.dev-parvagas-cv.service=dev-parvagas-cv-svc
       - traefik.http.services.dev-parvagas-cv-svc.loadbalancer.server.port=3000
     environment:
+      PORT: "3000"
+      APP_NAME: "Parvagas CV Builder"
+      SUPPORT_EMAIL: suporte@parvagas.pt
+      SUPPORT_URL: https://parvagas.pt
       # ── Storage ──────────────────────────────────────────────────────────
       STORAGE_PROVIDER: minio
       STORAGE_ENDPOINT: minio
@@ -276,16 +280,33 @@ services:
       # ── Database ─────────────────────────────────────────────────────────
       DATABASE_URL: postgresql://parvagas:devpass@postgres:5432/parvagas
       # ── Auth ─────────────────────────────────────────────────────────────
+      AUTH_SECRET: dev-cv-builder-secret
+      BETTER_AUTH_SECRET: dev-cv-builder-secret
       ACCESS_TOKEN_SECRET: dev-cv-builder-secret
       REFRESH_TOKEN_SECRET: dev-cv-builder-refresh-secret
       # ── Public URL ───────────────────────────────────────────────────────
+      APP_URL: https://dev-cv.parvagas.pt
       PUBLIC_URL: https://dev-cv.parvagas.pt
       # ── Branding ─────────────────────────────────────────────────────────
       NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Dev)"
       NEXT_PUBLIC_APP_URL: https://dev-cv.parvagas.pt
       # ── Mail ─────────────────────────────────────────────────────────────
-      MAIL_FROM: noreply@parvagas.pt
-      SMTP_URL: smtp://mailhog:1025
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      SMTP_FROM: "Parvagas CV Builder <suporte@parvagas.pt>"
+      # ── Parvagas Account SSO (optional) ─────────────────────────────────
+      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas Account}
+      OAUTH_CLIENT_ID: ${PARVAGAS_OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${PARVAGAS_OAUTH_CLIENT_SECRET:-}
+      OAUTH_DISCOVERY_URL: ${PARVAGAS_OAUTH_DISCOVERY_URL:-}
+      # ── Sync resumes to Parvagas API (optional) ─────────────────────────
+      PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-false}
+      PARVAGAS_API_URL: ${PARVAGAS_API_URL:-https://dev-api.parvagas.pt}
+      PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
+      PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
     depends_on:
       postgres:
         condition: service_healthy
@@ -293,6 +314,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      mailhog:
+        condition: service_started
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
       start_period: 30s
@@ -315,8 +338,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-
+volumes:
   dev_postgres_data:
   dev_redis_data:
   dev_minio_data:

@@ -167,9 +167,9 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", FRONTEND_URL)
 
-    # CV Builder (Reactive Resume self-hosted instance)
+    # Parvagas CV Builder (self-hosted instance)
     RESUME_BUILDER_URL: str = os.getenv("RESUME_BUILDER_URL", "")
-    # JWT secret shared with the Reactive Resume instance for SSO pass-through.
+    # JWT secret shared with the Parvagas CV Builder instance for SSO pass-through.
     RESUME_BUILDER_SECRET: str = os.getenv("RESUME_BUILDER_SECRET", "")
 
     # Ollama — free-tier local AI for CV builder (no subscription required).

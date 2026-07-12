@@ -20,16 +20,16 @@ Go to **Vercel Dashboard** → Your Project → **Settings** → **Environment V
 **Development Environment:**
 ```env
 NEXT_PUBLIC_API_URL=https://api.dev.parvagas.pt
-NEXT_PUBLIC_RESUME_BUILDER_URL=https://cv.dev.parvagas.pt
-NEXT_PUBLIC_STORAGE_URL=https://storage.dev.parvagas.pt
+NEXT_PUBLIC_RESUME_BUILDER_URL=https://dev-cv.parvagas.pt
+NEXT_PUBLIC_STORAGE_URL=https://dev-storage.parvagas.pt
 NEXT_PUBLIC_SITE_URL=https://dev-parvagas.vercel.app
 ```
 
 **Preview Environment:**
 ```env
 NEXT_PUBLIC_API_URL=https://api.dev.parvagas.pt
-NEXT_PUBLIC_RESUME_BUILDER_URL=https://cv.dev.parvagas.pt
-NEXT_PUBLIC_STORAGE_URL=https://storage.dev.parvagas.pt
+NEXT_PUBLIC_RESUME_BUILDER_URL=https://dev-cv.parvagas.pt
+NEXT_PUBLIC_STORAGE_URL=https://dev-storage.parvagas.pt
 NEXT_PUBLIC_SITE_URL=https://dev-parvagas.vercel.app
 ```
 

@@ -8,17 +8,17 @@
 |----------|-----------|-----------|---------|
 | `FRONTEND_URL` | `https://dev.parvagas.pt` or `https://dev-parvagas.vercel.app` | `https://parvagas.vercel.app` | Frontend origin for CORS + email branding |
 | `CORS_ORIGIN` | `https://dev-parvagas.vercel.app,https://dev.parvagas.pt` | `https://parvagas.vercel.app,https://parvagas.pt` | Additional allowed CORS origins |
-| `BACKEND_URL` | `https://api.dev.parvagas.pt` | `https://api.parvagas.pt` | Backend public URL for links in emails |
-| `S3_ENDPOINT_URL` | `https://storage.dev.parvagas.pt` | `https://storage.parvagas.pt` | MinIO public URL for file downloads |
-| `RESUME_BUILDER_URL` | `https://cv.dev.parvagas.pt` | `https://cv.parvagas.pt` | CV Builder (Reactive Resume) public URL |
+| `BACKEND_URL` | `https://dev-api.parvagas.pt` | `https://api.parvagas.pt` | Backend public URL for links in emails |
+| `S3_ENDPOINT_URL` | `https://dev-storage.parvagas.pt` | `https://storage.parvagas.pt` | MinIO public URL for file downloads |
+| `RESUME_BUILDER_URL` | `https://dev-cv.parvagas.pt` | `https://cv.parvagas.pt` | Parvagas CV Builder public URL |
 
 ### Frontend Environment Variables (Vercel)
 
 | Variable | Dev Value | Prod Value | Purpose |
 |----------|-----------|-----------|---------|
-| `NEXT_PUBLIC_BACKEND_URL` | `https://api.dev.parvagas.pt` | `https://api.parvagas.pt` | Backend API endpoint (frontend calls) |
-| `NEXT_PUBLIC_CV_BUILDER_URL` | `https://cv.dev.parvagas.pt` | `https://cv.parvagas.pt` | CV Builder app URL (iframe/popup) |
-| `NEXT_PUBLIC_STORAGE_URL` | `https://storage.dev.parvagas.pt` | `https://storage.parvagas.pt` | Storage (MinIO) URL for file downloads |
+| `NEXT_PUBLIC_API_URL` | `https://dev-api.parvagas.pt` | `https://api.parvagas.pt` | Backend API endpoint (frontend calls) |
+| `NEXT_PUBLIC_CV_BUILDER_URL` | `https://dev-cv.parvagas.pt` | `https://cv.parvagas.pt` | Parvagas CV Builder app URL |
+| `NEXT_PUBLIC_STORAGE_URL` | `https://dev-storage.parvagas.pt` | `https://storage.parvagas.pt` | Storage (MinIO) URL for file downloads |
 | `NEXT_PUBLIC_APP_URL` | `https://dev-parvagas.vercel.app` | `https://parvagas.vercel.app` | Frontend app URL (for canonical URLs, etc) |
 
 ## Command Reference
@@ -30,7 +30,7 @@
 vercel link
 
 # Add environment variables via CLI
-vercel env add NEXT_PUBLIC_BACKEND_URL
+vercel env add NEXT_PUBLIC_API_URL
 vercel env add NEXT_PUBLIC_CV_BUILDER_URL
 vercel env add NEXT_PUBLIC_STORAGE_URL
 vercel env add NEXT_PUBLIC_APP_URL
@@ -107,9 +107,9 @@ For testing Vercel + Docker setup locally:
 ### 1. Add hosts entries (/etc/hosts or C:\Windows\System32\drivers\etc\hosts)
 
 ```
-127.0.0.1  api.dev.parvagas.pt
-127.0.0.1  cv.dev.parvagas.pt
-127.0.0.1  storage.dev.parvagas.pt
+127.0.0.1  dev-api.parvagas.pt
+127.0.0.1  dev-cv.parvagas.pt
+127.0.0.1  dev-storage.parvagas.pt
 127.0.0.1  dev.parvagas.pt
 ```
 
@@ -124,8 +124,8 @@ docker compose -f docker-compose.dev.yml up
 ```bash
 cd <frontend-dir>
 NEXT_PUBLIC_BACKEND_URL=https://api.dev.parvagas.pt \
-NEXT_PUBLIC_CV_BUILDER_URL=https://cv.dev.parvagas.pt \
-NEXT_PUBLIC_STORAGE_URL=https://storage.dev.parvagas.pt \
+NEXT_PUBLIC_CV_BUILDER_URL=https://dev-cv.parvagas.pt \
+NEXT_PUBLIC_STORAGE_URL=https://dev-storage.parvagas.pt \
 NEXT_PUBLIC_APP_URL=http://localhost:3000 \
 npm run dev
 ```
@@ -134,7 +134,7 @@ npm run dev
 
 ```typescript
 // In browser console
-fetch('https://api.dev.parvagas.pt/api/health')
+fetch('https://dev-api.parvagas.pt/api/health')
   .then(r => r.json())
   .then(console.log)
   .catch(console.error)

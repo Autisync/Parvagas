@@ -36,7 +36,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 # Vercel deployment (dev preview/staging)
 # Replace with your actual Vercel dev domain
 FRONTEND_URL=https://dev-parvagas.vercel.app
-BACKEND_URL=https://api.dev.parvagas.pt
+BACKEND_URL=https://dev-api.parvagas.pt
 
 # Allow multiple origins (Vercel + local testing)
 # Comma-separated if you need multiple URLs
@@ -60,10 +60,10 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_SECURE=false
 MINIO_BUCKET=parvagas
-S3_ENDPOINT_URL=https://storage.dev.parvagas.pt
+S3_ENDPOINT_URL=https://dev-storage.parvagas.pt
 
 # CV Builder
-RESUME_BUILDER_URL=https://cv.dev.parvagas.pt
+RESUME_BUILDER_URL=https://dev-cv.parvagas.pt
 RESUME_BUILDER_SECRET=<your-jwt-secret>
 
 # AI / Ollama
@@ -75,12 +75,12 @@ OLLAMA_FREE_TIER_ENABLED=true
 **Vercel Environment Variables (Dev)**
 ```env
 # Browser-exposed (NEXT_PUBLIC_ prefix)
-NEXT_PUBLIC_BACKEND_URL=https://api.dev.parvagas.pt
-NEXT_PUBLIC_API_BASE_URL=https://api.dev.parvagas.pt
-NEXT_PUBLIC_CV_BUILDER_URL=https://cv.dev.parvagas.pt
-NEXT_PUBLIC_RESUME_BUILDER_URL=https://cv.dev.parvagas.pt
-NEXT_PUBLIC_STORAGE_URL=https://storage.dev.parvagas.pt
-NEXT_PUBLIC_S3_ENDPOINT=https://storage.dev.parvagas.pt
+NEXT_PUBLIC_BACKEND_URL=https://dev-api.parvagas.pt
+NEXT_PUBLIC_API_BASE_URL=https://dev-api.parvagas.pt
+NEXT_PUBLIC_CV_BUILDER_URL=https://dev-cv.parvagas.pt
+NEXT_PUBLIC_RESUME_BUILDER_URL=https://dev-cv.parvagas.pt
+NEXT_PUBLIC_STORAGE_URL=https://dev-storage.parvagas.pt
+NEXT_PUBLIC_S3_ENDPOINT=https://dev-storage.parvagas.pt
 NEXT_PUBLIC_APP_URL=https://dev-parvagas.vercel.app
 
 # Server-only (optional for /api/* routes that proxy to backend)
@@ -176,9 +176,9 @@ cv.parvagas.pt           A record → your-server-ip
 storage.parvagas.pt      A record → your-server-ip
 
 # Development DNS (optional, for testing before prod)
-api.dev.parvagas.pt      A record → your-server-ip
-cv.dev.parvagas.pt       A record → your-server-ip
-storage.dev.parvagas.pt  A record → your-server-ip
+dev-api.parvagas.pt      A record → your-server-ip
+dev-cv.parvagas.pt       A record → your-server-ip
+dev-storage.parvagas.pt  A record → your-server-ip
 
 # Or use wildcard
 *.parvagas.pt            A record → your-server-ip
@@ -278,8 +278,8 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate backend-python
 | Component | Dev | Prod |
 |-----------|-----|------|
 | Frontend | https://dev-parvagas.vercel.app | https://parvagas.vercel.app |
-| Backend API | https://api.dev.parvagas.pt | https://api.parvagas.pt |
-| CV Builder | https://cv.dev.parvagas.pt | https://cv.parvagas.pt |
-| Storage | https://storage.dev.parvagas.pt | https://storage.parvagas.pt |
+| Backend API | https://dev-api.parvagas.pt | https://api.parvagas.pt |
+| Parvagas CV Builder | https://dev-cv.parvagas.pt | https://cv.parvagas.pt |
+| Storage | https://dev-storage.parvagas.pt | https://storage.parvagas.pt |
 | CORS Origin | https://dev-parvagas.vercel.app | https://parvagas.vercel.app |
 | DNS | *.dev.parvagas.pt | *.parvagas.pt |

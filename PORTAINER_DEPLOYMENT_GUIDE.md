@@ -135,7 +135,7 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASS=your-app-password
 SMTP_FROM=Parvagas <noreply@parvagas.pt>
 
-# CV Builder
+# Parvagas CV Builder
 RESUME_BUILDER_URL=https://cv.parvagas.pt
 RESUME_BUILDER_SECRET=GENERATE_STRONG_RANDOM_STRING_HERE
 

@@ -17,7 +17,7 @@
 #
 # Routing: Traefik Docker-label provider (preferred).
 #   api.parvagas.pt      → backend-python :8000
-#   cv.parvagas.pt       → cv-builder :3000
+#   cv.parvagas.pt       → parvagas-cv-builder :3000
 #   storage.parvagas.pt  → minio :9000
 #
 # The legacy FILE provider config (deploy/traefik/dynamic/parvagas.yml) still
@@ -30,7 +30,7 @@
 x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-production}
   # Database — self-hosted Postgres (built from the POSTGRES_* values below)
-  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parvagas}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-parvagas}
   JWT_SECRET: ${JWT_SECRET}
   JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
   ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
@@ -79,7 +79,7 @@ x-backend-env: &backend-env
   WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
   # CV Builder + Ollama
   RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-  RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET}
+  RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET:?RESUME_BUILDER_SECRET is required}
   CV_HOST: ${CV_HOST:-cv.parvagas.pt}
   # Ollama (free-tier AI)
   OLLAMA_BASE_URL: http://ollama:11434
@@ -302,20 +302,22 @@ services:
       redis:
         condition: service_healthy
 
-  # ── CV Builder (Reactive Resume — cv.parvagas.pt) ─────────────────────────
-  # Uses the official prebuilt image (docker.io/amruthpillai/reactive-resume)
-  # instead of building from ./reactive-resume: that directory was committed
-  # as a bare gitlink (mode 160000) with no .gitmodules, so it clones as an
-  # empty folder on any fresh checkout — Portainer's `git pull` never had a
-  # Dockerfile to build. If a customized fork/build is ever needed, restore
-  # this as a `build:` block with the source properly vendored into the repo
-  # (not a submodule — Portainer's git-stack integration doesn't fetch those).
+  # ── Parvagas CV Builder (cv.parvagas.pt) ───────────────────────────────────
+  # Built from local source to keep Parvagas branding, integrations and UI
+  # changes in sync with this repository.
   cv-builder:
-    image: amruthpillai/reactive-resume:v5.2.3
+    build:
+      context: ./reactive-resume
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      PORT: "3000"
+      APP_NAME: "Parvagas CV Builder"
+      SUPPORT_EMAIL: suporte@parvagas.pt
+      SUPPORT_URL: https://parvagas.pt
       APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-      AUTH_SECRET: ${RESUME_BUILDER_SECRET}
+      AUTH_SECRET: ${RESUME_BUILDER_SECRET:?RESUME_BUILDER_SECRET is required}
+      BETTER_AUTH_SECRET: ${RESUME_BUILDER_SECRET:?RESUME_BUILDER_SECRET is required}
       STORAGE_PROVIDER: minio
       STORAGE_ENDPOINT: minio
       STORAGE_PORT: "9000"
@@ -335,14 +337,26 @@ services:
       # same password (e.g. `#` -> `%23`, `!` -> `%21`) if it contains reserved
       # URL characters. Falls back to the raw password when unset, so this is a
       # no-op until you actually add the encoded var.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-parvagas}
-      ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET}
-      REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET}}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}}@postgres:5432/${POSTGRES_DB:-parvagas}
+      ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET:?RESUME_BUILDER_SECRET is required}
+      REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET:?RESUME_BUILDER_SECRET is required}}
       PUBLIC_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
       NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder"
       NEXT_PUBLIC_APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-      MAIL_FROM: ${SMTP_FROM:-noreply@parvagas.pt}
-      SMTP_URL: smtp://${SMTP_USER:-}:${SMTP_PASS:-}@${SMTP_HOST}:${SMTP_PORT:-587}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Parvagas CV Builder <suporte@parvagas.pt>}
+      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas Account}
+      OAUTH_CLIENT_ID: ${PARVAGAS_OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${PARVAGAS_OAUTH_CLIENT_SECRET:-}
+      OAUTH_DISCOVERY_URL: ${PARVAGAS_OAUTH_DISCOVERY_URL:-}
+      PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-true}
+      PARVAGAS_API_URL: ${PARVAGAS_API_URL:-https://api.parvagas.pt}
+      PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
+      PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
     depends_on:
       postgres:
         condition: service_healthy
