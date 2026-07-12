@@ -1,14 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon } from "@heroicons/react/24/outline";
+import TagInput from "@/app/components/profile/TagInput";
+import AddItemModal from "@/app/components/profile/AddItemModal";
+import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
+import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, PlusIcon } from "@heroicons/react/24/outline";
 
-type ResumeData = Record<string, unknown>;
+type ResumeData = {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  professionalSummary?: string;
+  workExperience?: ExperienceItem[];
+  education?: EducationItem[];
+  hardSkills?: string[];
+  techniques?: string[];
+  tools?: string[];
+  languages?: string[];
+  certifications?: string[];
+  [key: string]: unknown;
+};
 
 type Resume = {
   id: string;
@@ -19,22 +40,52 @@ type Resume = {
   is_published: boolean;
 };
 
-// Section rail — only "Resumo" has a real editor in this iteration (A2, the
-// shell). The rest are wired up in A3; showing them now (as "em breve")
-// keeps the full structure visible so the guided, checklist-style rail from
-// the UX spec is in place from the start, not bolted on later.
 const SECTIONS = [
-  { key: "resumo", label: "Resumo", ready: true },
-  { key: "experiencia", label: "Experiência", ready: false },
-  { key: "educacao", label: "Educação", ready: false },
-  { key: "competencias", label: "Competências", ready: false },
-  { key: "idiomas", label: "Idiomas", ready: false },
-  { key: "certificacoes", label: "Certificações", ready: false },
+  { key: "dados", label: "Dados Pessoais" },
+  { key: "resumo", label: "Resumo" },
+  { key: "experiencia", label: "Experiência" },
+  { key: "educacao", label: "Educação" },
+  { key: "competencias", label: "Competências" },
+  { key: "idiomas", label: "Idiomas" },
+  { key: "certificacoes", label: "Certificações" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
 
 const AUTOSAVE_DEBOUNCE_MS = 10000;
+
+const DEFAULT_EXPERIENCE: ExperienceItem = {
+  jobTitle: "", company: "", location: "", startDate: "", endDate: "", current: false, description: "",
+};
+const DEFAULT_EDUCATION: EducationItem = {
+  degree: "", institution: "", location: "", startDate: "", endDate: "", description: "",
+};
+
+function sectionHasContent(data: ResumeData, key: SectionKey): boolean {
+  switch (key) {
+    case "dados": return Boolean(data.fullName?.trim() && data.phone?.trim());
+    case "resumo": return Boolean(data.professionalSummary?.trim());
+    case "experiencia": return Boolean(data.workExperience?.length);
+    case "educacao": return Boolean(data.education?.length);
+    case "competencias": return Boolean(data.hardSkills?.length || data.techniques?.length || data.tools?.length);
+    case "idiomas": return Boolean(data.languages?.length);
+    case "certificacoes": return Boolean(data.certifications?.length);
+  }
+}
+
+function completenessOf(title: string, data: ResumeData): { percent: number; nextAction: string } {
+  const doneSections = SECTIONS.filter((s) => sectionHasContent(data, s.key));
+  const total = SECTIONS.length + 1; // +1 for title
+  const done = doneSections.length + (title.trim() ? 1 : 0);
+  const percent = Math.round((done / total) * 100);
+  const missing = SECTIONS.find((s) => !sectionHasContent(data, s.key));
+  const nextAction = !title.trim()
+    ? "Dê um título ao seu CV."
+    : missing
+      ? `Adicione ${missing.label.toLowerCase()}.`
+      : "O seu CV está completo!";
+  return { percent, nextAction };
+}
 
 export default function ConstrutorCvEditorPage() {
   const { token, loading: authLoading } = useAuth("candidate", { allowAdmin: false });
@@ -45,27 +96,39 @@ export default function ConstrutorCvEditorPage() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState<SectionKey>("resumo");
+  const [activeSection, setActiveSection] = useState<SectionKey>("dados");
   const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
 
-  // Local edit buffer, decoupled from the fetched `resume` so typing never
-  // waits on a network round-trip.
   const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-  const debouncedTitle = useDebounce(title, AUTOSAVE_DEBOUNCE_MS);
-  const debouncedSummary = useDebounce(summary, AUTOSAVE_DEBOUNCE_MS);
+  const [data, setData] = useState<ResumeData>({});
+  const draft = useMemo(() => ({ title, data }), [title, data]);
+  const debouncedDraft = useDebounce(draft, AUTOSAVE_DEBOUNCE_MS);
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydrated = useRef(false);
+  const lastSavedJson = useRef("");
+
+  // Experience/education modal state (mirrors the pattern already used in
+  // CV-e-Documentos for the exact same ExperienceItem/EducationItem shapes).
+  const [expModalOpen, setExpModalOpen] = useState(false);
+  const [draftExperience, setDraftExperience] = useState<ExperienceItem>(DEFAULT_EXPERIENCE);
+  const [editingExpIndex, setEditingExpIndex] = useState<number | null>(null);
+  const [expFormError, setExpFormError] = useState("");
+
+  const [eduModalOpen, setEduModalOpen] = useState(false);
+  const [draftEducation, setDraftEducation] = useState<EducationItem>(DEFAULT_EDUCATION);
+  const [editingEduIndex, setEditingEduIndex] = useState<number | null>(null);
+  const [eduFormError, setEduFormError] = useState("");
 
   const load = useCallback(async () => {
     if (!token || !resumeId) return;
     setError("");
     try {
-      const data = await authFetch<Resume>(`/resumes/${resumeId}`, token);
-      setResume(data);
-      setTitle(data.title);
-      setSummary((data.data?.professionalSummary as string) || data.summary || "");
+      const fetched = await authFetch<Resume>(`/resumes/${resumeId}`, token);
+      setResume(fetched);
+      setTitle(fetched.title);
+      setData(fetched.data || {});
+      lastSavedJson.current = JSON.stringify({ title: fetched.title, data: fetched.data || {} });
       hydrated.current = true;
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível carregar este CV."));
@@ -78,33 +141,35 @@ export default function ConstrutorCvEditorPage() {
     load();
   }, [load]);
 
-  // Autosave — fires on the debounced value, never blocks typing. Only
-  // sends the fields this iteration's editor actually touches (title,
-  // professionalSummary inside `data`); A3's section editors will extend
-  // this same pattern per section rather than replacing it.
+  // Autosave — one debounced snapshot of {title, data} covers every section,
+  // so every editor below just calls setData/setTitle and this handles the
+  // rest. Compares against the last-saved JSON so it never fires a no-op
+  // PATCH (e.g. right after load, before the user has touched anything).
   useEffect(() => {
-    if (!hydrated.current || !token || !resume) return;
-    if (debouncedTitle === resume.title && debouncedSummary === ((resume.data?.professionalSummary as string) || resume.summary || "")) {
-      return;
-    }
+    if (!hydrated.current || !token) return;
+    const nextJson = JSON.stringify(debouncedDraft);
+    if (nextJson === lastSavedJson.current) return;
+
     const save = async () => {
       setSaveState("saving");
       try {
-        const nextData = { ...resume.data, professionalSummary: debouncedSummary };
         const updated = await authFetch<Resume>(`/resumes/${resumeId}`, token, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: debouncedTitle || "Sem título", summary: debouncedSummary, data: nextData }),
+          body: JSON.stringify({
+            title: debouncedDraft.title || "Sem título",
+            summary: debouncedDraft.data.professionalSummary || "",
+            data: debouncedDraft.data,
+          }),
         });
-        setResume(updated);
+        lastSavedJson.current = JSON.stringify({ title: updated.title, data: updated.data });
         setSaveState("saved");
       } catch {
         setSaveState("error");
       }
     };
     save();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedTitle, debouncedSummary]);
+  }, [debouncedDraft, token, resumeId]);
 
   const exportResume = async (format: "pdf" | "docx") => {
     if (!token) return;
@@ -127,6 +192,78 @@ export default function ConstrutorCvEditorPage() {
     }
   };
 
+  // ---- Experience handlers ----
+  const experienceList = data.workExperience || [];
+  const openAddExperience = () => {
+    setDraftExperience(DEFAULT_EXPERIENCE);
+    setEditingExpIndex(null);
+    setExpFormError("");
+    setExpModalOpen(true);
+  };
+  const openEditExperience = (index: number) => {
+    setDraftExperience(experienceList[index] || DEFAULT_EXPERIENCE);
+    setEditingExpIndex(index);
+    setExpFormError("");
+    setExpModalOpen(true);
+  };
+  const saveExperience = () => {
+    if (!draftExperience.jobTitle.trim() || !draftExperience.company.trim()) {
+      setExpFormError("Preencha pelo menos o cargo e a empresa.");
+      return;
+    }
+    const next = [...experienceList];
+    if (editingExpIndex === null) next.unshift(draftExperience);
+    else next[editingExpIndex] = draftExperience;
+    setData((prev) => ({ ...prev, workExperience: next }));
+    setExpModalOpen(false);
+  };
+  const deleteExperience = (index: number) => {
+    setData((prev) => ({ ...prev, workExperience: experienceList.filter((_, i) => i !== index) }));
+  };
+  const moveExperience = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= experienceList.length) return;
+    const next = [...experienceList];
+    [next[index], next[target]] = [next[target], next[index]];
+    setData((prev) => ({ ...prev, workExperience: next }));
+  };
+
+  // ---- Education handlers ----
+  const educationList = data.education || [];
+  const openAddEducation = () => {
+    setDraftEducation(DEFAULT_EDUCATION);
+    setEditingEduIndex(null);
+    setEduFormError("");
+    setEduModalOpen(true);
+  };
+  const openEditEducation = (index: number) => {
+    setDraftEducation(educationList[index] || DEFAULT_EDUCATION);
+    setEditingEduIndex(index);
+    setEduFormError("");
+    setEduModalOpen(true);
+  };
+  const saveEducation = () => {
+    if (!draftEducation.degree.trim() || !draftEducation.institution.trim()) {
+      setEduFormError("Preencha pelo menos o curso e a instituição.");
+      return;
+    }
+    const next = [...educationList];
+    if (editingEduIndex === null) next.unshift(draftEducation);
+    else next[editingEduIndex] = draftEducation;
+    setData((prev) => ({ ...prev, education: next }));
+    setEduModalOpen(false);
+  };
+  const deleteEducation = (index: number) => {
+    setData((prev) => ({ ...prev, education: educationList.filter((_, i) => i !== index) }));
+  };
+  const moveEducation = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= educationList.length) return;
+    const next = [...educationList];
+    [next[index], next[target]] = [next[target], next[index]];
+    setData((prev) => ({ ...prev, education: next }));
+  };
+
   if (authLoading || fetching) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -140,6 +277,8 @@ export default function ConstrutorCvEditorPage() {
   }
 
   if (!resume) return null;
+
+  const { percent, nextAction } = completenessOf(title, data);
 
   return (
     <div>
@@ -179,51 +318,242 @@ export default function ConstrutorCvEditorPage() {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Título do CV"
-        className="mb-6 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xl font-bold text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+        className="mb-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xl font-bold text-slate-900 outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
       />
+
+      {/* Completeness meter — the single easiness lever from the UX spec:
+          always visible, always says exactly what to do next. */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-semibold text-slate-800">O seu CV está {percent}% completo</span>
+          <span className="text-slate-500">{nextAction}</span>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-red-600 transition-all" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[240px,1fr,1fr]">
         {/* Section rail */}
         <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
-          {SECTIONS.map((section) => (
-            <button
-              key={section.key}
-              type="button"
-              onClick={() => setActiveSection(section.key)}
-              className={`flex shrink-0 items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition lg:shrink ${
-                activeSection === section.key
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <span>{section.label}</span>
-              {!section.ready && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">em breve</span>}
-            </button>
-          ))}
+          {SECTIONS.map((section) => {
+            const done = sectionHasContent(data, section.key);
+            return (
+              <button
+                key={section.key}
+                type="button"
+                onClick={() => setActiveSection(section.key)}
+                className={`flex shrink-0 items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition lg:shrink ${
+                  activeSection === section.key
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span>{section.label}</span>
+                <span className={`h-2 w-2 shrink-0 rounded-full ${done ? "bg-emerald-500" : "bg-slate-300"}`} />
+              </button>
+            );
+          })}
         </nav>
 
         {/* Editor pane */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          {activeSection === "resumo" ? (
+          {activeSection === "dados" && (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="resume-fullname" className="block text-sm font-semibold text-slate-800">Nome completo</label>
+                <input
+                  id="resume-fullname"
+                  type="text"
+                  value={data.fullName || ""}
+                  onChange={(e) => setData((prev) => ({ ...prev, fullName: e.target.value }))}
+                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="resume-email" className="block text-sm font-semibold text-slate-800">Email</label>
+                  <input
+                    id="resume-email"
+                    type="email"
+                    value={data.email || ""}
+                    onChange={(e) => setData((prev) => ({ ...prev, email: e.target.value }))}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="resume-phone" className="block text-sm font-semibold text-slate-800">Telefone</label>
+                  <input
+                    id="resume-phone"
+                    type="tel"
+                    value={data.phone || ""}
+                    onChange={(e) => setData((prev) => ({ ...prev, phone: e.target.value }))}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="resume-location" className="block text-sm font-semibold text-slate-800">Localização</label>
+                <input
+                  id="resume-location"
+                  type="text"
+                  value={data.location || ""}
+                  onChange={(e) => setData((prev) => ({ ...prev, location: e.target.value }))}
+                  placeholder="Ex: Luanda, Angola"
+                  className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="resume-linkedin" className="block text-sm font-semibold text-slate-800">LinkedIn</label>
+                  <input
+                    id="resume-linkedin"
+                    type="url"
+                    value={data.linkedinUrl || ""}
+                    onChange={(e) => setData((prev) => ({ ...prev, linkedinUrl: e.target.value }))}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="resume-portfolio" className="block text-sm font-semibold text-slate-800">Portefólio</label>
+                  <input
+                    id="resume-portfolio"
+                    type="url"
+                    value={data.portfolioUrl || ""}
+                    onChange={(e) => setData((prev) => ({ ...prev, portfolioUrl: e.target.value }))}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="resume-github" className="block text-sm font-semibold text-slate-800">GitHub</label>
+                  <input
+                    id="resume-github"
+                    type="url"
+                    value={data.githubUrl || ""}
+                    onChange={(e) => setData((prev) => ({ ...prev, githubUrl: e.target.value }))}
+                    className="mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === "resumo" && (
             <div>
               <label htmlFor="resume-summary" className="block text-sm font-semibold text-slate-800">Resumo profissional</label>
               <p className="mt-1 text-xs text-slate-500">Descreva quem é e o que procura em 2-3 frases.</p>
               <textarea
                 id="resume-summary"
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
+                value={data.professionalSummary || ""}
+                onChange={(e) => setData((prev) => ({ ...prev, professionalSummary: e.target.value }))}
                 rows={8}
                 placeholder="Ex: Engenheira de software com 5 anos de experiência em..."
                 className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-red-300 focus:ring-4 focus:ring-red-100"
               />
             </div>
-          ) : (
-            <div className="flex min-h-[200px] items-center justify-center text-center">
-              <p className="text-sm text-slate-500">
-                O editor de {SECTIONS.find((s) => s.key === activeSection)?.label.toLowerCase()} chega na próxima
-                iteração — os dados do seu perfil já estão guardados no CV se o criou "a partir do meu perfil".
-              </p>
+          )}
+
+          {activeSection === "experiencia" && (
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">Experiência profissional</h3>
+                <button
+                  type="button"
+                  onClick={openAddExperience}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  <PlusIcon className="h-3.5 w-3.5" /> Adicionar
+                </button>
+              </div>
+              {experienceList.length === 0 ? (
+                <p className="text-sm text-slate-500">Ainda não adicionou nenhuma experiência.</p>
+              ) : (
+                <div className="space-y-3">
+                  {experienceList.map((item, index) => (
+                    <ExperienceCard
+                      key={`${item.company}-${index}`}
+                      item={item}
+                      onEdit={() => openEditExperience(index)}
+                      onDelete={() => deleteExperience(index)}
+                      onMoveUp={index > 0 ? () => moveExperience(index, -1) : undefined}
+                      onMoveDown={index < experienceList.length - 1 ? () => moveExperience(index, 1) : undefined}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+          )}
+
+          {activeSection === "educacao" && (
+            <div>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">Formação académica</h3>
+                <button
+                  type="button"
+                  onClick={openAddEducation}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  <PlusIcon className="h-3.5 w-3.5" /> Adicionar
+                </button>
+              </div>
+              {educationList.length === 0 ? (
+                <p className="text-sm text-slate-500">Ainda não adicionou nenhuma formação.</p>
+              ) : (
+                <div className="space-y-3">
+                  {educationList.map((item, index) => (
+                    <EducationCard
+                      key={`${item.institution}-${index}`}
+                      item={item}
+                      onEdit={() => openEditEducation(index)}
+                      onDelete={() => deleteEducation(index)}
+                      onMoveUp={index > 0 ? () => moveEducation(index, -1) : undefined}
+                      onMoveDown={index < educationList.length - 1 ? () => moveEducation(index, 1) : undefined}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === "competencias" && (
+            <div className="space-y-6">
+              <TagInput
+                label="Competências técnicas"
+                placeholder="Ex: Python, Excel, Gestão de projetos"
+                values={data.hardSkills || []}
+                onChange={(next) => setData((prev) => ({ ...prev, hardSkills: next }))}
+              />
+              <TagInput
+                label="Técnicas / Metodologias"
+                placeholder="Ex: Scrum, Vendas B2B"
+                values={data.techniques || []}
+                onChange={(next) => setData((prev) => ({ ...prev, techniques: next }))}
+              />
+              <TagInput
+                label="Ferramentas"
+                placeholder="Ex: Docker, Photoshop, SAP"
+                values={data.tools || []}
+                onChange={(next) => setData((prev) => ({ ...prev, tools: next }))}
+              />
+            </div>
+          )}
+
+          {activeSection === "idiomas" && (
+            <TagInput
+              label="Idiomas"
+              placeholder="Ex: Português (nativo), Inglês"
+              values={data.languages || []}
+              onChange={(next) => setData((prev) => ({ ...prev, languages: next }))}
+            />
+          )}
+
+          {activeSection === "certificacoes" && (
+            <TagInput
+              label="Certificações"
+              placeholder="Ex: AWS Certified, PMP"
+              values={data.certifications || []}
+              onChange={(next) => setData((prev) => ({ ...prev, certifications: next }))}
+            />
           )}
         </div>
 
@@ -232,6 +562,50 @@ export default function ConstrutorCvEditorPage() {
           <p className="text-center text-sm text-slate-500">Pré-visualização disponível na próxima iteração.<br />Use "Exportar PDF" para ver o resultado atual.</p>
         </div>
       </div>
+
+      <AddItemModal
+        open={expModalOpen}
+        title={editingExpIndex === null ? "Adicionar experiência" : "Editar experiência"}
+        onClose={() => setExpModalOpen(false)}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Cargo" value={draftExperience.jobTitle} onChange={(e) => setDraftExperience((prev) => ({ ...prev, jobTitle: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Empresa" value={draftExperience.company} onChange={(e) => setDraftExperience((prev) => ({ ...prev, company: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftExperience.location} onChange={(e) => setDraftExperience((prev) => ({ ...prev, location: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.startDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, startDate: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.endDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, endDate: e.target.value }))} disabled={draftExperience.current} />
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={draftExperience.current} onChange={(e) => setDraftExperience((prev) => ({ ...prev, current: e.target.checked, endDate: e.target.checked ? "" : prev.endDate }))} />
+            Trabalho atual
+          </label>
+        </div>
+        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição — comece com um verbo: 'Geri uma equipa de 5...'" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
+        {expFormError ? <p className="mt-2 text-xs text-rose-700">{expFormError}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setExpModalOpen(false)}>Cancelar</button>
+          <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveExperience}>Guardar</button>
+        </div>
+      </AddItemModal>
+
+      <AddItemModal
+        open={eduModalOpen}
+        title={editingEduIndex === null ? "Adicionar formação" : "Editar formação"}
+        onClose={() => setEduModalOpen(false)}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Curso / Grau" value={draftEducation.degree} onChange={(e) => setDraftEducation((prev) => ({ ...prev, degree: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Instituição" value={draftEducation.institution} onChange={(e) => setDraftEducation((prev) => ({ ...prev, institution: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftEducation.location} onChange={(e) => setDraftEducation((prev) => ({ ...prev, location: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.startDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, startDate: e.target.value }))} />
+          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.endDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, endDate: e.target.value }))} />
+        </div>
+        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição (opcional)" value={draftEducation.description} onChange={(e) => setDraftEducation((prev) => ({ ...prev, description: e.target.value }))} />
+        {eduFormError ? <p className="mt-2 text-xs text-rose-700">{eduFormError}</p> : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEduModalOpen(false)}>Cancelar</button>
+          <button type="button" className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white" onClick={saveEducation}>Guardar</button>
+        </div>
+      </AddItemModal>
     </div>
   );
 }

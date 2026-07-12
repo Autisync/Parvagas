@@ -141,15 +141,30 @@ design system (red-600 primary on white).
       candidate this sandbox doesn't have — flagged, not guessed.**
       tsc clean, vitest 78 green.
 
-### A3 — Section editors
-- [ ] Dados Pessoais + Resumo (reuse field patterns from CV-e-Documentos).
-- [ ] Experiência + Educação: reuse/extend the existing `ExperienceCard`
-      / `EducationCard` components (src/app/components/profile/) — add
-      reorder buttons.
-- [ ] Competências (reuse `TagInput` with the hard/techniques/tools
-      buckets), Idiomas, Certificações.
-- [ ] Completeness meter + per-section state chips per UX spec §1.
-- [ ] Verify: browser workflow + `impeccable` pass on the editor.
+### A3 — Section editors ✅ done
+- [x] Dados Pessoais (nome, email, telefone, localização, LinkedIn,
+      portefólio, GitHub) + Resumo — field patterns match CV-e-Documentos.
+- [x] Experiência + Educação: reused `ExperienceCard`/`EducationCard`
+      as-is (zero changes to those components) inside the same
+      `AddItemModal` add/edit pattern already proven in CV-e-Documentos,
+      with move-up/move-down reordering (keyboard-accessible buttons, per
+      the UX spec — not drag-only).
+- [x] Competências (3 `TagInput`s: hard skills/técnicas/ferramentas),
+      Idiomas, Certificações — each a single `TagInput`, reused unmodified.
+- [x] Completeness meter with a real "next best action" (not the list
+      page's cheap proxy — this one checks every section for actual
+      content) + a green/grey dot per section in the rail (UX spec §1).
+- [x] Autosave refactored from A2's separate title/summary debounce into
+      one debounced `{title, data}` snapshot, diffed against the
+      last-saved JSON — every section above (and any added later) is
+      covered by the same single effect, nothing section-specific to
+      wire per field.
+- [x] Verify: browser workflow — route compiles clean, zero console/server
+      errors with the full section set. **`impeccable` needs a live
+      authenticated session to actually see the rendered editor (it's a
+      visual audit, not a code review) — this sandbox can't get past the
+      /Login redirect, so this is flagged, not faked.** tsc clean,
+      vitest 78 green.
 
 ### A4 — Live preview (client-side)
 - [ ] `src/app/Portal/Candidato/Construtor-CV/preview/AtsClassic.tsx`:
