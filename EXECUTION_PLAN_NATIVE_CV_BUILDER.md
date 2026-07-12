@@ -95,29 +95,32 @@ design system (red-600 primary on white).
 
 ## Phase A — MVP native editor (replaces Reactive Resume for the core case)
 
-### A1 — Backend hardening of the existing `/resumes` API
-- [ ] Seed 2 `ResumeTemplate` rows via migration or startup seeder
-      (following the super-admin seed pattern in `20260517_0001`):
-      `ats-classic` (the existing cv_export_service layout) and
-      `moderno` (placeholder until Phase B renders it).
-- [ ] Implement the `POST /resumes/export` stub for real: accept
-      `format=pdf|docx|json`, build the profile-dict from `Resume.data`
-      (map Resume JSON → the dict shape `cv_export_service` expects),
-      return the file response. Reuse `to_pdf`/`to_docx`/`to_json_resume`
-      — zero new rendering code in Phase A.
-- [ ] Add `DELETE /resumes/{id}` and `POST /resumes/{id}/duplicate`
-      (both missing; duplication is a core "tailor per application" flow).
-- [ ] Add a "create from profile" mode to `POST /resumes`: when
-      `fromProfile: true`, initialize `Resume.data` from the candidate's
-      `CandidateProfile` (reuse `_profile_to_payload` in candidates.py).
-- [ ] Define the canonical `Resume.data` JSON shape in one place
-      (`app/schemas` docstring or a small module constant) — sections
-      mirroring JSON Resume v1 (basics/work/education/skills/languages/
-      certificates + sectionOrder array). Document that `to_json_resume`'s
-      output shape is the target so export stays lossless.
-- [ ] Tests: `tests/test_resumes_api.py` — CRUD + export happy path +
-      ownership isolation (candidate A cannot read candidate B's resume)
-      + from-profile initialization.
+### A1 — Backend hardening of the existing `/resumes` API ✅ done
+- [x] Seeded 2 `ResumeTemplate` rows via migration `20260712_0028`:
+      `ats-classic` and `moderno` (placeholder until Phase B renders it).
+- [x] Replaced the `POST /resumes/export` stub with a real
+      `GET /resumes/{resume_id}/export?format=pdf|docx|json` (matches the
+      existing `/candidates/cv/export` GET pattern) — zero new rendering
+      code, reuses `to_pdf`/`to_docx`/`to_json_resume` directly.
+- [x] Added `DELETE /resumes/{id}` and `POST /resumes/{id}/duplicate`.
+- [x] Added `from_profile` to `ResumeCreateRequest`: when true, `Resume.data`
+      is initialized via a new local `_profile_to_resume_data()` helper
+      (mirrors the dict already built in candidates.py's `/cv/export`,
+      not `_profile_to_payload` — that one carries profile-only fields
+      like onboarding flags that don't belong in a resume document).
+- [x] Canonical `Resume.data` shape documented in the module docstring:
+      deliberately identical to the flat profile dict `cv_export_service`
+      already consumes — no translation layer needed for export.
+- [x] Found and fixed a real pre-existing bug while in this file: `GET
+      /matches` was registered *after* `GET /{resume_id}`, so Starlette
+      matched the dynamic route first (`resume_id="matches"`) and the
+      endpoint was permanently unreachable. Reordered; added a routing
+      regression test.
+- [x] Tests: `tests/test_resumes_api.py` (14 tests) — CRUD, ownership
+      isolation, from-profile init (+ explicit data ignored when
+      from_profile=true), duplicate, delete-cascades-versions, export
+      pdf/docx/json + 404 + empty-data, route-ordering regression.
+      Full suite green (backend 265), tsc clean.
 
 ### A2 — Editor shell & routing
 - [ ] New route `src/app/Portal/Candidato/Construtor-CV/page.tsx`:

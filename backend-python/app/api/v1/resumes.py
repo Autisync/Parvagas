@@ -1,10 +1,21 @@
-"""Resume API endpoints."""
+"""Resume API endpoints — the native CV builder (EXECUTION_PLAN_NATIVE_CV_BUILDER.md).
+
+`Resume.data`'s canonical shape is deliberately identical to the flat
+profile dict app.services.cv_export_service already consumes (fullName,
+email, phone, location, linkedinUrl, portfolioUrl, githubUrl,
+professionalTitle, professionalSummary, skills/hardSkills/techniques/tools,
+languages, certifications, workExperience, education) — see
+_profile_to_resume_data() below. This means export needs zero translation
+layer: `json.loads(resume.data)` is already what to_pdf/to_docx/
+to_json_resume expect.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -35,6 +46,7 @@ from app.schemas import (
     ResumeUpdateRequest,
 )
 from app.services.resume_ai_service import ResumeAIService
+from app.services.cv_export_service import to_docx, to_json_resume, to_pdf
 from app.models import CandidateCVSubscription
 
 logger = get_logger(__name__)
@@ -56,6 +68,40 @@ def _ensure_candidate_profile(db: Session, current_user: User) -> CandidateProfi
     db.commit()
     db.refresh(profile)
     return profile
+
+
+def _profile_to_resume_data(current_user: User, profile: CandidateProfile) -> dict[str, Any]:
+    """Canonical Resume.data shape — identical to the profile dict
+    cv_export_service consumes, so export needs no translation layer.
+    Mirrors the local dict built in candidates.py's /cv/export endpoint."""
+    def _jl(value, default):
+        if not value:
+            return default
+        try:
+            return json.loads(value)
+        except Exception:
+            return default
+
+    return {
+        "fullName": current_user.full_name or "",
+        "email": current_user.email or "",
+        "phone": profile.phone or "",
+        "location": profile.location or "",
+        "postcode": profile.postcode or "",
+        "linkedinUrl": profile.linkedin_url or "",
+        "portfolioUrl": profile.portfolio_url or "",
+        "githubUrl": profile.github_url or "",
+        "professionalTitle": profile.job_title or "",
+        "professionalSummary": profile.professional_summary or "",
+        "skills": _jl(profile.skills, []),
+        "hardSkills": _jl(getattr(profile, "hard_skills", None), []),
+        "techniques": _jl(getattr(profile, "techniques", None), []),
+        "tools": _jl(getattr(profile, "tools", None), []),
+        "languages": _jl(profile.languages, []),
+        "certifications": _jl(profile.certifications, []),
+        "workExperience": _jl(profile.work_experience, []),
+        "education": _jl(profile.education, []),
+    }
 
 
 def _load_json_field(value: str | None) -> Any:
@@ -140,6 +186,23 @@ async def list_resumes(
     return [_resume_payload(resume) for resume in resumes]
 
 
+# NOTE: /matches (and any other static single-segment GET route) must be
+# registered before GET /{resume_id} — Starlette matches routes in
+# registration order, so a static route defined after a dynamic one is
+# unreachable (GET /resumes/matches would match /{resume_id} first with
+# resume_id="matches" and 404). This was a pre-existing bug; fixed by
+# ordering, not by changing the URL shape.
+@router.get("/matches", response_model=list[JobMatchResponse])
+async def list_job_matches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    matches = db.query(JobMatch).filter(JobMatch.candidate_profile_id == profile.id).order_by(JobMatch.match_percentage.desc()).all()
+    return matches
+
+
 @router.post("/", response_model=ResumeResponse)
 async def create_resume(
     payload: ResumeCreateRequest,
@@ -149,12 +212,15 @@ async def create_resume(
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
 
+    data = _profile_to_resume_data(current_user, profile) if payload.from_profile else (payload.data or {})
+    summary = (payload.summary or "").strip() or (data.get("professionalSummary") if payload.from_profile else None)
+
     resume = Resume(
         candidate_profile_id=profile.id,
         title=payload.title.strip(),
-        summary=(payload.summary or "").strip() or None,
+        summary=summary,
         template_id=payload.template_id,
-        data=json.dumps(payload.data or {}, ensure_ascii=False),
+        data=json.dumps(data, ensure_ascii=False),
         is_draft=bool(payload.is_draft),
         is_published=not bool(payload.is_draft),
     )
@@ -162,6 +228,53 @@ async def create_resume(
     db.commit()
     db.refresh(resume)
     return _resume_payload(resume)
+
+
+@router.post("/{resume_id}/duplicate", response_model=ResumeResponse)
+async def duplicate_resume(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Clone a resume — the core "tailor per application" flow: keep the
+    original, duplicate it, adapt the copy for a specific job."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    original = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not original:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    copy = Resume(
+        candidate_profile_id=profile.id,
+        title=f"{original.title} (cópia)",
+        summary=original.summary,
+        template_id=original.template_id,
+        data=original.data,
+        is_draft=True,
+        is_published=False,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return _resume_payload(copy)
+
+
+@router.delete("/{resume_id}", response_model=MessageResponse)
+async def delete_resume(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    db.query(ResumeVersion).filter(ResumeVersion.resume_id == resume.id).delete()
+    db.delete(resume)
+    db.commit()
+    return {"message": "Resume eliminado."}
 
 
 @router.get("/{resume_id}", response_model=ResumeResponse)
@@ -209,22 +322,54 @@ async def update_resume(
     return _resume_payload(resume)
 
 
-@router.post("/export", response_model=MessageResponse)
+@router.get("/{resume_id}/export")
 async def export_resume(
-    payload: dict[str, str],
+    resume_id: str,
+    format: str = Query(default="pdf", pattern="^(pdf|docx|json)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_candidate_user(current_user)
-    resume_id = payload.get("resume_id")
-    if not resume_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="resume_id is required")
+    """Export a specific resume document as PDF/DOCX/JSON-Resume.
 
-    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile.has(user_id=current_user.id)).first()
+    Zero translation layer: Resume.data IS already the profile-dict shape
+    to_pdf/to_docx/to_json_resume expect (see module docstring)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
-    return {"message": "Export endpoint is available. Resume export workflows will be implemented in the next phase."}
+    resume_data = _load_json_field(resume.data) or {}
+    safe_name = (resume.title or "cv").strip().replace(" ", "_").lower() or "cv"
+
+    try:
+        if format == "docx":
+            data = to_docx(resume_data)
+            return Response(
+                content=data,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.docx"'},
+            )
+        elif format == "json":
+            data = json.dumps(to_json_resume(resume_data), ensure_ascii=False, indent=2).encode("utf-8")
+            return Response(
+                content=data,
+                media_type="application/json",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.json"'},
+            )
+        else:  # pdf
+            data = to_pdf(resume_data)
+            return Response(
+                content=data,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+            )
+    except Exception as exc:
+        logger.error(f"Resume export error: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao gerar CV. Tente novamente.",
+        )
 
 
 @router.post("/score", response_model=ResumeScoreResponse)
@@ -332,14 +477,3 @@ async def create_cover_letter(
     db.refresh(cover_letter)
 
     return cover_letter
-
-
-@router.get("/matches", response_model=list[JobMatchResponse])
-async def list_job_matches(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_candidate_user(current_user)
-    profile = _ensure_candidate_profile(db, current_user)
-    matches = db.query(JobMatch).filter(JobMatch.candidate_profile_id == profile.id).order_by(JobMatch.match_percentage.desc()).all()
-    return matches

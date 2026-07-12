@@ -224,6 +224,10 @@ class ResumeCreateRequest(BaseModel):
     template_id: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
     is_draft: Optional[bool] = True
+    # When true, `data` is ignored and the resume is initialized from the
+    # candidate's saved CandidateProfile instead — "A partir do meu perfil"
+    # in the builder's create flow (never a blank canvas, per the UX spec).
+    from_profile: Optional[bool] = False
 
 
 class ResumeUpdateRequest(BaseModel):
