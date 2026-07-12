@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
+import { useAppNotifier } from "@/app/components/AppNotifier";
 import {
   PlusIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon,
 } from "@heroicons/react/24/outline";
@@ -39,6 +40,7 @@ function formatDate(value: string): string {
 export default function ConstrutorCvListPage() {
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
   const router = useRouter();
+  const { notify } = useAppNotifier();
   const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
@@ -88,6 +90,7 @@ export default function ConstrutorCvListPage() {
     setError("");
     try {
       await authFetch(`/resumes/${id}/duplicate`, token, { method: "POST" });
+      notify("CV duplicado com sucesso.", "success");
       load();
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível duplicar o CV."));
@@ -101,12 +104,13 @@ export default function ConstrutorCvListPage() {
     try {
       await authFetch(`/resumes/${id}`, token, { method: "DELETE" });
       setResumes((prev) => prev.filter((r) => r.id !== id));
+      notify("CV eliminado.", "success");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível eliminar o CV."));
     }
   };
 
-  const exportResume = async (id: string, format: "pdf" | "docx") => {
+  const exportResume = async (id: string, format: "pdf" | "docx" | "json") => {
     if (!token) return;
     setExportingId(id);
     setError("");
@@ -121,6 +125,7 @@ export default function ConstrutorCvListPage() {
       anchor.click();
       document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
+      notify(`CV exportado em ${format.toUpperCase()}.`, "success");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar o CV."));
     } finally {
@@ -218,14 +223,17 @@ export default function ConstrutorCvListPage() {
                   >
                     <DocumentDuplicateIcon className="h-3.5 w-3.5" /> Duplicar
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => exportResume(resume.id, "pdf")}
-                    disabled={exportingId === resume.id}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    <ArrowDownTrayIcon className="h-3.5 w-3.5" /> {exportingId === resume.id ? "A exportar…" : "PDF"}
-                  </button>
+                  {(["pdf", "docx", "json"] as const).map((fmt) => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      onClick={() => exportResume(resume.id, fmt)}
+                      disabled={exportingId === resume.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <ArrowDownTrayIcon className="h-3.5 w-3.5" /> {exportingId === resume.id ? "…" : fmt.toUpperCase()}
+                    </button>
+                  ))}
                   <button
                     type="button"
                     onClick={() => deleteResume(resume.id)}

@@ -226,10 +226,42 @@ design system (red-600 primary on white).
       gap, not a guess.
 
 ### A6 — Polish & i18n pass
-- [ ] All strings through the dictionary system (PT primary, EN entries).
-- [ ] Empty states, loading skeletons, error toasts (reuse AppNotifier).
-- [ ] Final `impeccable` audit across all builder screens; fix findings.
-- [ ] Update MANUAL_TEST_GUIDE.md with a "Construtor de CV nativo" section.
+- [x] All strings through the dictionary system (PT primary, EN entries) —
+      **scope-checked against the codebase's actual convention rather than
+      applied blindly**: `ENABLE_I18N = false` (src/config/appConfig.ts) —
+      i18n is itself shipped dark repo-wide, and every other candidate
+      portal page (CV-e-Documentos, Meu-Perfil, Onboarding, etc.) hardcodes
+      PT body copy directly, reserving `dict.*` only for chrome-level nav
+      labels (Header, sidebar). The builder already matches this: the
+      sidebar's "Construtor de CV" label went through `dict.portal.candidate
+      .cvBuilder` back in A2; all in-page copy is PT-hardcoded, same as
+      every sibling page. Migrating just this feature's body copy to the
+      dictionary system would be inconsistent with the rest of the app, not
+      more polished — left as-is.
+- [x] Empty states, loading skeletons, error toasts (reuse AppNotifier).
+      Empty states already existed (A2-A3: "Ainda não tem nenhum CV",
+      "Ainda não adicionou nenhuma experiência/formação"). Loading state
+      uses the same spinner as every other candidate portal page (`grep -rl
+      animate-pulse` across the portal returns nothing — skeletons aren't
+      this codebase's convention, so the spinner was kept for consistency
+      rather than introducing a new loading pattern this one feature).
+      Added: success toasts via `useAppNotifier` (mirroring Meu-Perfil's
+      pattern) for duplicate/delete/export on the list page and export on
+      the editor page; export buttons on both pages expanded from PDF-only
+      to PDF/DOCX/JSON (matching CV-e-Documentos's existing 3-button
+      convention — DOCX/JSON export were already live on the backend from
+      A1 but had no UI on the list page, and the editor was PDF-only).
+- [x] Final `impeccable` audit across all builder screens — **sandbox-blocked
+      again, same as A3/A4**: every Construtor-CV route redirects
+      unauthenticated visitors to `/Login`, and this sandbox has no way to
+      authenticate. Not silently skipped — flagged here and added as an
+      explicit manual step in MANUAL_TEST_GUIDE.md §11's last checkbox.
+- [x] Update MANUAL_TEST_GUIDE.md with a "Construtor de CV nativo" section
+      (§11) — covers pre-fill, autosave, live preview, mobile preview sheet,
+      experience/education modals, PDF/DOCX/JSON export with toasts,
+      duplicate/delete, and the full guest journey (including the
+      re-visit-same-email no-duplicate-account check) — plus the impeccable
+      audit as a manual step since the sandbox can't run it.
 
 ### A7 — Decommission Reactive Resume (deploy-time; manual steps flagged)
 - [ ] Remove the `cv-builder` service + OAUTH_* env from

@@ -243,6 +243,58 @@ These aren't new features, but confirm the fixes actually landed in prod.
 
 ---
 
+## 11. Construtor de CV nativo
+
+The CV builder was rebuilt natively inside the Parvagas portal (see
+`FEASIBILITY_NATIVE_CV_BUILDER.md` and `EXECUTION_PLAN_NATIVE_CV_BUILDER.md`)
+— it no longer redirects to the separate `cv.parvagas.pt` Reactive Resume
+instance. This section only exercises things the sandbox that built this
+feature genuinely could not: a live backend, an authenticated session past
+`/Login`, and the `impeccable` visual-polish audit.
+
+- [ ] Logged-in candidate: sidebar → "Construtor de CV" opens
+      `/Portal/Candidato/Construtor-CV`. Click "A partir do meu perfil" —
+      confirm the new CV is pre-filled from the candidate's existing profile
+      data (name, contact info, experience, education if present), not blank.
+- [ ] Click "Começar do zero" — confirm a blank CV opens straight in the
+      editor (no intermediate "creating…" dead end).
+- [ ] In the editor, fill in a few fields across different sections (Dados
+      Pessoais, Resumo, Experiência) and stop typing. Confirm the "A
+      guardar…" → "Guardado" indicator appears within ~10s (autosave), and
+      that typing was never blocked or lagged while it saved.
+- [ ] Confirm the desktop live preview (right pane) updates to reflect the
+      edits, and the completeness meter/percentage moves as sections fill in.
+- [ ] Resize to mobile width (or use a real phone). Confirm the preview is
+      NOT squeezed into a tiny side column — a floating "Pré-visualizar"
+      button should open it full-screen instead.
+- [ ] Add a work experience and an education entry via the "Adicionar"
+      modals. Confirm they appear in both the section list and the preview,
+      and that reordering (move up/down) works.
+- [ ] From both the CV list page and inside the editor, export PDF, DOCX,
+      and JSON. Confirm all three downloads succeed and a green success
+      toast appears for each. Open the PDF and confirm it's readable and
+      not obviously broken (layout, encoding, missing sections).
+- [ ] Duplicate a CV from the list page — confirm a copy appears with a
+      success toast. Delete a CV — confirm the confirmation dialog appears,
+      and after confirming, the card disappears with a success toast.
+- [ ] Guest journey: log out (or use an incognito window). From the
+      homepage or header, click "Construtor de CV" — confirm it lands on
+      `/Submission` scrolled to (or containing) the "Criar CV do Zero" form,
+      NOT a dead link. Fill in name + email and submit — confirm you land
+      directly in the native editor, already logged in (check the header
+      shows the account, not "Entrar"/"Criar conta"). Confirm a
+      verification email arrives at that address (this is a real new
+      account, same shadow-account pattern as the guest CV-upload flow).
+- [ ] Repeat the guest form with the SAME email — confirm it does NOT
+      create a second account or send a second verification email, and
+      still lands the visitor in the editor (their existing CVs, if any).
+- [ ] Run the `impeccable` design/UX audit skill against
+      `/Portal/Candidato/Construtor-CV` and its editor route while logged in
+      — this needs a real authenticated session, which the sandbox that
+      built this feature never had access to. Fix whatever it flags.
+
+---
+
 ## Rollout order once everything above passes
 
 1. `AUTO_APPLY_LLM_SCORING_ENABLED=true` — lowest risk, additive score

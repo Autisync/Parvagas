@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
+import { useAppNotifier } from "@/app/components/AppNotifier";
 import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
@@ -93,12 +94,13 @@ export default function ConstrutorCvEditorPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const resumeId = params.id;
+  const { notify } = useAppNotifier();
 
   const [resume, setResume] = useState<Resume | null>(null);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<SectionKey>("dados");
-  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "docx" | "json" | null>(null);
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -173,7 +175,7 @@ export default function ConstrutorCvEditorPage() {
     save();
   }, [debouncedDraft, token, resumeId]);
 
-  const exportResume = async (format: "pdf" | "docx") => {
+  const exportResume = async (format: "pdf" | "docx" | "json") => {
     if (!token) return;
     setExporting(format);
     try {
@@ -187,6 +189,7 @@ export default function ConstrutorCvEditorPage() {
       anchor.click();
       document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
+      notify(`CV exportado em ${format.toUpperCase()}.`, "success");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar o CV."));
     } finally {
@@ -302,14 +305,19 @@ export default function ConstrutorCvEditorPage() {
             )}
             {saveState === "error" && <span className="text-red-600">Erro ao guardar</span>}
           </span>
-          <button
-            type="button"
-            onClick={() => exportResume("pdf")}
-            disabled={exporting !== null}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-          >
-            <ArrowDownTrayIcon className="h-3.5 w-3.5" /> {exporting === "pdf" ? "A exportar…" : "Exportar PDF"}
-          </button>
+          <div className="flex gap-1.5">
+            {(["pdf", "docx", "json"] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => exportResume(fmt)}
+                disabled={exporting !== null}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+              >
+                <ArrowDownTrayIcon className="h-3.5 w-3.5" /> {exporting === fmt ? "…" : fmt.toUpperCase()}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
