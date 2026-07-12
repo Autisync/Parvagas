@@ -122,18 +122,24 @@ design system (red-600 primary on white).
       pdf/docx/json + 404 + empty-data, route-ordering regression.
       Full suite green (backend 265), tsc clean.
 
-### A2 — Editor shell & routing
-- [ ] New route `src/app/Portal/Candidato/Construtor-CV/page.tsx`:
-      "Os meus CVs" list (cards: title, template, updatedAt, completeness,
-      actions: editar/duplicar/exportar/eliminar) + "Criar novo CV" (choice:
-      "A partir do meu perfil" | "Do zero").
-- [ ] New route `.../Construtor-CV/[id]/page.tsx`: the editor shell —
-      section rail, editor pane, preview pane, autosave plumbing
-      (reuse `authFetch`; debounce util).
-- [ ] Portal nav: add "Construtor de CV" to the candidate sidebar
-      (replacing the external-link behavior inside the portal).
-- [ ] Verify: browser workflow — list renders, create→edit→autosave
-      round-trip visible in network tab, zero console errors.
+### A2 — Editor shell & routing ✅ done
+- [x] `src/app/Portal/Candidato/Construtor-CV/page.tsx`: "Os meus CVs" list
+      (title, updated date, draft/published badge, completeness bar,
+      editar/duplicar/exportar-PDF/eliminar) + the two create CTAs
+      ("A partir do meu perfil" using `from_profile`, "Começar do zero").
+- [x] `.../Construtor-CV/[id]/page.tsx`: editor shell — section rail
+      (Resumo real; Experiência/Educação/Competências/Idiomas/
+      Certificações marked "em breve" for A3), editor pane, preview-pane
+      placeholder (real rendering is A4), autosave plumbing wired via the
+      existing `useDebounce` hook (10s, per the UX spec) + `authFetch`
+      PATCH, with a "Guardado ✓" / "A guardar…" indicator.
+- [x] Portal nav: "Construtor de CV" added to `CandidateSidebar.tsx`
+      (new dictionary key `cvBuilder`, PT + EN).
+- [x] Verify: browser workflow — both routes compile clean, auth-guard
+      redirect to /Login works with zero console errors. **Full
+      create→edit→autosave round-trip needs a live backend + logged-in
+      candidate this sandbox doesn't have — flagged, not guessed.**
+      tsc clean, vitest 78 green.
 
 ### A3 — Section editors
 - [ ] Dados Pessoais + Resumo (reuse field patterns from CV-e-Documentos).

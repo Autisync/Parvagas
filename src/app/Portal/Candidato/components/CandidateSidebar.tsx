@@ -11,6 +11,7 @@ import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/Por
 import {
   HomeIcon, UserIcon, DocumentIcon, HeartIcon, SparklesIcon,
   BriefcaseIcon, CheckCircleIcon, BellIcon, CogIcon, RocketLaunchIcon,
+  PencilSquareIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 
@@ -38,6 +39,7 @@ export default function CandidateSidebar() {
     { href: "/Portal/Candidato/Meu-Perfil",        label: dict.portal.candidate.profile,      icon: <UserIcon className="h-5 w-5" />,          pinned: true },
     { href: "/Portal/Candidato/Onboarding",        label: "Configurar Perfil",                icon: <RocketLaunchIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/CV-e-Documentos",   label: dict.portal.candidate.cvDocs,       icon: <DocumentIcon className="h-5 w-5" /> },
+    { href: "/Portal/Candidato/Construtor-CV",     label: dict.portal.candidate.cvBuilder,    icon: <PencilSquareIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/Vagas-Recomendadas",label: dict.portal.candidate.recommended,  icon: <SparklesIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/Vagas-Guardadas",   label: dict.portal.candidate.saved,        icon: <HeartIcon className="h-5 w-5" /> },
     { href: "/Portal/Candidato/Alertas",           label: dict.portal.candidate.alerts,       icon: <BellIcon className="h-5 w-5" /> },

@@ -68,6 +68,7 @@ export type Dictionary = {
       dashboard: string;
       profile: string;
       cvDocs: string;
+      cvBuilder: string;
       recommended: string;
       jobs: string;
       saved: string;
@@ -404,6 +405,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
         dashboard: "Dashboard",
         profile: "Meu Perfil",
         cvDocs: "CV e Documentos",
+        cvBuilder: "Construtor de CV",
         recommended: "Vagas Recomendadas",
         jobs: "Vagas Disponíveis",
         saved: "Vagas Guardadas",
@@ -734,6 +736,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
         dashboard: "Dashboard",
         profile: "My Profile",
         cvDocs: "CV & Documents",
+        cvBuilder: "CV Builder",
         recommended: "Recommended Jobs",
         jobs: "Available Jobs",
         saved: "Saved Jobs",
