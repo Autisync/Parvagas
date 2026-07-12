@@ -4,8 +4,11 @@
 Same find-or-create-by-email shadow-account pattern as the sibling guest
 CV-drop endpoint (submit_spontaneous_cv in jobs.py, see
 test_public_cv_submission.py) — no visible signup screen, but a real
-CandidateProfile is created behind the scenes and immediately handed a Phase
-1 SSO handoff code so the visitor lands straight in the CV builder.
+CandidateProfile is created behind the scenes. Since EXECUTION_PLAN_NATIVE_
+CV_BUILDER.md's A5, the response is a normal login payload (access_token +
+user, same shape as POST /auth/login) rather than an SSO handoff code — the
+guest's next stop is the native CV builder route, not an external OIDC
+redirect.
 """
 import asyncio
 
@@ -16,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.v1.resume_sso import GuestStartRequest, guest_start
 from app.db.base import Base
-from app.models import CandidateProfile, SSOHandoffCode, User, UserRole
+from app.models import CandidateProfile, User, UserRole
 
 _ENDPOINT = guest_start.__wrapped__
 
@@ -42,25 +45,22 @@ async def _guest_start(db, monkeypatch, email="new-guest@example.com", full_name
     return result, verified
 
 
-def test_creates_shadow_account_and_returns_handoff_code(db, monkeypatch):
+def test_creates_shadow_account_and_returns_login_payload(db, monkeypatch):
     result, verified = asyncio.run(_guest_start(db, monkeypatch))
-    assert result["code"]
-    assert result["expiresIn"] > 0
+    assert result["access_token"]
+    assert result["token_type"] == "bearer"
+    assert result["isNewUser"] is True
     assert len(verified) == 1  # new account -> verification email queued
 
     user = db.query(User).filter(User.email == "new-guest@example.com").first()
     assert user is not None
     assert user.role == UserRole.candidate
+    assert result["user"].id == user.id
 
     profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user.id).first()
     assert profile is not None
     assert profile.first_name == "Maria"
     assert profile.last_name == "Guest"
-
-    handoff = db.query(SSOHandoffCode).filter(SSOHandoffCode.code == result["code"]).first()
-    assert handoff is not None
-    assert handoff.user_id == user.id
-    assert handoff.consumed_at is None
 
 
 def test_reuses_existing_account_without_resending_verification(db, monkeypatch):

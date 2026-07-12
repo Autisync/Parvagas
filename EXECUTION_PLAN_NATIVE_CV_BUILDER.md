@@ -188,18 +188,42 @@ design system (red-600 primary on white).
       tsc clean, vitest 87 green (78 + 9 new).
 
 ### A5 — Export & guest simplification
-- [ ] Wire export buttons (PDF/DOCX/JSON) in editor + list to
-      `POST /resumes/export` (blob download, same pattern as
-      CV-e-Documentos handleExport).
-- [ ] Simplify guest flow: `/public/resume-sso/guest-start` returns a
-      normal Parvagas JWT (same response shape as login) instead of an SSO
-      handoff code; `CVBuilderGuestForm` stores it via `setToken`/`setUser`
-      and routes to `/Portal/Candidato/Construtor-CV` directly. Update
-      `tests/test_resume_sso_guest.py`.
-- [ ] `buildResumeBuilderSsoUrl` + the three entry links point at the
-      native route now (logged-in: straight to the route; guests from
-      Header/homepage: to /Submission's guest form).
-- [ ] Verify: full guest journey in browser (form → lands in editor).
+- [x] Wire export buttons (PDF/DOCX/JSON) in editor + list to
+      `GET /resumes/{id}/export?format=` (blob download, same pattern as
+      CV-e-Documentos handleExport). Already done in A2 — list page's
+      `exportResume()` (src/app/Portal/Candidato/Construtor-CV/page.tsx:109)
+      hits the real endpoint built in A1; nothing left to wire.
+- [x] Simplify guest flow: `POST /public/resume-sso/guest-start` now
+      returns a normal Parvagas login payload (`access_token`, `token_type`,
+      `user`, `isNewUser` — same shape as `POST /auth/login`) instead of an
+      SSO handoff code, and no longer creates an `SSOHandoffCode` row
+      (backend-python/app/api/v1/resume_sso.py). `CVBuilderGuestForm.jsx`
+      stores the token/user via `setToken`/`setUser` (mirroring
+      GoogleSignInButton.tsx's pattern) and `router.push`es straight to
+      `/Portal/Candidato/Construtor-CV`, same tab, no more `window.open`.
+      `tests/test_resume_sso_guest.py` updated to assert the login-shaped
+      response; all 20 resume_sso + resume_sso_guest tests pass.
+- [x] `resumeBuilder.ts`'s `buildResumeBuilderSsoUrl`/
+      `buildAuthorizeUrlFromHandoff` are now unreferenced anywhere in the
+      frontend (kept dark per the module's pivot note — A7 owns deletion).
+      The three entry points repointed to plain internal navigation:
+      `Header.tsx`'s `openCvBuilder` and `CvBuilderCta.tsx`'s `open` now
+      `router.push` to `/Portal/Candidato/Construtor-CV` when a token exists,
+      else to `/Submission#criar-cv` (a new `id="criar-cv"` anchor added to
+      `CVBuilderGuestForm.jsx`'s wrapping `<section>`); `CV-e-Documentos/page.tsx`'s
+      `openCvBuilder` (always logged-in there) goes straight to the route,
+      no more `RESUME_BUILDER_URL` gate on the button's visibility.
+- [x] Verify: `pytest tests/test_resume_sso_guest.py tests/test_resume_sso.py`
+      (20 passed), `rm -rf .next && npx tsc --noEmit` (clean),
+      `npx vitest run` (87 passed, 7 files), browser check — logged-out
+      homepage → header "Construtor de CV" click lands on `/Submission`
+      with "Criar CV do Zero" guest form visible, no new console/server
+      errors beyond the expected localhost:8000-unreachable noise. Full
+      guest-form submission → editor landing NOT verified live (sandbox has
+      no backend to actually create the shadow account and mint a token);
+      the code path mirrors GoogleSignInButton.tsx's already-proven
+      setToken/setUser/router.push pattern exactly, so this is a documented
+      gap, not a guess.
 
 ### A6 — Polish & i18n pass
 - [ ] All strings through the dictionary system (PT primary, EN entries).

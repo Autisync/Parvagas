@@ -1,29 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { buildResumeBuilderSsoUrl } from "@/lib/resumeBuilder";
+import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/api";
 
 /**
  * Homepage "Construtor de CV" CTA. Extracted from the server-rendered
- * homepage (src/app/page.tsx) since minting the SSO handoff code needs an
- * authenticated client-side fetch — a bare href can't do that.
+ * homepage (src/app/page.tsx) since routing to the right destination
+ * (logged-in candidates vs. anonymous visitors) needs a client-side check —
+ * a bare href can't branch on auth state.
  */
 export default function CvBuilderCta({ label, className }: { label: string; className: string }) {
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  const open = async () => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const url = await buildResumeBuilderSsoUrl();
-      window.open(url, "_blank", "noopener,noreferrer");
-    } finally {
-      setLoading(false);
-    }
+  const open = () => {
+    router.push(getToken() ? "/Portal/Candidato/Construtor-CV" : "/Submission#criar-cv");
   };
 
   return (
-    <button type="button" onClick={open} disabled={loading} className={className}>
+    <button type="button" onClick={open} className={className}>
       {label}
     </button>
   );

@@ -8,7 +8,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
-import { buildResumeBuilderSsoUrl } from "@/lib/resumeBuilder";
 import { ENABLE_I18N } from "@/config/appConfig";
 
 const Logo = "/icon2.png";
@@ -25,7 +24,6 @@ export default function Header() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authUser, setAuthUser] = useState<{ role?: string; name?: string; email?: string } | null>(null);
-  const [cvBuilderLoading, setCvBuilderLoading] = useState(false);
   const { locale, dict, changeLocale } = useClientLocale();
   const isPortalPath = pathname.startsWith("/Portal/");
 
@@ -35,15 +33,8 @@ export default function Header() {
     { name: dict.header.career, href: "/Dicas-de-Carreira/" },
   ];
 
-  const openCvBuilder = async () => {
-    if (cvBuilderLoading) return;
-    setCvBuilderLoading(true);
-    try {
-      const url = await buildResumeBuilderSsoUrl();
-      window.open(url, "_blank", "noopener,noreferrer");
-    } finally {
-      setCvBuilderLoading(false);
-    }
+  const openCvBuilder = () => {
+    router.push(authUser ? "/Portal/Candidato/Construtor-CV" : "/Submission#criar-cv");
   };
 
   const renderNavigationItem = (item: { name: string; href: string }) => {
@@ -189,8 +180,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={openCvBuilder}
-                disabled={cvBuilderLoading}
-                className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+                className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700"
               >
                 {dict.header.cvBuilder}
               </button>
@@ -322,8 +312,7 @@ export default function Header() {
               <button
                 type="button"
                 onClick={openCvBuilder}
-                disabled={cvBuilderLoading}
-                className="block w-full rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-800 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+                className="block w-full rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-800 transition hover:bg-red-50 hover:text-red-700"
               >
                 {dict.header.cvBuilder}
               </button>

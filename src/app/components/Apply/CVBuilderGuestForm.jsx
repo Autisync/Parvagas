@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { apiFetchRaw } from "@/lib/api";
-import { buildAuthorizeUrlFromHandoff, RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
+import { useRouter } from "next/navigation";
+import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 
 const fieldClass =
   "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-red-300 focus:ring-4 focus:ring-red-100";
@@ -17,6 +17,7 @@ const labelClass = "block text-sm font-semibold text-slate-800";
  * straight in the CV builder already authenticated as that account.
  */
 export default function CVBuilderGuestForm() {
+  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -37,8 +38,21 @@ export default function CVBuilderGuestForm() {
       if (!res.ok) {
         throw new Error(body?.detail || "Não foi possível iniciar o construtor de CV.");
       }
-      const url = body?.code ? buildAuthorizeUrlFromHandoff(body.code) : RESUME_BUILDER_URL;
-      window.open(url, "_blank", "noopener,noreferrer");
+      const token = String(body?.access_token || "").trim();
+      if (!token) throw new Error("Resposta de autenticação inválida.");
+      setToken(token);
+      const u = body.user || {};
+      setUser({
+        id: String(u.id || ""),
+        email: u.email,
+        role: u.role,
+        name: u.fullName || u.full_name,
+        hasCompletedOnboarding: u.hasCompletedOnboarding ?? u.has_completed_onboarding ?? false,
+        hasSeenTutorial: u.hasSeenTutorial ?? u.has_seen_tutorial ?? false,
+        hasSeenEmpresaTutorial: u.hasSeenEmpresaTutorial ?? u.has_seen_empresa_tutorial ?? false,
+        companyStatus: u.companyStatus ?? u.company_status,
+      });
+      router.push("/Portal/Candidato/Construtor-CV");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível iniciar o construtor de CV.");
     } finally {
@@ -47,7 +61,7 @@ export default function CVBuilderGuestForm() {
   };
 
   return (
-    <section className="bg-white px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
+    <section id="criar-cv" className="bg-white px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-2xl rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm sm:p-10">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">Sem CV ainda?</p>
         <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Criar CV do Zero</h2>

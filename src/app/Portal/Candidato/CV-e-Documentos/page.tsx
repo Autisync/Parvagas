@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
@@ -9,7 +10,6 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import { normalizeParsedCvProfile } from "@/lib/cvProfile";
-import { buildResumeBuilderSsoUrl, RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
 import { SuccessCheck } from "@/app/components/motion";
 
 const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
@@ -404,10 +404,10 @@ function CVBuilderPlanBanner({ token }: { token: string | null }) {
 
 export default function CvDocumentosPage() {
   const { token, loading } = useAuth("candidate", { allowAdmin: false });
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadDone, setUploadDone] = useState(false);
-  const [cvBuilderLoading, setCvBuilderLoading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [draft, setDraft] = useState<ParsedDraft | null>(null);
   const [missingSections, setMissingSections] = useState<string[]>([]);
@@ -507,15 +507,8 @@ export default function CvDocumentosPage() {
     }
   };
 
-  const openCvBuilder = async () => {
-    if (cvBuilderLoading) return;
-    setCvBuilderLoading(true);
-    try {
-      const url = await buildResumeBuilderSsoUrl();
-      window.open(url, "_blank", "noopener,noreferrer");
-    } finally {
-      setCvBuilderLoading(false);
-    }
+  const openCvBuilder = () => {
+    router.push("/Portal/Candidato/Construtor-CV");
   };
 
   const handleExport = async (format: "pdf" | "docx" | "json") => {
@@ -953,19 +946,16 @@ export default function CvDocumentosPage() {
           <p className="mt-2 text-slate-600">Carregue CV, aprove dados extraídos e gere perfis específicos por área de emprego.</p>
         </div>
         {/* ── CV Builder launch button ── */}
-        {RESUME_BUILDER_URL && (
-          <button
-            type="button"
-            onClick={openCvBuilder}
-            disabled={cvBuilderLoading}
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-red-700 transition-colors disabled:opacity-60"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-            </svg>
-            Construtor de CV
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={openCvBuilder}
+          className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-red-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+          </svg>
+          Construtor de CV
+        </button>
       </div>
 
       {/* ── CV Builder subscription plan banner ── */}

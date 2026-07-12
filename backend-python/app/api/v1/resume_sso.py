@@ -23,6 +23,17 @@ cannot carry an Authorization header. So:
 
 Single-client allow-list (RESUME_SSO_CLIENT_ID/RESUME_SSO_REDIRECT_URI) —
 no OAuth client registry table, since Reactive Resume is the only consumer.
+
+PIVOT (2026-07-12, see FEASIBILITY_NATIVE_CV_BUILDER.md): the CV builder is
+being rebuilt natively inside the Parvagas portal instead of embedding
+Reactive Resume, so this whole OIDC bridge has no live caller anymore — the
+three frontend entry points now link straight to
+/Portal/Candidato/Construtor-CV instead of minting a handoff code. Kept
+dark (harmless, still tested) rather than deleted here; EXECUTION_PLAN_
+NATIVE_CV_BUILDER.md's A7 owns the deliberate removal once Phase A ships.
+`guest_start` below is the one endpoint that DID change — it now returns a
+normal login response instead of a handoff code, since the guest's next
+stop is the native editor, not an external OIDC redirect.
 """
 import json
 import re
@@ -42,6 +53,7 @@ from app.core.observability import limiter
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models import AuditLog, CandidateProfile, OAuthAuthorizationCode, SSOHandoffCode, User, UserRole
+from app.schemas import UserResponse
 from app.services.auth_service import AuthService
 from app.workers.tasks import send_verification_email
 
@@ -113,8 +125,10 @@ async def guest_start(
     """"Build a CV from scratch" entry point for visitors with no account —
     same find-or-create-by-email shadow-account pattern as the sibling guest
     CV-drop endpoint (POST /public/cv-submissions in jobs.py), but skips the
-    file upload/parse entirely and lands the visitor straight in the CV
-    builder via the same SSO bridge a logged-in candidate uses. The account
+    file upload/parse entirely. Returns a normal login response (access
+    token + user, same shape as POST /auth/login) so the frontend can log
+    the guest straight into the native CV builder — no SSO handoff code,
+    since there's no external app to hand off to anymore. The account
     isn't a dead end — new users get a verification email and can claim a
     real password later via the existing forgot-password flow, exactly like
     today's guest CV-drop accounts."""
@@ -146,11 +160,6 @@ async def guest_start(
         db.add(profile)
     db.flush()
 
-    code = secrets.token_urlsafe(32)
-    db.add(SSOHandoffCode(
-        code=code, user_id=user.id,
-        expires_at=datetime.utcnow() + timedelta(seconds=HANDOFF_TTL_SECONDS),
-    ))
     db.commit()
 
     if is_new_user:
@@ -158,7 +167,14 @@ async def guest_start(
         send_verification_email.delay(str(user.id), raw_token)
 
     _audit(db, action="resume_sso.guest_start", user_id=user.id, extra={"isNewUser": is_new_user})
-    return {"code": code, "expiresIn": HANDOFF_TTL_SECONDS}
+
+    token = AuthService.create_access_token(user)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
+        "isNewUser": is_new_user,
+    }
 
 
 @router.get("/oauth/authorize")
