@@ -81,6 +81,11 @@ x-backend-env: &backend-env
   RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
   RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET}
   CV_HOST: ${CV_HOST:-cv.parvagas.pt}
+  # SSO bridge — Parvagas as OIDC provider for the CV builder (see
+  # backend-python/app/api/v1/resume_sso.py). Must match the cv-builder
+  # service's OAUTH_CLIENT_ID/OAUTH_TOKEN_URL redirect_uri exactly.
+  RESUME_SSO_CLIENT_ID: ${RESUME_SSO_CLIENT_ID:-reactive-resume}
+  RESUME_SSO_REDIRECT_URI: ${RESUME_SSO_REDIRECT_URI}
   # Ollama (free-tier AI)
   OLLAMA_BASE_URL: http://ollama:11434
   OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
@@ -338,6 +343,17 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-parvagas}
       ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET}
       REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET}}
+      # OIDC client config — Parvagas acts as the identity provider so a
+      # logged-in candidate lands here already authenticated as themselves
+      # (see backend-python/app/api/v1/resume_sso.py). Manual endpoint URLs,
+      # no discovery/JWKS needed: single client, shared HS256 secret.
+      OAUTH_PROVIDER_NAME: "Parvagas"
+      OAUTH_CLIENT_ID: ${RESUME_SSO_CLIENT_ID:-reactive-resume}
+      OAUTH_CLIENT_SECRET: ${RESUME_BUILDER_SECRET}
+      OAUTH_AUTHORIZATION_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/authorize
+      OAUTH_TOKEN_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/token
+      OAUTH_USER_INFO_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/userinfo
+      OAUTH_SCOPES: "openid profile email"
       PUBLIC_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
       NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder"
       NEXT_PUBLIC_APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}

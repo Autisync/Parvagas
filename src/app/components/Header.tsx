@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
-import { RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
+import { buildResumeBuilderSsoUrl } from "@/lib/resumeBuilder";
 import { ENABLE_I18N } from "@/config/appConfig";
 
 const Logo = "/icon2.png";
@@ -25,6 +25,7 @@ export default function Header() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authUser, setAuthUser] = useState<{ role?: string; name?: string; email?: string } | null>(null);
+  const [cvBuilderLoading, setCvBuilderLoading] = useState(false);
   const { locale, dict, changeLocale } = useClientLocale();
   const isPortalPath = pathname.startsWith("/Portal/");
 
@@ -32,8 +33,18 @@ export default function Header() {
     { name: dict.header.jobs, href: "/Vagas-Disponiveis/" },
     { name: dict.header.companies, href: "/Empresa/" },
     { name: dict.header.career, href: "/Dicas-de-Carreira/" },
-    { name: dict.header.cvBuilder, href: RESUME_BUILDER_URL },
   ];
+
+  const openCvBuilder = async () => {
+    if (cvBuilderLoading) return;
+    setCvBuilderLoading(true);
+    try {
+      const url = await buildResumeBuilderSsoUrl();
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setCvBuilderLoading(false);
+    }
+  };
 
   const renderNavigationItem = (item: { name: string; href: string }) => {
     const active = !isExternalHref(item.href) && isCurrentPath(pathname, item.href);
@@ -173,7 +184,17 @@ export default function Header() {
               {dict.header.portalMode}
             </span>
           ) : (
-            navigation.map(renderNavigationItem)
+            <>
+              {navigation.map(renderNavigationItem)}
+              <button
+                type="button"
+                onClick={openCvBuilder}
+                disabled={cvBuilderLoading}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              >
+                {dict.header.cvBuilder}
+              </button>
+            </>
           )}
         </div>
 
@@ -298,6 +319,14 @@ export default function Header() {
           {!isPortalPath && (
             <div className="mt-5 space-y-2">
               {navigation.map(renderMobileNavigationItem)}
+              <button
+                type="button"
+                onClick={openCvBuilder}
+                disabled={cvBuilderLoading}
+                className="block w-full rounded-xl px-4 py-3 text-left text-base font-semibold text-slate-800 transition hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              >
+                {dict.header.cvBuilder}
+              </button>
             </div>
           )}
 
