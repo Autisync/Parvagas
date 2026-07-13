@@ -581,10 +581,36 @@ one remaining exit condition, deliberately left for you to execute via
       frontend surface).
 
 ### C5 — Guest→member conversion nudges
-- [ ] Post-export prompt for guest-created accounts: "Defina uma
-      palavra-passe para guardar este CV" → existing forgot-password flow.
-- [ ] Email (existing EmailService pattern): "O seu CV está guardado" with
-      claim link. Rate-limited, one per account.
+- [x] New `User.is_guest_account` (set true by both shadow-account creation
+      sites — resume_sso.py's `guest_start` and jobs.py's
+      `submit_spontaneous_cv` — and cleared the moment a real password is
+      set via `AuthService.reset_password`, which is the "claiming" event
+      for both flows) + `User.guest_claim_email_sent_at` for one-shot
+      rate-limiting. Migration `20260713_0031`.
+- [x] Post-export prompt: dismissible amber banner in the editor, shown
+      once after export for `user.isGuestAccount`. **Reused
+      `RestorePass.tsx` directly** (its self-contained trigger + modal +
+      captcha-verified `/auth/forgot-password` call) instead of building a
+      new flow — the plan's own wording ("→ existing forgot-password
+      flow") pointed at exactly this component; dropping it in was less
+      code than a bespoke button.
+- [x] Rate-limited claim email: `_maybe_send_guest_claim_email()` fires on
+      a guest's first `/resumes/{id}/export` call (any format), mints a
+      password-reset token (same mechanism as the real forgot-password
+      flow, so the link both claims the account AND sets the password),
+      and sends via a new `EmailService.send_guest_cv_claim_email()` /
+      Celery task pair mirroring `send_password_reset_email`'s shape
+      exactly. Guarded by `guest_claim_email_sent_at` — true one-shot, not
+      a rolling cooldown, since this is a conversion nudge, not a
+      recurring notification.
+- [x] Verify: pytest 299 passed/3 skipped (2 new: claim email fires once
+      on first guest export and not again on a second, never fires for a
+      non-guest account), migration chain still single-head, tsc clean
+      (added `is_guest_account`/`isGuestAccount` to the `UserResponse`
+      schema and every frontend `setUser()` call site that already threads
+      through `data.user.*` — Login's two flows, and the CV-builder guest
+      form), vitest 91, browser check of both `/Login` and the editor
+      route clean. This closes Phase C (C1-C5) in full.
 
 ---
 

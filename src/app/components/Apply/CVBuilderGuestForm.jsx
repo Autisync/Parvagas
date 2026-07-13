@@ -51,6 +51,7 @@ export default function CVBuilderGuestForm() {
         hasSeenTutorial: u.hasSeenTutorial ?? u.has_seen_tutorial ?? false,
         hasSeenEmpresaTutorial: u.hasSeenEmpresaTutorial ?? u.has_seen_empresa_tutorial ?? false,
         companyStatus: u.companyStatus ?? u.company_status,
+        isGuestAccount: u.isGuestAccount ?? u.is_guest_account ?? true,
       });
       router.push("/Portal/Candidato/Construtor-CV");
     } catch (err) {

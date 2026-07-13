@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from datetime import datetime
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
@@ -49,15 +50,30 @@ from app.schemas import (
     ResumeUpdateRequest,
 )
 from app.core.config import get_settings
+from app.services.auth_service import AuthService
 from app.services.resume_ai_service import ResumeAIService
 from app.services.cv_export_service import letter_to_pdf, to_docx, to_json_resume, to_pdf
 from app.services import resume_render_service
 from app.models import CandidateCVSubscription
+from app.workers.tasks import send_guest_cv_claim_email
 
 settings = get_settings()
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/resumes", tags=["resumes"])
+
+
+def _maybe_send_guest_claim_email(db: Session, current_user: User) -> None:
+    """C5 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): one-time "O seu CV está
+    guardado" nudge, fired on a guest account's first export. Rate-limited
+    to once-ever via guest_claim_email_sent_at, not a rolling window — this
+    is a one-shot conversion nudge, not a recurring notification."""
+    if not current_user.is_guest_account or current_user.guest_claim_email_sent_at:
+        return
+    raw_token = AuthService.create_password_reset_token(db, current_user)
+    current_user.guest_claim_email_sent_at = datetime.utcnow()
+    db.commit()
+    send_guest_cv_claim_email.delay(str(current_user.id), raw_token)
 
 
 def _ensure_candidate_user(current_user: User) -> None:
@@ -395,6 +411,7 @@ async def export_resume(
 
     resume_data = _load_json_field(resume.data) or {}
     safe_name = (resume.title or "cv").strip().replace(" ", "_").lower() or "cv"
+    _maybe_send_guest_claim_email(db, current_user)
 
     try:
         if format == "docx":

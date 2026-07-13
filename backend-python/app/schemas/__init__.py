@@ -46,6 +46,7 @@ class UserResponse(BaseModel):
     has_seen_empresa_tutorial: Optional[bool] = None
     company_status: Optional[str] = None
     company_team_role: Optional[str] = None
+    is_guest_account: Optional[bool] = None
 
     class Config:
         from_attributes = True

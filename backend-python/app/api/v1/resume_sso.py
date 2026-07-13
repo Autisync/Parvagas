@@ -149,6 +149,7 @@ async def guest_start(
         user = User(
             email=email_norm, full_name=full_name,
             password_hash=hash_password(generated_password), role=UserRole.candidate,
+            is_guest_account=True,
         )
         db.add(user)
         db.flush()

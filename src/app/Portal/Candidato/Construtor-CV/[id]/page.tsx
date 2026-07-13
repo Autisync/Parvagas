@@ -12,6 +12,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import ResumePreview from "../preview/ResumePreview";
+import RestorePass from "@/app/components/RestorePass";
 import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
@@ -138,7 +139,7 @@ function percentileHint(score: ScoreResult): string {
 }
 
 export default function ConstrutorCvEditorPage() {
-  const { token, loading: authLoading } = useAuth("candidate", { allowAdmin: false });
+  const { token, user, loading: authLoading } = useAuth("candidate", { allowAdmin: false });
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const resumeId = params.id;
@@ -160,6 +161,7 @@ export default function ConstrutorCvEditorPage() {
   const [versionPreview, setVersionPreview] = useState<VersionSnapshot | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<"score" | "rewrite" | "adapt" | null>(null);
+  const [showClaimPrompt, setShowClaimPrompt] = useState(false);
   const [score, setScore] = useState<ScoreResult | null>(null);
   const [savedJobs, setSavedJobs] = useState<{ id: string; title: string }[]>([]);
   const [adaptJobId, setAdaptJobId] = useState("");
@@ -421,6 +423,7 @@ export default function ConstrutorCvEditorPage() {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
       notify(`CV exportado em ${format.toUpperCase()}.`, "success");
+      if (user?.isGuestAccount) setShowClaimPrompt(true);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar o CV."));
     } finally {
@@ -582,6 +585,28 @@ export default function ConstrutorCvEditorPage() {
       </div>
 
       {error && <div className="mb-4"><BannerError title="Erro" message={error} /></div>}
+
+      {showClaimPrompt && user?.isGuestAccount && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Guarde o acesso a este CV</p>
+            <p className="text-xs text-amber-700">
+              Defina uma palavra-passe para poder voltar a entrar e continuar a editar mais tarde.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <RestorePass />
+            <button
+              type="button"
+              onClick={() => setShowClaimPrompt(false)}
+              className="rounded-lg p-1.5 text-amber-500 hover:bg-amber-100"
+              aria-label="Dispensar"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <input
         type="text"

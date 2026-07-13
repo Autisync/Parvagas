@@ -226,7 +226,11 @@ class AuthService:
         token.used_at = datetime.utcnow()
         user = db.query(User).get(token.user_id)
         user.password_hash = hash_password(new_password)
-        
+        # C5: setting a real password is exactly what "claiming" a guest
+        # shadow account means — this is the one place that transition
+        # happens for every guest-account flow (CV builder, CV-drop).
+        user.is_guest_account = False
+
         db.commit()
         db.refresh(user)
         
@@ -251,6 +255,7 @@ class AuthService:
             "role": user.role.value if hasattr(user.role, "value") else user.role,
             "admin_level": user.admin_level,
             "email_verified": user.email_verified,
+            "is_guest_account": bool(user.is_guest_account),
         }
 
         if user.role == UserRole.candidate:

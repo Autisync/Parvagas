@@ -44,11 +44,18 @@ class User(Base, TimestampMixin):
     
     # Status
     suspended = Column(Boolean, nullable=False, default=False)
-    
+
     # Tokens
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
-    
+
+    # Guest shadow accounts (C5, EXECUTION_PLAN_NATIVE_CV_BUILDER.md) — set
+    # true by the guest CV-drop / CV-builder-guest-start flows (a random,
+    # never-shown password is generated); flips false the moment the
+    # candidate actually sets a password via AuthService.reset_password.
+    is_guest_account = Column(Boolean, nullable=False, default=False)
+    guest_claim_email_sent_at = Column(DateTime, nullable=True)
+
     # Relations
     candidate_profile = relationship("CandidateProfile", back_populates="user", uselist=False)
     company = relationship("Company", back_populates="owner", uselist=False, foreign_keys="Company.owner_user_id")

@@ -39,6 +39,8 @@ type LoginResponse = {
     hasSeenEmpresaTutorial?: boolean;
     company_status?: "inactive" | "pending_verification" | "active" | "rejected";
     companyStatus?: "inactive" | "pending_verification" | "active" | "rejected";
+    is_guest_account?: boolean;
+    isGuestAccount?: boolean;
   };
 };
 
@@ -311,6 +313,7 @@ function LoginContent() {
         hasSeenTutorial: data.user.hasSeenTutorial ?? data.user.has_seen_tutorial ?? false,
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
         companyStatus: data.user.companyStatus || data.user.company_status,
+        isGuestAccount: data.user.isGuestAccount ?? data.user.is_guest_account ?? false,
       });
       router.replace(portalRoute(data.user.role));
       return;
@@ -391,6 +394,7 @@ function LoginContent() {
         hasSeenTutorial: data.user.hasSeenTutorial ?? data.user.has_seen_tutorial ?? false,
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
         companyStatus: data.user.companyStatus || data.user.company_status,
+        isGuestAccount: data.user.isGuestAccount ?? data.user.is_guest_account ?? false,
       });
       router.replace(portalRoute(data.user.role));
       return;

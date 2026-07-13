@@ -15,6 +15,7 @@ type User = {
   hasSeenTutorial?: boolean;
   hasSeenEmpresaTutorial?: boolean;
   companyStatus?: "inactive" | "pending_verification" | "active" | "rejected";
+  isGuestAccount?: boolean;
 };
 
 type UseAuthOptions = {

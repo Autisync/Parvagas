@@ -93,6 +93,45 @@ def send_password_reset_email(self, user_id: str, raw_token: str) -> bool:
 
 
 @celery.task(
+    name='app.workers.tasks.send_guest_cv_claim_email',
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 5},
+)
+def send_guest_cv_claim_email(self, user_id: str, raw_token: str) -> bool:
+    """C5 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): one-time nudge after a
+    guest-created account's first CV export. Reuses the password-reset
+    token/link shape — same claim mechanism, different copy/subject."""
+    try:
+        db = SessionLocal()
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            logger.warning(f"User {user_id} not found for guest CV claim email")
+            return False
+
+        claim_link = f"{settings.FRONTEND_URL}/Login?resetToken={quote(raw_token)}&role=candidate"
+
+        success = EmailService.send_guest_cv_claim_email(
+            user.email,
+            user.full_name,
+            claim_link
+        )
+
+        if not success:
+            raise RuntimeError(f"Guest CV claim email send failed for {user.email}")
+
+        db.close()
+        return success
+
+    except Exception as e:
+        logger.error(f"Failed to send guest CV claim email: {str(e)}")
+        raise
+
+
+@celery.task(
     name='app.workers.tasks.send_welcome_email',
     bind=True,
     autoretry_for=(Exception,),

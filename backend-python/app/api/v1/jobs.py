@@ -442,7 +442,10 @@ async def submit_spontaneous_cv(
 
     if not user:
         generated_password = secrets.token_urlsafe(18)
-        user = User(email=email_norm, full_name=full_name, password_hash=hash_password(generated_password), role=UserRole.candidate)
+        user = User(
+            email=email_norm, full_name=full_name, password_hash=hash_password(generated_password),
+            role=UserRole.candidate, is_guest_account=True,
+        )
         db.add(user)
         db.flush()
 
