@@ -149,7 +149,7 @@ services:
       "
 
   cv-builder-migrate:
-    image: ${CV_BUILDER_MIGRATE_IMAGE:?CV_BUILDER_MIGRATE_IMAGE is required}
+    image: ${CV_BUILDER_MIGRATE_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder-migrate:prod}
     pull_policy: always
     restart: "no"
     environment: *cv-env
