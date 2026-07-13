@@ -1,17 +1,89 @@
+name: parvagas-local
+
+x-backend-env: &backend-env
+  APP_ENV: ${APP_ENV:-development}
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://parvagas:devpass@postgres:5432/parvagas_local}
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+  ADMIN_SIGNUP_KEY: ${ADMIN_SIGNUP_KEY:-dev-admin-key}
+  MODERATOR_SIGNUP_KEY: ${MODERATOR_SIGNUP_KEY:-dev-mod-key}
+  SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@parvagas.pt}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+  BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+  CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://127.0.0.1:3000}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+  S3_BUCKET: ${S3_BUCKET:-cvs-local}
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  SMTP_HOST: ${SMTP_HOST:-mailhog}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-dev@parvagas.pt}
+  RESUME_PARSER_PROVIDER: ${RESUME_PARSER_PROVIDER:-}
+  SKIMA_API_KEY: ${SKIMA_API_KEY:-}
+  UPLOAD_DIR: /app/uploads
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+  WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+  RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
+  RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+  OLLAMA_FREE_TIER_ENABLED: ${OLLAMA_FREE_TIER_ENABLED:-true}
+  TRUSTED_HOSTS: ${TRUSTED_HOSTS:-*}
+
+x-cv-env: &cv-env
+  PORT: "3000"
+  APP_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
+  DATABASE_URL: ${CV_BUILDER_DATABASE_URL:-postgresql://parvagas:devpass@postgres:5432/parvagas_cv_builder_local}
+  AUTH_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
+  S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ENDPOINT: http://minio:9000
+  S3_BUCKET: ${CV_BUILDER_S3_BUCKET:-reactive-resume-local}
+  S3_FORCE_PATH_STYLE: "true"
+  REDIS_URL: redis://redis:6379
+  ENCRYPTION_SECRET: ${CV_BUILDER_ENCRYPTION_SECRET:-dev-cv-builder-encryption-secret-minimum-32-chars}
+  SMTP_HOST: ${SMTP_HOST:-mailhog}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-Parvagas CV Builder <suporte@parvagas.pt>}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-Parvagas}
+  OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+  OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+  OAUTH_DISCOVERY_URL: ${OAUTH_DISCOVERY_URL:-}
+  OAUTH_SCOPES: "openid profile email"
+  FLAG_DISABLE_SIGNUPS: ${CV_BUILDER_DISABLE_SIGNUPS:-false}
+  FLAG_DISABLE_EMAIL_AUTH: ${CV_BUILDER_DISABLE_EMAIL_AUTH:-false}
+  FLAG_DISABLE_API_RATE_LIMIT: "false"
+  FLAG_SHOW_SPONSORS: "false"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
-    env_file:
-      - ./.env.docker
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-parvagas_local}
+      POSTGRES_USER: ${POSTGRES_USER:-parvagas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-parvagas} -d $${POSTGRES_DB:-parvagas_local}"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 10
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -22,140 +94,23 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
     restart: unless-stopped
+    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:-minioadmin}}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:-minioadmin}}
-    command: server /data
-    ports:
-      - "9000:9000"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:9000/minio/health/live || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-
-  # Python Backend (New) — REST API on port 8000
-  backend-python:
-    build:
-      context: ./backend-python
-      dockerfile: Dockerfile
-      target: api-service
-    restart: unless-stopped
-    user: "0:0"
-    env_file:
-      - ./backend-python/.env
-      - ./.env.docker
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - FRONTEND_URL=http://localhost:3000
-      - BACKEND_URL=http://localhost:8000
-      - USE_MINIO_STORAGE=true
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - MINIO_SECURE=false
-      - MINIO_BUCKET=parvagas
-      - MINIO_REGION=us-east-1
-      - RESUME_AI_ENABLED=false
-      - RESUME_AI_PROVIDER=openai
-      - RESUME_AI_BASE_URL=https://api.openai.com/v1
-      - RESUME_AI_API_KEY=
-      - RESUME_AI_MODEL=gpt-4.1-mini
-      - RESUME_AI_TIMEOUT_SECONDS=30
-      - RESUME_AI_ORGANIZATION=
-      - RESUME_AI_PROJECT=
-      - RESUME_AI_APP_NAME=Parvagas Resume AI
-      - RESUME_AI_SITE_URL=http://localhost:3000
-      - RESUME_AI_AZURE_API_VERSION=2024-10-21
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-    volumes:
-      - python_uploads:/app/uploads
-      - python_logs:/app/logs
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/health')\" || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # WebSocket Service — Real-time updates on port 8001
-  websocket-service:
-    build:
-      context: ./backend-python
-      dockerfile: Dockerfile
-      target: websocket-service
-    restart: unless-stopped
-    user: "0:0"
-    env_file:
-      - ./backend-python/.env
-      - ./.env.docker
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - FRONTEND_URL=http://localhost:3000
-      - BACKEND_URL=http://localhost:8000
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    ports:
-      - "8001:8001"
-    volumes:
-      - python_uploads:/app/uploads
-      - python_logs:/app/logs
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  ollama:
-    image: ollama/ollama:latest
-    mem_limit: 3g
-    cpus: "1.5"
-    environment:
-      - OLLAMA_MODELS=qwen2.5:3b,llama3.2:3b,phi3:mini
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-
-  mailhog:
-    image: mailhog/mailhog:latest
-    restart: unless-stopped
-    ports:
-      - "1025:1025"
-      - "8025:8025"
 
   cv-builder-db-init:
     image: postgres:16-alpine
     restart: "no"
-    env_file:
-      - ./.env.docker
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-devpass}
     depends_on:
       postgres:
         condition: service_healthy
@@ -163,23 +118,27 @@ services:
       [
         "sh",
         "-c",
-        "psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='parvagas_cv_builder'\" | grep -q 1 || psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -c \"CREATE DATABASE parvagas_cv_builder\""
+        "psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='${CV_BUILDER_DB:-parvagas_cv_builder_local}'\" | grep -q 1 || psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -c \"CREATE DATABASE ${CV_BUILDER_DB:-parvagas_cv_builder_local}\""
       ]
 
   cv-builder-bucket-init:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
     restart: "no"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:-minioadmin}}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:-minioadmin}}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      CV_BUILDER_S3_BUCKET: ${CV_BUILDER_S3_BUCKET:-reactive-resume-local}
     depends_on:
       minio:
-        condition: service_healthy
+        condition: service_started
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do echo 'waiting for minio'; sleep 2; done;
-      mc mb --ignore-existing local/reactive-resume;
-      mc anonymous set none local/reactive-resume;
+      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do
+        echo 'Waiting for MinIO...';
+        sleep 3;
+      done;
+      mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET;
+      mc anonymous set none local/$$CV_BUILDER_S3_BUCKET;
       echo 'cv-builder bucket ready';
       "
 
@@ -189,15 +148,7 @@ services:
       dockerfile: Dockerfile
       target: builder
     restart: "no"
-    env_file:
-      - ./.env.docker
-    environment:
-      PORT: "3000"
-      SERVER_PORT: "3000"
-      NODE_ENV: production
-      APP_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
-      AUTH_SECRET: ${RESUME_BUILDER_SECRET}
-      DATABASE_URL: ${CV_BUILDER_DATABASE_URL}
+    environment: *cv-env
     command: ["pnpm", "db:migrate"]
     depends_on:
       postgres:
@@ -205,62 +156,96 @@ services:
       cv-builder-db-init:
         condition: service_completed_successfully
 
-  # Parvagas CV Builder — localhost:3050
-  cv-builder:
+  backend:
     build:
-      context: ./reactive-resume
+      context: ./backend-python
       dockerfile: Dockerfile
+      target: api-service
     restart: unless-stopped
-    env_file:
-      - ./.env.docker
-    ports:
-      - "3050:3000"
-    environment:
-      PORT: "3000"
-      SERVER_PORT: "3000"
-      NODE_ENV: production
-      APP_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
-      APP_NAME: "Parvagas CV Builder"
-      SUPPORT_EMAIL: suporte@parvagas.pt
-      SUPPORT_URL: https://parvagas.pt
-      AUTH_SECRET: ${RESUME_BUILDER_SECRET}
-      DATABASE_URL: ${CV_BUILDER_DATABASE_URL}
-      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:-minioadmin}}
-      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:-minioadmin}}
-      S3_REGION: ${S3_REGION:-us-east-1}
-      S3_ENDPOINT: http://minio:9000
-      S3_BUCKET: reactive-resume
-      S3_FORCE_PATH_STYLE: "true"
-      REDIS_URL: redis://redis:6379
-      ENCRYPTION_SECRET: ${CV_BUILDER_ENCRYPTION_SECRET}
-      CV_BUILDER_DATABASE_URL_LEGACY: postgresql://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
-      SMTP_HOST: mailhog
-      SMTP_PORT: "1025"
-      SMTP_SECURE: "false"
-      SMTP_USER: ""
-      SMTP_PASS: ""
-      SMTP_FROM: "Parvagas CV Builder <suporte@parvagas.pt>"
-      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas}
-      OAUTH_CLIENT_ID: ${PARVAGAS_OAUTH_CLIENT_ID:-}
-      OAUTH_CLIENT_SECRET: ${PARVAGAS_OAUTH_CLIENT_SECRET:-}
-      OAUTH_DISCOVERY_URL: ${PARVAGAS_OAUTH_DISCOVERY_URL:-}
-      OAUTH_SCOPES: "openid profile email"
-      PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-false}
-      PARVAGAS_API_URL: ${PARVAGAS_API_URL:-http://backend-python:8000}
-      PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
-      PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
-      PARVAGAS_WEBHOOK_SECRET: ${PARVAGAS_WEBHOOK_SECRET:-}
-      FLAG_DISABLE_SIGNUPS: ${CV_BUILDER_DISABLE_SIGNUPS:-false}
-      FLAG_DISABLE_EMAIL_AUTH: ${CV_BUILDER_DISABLE_EMAIL_AUTH:-false}
-      FLAG_DISABLE_IMAGE_PROCESSING: ${CV_BUILDER_DISABLE_IMAGE_PROCESSING:-false}
-      FLAG_DISABLE_API_RATE_LIMIT: "false"
-      FLAG_SHOW_SPONSORS: "false"
+    user: "0:0"
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
+    volumes:
+      - backend_media:/app/uploads
+      - backend_static:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  worker:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+      target: api-service
+    command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,emails,parsing,cleanup,scraping
+    restart: unless-stopped
+    user: "0:0"
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_media:/app/uploads
+      - backend_static:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  scheduler:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+      target: api-service
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    restart: unless-stopped
+    user: "0:0"
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: ["sh", "-c", "npm ci ; npm run dev -- --hostname 0.0.0.0 --port 3000"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      backend:
+        condition: service_started
+
+  cv-builder:
+    build:
+      context: ./reactive-resume
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment: *cv-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       cv-builder-db-init:
         condition: service_completed_successfully
@@ -268,10 +253,6 @@ services:
         condition: service_completed_successfully
       cv-builder-migrate:
         condition: service_completed_successfully
-      mailhog:
-        condition: service_started
-    profiles:
-      - cv-builder
     healthcheck:
       test:
         [
@@ -285,137 +266,16 @@ services:
       retries: 5
       start_period: 60s
 
-
-  celery-worker:
-    build:
-      context: ./backend-python
-      dockerfile: Dockerfile
-      target: api-service
-    entrypoint: >
-      /bin/sh -c "RUN_MIGRATIONS=false exec celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup,scraping"
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
     restart: unless-stopped
-    user: "0:0"
-    env_file:
-      - ./backend-python/.env
-      - ./.env.docker
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - FRONTEND_URL=http://localhost:3000
-      - BACKEND_URL=http://localhost:8000
-      - USE_MINIO_STORAGE=true
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - MINIO_SECURE=false
-      - MINIO_BUCKET=parvagas
-      - MINIO_REGION=us-east-1
-      - RESUME_AI_ENABLED=false
-      - RESUME_AI_PROVIDER=openai
-      - RESUME_AI_BASE_URL=https://api.openai.com/v1
-      - RESUME_AI_API_KEY=
-      - RESUME_AI_MODEL=gpt-4.1-mini
-      - RESUME_AI_TIMEOUT_SECONDS=30
-      - RESUME_AI_ORGANIZATION=
-      - RESUME_AI_PROJECT=
-      - RESUME_AI_APP_NAME=Parvagas Resume AI
-      - RESUME_AI_SITE_URL=http://localhost:3000
-      - RESUME_AI_AZURE_API_VERSION=2024-10-21
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    volumes:
-      - python_uploads:/app/uploads
-      - python_logs:/app/logs
-  # Celery Beat (Python) - Optional scheduler
-  celery-beat:
-    build:
-      context: ./backend-python
-      dockerfile: Dockerfile
-      target: api-service
-    entrypoint: >
-      /bin/sh -c "RUN_MIGRATIONS=false exec celery -A app.workers.celery_app beat --loglevel=info"
-    restart: unless-stopped
-    env_file:
-      - ./backend-python/.env
-      - ./.env.docker
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - FRONTEND_URL=http://localhost:3000
-      - BACKEND_URL=http://localhost:8000
-      - USE_MINIO_STORAGE=true
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - MINIO_SECURE=false
-      - MINIO_BUCKET=parvagas
-      - MINIO_REGION=us-east-1
-      - RESUME_AI_ENABLED=false
-      - RESUME_AI_PROVIDER=openai
-      - RESUME_AI_BASE_URL=https://api.openai.com/v1
-      - RESUME_AI_API_KEY=
-      - RESUME_AI_MODEL=gpt-4.1-mini
-      - RESUME_AI_TIMEOUT_SECONDS=30
-      - RESUME_AI_ORGANIZATION=
-      - RESUME_AI_PROJECT=
-      - RESUME_AI_APP_NAME=Parvagas Resume AI
-      - RESUME_AI_SITE_URL=http://localhost:3000
-      - RESUME_AI_AZURE_API_VERSION=2024-10-21
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    profiles:
-      - python-backend-beat
-
-  db-migrator:
-    image: postgres:16-alpine
-    profiles: ["migration"]
-    env_file:
-      - ./.env.docker
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./scripts/migrate-old-db.sh:/migrate-old-db.sh:ro
-    entrypoint: ["/bin/sh", "/migrate-old-db.sh"]
-
-  pgadmin:
-    image: dpage/pgadmin4:8
-    restart: unless-stopped
-    profiles: ["admin"]
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@parvagas.local}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-REDACTED}
-    ports:
-      - "5050:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
-  python_uploads:
-  python_logs:
-  ollama-data:
-  local_cv_data:
+  backend_media:
+  backend_static:
+
+networks:
+  default: {}

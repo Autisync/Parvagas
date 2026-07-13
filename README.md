@@ -13,22 +13,30 @@ Plataforma de recrutamento Angola-first com foco em:
 - Adapters para IA, Storage, Notificações
 - MeiliSearch (opcional) para indexação de vagas públicas
 
+## Docker Compose (arquitetura)
+
+Consulte `DOCKER_COMPOSE_ARCHITECTURE.md` para os 3 modos oficiais de deploy (local, Portainer dev, Portainer prod), ficheiros canónicos e validações.
+
 ## CV Builder (Reactive Resume) Setup
 
 ```bash
 # 1) Validate configuration
 ./scripts/check-cv-builder-integration.sh
 
-# 2) Validate compose files
+# 2) Validate canonical compose files
 docker compose config
-docker compose -f docker-compose.dev.yml config
-docker compose -f docker-compose.prod.yml config
+docker compose -f docker-compose.yml -f docker-compose.dev.yml config
+docker compose --env-file .env.dev.portainer.example -f docker-compose.dev.portainer.yml config
+docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config
+
+# Or run all checks in one command (Windows)
+./scripts/validate-compose.ps1
 
 # 3) Build CV Builder image
 docker build -t parvagas-cv-builder-test ./reactive-resume
 
 # 4) Start CV Builder profile (local)
-docker compose --profile cv-builder up -d --build
+docker compose up -d --build cv-builder
 ```
 
 Windows PowerShell preflight:
@@ -271,8 +279,6 @@ Crie também um `.env.local` (frontend) com:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 Para frontend a correr em Docker, use:
@@ -281,7 +287,7 @@ Para frontend a correr em Docker, use:
 NEXT_PUBLIC_API_URL=http://backend-python:8000
 ```
 
-Se `NEXT_PUBLIC_SUPABASE_URL` ou `NEXT_PUBLIC_SUPABASE_ANON_KEY` não estiverem definidos, a aplicação mostra um aviso no console em desenvolvimento.
+O exemplo completo para ambiente local está em `.env.local.example`.
 
 ## CV Parser
 
@@ -299,15 +305,15 @@ O pipeline de parsing de CVs suporta múltiplos providers, selecionados via vari
 
 ```bash
 docker compose up -d --build
-docker compose logs -f backend-python
-docker compose exec backend-python alembic upgrade head
-docker compose exec postgres psql -U parvagas_user -d parvagas
+docker compose logs -f backend
+docker compose exec backend alembic upgrade head
+docker compose exec postgres psql -U parvagas -d parvagas_local
 ```
 
 Quick validation helpers:
 
 ```bash
-docker compose logs -f celery-worker
+docker compose logs -f worker
 Invoke-RestMethod -Uri 'http://localhost:8000/health' -Method Get
 ```
 
@@ -331,7 +337,6 @@ Backend (Docker):
 Frontend (Next.js / Vercel):
 
 - `NEXT_PUBLIC_RESUME_BUILDER_URL`
-- `NEXT_PUBLIC_CV_BUILDER_URL` (compatibilidade)
 
 CV Builder (SSO + integração com Parvagas API):
 
