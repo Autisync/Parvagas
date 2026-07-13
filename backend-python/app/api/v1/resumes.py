@@ -14,15 +14,17 @@ from __future__ import annotations
 
 import json
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.logging import get_logger
+from app.core.observability import limiter
 from app.db.session import get_db
 from app.models import (
     CandidateProfile,
@@ -54,7 +56,11 @@ from app.services.auth_service import AuthService
 from app.services.resume_ai_service import ResumeAIService
 from app.services.cv_export_service import letter_to_pdf, to_docx, to_json_resume, to_pdf
 from app.services import resume_render_service
-from app.models import CandidateCVSubscription
+from app.services.candidate_billing_service import (
+    assert_cover_letters_allowed,
+    assert_resume_quota,
+    cv_uses_free_ai_tier,
+)
 from app.workers.tasks import send_guest_cv_claim_email
 
 settings = get_settings()
@@ -189,18 +195,27 @@ def _save_resume_score(db: Session, profile: CandidateProfile, resume: Resume, s
 VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS = 30 * 60
 
 
-def _snapshot_due(resume: Resume) -> bool:
+def _snapshot_due(db: Session, resume: Resume) -> bool:
     """True when the newest version is old enough (or absent) that another
-    automatic snapshot is worth keeping — see update_resume."""
-    timestamps = [v.created_at for v in resume.versions if v.created_at is not None]
-    if not timestamps:
+    automatic snapshot is worth keeping — see update_resume. A single
+    MAX() aggregate instead of loading resume.versions (this runs on every
+    autosave, so a full-collection lazy-load here would be a real N+1)."""
+    latest = (
+        db.query(func.max(ResumeVersion.created_at))
+        .filter(ResumeVersion.resume_id == resume.id)
+        .scalar()
+    )
+    if latest is None:
         return True
-    from datetime import datetime, timedelta
-    return datetime.utcnow() - max(timestamps) > timedelta(seconds=VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS)
+    return datetime.utcnow() - latest > timedelta(seconds=VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS)
 
 
 def _create_resume_version(db: Session, resume: Resume, user_id: str, notes: str) -> None:
-    version_number = len(resume.versions) + 1
+    # COUNT() instead of len(resume.versions) — avoids loading every prior
+    # snapshot's full data payload just to number the next one.
+    version_number = (
+        db.query(func.count(ResumeVersion.id)).filter(ResumeVersion.resume_id == resume.id).scalar() or 0
+    ) + 1
     resume_version = ResumeVersion(
         resume_id=resume.id,
         version_number=version_number,
@@ -264,13 +279,16 @@ async def list_cover_letters(
 
 
 @router.post("/", response_model=ResumeResponse)
+@limiter.limit("30/hour")
 async def create_resume(
     payload: ResumeCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
+    assert_resume_quota(db, profile.id)
 
     data = _profile_to_resume_data(current_user, profile) if payload.from_profile else (payload.data or {})
     summary = (payload.summary or "").strip() or (data.get("professionalSummary") if payload.from_profile else None)
@@ -291,10 +309,12 @@ async def create_resume(
 
 
 @router.post("/{resume_id}/duplicate", response_model=ResumeResponse)
+@limiter.limit("30/hour")
 async def duplicate_resume(
     resume_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """Clone a resume — the core "tailor per application" flow: keep the
     original, duplicate it, adapt the copy for a specific job."""
@@ -303,6 +323,7 @@ async def duplicate_resume(
     original = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
     if not original:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    assert_resume_quota(db, profile.id)
 
     copy = Resume(
         candidate_profile_id=profile.id,
@@ -371,7 +392,7 @@ async def update_resume(
     # rewrite is always a meaningful boundary).
     if payload.data is not None:
         new_data_json = json.dumps(payload.data, ensure_ascii=False)
-        if new_data_json != (resume.data or "") and _snapshot_due(resume):
+        if new_data_json != (resume.data or "") and _snapshot_due(db, resume):
             _create_resume_version(db, resume, current_user.id, "Snapshot automático antes de alterações.")
 
     if payload.title is not None:
@@ -393,11 +414,13 @@ async def update_resume(
 
 
 @router.get("/{resume_id}/export")
+@limiter.limit("60/hour")
 async def export_resume(
     resume_id: str,
     format: str = Query(default="pdf", pattern="^(pdf|docx|json)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """Export a specific resume document as PDF/DOCX/JSON-Resume.
 
@@ -483,11 +506,13 @@ class ResumeShareRequest(BaseModel):
 
 
 @router.post("/{resume_id}/share")
+@limiter.limit("30/hour")
 async def share_resume(
     resume_id: str,
     payload: ResumeShareRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """Toggle a resume's public share page (Phase B3). First publish mints a
     permanent random share_slug (kept on unpublish so re-publishing restores
@@ -577,11 +602,13 @@ async def get_resume_version(
 
 
 @router.post("/{resume_id}/versions/{version_id}/restore")
+@limiter.limit("30/hour")
 async def restore_resume_version(
     resume_id: str,
     version_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """Restore-as-copy (never destructive, per the plan): the snapshot
     becomes a brand-new draft resume; the current resume and its history
@@ -592,6 +619,7 @@ async def restore_resume_version(
     ).first()
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    assert_resume_quota(db, resume.candidate_profile_id)
 
     copy = Resume(
         candidate_profile_id=resume.candidate_profile_id,
@@ -613,11 +641,13 @@ class ResumeAdaptRequest(BaseModel):
 
 
 @router.post("/{resume_id}/adapt")
+@limiter.limit("30/hour")
 async def adapt_resume_to_job(
     resume_id: str,
     payload: ResumeAdaptRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     """"Adaptar a esta vaga" (Phase C2): tailor Resume.data toward a job via
     the already-tested inject_job_keywords grounding pipeline. Never
@@ -698,10 +728,12 @@ async def get_public_resume(
 
 
 @router.post("/score", response_model=ResumeScoreResponse)
+@limiter.limit("20/hour")
 async def score_resume(
     payload: dict[str, str],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
@@ -714,11 +746,7 @@ async def score_resume(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
     # Free-tier candidates get Ollama; paid get cloud AI.
-    _cv_sub = (db.query(CandidateCVSubscription)
-        .filter(CandidateCVSubscription.candidate_profile_id == profile.id,
-                CandidateCVSubscription.status == "active")
-        .order_by(CandidateCVSubscription.created_at.desc()).first())
-    use_free_tier = not _cv_sub or _cv_sub.plan_tier == "free"
+    use_free_tier = cv_uses_free_ai_tier(db, profile.id)
 
     score_data = ResumeAIService.score_resume(resume, profile, use_free_tier=use_free_tier)
     _save_resume_score(db, profile, resume, score_data)
@@ -734,10 +762,12 @@ async def score_resume(
 
 
 @router.post("/rewrite", response_model=ResumeRewriteResponse)
+@limiter.limit("15/hour")
 async def rewrite_resume(
     payload: ResumeRewriteRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
@@ -746,11 +776,7 @@ async def rewrite_resume(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
     # Free-tier candidates get Ollama (limited); paid get cloud AI (full rewrite).
-    _cv_sub2 = (db.query(CandidateCVSubscription)
-        .filter(CandidateCVSubscription.candidate_profile_id == profile.id,
-                CandidateCVSubscription.status == "active")
-        .order_by(CandidateCVSubscription.created_at.desc()).first())
-    use_free_tier = not _cv_sub2 or _cv_sub2.plan_tier == "free"
+    use_free_tier = cv_uses_free_ai_tier(db, profile.id)
 
     rewrite_result = ResumeAIService.rewrite_resume(resume, profile, payload.tone or "professional", payload.instructions, use_free_tier=use_free_tier)
     notes = rewrite_result.get("notes", "Resume rewrite completed.")
@@ -779,13 +805,16 @@ async def rewrite_resume(
 
 
 @router.post("/cover-letters", response_model=CoverLetterResponse)
+@limiter.limit("30/hour")
 async def create_cover_letter(
     payload: CoverLetterCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
+    assert_cover_letters_allowed(db, profile.id)
 
     cover_letter = CoverLetter(
         candidate_profile_id=profile.id,
@@ -846,10 +875,12 @@ async def delete_cover_letter(
 
 
 @router.get("/cover-letters/{letter_id}/export")
+@limiter.limit("60/hour")
 async def export_cover_letter(
     letter_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ):
     letter = _owned_cover_letter(db, letter_id, current_user)
     try:

@@ -18,7 +18,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models import CVUpload, CandidateProfile, Company, CoverLetter, Job, JobAlert, JobApplication, JobMatchProposal, Resume, SavedJob, User, UserRole
-from app.services.candidate_billing_service import candidate_has_premium_access
+from app.services.candidate_billing_service import assert_auto_apply_allowed, candidate_has_premium_access
 from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
 from app.services import llm_service
@@ -308,7 +308,14 @@ async def patch_candidate_profile(
     _ensure_candidate_user(current_user)
     profile = _ensure_candidate_profile(db, current_user)
 
-    _apply_profile_payload(profile, current_user, payload or {})
+    # Auto-apply is a premium-tier feature (candidate_billing_service) — only
+    # gated on the attempt to turn it ON, not on every save, and only once
+    # CANDIDATE_PREMIUM_ENABLED is flipped on (no-op until then).
+    payload = payload or {}
+    if payload.get("autoApplyOptIn") or payload.get("auto_apply_opt_in"):
+        assert_auto_apply_allowed(db, profile.id)
+
+    _apply_profile_payload(profile, current_user, payload)
     db.commit()
     db.refresh(profile)
     db.refresh(current_user)

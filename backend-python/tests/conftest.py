@@ -14,6 +14,16 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
 import pytest  # noqa: E402
 
+# Tests call endpoint functions directly (no ASGI/HTTP layer), so
+# @limiter.limit-decorated endpoints have no real Starlette Request to
+# inspect. slowapi skips that check entirely when the limiter is disabled —
+# the standard way to unit-test rate-limited endpoints — so real rate
+# limiting is never exercised here; it's covered by living behind the same
+# well-established slowapi wiring already used by auth.py/ads.py/etc.
+from app.core.observability import limiter  # noqa: E402
+
+limiter.enabled = False
+
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
