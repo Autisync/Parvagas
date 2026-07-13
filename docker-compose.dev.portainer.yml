@@ -62,6 +62,20 @@ x-cv-env: &cv-env
   FLAG_DISABLE_API_RATE_LIMIT: "false"
   FLAG_SHOW_SPONSORS: "false"
 
+x-backend-build: &backend-build
+  context: ./backend-python
+  dockerfile: Dockerfile
+  target: api-service
+
+x-cv-build: &cv-build
+  context: ./reactive-resume
+  dockerfile: Dockerfile
+
+x-cv-migrate-build: &cv-migrate-build
+  context: ./reactive-resume
+  dockerfile: Dockerfile
+  target: builder
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -151,8 +165,8 @@ services:
       "
 
   cv-builder-migrate:
+    build: *cv-migrate-build
     image: ${CV_BUILDER_MIGRATE_IMAGE:-parvagas-cv-builder-migrate:dev}
-    pull_policy: if_not_present
     restart: "no"
     environment: *cv-env
     command: ["pnpm", "db:migrate"]
@@ -163,8 +177,8 @@ services:
         condition: service_completed_successfully
 
   backend:
+    build: *backend-build
     image: ${BACKEND_IMAGE:-parvagas-backend:dev}
-    pull_policy: if_not_present
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
@@ -203,8 +217,8 @@ services:
       start_period: 60s
 
   worker:
+    build: *backend-build
     image: ${WORKER_IMAGE:-parvagas-backend:dev}
-    pull_policy: if_not_present
     command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,emails,parsing,cleanup,scraping
     restart: unless-stopped
     user: "0:0"
@@ -225,8 +239,8 @@ services:
       start_period: 60s
 
   scheduler:
+    build: *backend-build
     image: ${WORKER_IMAGE:-parvagas-backend:dev}
-    pull_policy: if_not_present
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
     user: "0:0"
@@ -238,8 +252,8 @@ services:
         condition: service_healthy
 
   cv-builder:
+    build: *cv-build
     image: ${CV_BUILDER_IMAGE:-parvagas-cv-builder:dev}
-    pull_policy: if_not_present
     restart: unless-stopped
     environment: *cv-env
     depends_on:
