@@ -7,6 +7,11 @@ This repository now uses four canonical Compose files:
 - `docker-compose.dev.portainer.yml`: image-only development stack for Portainer Git stacks
 - `docker-compose.prod.portainer.yml`: image-only production stack for Portainer Git stacks
 
+Deployment split:
+
+- Frontend (Parvagas Next.js): Vercel for dev and prod
+- Backend + workers + CV Builder + infra (Postgres/Redis/MinIO): Portainer server
+
 ## 1) Local development (build-context mode)
 
 Use local build contexts for development on your machine.
@@ -23,7 +28,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 ## 2) Portainer development (image-only)
 
-Use this for server-side dev/staging stack deployments through Portainer.
+Use this for server-side dev/staging backend deployments through Portainer.
+This stack does not include the Parvagas frontend container.
 
 ```bash
 docker compose --env-file .env.dev.portainer.example -f docker-compose.dev.portainer.yml config
@@ -33,7 +39,8 @@ In Portainer, map environment variables from your real dev env file and deploy `
 
 ## 3) Portainer production (image-only)
 
-Use this for production stack deployments through Portainer.
+Use this for production backend deployments through Portainer.
+This stack does not include the Parvagas frontend container.
 
 ```bash
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config
@@ -53,6 +60,7 @@ Important:
 - Keep `CV_BUILDER_DATABASE_URL` fully expanded in Portainer env files (no nested interpolation).
 - `cv-builder` listens internally on port `3000`.
 - Dev and prod stacks use isolated names for volumes, DB names, buckets, and Traefik routers.
+- Set `FRONTEND_URL` and `CORS_ORIGIN` to Vercel domains for each environment.
 
 ## Validation
 

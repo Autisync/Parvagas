@@ -279,24 +279,6 @@ services:
       retries: 5
       start_period: 60s
 
-  frontend:
-    image: ${FRONTEND_IMAGE:-parvagas-frontend:dev}
-    pull_policy: if_not_present
-    restart: unless-stopped
-    networks:
-      default: {}
-      traefik:
-        aliases:
-          - parvagas-dev-web
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
-      - traefik.http.routers.parvagas-dev-web.rule=Host(`${APP_HOST:-dev.parvagas.pt}`)
-      - traefik.http.routers.parvagas-dev-web.entrypoints=websecure
-      - traefik.http.routers.parvagas-dev-web.tls=true
-      - traefik.http.routers.parvagas-dev-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      - traefik.http.services.parvagas-dev-web.loadbalancer.server.port=3000
-
   mailhog:
     image: mailhog/mailhog:v1.0.1
     restart: unless-stopped

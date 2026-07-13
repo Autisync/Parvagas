@@ -1,8 +1,11 @@
 node_modules
 **/node_modules
+.pnpm-store
+.pnpm
 .next
 dist
 coverage
+*.tsbuildinfo
 .git
 .gitignore
 .vscode
@@ -21,3 +24,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 docker-compose*.yml
+backend-python
+reactive-resume
+docs
+deploy
+docker
+scripts
+*.md
+*.txt
+*.html
+*.yml
+*.yaml

@@ -277,24 +277,6 @@ services:
       retries: 5
       start_period: 60s
 
-  frontend:
-    image: ${FRONTEND_IMAGE:-parvagas-frontend:prod}
-    pull_policy: if_not_present
-    restart: unless-stopped
-    networks:
-      default: {}
-      traefik:
-        aliases:
-          - parvagas-prod-web
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
-      - traefik.http.routers.parvagas-prod-web.rule=Host(`${APP_HOST:-parvagas.pt}`)
-      - traefik.http.routers.parvagas-prod-web.entrypoints=websecure
-      - traefik.http.routers.parvagas-prod-web.tls=true
-      - traefik.http.routers.parvagas-prod-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
-      - traefik.http.services.parvagas-prod-web.loadbalancer.server.port=3000
-
 networks:
   default:
     name: parvagas-prod_internal
