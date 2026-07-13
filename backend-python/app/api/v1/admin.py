@@ -23,7 +23,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, AuditLog, CandidateProfile, CareerPost, Company, Job, JobApplication,
-    ScrapedJob, User, UserRole,
+    ScrapedJob, SecurityEvent, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality
@@ -62,6 +62,7 @@ ALL_ADMIN_PERMISSIONS = [
     "admin.admins.demote",
     "admin.auditLogs.view",
     "admin.adminActionLogs.view",
+    "admin.security.view",
     "admin.ads.create",
     "admin.ads.manage",
     "admin.exports.users",
@@ -1269,6 +1270,72 @@ async def admin_audit_logs(
         for r in rows
     ]
     return {"auditLogs": audit_logs, "pagination": _pagination(page, limit, total)}
+
+
+@router.get("/security/events")
+async def admin_security_events(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=200),
+    eventType: str | None = None,
+    severity: str | None = None,
+    keyword: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Security-concern feed for the admin Segurança tab: failed logins with
+    IP/user-agent, brute-force bursts, lockouts, outbound-email rate-limit
+    hits, and the alerts sent about them. Also returns 24h summary counters
+    so the page can show at-a-glance severity totals."""
+    _ensure_admin(current_user)
+    query = db.query(SecurityEvent)
+    if eventType and eventType.strip():
+        query = query.filter(SecurityEvent.event_type == eventType.strip())
+    if severity and severity.strip():
+        query = query.filter(SecurityEvent.severity == severity.strip())
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = query.filter(
+            SecurityEvent.email.ilike(like)
+            | SecurityEvent.ip_address.ilike(like)
+            | SecurityEvent.details.ilike(like)
+            | SecurityEvent.event_type.ilike(like)
+        )
+    total = query.count()
+    rows = (
+        query.order_by(SecurityEvent.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    events = [
+        {
+            "_id": r.id,
+            "eventType": r.event_type,
+            "severity": r.severity,
+            "email": r.email,
+            "ipAddress": r.ip_address,
+            "userAgent": r.user_agent,
+            "details": json.loads(r.details) if r.details else {},
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+    day_ago = datetime.utcnow() - timedelta(hours=24)
+    summary, _ok = _count_block(
+        db,
+        {
+            "last24hTotal": lambda: db.query(SecurityEvent).filter(SecurityEvent.created_at >= day_ago).count(),
+            "last24hHigh": lambda: db.query(SecurityEvent).filter(
+                SecurityEvent.created_at >= day_ago, SecurityEvent.severity == "high"
+            ).count(),
+            "last24hFailedLogins": lambda: db.query(SecurityEvent).filter(
+                SecurityEvent.created_at >= day_ago, SecurityEvent.event_type == "failed_login"
+            ).count(),
+        },
+        "security-summary",
+    )
+    return {"securityEvents": events, "summary": summary, "pagination": _pagination(page, limit, total)}
 
 
 @router.get("/audit-logs/export.csv")

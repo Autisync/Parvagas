@@ -249,6 +249,23 @@ export type AdminActionRecord = {
   createdAt?: string;
 };
 
+export type SecurityEventRecord = {
+  _id: string;
+  eventType: string;
+  severity: "low" | "medium" | "high";
+  email?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  details?: Record<string, unknown>;
+  createdAt?: string;
+};
+
+export type SecuritySummary = {
+  last24hTotal: number | null;
+  last24hHigh: number | null;
+  last24hFailedLogins: number | null;
+};
+
 export type LaunchReadinessCheck = {
   id: string;
   scope: string;
@@ -344,6 +361,13 @@ export const AUDIENCE_LANE_LABELS: Record<string, string> = {
 
 export async function fetchAuditLogs(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"auditLogs", AuditLogRecord>>(`/admin/audit-logs${listQuery(params)}`, token);
+}
+
+export async function fetchSecurityEvents(token: string, params: Record<string, string | number | undefined> = {}) {
+  return authFetch<Paginated<"securityEvents", SecurityEventRecord> & { summary?: SecuritySummary }>(
+    `/admin/security/events${listQuery(params)}`,
+    token,
+  );
 }
 
 export async function downloadAuditLogsCsv(token: string, params: Record<string, string | number | undefined> = {}) {

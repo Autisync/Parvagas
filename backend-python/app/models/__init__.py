@@ -689,6 +689,26 @@ class Subscription(Base, TimestampMixin):
     current_period_end = Column(DateTime, nullable=True)
 
 
+class SecurityEvent(Base, TimestampMixin):
+    """A security-relevant occurrence surfaced in the admin "Segurança" tab.
+
+    Distinct from AuditLog (a record of things that DID happen, written by
+    trusted code paths): SecurityEvent records things that SHOULDN'T be
+    happening — failed logins, login bursts, lockouts, outbound-email rate
+    limit hits. Rows are written by app.services.security_service, which also
+    decides when a cluster of events warrants an alert email to the admins.
+    """
+    __tablename__ = "security_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_type = Column(String(60), nullable=False, index=True)  # failed_login|login_burst|account_locked|email_rate_limit|alert_sent|...
+    severity = Column(String(10), nullable=False, default="low", index=True)  # low|medium|high
+    email = Column(String(255), nullable=True, index=True)  # account targeted, if any
+    ip_address = Column(String(64), nullable=True, index=True)
+    user_agent = Column(String(400), nullable=True)
+    details = Column(Text, nullable=True)  # JSON
+
+
 class Transaction(Base, TimestampMixin):
     """Payment record (local rails: Multicaixa Express, Unitel Money, bank reference)."""
     __tablename__ = "transactions"

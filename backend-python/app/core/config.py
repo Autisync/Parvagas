@@ -198,6 +198,25 @@ class Settings(BaseSettings):
     MODERATOR_FULL_NAME: str = os.getenv("MODERATOR_FULL_NAME", "Parvagas Moderator")
     MODERATOR_SIGNUP_KEY: str = os.getenv("MODERATOR_SIGNUP_KEY", "")
 
+    # Security monitoring (app.services.security_service) — added after the
+    # 2026-07-09 no-reply@ SMTP credential compromise. Failed logins are
+    # recorded per-account with IP/user-agent; a burst (threshold within
+    # window) triggers an alert email to SECURITY_ALERT_EMAIL cc
+    # SECURITY_ALERT_CC, throttled by the cooldown so a sustained attack
+    # doesn't itself flood the admin inbox.
+    SECURITY_ALERT_EMAIL: str = os.getenv("SECURITY_ALERT_EMAIL", "admin@parvagas.pt")
+    SECURITY_ALERT_CC: str = os.getenv("SECURITY_ALERT_CC", "support@parvagas.pt")
+    SECURITY_FAILED_LOGIN_BURST_THRESHOLD: int = int(os.getenv("SECURITY_FAILED_LOGIN_BURST_THRESHOLD", 5))
+    SECURITY_FAILED_LOGIN_BURST_WINDOW_MINUTES: int = int(os.getenv("SECURITY_FAILED_LOGIN_BURST_WINDOW_MINUTES", 10))
+    SECURITY_ALERT_COOLDOWN_MINUTES: int = int(os.getenv("SECURITY_ALERT_COOLDOWN_MINUTES", 30))
+
+    # Outbound email rate limit — hard hourly cap across ALL sends from this
+    # backend. Legit traffic is far below this; a compromised credential or a
+    # runaway loop trips it, blocks further sends for the rest of the hour,
+    # and records a high-severity security event (which alerts admins via the
+    # priority bypass). 0 disables the cap.
+    EMAIL_MAX_PER_HOUR: int = int(os.getenv("EMAIL_MAX_PER_HOUR", 200))
+
     # Observability
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
     SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0"))

@@ -174,6 +174,20 @@ async def login(
         raise
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
+        # Record the failure (with IP + user-agent) and run burst detection —
+        # repeated failures for one account or from one IP alert the admins
+        # and show up in the admin portal's Segurança tab.
+        try:
+            from app.services.security_service import record_failed_login
+            record_failed_login(
+                db,
+                email=payload.email,
+                ip_address=_ip,
+                user_agent=request.headers.get("user-agent"),
+                reason=str(e),
+            )
+        except Exception as sec_exc:  # pragma: no cover - defensive
+            logger.warning(f"Failed-login security recording failed: {sec_exc}")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 

@@ -680,6 +680,40 @@ class EmailService:
             preheader=f"{job_title} foi denunciada.",
         )
 
+    # ============================ SECURITY ============================== #
+
+    @staticmethod
+    def send_security_alert_email(subject: str, title: str, lines: list[str]) -> bool:
+        """Alert the admins about a security concern (login burst, email
+        rate-limit hit, ...). Goes to SECURITY_ALERT_EMAIL cc
+        SECURITY_ALERT_CC, and bypasses the hourly outbound cap
+        (priority=True) — the alert about abuse must not be suppressed by the
+        very cap that the abuse tripped."""
+        try:
+            if not EmailService._email_enabled():
+                logger.warning("Email not configured, skipping security alert")
+                return False
+            paragraphs = "".join(
+                f'<p style="margin:0 0 14px;">{escape(line)}</p>' for line in lines
+            )
+            html = EmailService._build_email_html(
+                title=title,
+                body_html=paragraphs,
+                action_text="Abrir separador Segurança",
+                action_url=f"{EmailService._base_url()}/Portal/Admin/security",
+                preheader=title,
+            )
+            return EmailService._send_email(
+                settings.SECURITY_ALERT_EMAIL,
+                f"{settings.BRAND_NAME} — {subject}",
+                html,
+                cc=settings.SECURITY_ALERT_CC or None,
+                priority=True,
+            )
+        except Exception as e:
+            logger.error(f"Failed to send security alert email: {e}")
+            return False
+
     @staticmethod
     def _email_enabled() -> bool:
         """True when a usable delivery provider is configured."""
@@ -688,14 +722,52 @@ class EmailService:
         return bool(settings.SMTP_HOST)
 
     @staticmethod
-    def _send_via_resend(to_email: str, subject: str, html_content: str) -> bool:
+    def _check_outbound_rate_limit(to_email: str) -> bool:
+        """Enforce the global hourly outbound cap (EMAIL_MAX_PER_HOUR).
+
+        Returns True when the send may proceed. Counter lives in Redis keyed
+        by the current UTC hour; if Redis is unreachable the check fails OPEN
+        (legitimate transactional email must not depend on Redis uptime). On
+        the first send over the cap, a high-severity security event is
+        recorded and the admins are alerted (via the priority bypass).
+        """
+        limit = settings.EMAIL_MAX_PER_HOUR
+        if limit <= 0:
+            return True
+        try:
+            import redis as _redis
+            from datetime import datetime, timezone
+
+            client = _redis.Redis.from_url(settings.REDIS_URL, socket_timeout=3)
+            hour_key = f"email:outbound:{datetime.now(timezone.utc).strftime('%Y%m%d%H')}"
+            count = client.incr(hour_key)
+            if count == 1:
+                client.expire(hour_key, 7200)
+            if count <= limit:
+                return True
+            logger.error(
+                f"Outbound email cap hit ({count}/{limit} this hour) — blocked send to {to_email}"
+            )
+            if count == limit + 1:  # alert once per hour-window, on first block
+                from app.services.security_service import record_email_rate_limit_hit
+                record_email_rate_limit_hit(sent_this_hour=int(count), blocked_recipient=to_email)
+            return False
+        except Exception as e:  # noqa: BLE001 — fail open
+            logger.warning(f"Outbound rate-limit check unavailable ({e}); allowing send")
+            return True
+
+    @staticmethod
+    def _send_via_resend(to_email: str, subject: str, html_content: str, cc: str | None = None) -> bool:
         """Send through the Resend HTTP API (better deliverability than a shared SMTP IP)."""
         import httpx
 
+        payload = {"from": settings.SMTP_FROM, "to": [to_email], "subject": subject, "html": html_content}
+        if cc:
+            payload["cc"] = [cc]
         resp = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"},
-            json={"from": settings.SMTP_FROM, "to": [to_email], "subject": subject, "html": html_content},
+            json=payload,
             timeout=15,
         )
         if resp.status_code in (200, 201):
@@ -705,17 +777,31 @@ class EmailService:
         return False
 
     @staticmethod
-    def _send_email(to_email: str, subject: str, html_content: str) -> bool:
-        """Send an email via the configured provider (smtp | resend)."""
+    def _send_email(
+        to_email: str,
+        subject: str,
+        html_content: str,
+        cc: str | None = None,
+        priority: bool = False,
+    ) -> bool:
+        """Send an email via the configured provider (smtp | resend).
+
+        `priority=True` (security alerts only) skips the hourly outbound cap.
+        """
         try:
+            if not priority and not EmailService._check_outbound_rate_limit(to_email):
+                return False
+
             if settings.EMAIL_PROVIDER == "resend":
-                return EmailService._send_via_resend(to_email, subject, html_content)
+                return EmailService._send_via_resend(to_email, subject, html_content, cc=cc)
 
             # Default: SMTP
             msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = settings.SMTP_FROM
             msg["To"] = to_email
+            if cc:
+                msg["Cc"] = cc
             msg.attach(MIMEText(html_content, "html"))
             # Port 465 = SMTPS (implicit TLS from first byte, use SMTP_SSL).
             # Port 587 / SMTP_SECURE = submission with STARTTLS upgrade (use SMTP).

@@ -10,7 +10,7 @@ import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/Por
 import {
   HomeIcon, ChartBarIcon, BriefcaseIcon, BuildingOffice2Icon,
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
-  ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
+  ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
 
@@ -30,6 +30,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/ads",          label: "Campanhas",      hint: "Ads e placements",       levels: ["super-admin"],             icon: <MegaphoneIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/admin-levels", label: "Super-admin",    hint: "Admins e moderadores",   levels: ["super-admin"],             icon: <ShieldCheckIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/audit",        label: "Auditoria",      hint: "Ações privilegiadas",    levels: ["super-admin"],             icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/security",     label: "Segurança",      hint: "Logins falhados e alertas", levels: ["super-admin"],          icon: <ShieldExclamationIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/exports",      label: "Exportações CSV",hint: "Dados operacionais",     levels: ["super-admin"],             icon: <CloudArrowDownIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/deploy",       label: "Deploy",         hint: "Lançar para produção",   levels: ["super-admin"],             icon: <RocketLaunchIcon className="h-5 w-5" /> },
 ];
