@@ -163,7 +163,7 @@ services:
         condition: service_completed_successfully
 
   backend:
-    image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
+    image: ${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}
     pull_policy: always
     restart: unless-stopped
     user: "0:0"
@@ -203,7 +203,7 @@ services:
       start_period: 60s
 
   worker:
-    image: ${WORKER_IMAGE:?WORKER_IMAGE is required}
+    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}
     pull_policy: always
     command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,emails,parsing,cleanup,scraping
     restart: unless-stopped
@@ -225,7 +225,7 @@ services:
       start_period: 60s
 
   scheduler:
-    image: ${WORKER_IMAGE:?WORKER_IMAGE is required}
+    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}
     pull_policy: always
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
@@ -238,7 +238,7 @@ services:
         condition: service_healthy
 
   cv-builder:
-    image: ${CV_BUILDER_IMAGE:?CV_BUILDER_IMAGE is required}
+    image: ${CV_BUILDER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder:dev}
     pull_policy: always
     restart: unless-stopped
     environment: *cv-env
@@ -280,7 +280,7 @@ services:
       start_period: 60s
 
   frontend:
-    image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
+    image: ${FRONTEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-frontend:dev}
     pull_policy: always
     restart: unless-stopped
     networks:
