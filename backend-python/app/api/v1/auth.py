@@ -22,7 +22,7 @@ from app.workers.tasks import (
     send_verification_email, send_password_reset_email, send_welcome_email
 )
 from app.core.config import get_settings
-from app.core.errors import ConflictError, ParavagasException, ValidationError
+from app.core.errors import AuthenticationError, ConflictError, ParavagasException, ValidationError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -170,13 +170,31 @@ async def login(
             "user": UserResponse.model_validate(AuthService.build_user_response(db, user))
         }
 
-    except HTTPException:
-        raise
-    except Exception as e:
+    except AuthenticationError as e:
+        # AuthenticationError IS an HTTPException subclass (see
+        # app.core.errors.ParavagasException), so it must be caught here —
+        # before the generic `except HTTPException: raise` below — or wrong-
+        # password / locked-account failures never reach the recording code.
         logger.error(f"Login error: {str(e)}")
         # Record the failure (with IP + user-agent) and run burst detection —
         # repeated failures for one account or from one IP alert the admins
         # and show up in the admin portal's Segurança tab.
+        try:
+            from app.services.security_service import record_failed_login
+            record_failed_login(
+                db,
+                email=payload.email,
+                ip_address=_ip,
+                user_agent=request.headers.get("user-agent"),
+                reason=str(e.detail),
+            )
+        except Exception as sec_exc:  # pragma: no cover - defensive
+            logger.warning(f"Failed-login security recording failed: {sec_exc}")
+        raise
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
         try:
             from app.services.security_service import record_failed_login
             record_failed_login(
