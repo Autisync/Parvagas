@@ -63,17 +63,17 @@ x-cv-env: &cv-env
   FLAG_SHOW_SPONSORS: "false"
 
 x-backend-build: &backend-build
-  context: ./backend-python
-  dockerfile: Dockerfile
+  context: .
+  dockerfile: backend-python/Dockerfile
   target: api-service
 
 x-cv-build: &cv-build
-  context: ./reactive-resume
-  dockerfile: Dockerfile
+  context: .
+  dockerfile: reactive-resume/Dockerfile
 
 x-cv-migrate-build: &cv-migrate-build
-  context: ./reactive-resume
-  dockerfile: Dockerfile
+  context: .
+  dockerfile: reactive-resume/Dockerfile
   target: builder
 
 services:
