@@ -4,7 +4,7 @@ param(
     [string]$Environment = "prod",
 
     [string]$Registry = "ghcr.io",
-    [string]$Owner = "Autisync",
+    [string]$Owner = "heliotheanalyst",
     [string]$Tag,
 
     [switch]$Push
