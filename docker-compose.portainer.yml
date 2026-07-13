@@ -27,11 +27,12 @@
 # All ${VARS} come from Portainer's stack "Environment variables" (paste .env.prod).
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# Image variables required for this Portainer variant (no local docker builds):
-#   BACKEND_API_IMAGE         (example: ghcr.io/<org>/parvagas-backend-api:prod)
-#   BACKEND_WS_IMAGE          (example: ghcr.io/<org>/parvagas-backend-ws:prod)
-#   CV_BUILDER_IMAGE          (example: ghcr.io/<org>/parvagas-cv-builder:prod)
-#   CV_BUILDER_MIGRATE_IMAGE  (example: ghcr.io/<org>/parvagas-cv-builder-migrate:prod)
+# Image variables for this Portainer variant (no local docker builds).
+# If omitted, compose defaults to ghcr.io/autisync/*:prod:
+#   BACKEND_API_IMAGE         (default: ghcr.io/autisync/parvagas-backend-api:prod)
+#   BACKEND_WS_IMAGE          (default: ghcr.io/autisync/parvagas-backend-ws:prod)
+#   CV_BUILDER_IMAGE          (default: ghcr.io/autisync/parvagas-cv-builder:prod)
+#   CV_BUILDER_MIGRATE_IMAGE  (default: ghcr.io/autisync/parvagas-cv-builder-migrate:prod)
 
 x-backend-env: &backend-env
   APP_ENV: ${APP_ENV:-production}
@@ -202,7 +203,7 @@ services:
       "
 
   cv-builder-migrate:
-    image: ${CV_BUILDER_MIGRATE_IMAGE:?CV_BUILDER_MIGRATE_IMAGE is required}
+    image: ${CV_BUILDER_MIGRATE_IMAGE:-ghcr.io/autisync/parvagas-cv-builder-migrate:prod}
     pull_policy: always
     restart: "no"
     environment:
@@ -220,7 +221,7 @@ services:
         condition: service_completed_successfully
 
   backend-python:
-    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    image: ${BACKEND_API_IMAGE:-ghcr.io/autisync/parvagas-backend-api:prod}
     pull_policy: always
     restart: unless-stopped
     user: "0:0"
@@ -256,7 +257,7 @@ services:
 
   # ── WebSocket Service (Real-time updates — /ws endpoint) ────────────────
   websocket-service:
-    image: ${BACKEND_WS_IMAGE:?BACKEND_WS_IMAGE is required}
+    image: ${BACKEND_WS_IMAGE:-ghcr.io/autisync/parvagas-backend-ws:prod}
     pull_policy: always
     container_name: parvagas-websocket
     restart: unless-stopped
@@ -289,7 +290,7 @@ services:
       start_period: 40s
 
   celery-worker:
-    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    image: ${BACKEND_API_IMAGE:-ghcr.io/autisync/parvagas-backend-api:prod}
     pull_policy: always
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup
     restart: unless-stopped
@@ -315,7 +316,7 @@ services:
   # ingest run must never compete with the main worker (emails, CV parsing)
   # for CPU/RAM. concurrency=1 + memory/CPU caps bound its worst case.
   celery-worker-scraper:
-    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    image: ${BACKEND_API_IMAGE:-ghcr.io/autisync/parvagas-backend-api:prod}
     pull_policy: always
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q scraping
     restart: unless-stopped
@@ -336,7 +337,7 @@ services:
         condition: service_healthy
 
   celery-beat:
-    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    image: ${BACKEND_API_IMAGE:-ghcr.io/autisync/parvagas-backend-api:prod}
     pull_policy: always
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
@@ -355,7 +356,7 @@ services:
   # Built from local source to keep Parvagas branding, integrations and UI
   # changes in sync with this repository.
   cv-builder:
-    image: ${CV_BUILDER_IMAGE:?CV_BUILDER_IMAGE is required}
+    image: ${CV_BUILDER_IMAGE:-ghcr.io/autisync/parvagas-cv-builder:prod}
     pull_policy: always
     restart: unless-stopped
     environment:
