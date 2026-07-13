@@ -13,7 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models import CandidateProfile, CandidateSubscription, Company, Job, User, UserRole
+from app.models import CandidateCVSubscription, CandidateProfile, Company, Job, User, UserRole
 from app.api.v1 import candidates as candidates_module
 from app.api.v1.candidates import (
     generate_cover_letter,
@@ -80,7 +80,7 @@ def test_interview_prep_requires_active_subscription_when_flag_on(db, monkeypatc
 def test_interview_prep_allowed_with_active_subscription_when_flag_on(db, monkeypatch):
     monkeypatch.setattr(candidates_module.settings, "CANDIDATE_PREMIUM_ENABLED", True)
     user, profile = _make_candidate(db, work_experience=json.dumps([{"jobTitle": "Dev", "company": "X"}]))
-    db.add(CandidateSubscription(candidate_user_id=user.id, status="active"))
+    db.add(CandidateCVSubscription(candidate_profile_id=profile.id, plan_tier="pro", status="active"))
     db.commit()
     _, job = _make_company_and_job(db)
     monkeypatch.setattr(candidates_module.llm_service, "chat_json", lambda *a, **k: {"stories": [{"situation": "s", "task": "t", "action": "a", "result": "r"}]})

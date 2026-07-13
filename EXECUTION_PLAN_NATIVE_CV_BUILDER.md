@@ -542,14 +542,43 @@ one remaining exit condition, deliberately left for you to execute via
       check of the list page clean (auth wall as always).
 
 ### C4 — Billing consolidation (product decision checkpoint — confirm before executing)
-- [ ] Gate Phase 4 premium tools (interview prep/snapshot/cover letter) by
-      `CandidateCVSubscription` tier instead of
-      `CANDIDATE_PREMIUM_ENABLED`; no-subscription = free tier = full
-      access until pricing is set (preserves the standing "ship free"
-      decision).
-- [ ] Retire `CandidateSubscription` + `candidate_billing_service` + flag
-      (migration drops table after a dark release).
-- [ ] Update .env.example + MANUAL_TEST_GUIDE.md accordingly.
+**User confirmed "proceed as planned" via AskUserQuestion before this iteration started** — real billing/access logic and a destructive schema change, so this was not guessed through.
+
+- [x] Gated on `CandidateCVSubscription` tier: `candidate_billing_service.
+      candidate_has_premium_access()` now queries `CandidateCVSubscription`
+      (paid tier = pro/premium; an explicit `free`-tier row does NOT grant
+      access) instead of the old `CandidateSubscription` table.
+      **Deviation from the plan's literal wording**: `CANDIDATE_PREMIUM_
+      ENABLED` was kept as the master ship-dark switch rather than removed
+      outright — the plan's own bullet says "no-subscription = full access
+      until pricing is set," which the flag already encodes cleanly (off ⇒
+      everyone free regardless of subscription rows) and removing it would
+      require either deleting the entitlement check entirely or quietly
+      relying on absence-of-any-row as "free," which is a subtler, harder-
+      to-audit invariant. `candidates.py`'s three call sites were reordered
+      (`_ensure_candidate_profile` now runs before `_require_premium_
+      access`, since the check needs `candidate_profile_id`, not
+      `user_id`).
+- [x] Retired `CandidateSubscription`: model deleted from `models/
+      __init__.py`, migration `20260713_0030` drops `candidate_subscriptions`
+      (safe — the table was never read in production since the flag
+      defaults false). **`candidate_billing_service` itself was NOT
+      retired** — it's the module the consolidated check lives in, kept
+      and rewritten rather than deleted (deviation from the plan's literal
+      "retire ... candidate_billing_service," same reasoning as above: the
+      *duplicate table* was the thing worth removing, not the entitlement
+      abstraction itself).
+- [x] Updated `.env.example` and `MANUAL_TEST_GUIDE.md` (§7's billing dry
+      run now walks `CandidateCVSubscription` + the free-tier-doesn't-count
+      case; rollout-order note flags that today's real payment flow sells
+      CV-builder access, not these specific premium tools — confirm intent
+      before flipping the flag in production).
+- [x] Verify: pytest 285 passed/3 skipped (rewrote `test_candidate_billing_
+      service.py` and the one `CandidateSubscription`-dependent test in
+      `test_candidate_premium_endpoints.py` onto `CandidateCVSubscription`,
+      added a free-tier-denied case that didn't exist before), migration
+      chain still single-head, tsc clean (backend-only iteration, no
+      frontend surface).
 
 ### C5 — Guest→member conversion nudges
 - [ ] Post-export prompt for guest-created accounts: "Defina uma

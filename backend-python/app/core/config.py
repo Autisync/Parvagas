@@ -130,11 +130,13 @@ class Settings(BaseSettings):
     CV_EXPORT_LLM_INJECTION_ENABLED: bool = os.getenv("CV_EXPORT_LLM_INJECTION_ENABLED", "false").lower() == "true"
 
     # Candidate premium AI tools (interview prep, cover letter, company
-    # snapshot — app.api.v1.candidate_premium). Master ship-free switch:
-    # while this is false (the default), EVERY candidate has access
-    # regardless of CandidateSubscription rows — no pricing has been decided
-    # yet, so this ships as a free feature. Flip to true once a real plan
-    # exists to start enforcing app.services.candidate_billing_service.
+    # snapshot — app.api.v1.candidates). Master ship-free switch: while this
+    # is false (the default), EVERY candidate has access regardless of
+    # CandidateCVSubscription rows — no pricing has been decided yet, so
+    # this ships as a free feature. Flip to true once a real plan exists to
+    # start enforcing app.services.candidate_billing_service (C4: gates on
+    # a paid CandidateCVSubscription tier, the same table the CV builder's
+    # own pro/premium tiers already use — see payments.py).
     CANDIDATE_PREMIUM_ENABLED: bool = os.getenv("CANDIDATE_PREMIUM_ENABLED", "false").lower() == "true"
 
     # WeasyPrint HTML/CSS-driven resume rendering (EXECUTION_PLAN_NATIVE_

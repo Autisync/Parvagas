@@ -187,12 +187,18 @@ These aren't new features, but confirm the fixes actually landed in prod.
       returns "Sem informação suficiente" rather than fabricating anything.
 - [ ] **Billing dry run (optional, do this on staging only):** flip
       `CANDIDATE_PREMIUM_ENABLED=true`, restart backend. Confirm the same
-      candidate (no `CandidateSubscription` row) now gets a 402/blocked
-      response from all three tools. Manually insert a
-      `CandidateSubscription` row for that candidate
-      (`status='active'`), retry — confirm access is restored. **Flip the
-      flag back to `false` afterward** unless you're intentionally
-      launching billing.
+      candidate (no `CandidateCVSubscription` row, or only a `free`-tier
+      one) now gets a 402/blocked response from all three tools. Manually
+      insert a `CandidateCVSubscription` row for that candidate's
+      `CandidateProfile` (`plan_tier='pro'`, `status='active'`), retry —
+      confirm access is restored. Also confirm a `plan_tier='free'` row
+      does NOT grant access (these premium tools are gated separately from
+      the CV builder's own free tier). **Flip the flag back to `false`
+      afterward** unless you're intentionally launching billing. (C4,
+      EXECUTION_PLAN_NATIVE_CV_BUILDER.md: this used to be a dedicated
+      `CandidateSubscription` table with no real payment flow behind it —
+      now consolidated onto `CandidateCVSubscription`, the same table
+      `payments.py` already backs.)
 
 ---
 
@@ -301,8 +307,10 @@ feature genuinely could not: a live backend, an authenticated session past
    refinement only.
 2. `CV_EXPORT_LLM_INJECTION_ENABLED=true` — re-run Section 6's tailored-export
    checks in production with real candidates before calling it done.
-3. `CANDIDATE_PREMIUM_ENABLED=true` — **only after real pricing/payment
-   flow exists**; flipping it now just blocks everyone since there's no
-   way for a candidate to actually get a `CandidateSubscription` row yet.
+3. `CANDIDATE_PREMIUM_ENABLED=true` — **only after real pricing exists for
+   these specific tools**; flipping it now blocks everyone who isn't on a
+   paid `CandidateCVSubscription` tier, and today's real payment flow
+   (`payments.py`) sells CV-builder-tier access, not this. Confirm the two
+   are meant to be the same purchase before flipping this flag.
 4. Careerjet scraper adapter — **only after the partner-terms question in
    Section 8 is resolved**.

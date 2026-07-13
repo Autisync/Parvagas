@@ -1110,8 +1110,8 @@ async def dismiss_auto_apply_proposal(
 # docstring. Nothing here changes behavior until CANDIDATE_PREMIUM_ENABLED
 # is flipped on, which requires a pricing decision this code doesn't make.
 
-def _require_premium_access(db: Session, current_user: User) -> None:
-    if not candidate_has_premium_access(db, current_user.id):
+def _require_premium_access(db: Session, candidate_profile_id: str) -> None:
+    if not candidate_has_premium_access(db, candidate_profile_id):
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Esta funcionalidade requer uma subscrição activa.",
@@ -1166,8 +1166,8 @@ async def generate_interview_prep(
     work experience — never fabricated. Free while CANDIDATE_PREMIUM_ENABLED
     is off (see module note above)."""
     _ensure_candidate_user(current_user)
-    _require_premium_access(db, current_user)
     profile = _ensure_candidate_profile(db, current_user)
+    _require_premium_access(db, profile.id)
     job_id = str(payload.get("jobId") or "").strip()
     if not job_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="jobId é obrigatório")
@@ -1212,8 +1212,8 @@ async def generate_cover_letter(
     manage cover letters, instead of this being an ephemeral, never-saved
     generation."""
     _ensure_candidate_user(current_user)
-    _require_premium_access(db, current_user)
     profile = _ensure_candidate_profile(db, current_user)
+    _require_premium_access(db, profile.id)
     job_id = str(payload.get("jobId") or "").strip()
     if not job_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="jobId é obrigatório")
@@ -1263,7 +1263,8 @@ async def get_company_snapshot(
     (Company/Job rows) — never invented external knowledge about the real
     company. Free while CANDIDATE_PREMIUM_ENABLED is off (see module note)."""
     _ensure_candidate_user(current_user)
-    _require_premium_access(db, current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    _require_premium_access(db, profile.id)
     job = _load_public_job_or_404(db, job_id)
 
     company_name = getattr(job, "external_company_name", None)
