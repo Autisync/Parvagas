@@ -617,9 +617,34 @@ one remaining exit condition, deliberately left for you to execute via
 ## Phase D — Ecosystem integration
 
 ### D1 — Apply with a chosen CV
-- [ ] `JobApplication.resume_id` (nullable FK, migration); apply flow
-      offers "Candidatar com: [CV picker|perfil padrão]"; employer-side
-      application view renders/downloads that resume's PDF.
+- [x] `JobApplication.resume_id` — nullable `String(36)`, no DB-level FK,
+      matching this table's existing convention (`job_id`/
+      `saved_cv_document_id` are the same loose-reference shape, not real
+      foreign keys). Migration `20260713_0032`.
+- [x] Apply flow (`Aplicar/[id]/page.tsx`): the two-way "CV já guardado /
+      enviar novo CV" radio became a three-way `cvSource` picker — a new
+      "Usar CV do Construtor de CV" option (backed by `GET /resumes/`)
+      is added and preselected whenever the candidate has at least one
+      resume (native builder CVs are more complete/current than a static
+      upload); falls back to the previous saved/upload choices otherwise.
+      Backend `POST /candidates/jobs/apply` gained `resumeId`, verified
+      owned by the applying candidate before attaching.
+- [x] Employer-side: `GET /applications/{id}/candidate-cv` now lists the
+      attached native resume first among "documents" (flagged
+      `isNativeResume`, `signedUrl: null` since it's rendered on demand,
+      not a stored file). New `GET /applications/{id}/resume-cv`
+      (company-owner/admin gated, same ownership check as candidate-cv)
+      renders the PDF via the Phase A reportlab path. Candidaturas page
+      renders it as a "Descarregar" button (authenticated blob download,
+      same pattern as the CV builder's own export buttons) instead of the
+      bare `<a href={signedUrl}>` used for stored CVUpload files.
+- [x] Verify: pytest 304 passed/3 skipped (5 new: apply-with-resume attaches
+      + sets profile_source, ownership rejection on a resume the candidate
+      doesn't own, candidate-cv lists it first with no signedUrl,
+      resume-cv download returns real PDF bytes for the owning company,
+      403 for a different company), migration chain single-head, tsc
+      clean, vitest 91, browser check of both `/Aplicar/[id]` and
+      `/Portal/Empresa/Candidaturas` clean (auth wall on the latter).
 ### D2 — Auto-apply uses documents
 - [ ] `JobMatchProposal` carries a suggested resume (default: the one
       matching the job's category, else newest); approval creates the

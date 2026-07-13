@@ -6,14 +6,16 @@ import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import (
-    CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, User, UserRole,
+    CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, Resume, User, UserRole,
 )
+from app.services.cv_export_service import to_pdf
 
 
 def _resolve_company_id(db, job_id: str, provided: str | None) -> str | None:
@@ -162,6 +164,7 @@ async def submit_candidate_application(
     phone: str | None = Form(default=None),
     location: str | None = Form(default=None),
     savedCvDocumentId: str | None = Form(default=None),
+    resumeId: str | None = Form(default=None),
     customCv: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -170,13 +173,27 @@ async def submit_candidate_application(
     if current_user.role != UserRole.candidate:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Candidate access required")
 
+    resume_id = (resumeId or "").strip() or None
     use_latest_cv = str(useLatestCv).strip().lower() in {"1", "true", "yes", "on"}
-    if use_latest_cv and not (savedCvDocumentId or "").strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="savedCvDocumentId is required when useLatestCv is true")
-    if not use_latest_cv and customCv is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="customCv file is required when useLatestCv is false")
+    if resume_id is None:
+        if use_latest_cv and not (savedCvDocumentId or "").strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="savedCvDocumentId is required when useLatestCv is true")
+        if not use_latest_cv and customCv is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="customCv file is required when useLatestCv is false")
 
     candidate_profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+
+    if resume_id is not None:
+        # D1 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): a Construtor de CV
+        # resume — verified owned by this candidate before it's attached
+        # to the application, same ownership rule as /resumes itself.
+        owned_resume = (
+            db.query(Resume)
+            .filter(Resume.id == resume_id, Resume.candidate_profile_id == (candidate_profile.id if candidate_profile else None))
+            .first()
+        )
+        if not owned_resume:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV não encontrado")
 
     cv_file_path = None
     if customCv is not None:
@@ -196,10 +213,11 @@ async def submit_candidate_application(
         applicant_phone=_resolve_applicant_field(phone, candidate_profile.phone if candidate_profile else None),
         applicant_location=_resolve_applicant_field(location, candidate_profile.location if candidate_profile else None),
         cover_letter=(coverLetter or "").strip() or None,
-        profile_source="main_profile" if use_latest_cv else "custom_cv",
+        profile_source="native_resume" if resume_id else ("main_profile" if use_latest_cv else "custom_cv"),
         status="submitted",
         cv_file_path=cv_file_path,
         saved_cv_document_id=(savedCvDocumentId or "").strip() or None,
+        resume_id=resume_id,
     )
     db.add(application)
     db.commit()
@@ -543,7 +561,66 @@ async def application_candidate_cv(
                  "signedUrl": StorageService.signed_url(getattr(c, "file_path", None))}
                 for c in cvs
             ]
+
+    if app_row.resume_id:
+        # D1: rendered on-demand from Resume.data, not a stored file — no
+        # signedUrl to hand out, so the frontend downloads it via the
+        # authenticated /resume-cv endpoint below instead of a bare <a href>.
+        resume = db.query(Resume).filter(Resume.id == app_row.resume_id).first()
+        if resume:
+            documents.insert(0, {
+                "_id": resume.id,
+                "fileName": f"{resume.title or 'CV'}.pdf",
+                "mimeType": "application/pdf",
+                "createdAt": resume.updated_at.isoformat() if resume.updated_at else None,
+                "signedUrl": None,
+                "isNativeResume": True,
+            })
+
     return {"candidate": candidate, "documents": documents}
+
+
+@router.get("/applications/{application_id}/resume-cv")
+async def application_resume_cv(
+    application_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """PDF download of the native Construtor de CV resume attached to an
+    application (D1) — company owner/admin only, mirrors candidate-cv's
+    ownership check. Rendered on demand (Phase A reportlab path — same as
+    the candidate's own default export) since a native resume has no
+    stored file to sign a URL for."""
+    app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
+    if not app_row or not app_row.resume_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application or resume not found")
+    if current_user.role != UserRole.admin:
+        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        if not co or app_row.company_id != co.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+
+    resume = db.query(Resume).filter(Resume.id == app_row.resume_id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV not found")
+
+    try:
+        resume_data = _json.loads(resume.data) if resume.data else {}
+        if not isinstance(resume_data, dict):
+            resume_data = {}
+    except Exception:
+        resume_data = {}
+    try:
+        pdf_bytes = to_pdf(resume_data)
+    except Exception as exc:
+        logger.error(f"Application resume export error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao gerar CV.")
+
+    safe_name = (resume.title or "cv").strip().replace(" ", "_").lower() or "cv"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+    )
 
 
 # ── Application notes / ratings (mini-ATS) ──────────────────────────────────

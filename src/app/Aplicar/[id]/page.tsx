@@ -39,6 +39,12 @@ type CvDocument = {
   createdAt?: string;
 };
 
+type ResumeOption = {
+  id: string;
+  title: string;
+  updated_at?: string;
+};
+
 type ViewMode = "candidate" | "guest";
 
 export default function ApplyJobPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,6 +62,7 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
   const [accountRole, setAccountRole] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>("guest");
   const [savedCvs, setSavedCvs] = useState<CvDocument[]>([]);
+  const [resumes, setResumes] = useState<ResumeOption[]>([]);
 
   const [candidateForm, setCandidateForm] = useState({
     fullName: "",
@@ -63,8 +70,9 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
     phone: "",
     location: "",
     coverLetter: "",
-    useLatestCv: true,
+    cvSource: "saved" as "saved" | "resume" | "custom",
     savedCvDocumentId: "",
+    resumeId: "",
     customCv: null as File | null,
   });
 
@@ -97,13 +105,20 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
         setMode(isCandidate ? "candidate" : "guest");
 
         if (isCandidate && t) {
-          const [profileRes, docsRes] = await Promise.all([
+          const [profileRes, docsRes, resumesRes] = await Promise.all([
             authFetch<ProfileResponse>("/candidates/profile", t, { suppressGlobalErrors: true }),
             authFetch<{ documents?: CvDocument[] }>("/candidates/cv/documents", t, { suppressGlobalErrors: true }),
+            authFetch<ResumeOption[]>("/resumes/", t, { suppressGlobalErrors: true }).catch(() => []),
           ]);
           if (!mounted) return;
           const docs = (docsRes.documents || []).filter(Boolean);
+          const resumeList = (resumesRes || []).filter(Boolean);
           setSavedCvs(docs);
+          setResumes(resumeList);
+          // Prefer a Construtor de CV resume when one exists — it's the
+          // more complete, always-current option; fall back to a saved
+          // upload, otherwise the candidate uploads a new file.
+          const preferredSource = resumeList.length > 0 ? "resume" : docs.length > 0 ? "saved" : "custom";
           setCandidateForm((prev) => ({
             ...prev,
             fullName: profileRes.profile?.fullName || prev.fullName,
@@ -111,6 +126,8 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
             phone: profileRes.profile?.phone || prev.phone,
             location: profileRes.profile?.location || prev.location,
             savedCvDocumentId: docs[0]?._id || "",
+            resumeId: resumeList[0]?.id || "",
+            cvSource: preferredSource,
           }));
         }
       } catch (error: unknown) {
@@ -150,14 +167,17 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
       const formData = new FormData();
       formData.append("jobId", job._id);
       if (companyId) formData.append("companyId", companyId);
-      formData.append("useLatestCv", candidateForm.useLatestCv ? "true" : "false");
+      formData.append("useLatestCv", candidateForm.cvSource === "saved" ? "true" : "false");
       formData.append("coverLetter", candidateForm.coverLetter);
       formData.append("phone", candidateForm.phone);
       formData.append("location", candidateForm.location);
-      if (candidateForm.useLatestCv && candidateForm.savedCvDocumentId) {
+      if (candidateForm.cvSource === "resume" && candidateForm.resumeId) {
+        formData.append("resumeId", candidateForm.resumeId);
+      }
+      if (candidateForm.cvSource === "saved" && candidateForm.savedCvDocumentId) {
         formData.append("savedCvDocumentId", candidateForm.savedCvDocumentId);
       }
-      if (!candidateForm.useLatestCv && candidateForm.customCv) {
+      if (candidateForm.cvSource === "custom" && candidateForm.customCv) {
         formData.append("customCv", candidateForm.customCv);
       }
 
@@ -341,11 +361,35 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
 
                       <fieldset className="space-y-2">
                         <legend className="text-sm font-semibold text-slate-800">CV para esta vaga</legend>
+
+                        {resumes.length > 0 && (
+                          <>
+                            <label className="flex items-center gap-2 text-sm text-slate-700">
+                              <input type="radio" checked={candidateForm.cvSource === "resume"} onChange={() => setCandidateForm((p) => ({ ...p, cvSource: "resume" }))} />
+                              Usar CV do Construtor de CV
+                            </label>
+                            {candidateForm.cvSource === "resume" && (
+                              <select
+                                value={candidateForm.resumeId}
+                                onChange={(e) => setCandidateForm((p) => ({ ...p, resumeId: e.target.value }))}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                              >
+                                {resumes.map((resume) => (
+                                  <option key={resume.id} value={resume.id}>
+                                    {resume.title || "CV"}
+                                    {resume.updated_at ? ` (${new Date(resume.updated_at).toLocaleDateString("pt-PT")})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </>
+                        )}
+
                         <label className="flex items-center gap-2 text-sm text-slate-700">
-                          <input type="radio" checked={candidateForm.useLatestCv} onChange={() => setCandidateForm((p) => ({ ...p, useLatestCv: true }))} />
+                          <input type="radio" checked={candidateForm.cvSource === "saved"} onChange={() => setCandidateForm((p) => ({ ...p, cvSource: "saved" }))} />
                           Usar CV já guardado
                         </label>
-                        {candidateForm.useLatestCv ? (
+                        {candidateForm.cvSource === "saved" ? (
                           savedCvs.length > 0 ? (
                             <select
                               value={candidateForm.savedCvDocumentId}
@@ -366,10 +410,10 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
                           )
                         ) : null}
                         <label className="flex items-center gap-2 text-sm text-slate-700">
-                          <input type="radio" checked={!candidateForm.useLatestCv} onChange={() => setCandidateForm((p) => ({ ...p, useLatestCv: false }))} />
+                          <input type="radio" checked={candidateForm.cvSource === "custom"} onChange={() => setCandidateForm((p) => ({ ...p, cvSource: "custom" }))} />
                           Enviar novo CV (PDF/DOCX)
                         </label>
-                        {!candidateForm.useLatestCv ? (
+                        {candidateForm.cvSource === "custom" ? (
                           <input
                             type="file"
                             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -392,8 +436,9 @@ export default function ApplyJobPage({ params }: { params: Promise<{ id: string 
                         onClick={submitCandidateApplication}
                         disabled={
                           submitting ||
-                          (!candidateForm.useLatestCv && !candidateForm.customCv) ||
-                          (candidateForm.useLatestCv && !candidateForm.savedCvDocumentId)
+                          (candidateForm.cvSource === "resume" && !candidateForm.resumeId) ||
+                          (candidateForm.cvSource === "saved" && !candidateForm.savedCvDocumentId) ||
+                          (candidateForm.cvSource === "custom" && !candidateForm.customCv)
                         }
                         className="rounded-xl bg-red-600 px-5 py-3 font-semibold text-white disabled:opacity-50"
                       >

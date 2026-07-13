@@ -346,6 +346,10 @@ class JobApplication(Base, TimestampMixin):
 
     cv_file_path = Column(String(500), nullable=True)
     saved_cv_document_id = Column(String(36), nullable=True)
+    # A native Construtor de CV resume (D1, EXECUTION_PLAN_NATIVE_CV_
+    # BUILDER.md) — an alternative to the two fields above, rendered
+    # on-demand rather than a stored file, so no matching *_path column.
+    resume_id = Column(String(36), nullable=True, index=True)
 
     # Lets a guest applicant (no account) check this one application's status
     # without logging in — issued at submission time, sent in the

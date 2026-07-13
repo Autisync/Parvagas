@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useApplications } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
-import { authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
@@ -41,6 +41,7 @@ type CandidateCvPayload = {
     signedUrl?: string;
     mimeType?: string;
     createdAt?: string;
+    isNativeResume?: boolean;
   }>;
 };
 
@@ -60,6 +61,8 @@ export default function EmpresaCandidaturasPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [cvLoadingFor, setCvLoadingFor] = useState<string | null>(null);
   const [selectedCv, setSelectedCv] = useState<CandidateCvPayload | null>(null);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
+  const [resumeDownloading, setResumeDownloading] = useState(false);
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [notes, setNotes] = useState<Array<{ _id: string; body?: string; rating?: number | null; createdAt?: string }>>([]);
   const [noteBody, setNoteBody] = useState("");
@@ -169,10 +172,32 @@ export default function EmpresaCandidaturasPage() {
     try {
       const payload = await authFetch<CandidateCvPayload>(`/applications/${applicationId}/candidate-cv`, token!);
       setSelectedCv(payload);
+      setSelectedApplicationId(applicationId);
     } catch (err: unknown) {
       pushToast("error", (err as Error).message || "Erro ao carregar CV do candidato.");
     } finally {
       setCvLoadingFor(null);
+    }
+  };
+
+  const downloadResumeCv = async () => {
+    if (!selectedApplicationId || resumeDownloading) return;
+    setResumeDownloading(true);
+    try {
+      const res = await authFetchRaw(`/applications/${selectedApplicationId}/resume-cv`, token!);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "cv.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(href);
+    } catch (err: unknown) {
+      pushToast("error", (err as Error).message || "Erro ao descarregar CV.");
+    } finally {
+      setResumeDownloading(false);
     }
   };
 
@@ -390,7 +415,7 @@ export default function EmpresaCandidaturasPage() {
                       <h3 className="text-lg font-bold text-slate-900">CV do candidato</h3>
                       <p className="text-sm text-slate-600">{selectedCv.candidate?.fullName || "Candidato"} · {selectedCv.candidate?.email || "sem email"}</p>
                     </div>
-                    <button type="button" onClick={() => setSelectedCv(null)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">Fechar</button>
+                    <button type="button" onClick={() => { setSelectedCv(null); setSelectedApplicationId(null); }} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">Fechar</button>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -426,8 +451,20 @@ export default function EmpresaCandidaturasPage() {
                     ) : (
                       selectedCv.documents.map((doc) => (
                         <div key={doc._id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-2.5 text-sm">
-                          <span className="text-slate-700">{doc.fileName || "Documento"}</span>
-                          {doc.signedUrl ? (
+                          <span className="text-slate-700">
+                            {doc.fileName || "Documento"}
+                            {doc.isNativeResume && <span className="ml-1.5 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700">Construtor de CV</span>}
+                          </span>
+                          {doc.isNativeResume ? (
+                            <button
+                              type="button"
+                              onClick={downloadResumeCv}
+                              disabled={resumeDownloading}
+                              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                            >
+                              {resumeDownloading ? "A descarregar…" : "Descarregar"}
+                            </button>
+                          ) : doc.signedUrl ? (
                             <a href={doc.signedUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white">
                               Abrir
                             </a>
