@@ -36,6 +36,43 @@ def llm_enabled() -> bool:
     return bool(settings.LLM_API_KEY.strip())
 
 
+def chat_json_request(
+    url: str,
+    headers: dict,
+    body: dict,
+    *,
+    fallback: dict,
+    timeout: float,
+) -> dict:
+    """Low-level sibling of chat_json for callers that assemble their own
+    endpoint config (e.g. ResumeAIService's per-tier providers — Azure's
+    deployment-path URLs don't fit a simple base_url join). Same contract:
+    POSTs an OpenAI-style chat body, parses choices[0].message.content as a
+    JSON object, and returns `fallback` untouched on ANY failure. This is
+    the single HTTP path every LLM feature goes through (plan C1)."""
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(url, headers=headers, json=body)
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:  # noqa: BLE001 — never let an LLM outage break the caller
+        logger.warning(f"LLM call failed, using fallback: {exc}")
+        return fallback
+
+    try:
+        content = data["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"LLM returned invalid JSON, using fallback: {exc}")
+        return fallback
+
+    if not isinstance(parsed, dict):
+        logger.warning("LLM JSON response was not an object, using fallback")
+        return fallback
+
+    return parsed
+
+
 def chat_json(
     system_prompt: str,
     user_prompt: str,
@@ -70,24 +107,10 @@ def chat_json(
         "response_format": {"type": "json_object"},
     }
 
-    try:
-        with httpx.Client(timeout=timeout or settings.LLM_TIMEOUT_SECONDS) as client:
-            response = client.post(f"{base_url}/chat/completions", headers=headers, json=body)
-            response.raise_for_status()
-            data = response.json()
-    except Exception as exc:  # noqa: BLE001 — never let an LLM outage break the caller
-        logger.warning(f"LLM call failed, using fallback: {exc}")
-        return fallback
-
-    try:
-        content = data["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"LLM returned invalid JSON, using fallback: {exc}")
-        return fallback
-
-    if not isinstance(parsed, dict):
-        logger.warning("LLM JSON response was not an object, using fallback")
-        return fallback
-
-    return parsed
+    return chat_json_request(
+        f"{base_url}/chat/completions",
+        headers,
+        body,
+        fallback=fallback,
+        timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
+    )

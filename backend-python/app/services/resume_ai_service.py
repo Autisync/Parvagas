@@ -1,12 +1,18 @@
-"""AI resume scoring and rewrite helpers."""
+"""AI resume scoring and rewrite helpers.
+
+HTTP is delegated to llm_service.chat_json_request (plan C1: one LLM client
+path for every feature) — this module only assembles per-tier endpoint
+config (_request_parts), builds prompts, and normalizes/validates results.
+The public API (score_resume/rewrite_resume with use_free_tier routing) and
+the cloud → Ollama → heuristic fall-through are unchanged.
+"""
 import json
 from typing import Any
-
-import httpx
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models import CandidateProfile, Resume
+from app.services.llm_service import chat_json_request
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -74,23 +80,35 @@ class ResumeAIService:
         )
 
     @staticmethod
-    def _call_ollama(prompt: str) -> dict[str, Any]:
-        """Call Ollama /api/chat (OpenAI-compatible endpoint) for free-tier users."""
-        url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
+    def _call_ollama(prompt: str) -> dict[str, Any] | None:
+        """Free-tier call through Ollama's OpenAI-compatible endpoint.
+
+        C1 note: this used to speak Ollama's NATIVE /api/chat protocol
+        (different body: stream/format keys; different response shape:
+        message.content instead of choices[0].message.content), which is
+        exactly the bespoke-HTTP divergence the plan's "one LLM client"
+        refactor removes. Ollama has shipped the /v1/chat/completions
+        OpenAI-compatibility layer since early 2024 and the deployed image
+        is ollama/ollama:latest, so the unified path applies cleanly.
+        """
+        url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/v1/chat/completions"
         body = {
             "model": settings.OLLAMA_MODEL,
             "messages": [
                 {"role": "system", "content": "You are a resume optimization assistant. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt},
             ],
-            "stream": False,
-            "format": "json",
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
         }
-        resp = httpx.post(url, json=body, timeout=settings.OLLAMA_TIMEOUT_SECONDS)
-        resp.raise_for_status()
-        data = resp.json()
-        content = data.get("message", {}).get("content", "{}")
-        return json.loads(content)
+        result = chat_json_request(
+            url,
+            {"Content-Type": "application/json"},
+            body,
+            fallback={},
+            timeout=settings.OLLAMA_TIMEOUT_SECONDS,
+        )
+        return result or None
 
     @staticmethod
     def _request_parts(prompt: str) -> tuple[str, dict[str, str], dict[str, Any]]:
@@ -134,30 +152,17 @@ class ResumeAIService:
         return url, headers, body
 
     @staticmethod
-    def _try_parse_json_response(response: dict[str, Any]) -> dict[str, Any] | None:
-        try:
-            content = response["choices"][0]["message"]["content"]
-            return json.loads(content)
-        except Exception as exc:
-            logger.warning(f"AI resume response parse failed: {exc}")
-            return None
-
-    @staticmethod
     def _call_ai(prompt: str) -> dict[str, Any] | None:
         if not ResumeAIService._ai_enabled():
             return None
 
         url, headers, body = ResumeAIService._request_parts(prompt)
-        try:
-            with httpx.Client(timeout=settings.RESUME_AI_TIMEOUT_SECONDS) as client:
-                response = client.post(url, headers=headers, json=body)
-                response.raise_for_status()
-                payload = response.json()
-                parsed = ResumeAIService._try_parse_json_response(payload)
-                return parsed
-        except Exception as exc:
-            logger.warning(f"AI resume call failed: {exc}")
-            return None
+        result = chat_json_request(
+            url, headers, body,
+            fallback={},
+            timeout=settings.RESUME_AI_TIMEOUT_SECONDS,
+        )
+        return result or None
 
     @staticmethod
     def score_resume(resume: Resume, profile: CandidateProfile | None, use_free_tier: bool = False) -> dict[str, Any]:

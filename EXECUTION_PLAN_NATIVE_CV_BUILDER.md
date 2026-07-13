@@ -452,9 +452,31 @@ one remaining exit condition, deliberately left for you to execute via
 ## Phase C — Intelligence layer + billing consolidation
 
 ### C1 — One LLM client
-- [ ] Refactor `ResumeAIService` internals onto `llm_service.chat_json()`
-      (keep its public API + free/paid tier routing). Delete its bespoke
-      HTTP code. Tests keep passing unchanged — that's the refactor gate.
+- [x] Refactored — with one deviation from the letter of the plan text:
+      `chat_json()` reads the shared `LLM_*` settings, but ResumeAIService
+      needs per-tier endpoint config (RESUME_AI_* cloud providers incl.
+      Azure's deployment-path URLs, OLLAMA_* free tier), so the shared
+      client gained a low-level `chat_json_request(url, headers, body,
+      fallback, timeout)` and `chat_json()` now delegates to it — one HTTP
+      + parse + never-raises path for everything, which is the actual
+      intent. ResumeAIService keeps its public API and cloud → Ollama →
+      heuristic routing; `_request_parts` survives as pure config assembly;
+      the bespoke `_call_ai` HTTP block, `_try_parse_json_response`, and
+      `_call_ollama`'s native-protocol HTTP are gone (`import httpx`
+      deleted from the module). **Protocol note**: the Ollama tier moved
+      from Ollama's NATIVE /api/chat (different body and response shape —
+      the exact divergence this refactor exists to remove) to its
+      OpenAI-compatible /v1/chat/completions, available since early 2024
+      and the deployed image is ollama/ollama:latest. Flag for the deploy
+      pass: confirm one free-tier score/rewrite round-trip against the real
+      container.
+- [x] Refactor gate: full suite passes (267/3 skipped) with zero changes to
+      existing tests. Plus 6 NEW unit tests (test_resume_ai_service.py)
+      monkeypatching the single chat_json_request seam: cloud routing,
+      free-tier→Ollama endpoint, LLM-failure→heuristic fall-through,
+      rewrite unavailable/cloud paths, and Azure's deployment-URL assembly.
+      Backend-only iteration — tsc/vitest untouched (still green from B4),
+      no browser surface.
 
 ### C2 — In-editor AI actions
 - [ ] "Adaptar a esta vaga": job picker (saved jobs, reuse the
