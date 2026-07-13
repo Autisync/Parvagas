@@ -169,6 +169,19 @@ def _save_resume_score(db: Session, profile: CandidateProfile, resume: Resume, s
     db.commit()
 
 
+VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS = 30 * 60
+
+
+def _snapshot_due(resume: Resume) -> bool:
+    """True when the newest version is old enough (or absent) that another
+    automatic snapshot is worth keeping — see update_resume."""
+    timestamps = [v.created_at for v in resume.versions if v.created_at is not None]
+    if not timestamps:
+        return True
+    from datetime import datetime, timedelta
+    return datetime.utcnow() - max(timestamps) > timedelta(seconds=VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS)
+
+
 def _create_resume_version(db: Session, resume: Resume, user_id: str, notes: str) -> None:
     version_number = len(resume.versions) + 1
     resume_version = ResumeVersion(
@@ -321,6 +334,16 @@ async def update_resume(
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
+    # Throttled history snapshot (B4): before overwriting data, capture the
+    # outgoing state — but at most once per VERSION_SNAPSHOT_MIN_INTERVAL,
+    # since the editor autosaves every ~10s and per-save versions would just
+    # be noise. The rewrite endpoint still snapshots unconditionally (an AI
+    # rewrite is always a meaningful boundary).
+    if payload.data is not None:
+        new_data_json = json.dumps(payload.data, ensure_ascii=False)
+        if new_data_json != (resume.data or "") and _snapshot_due(resume):
+            _create_resume_version(db, resume, current_user.id, "Snapshot automático antes de alterações.")
+
     if payload.title is not None:
         resume.title = payload.title.strip() or resume.title
     if payload.summary is not None:
@@ -458,6 +481,100 @@ async def share_resume(
     db.commit()
     db.refresh(resume)
     return _resume_payload(resume)
+
+
+def _owned_resume(db: Session, resume_id: str, current_user: User) -> Resume:
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    return resume
+
+
+@router.get("/{resume_id}/versions")
+async def list_resume_versions(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Version history metadata, newest first — no data payloads (a long
+    history of full CV snapshots would be a heavy response for a list the
+    UI only renders as rows; GET /versions/{id} fetches one on demand)."""
+    resume = _owned_resume(db, resume_id, current_user)
+    versions = (
+        db.query(ResumeVersion)
+        .filter(ResumeVersion.resume_id == resume.id)
+        .order_by(ResumeVersion.version_number.desc())
+        .all()
+    )
+    return [
+        {
+            "id": v.id,
+            "version_number": v.version_number,
+            "title": v.title,
+            "change_summary": v.change_summary,
+            "created_at": v.created_at,
+        }
+        for v in versions
+    ]
+
+
+@router.get("/{resume_id}/versions/{version_id}")
+async def get_resume_version(
+    resume_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One full snapshot, for the panel's preview pane."""
+    resume = _owned_resume(db, resume_id, current_user)
+    version = db.query(ResumeVersion).filter(
+        ResumeVersion.id == version_id, ResumeVersion.resume_id == resume.id,
+    ).first()
+    if not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return {
+        "id": version.id,
+        "version_number": version.version_number,
+        "title": version.title,
+        "summary": version.summary,
+        "data": _load_json_field(version.data) or {},
+        "change_summary": version.change_summary,
+        "created_at": version.created_at,
+    }
+
+
+@router.post("/{resume_id}/versions/{version_id}/restore")
+async def restore_resume_version(
+    resume_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Restore-as-copy (never destructive, per the plan): the snapshot
+    becomes a brand-new draft resume; the current resume and its history
+    are untouched."""
+    resume = _owned_resume(db, resume_id, current_user)
+    version = db.query(ResumeVersion).filter(
+        ResumeVersion.id == version_id, ResumeVersion.resume_id == resume.id,
+    ).first()
+    if not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+
+    copy = Resume(
+        candidate_profile_id=resume.candidate_profile_id,
+        title=f"{version.title} (v{version.version_number} restaurada)",
+        summary=version.summary,
+        template_id=resume.template_id,
+        data=version.data,
+        is_draft=True,
+        is_published=False,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return _resume_payload(copy)
 
 
 # Public share page (B3) — its own router so the URL is /public/resumes/…,

@@ -36,6 +36,9 @@ _export_resume = resumes_module.export_resume
 _preview_resume_html = resumes_module.preview_resume_html
 _share_resume = resumes_module.share_resume
 _get_public_resume = resumes_module.get_public_resume
+_list_versions = resumes_module.list_resume_versions
+_get_version = resumes_module.get_resume_version
+_restore_version = resumes_module.restore_resume_version
 
 
 @pytest.fixture()
@@ -356,6 +359,76 @@ def test_share_only_touches_own_resume(db):
         asyncio.run(_share_resume(
             resume_id=created["id"], payload=resumes_module.ResumeShareRequest(published=True), db=db, current_user=intruder,
         ))
+    assert exc_info.value.status_code == 404
+
+
+# --------------------------- versions (Phase B4) ---------------------------- #
+
+def _patch_data(db, user, resume_id, data):
+    return asyncio.run(resumes_module.update_resume(
+        resume_id=resume_id, payload=ResumeUpdateRequest(data=data), db=db, current_user=user,
+    ))
+
+
+def test_update_creates_throttled_snapshot_of_outgoing_state(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"fullName": "Estado Original"}), db=db, current_user=user,
+    ))
+    _patch_data(db, user, created["id"], {"fullName": "Estado Novo"})
+
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+    assert len(versions) == 1
+    snapshot = asyncio.run(_get_version(resume_id=created["id"], version_id=versions[0]["id"], db=db, current_user=user))
+    assert snapshot["data"]["fullName"] == "Estado Original"  # the OUTGOING state, not the new one
+
+    # A second save moments later must NOT create another version (throttle),
+    # and an unchanged-data save never snapshots regardless.
+    _patch_data(db, user, created["id"], {"fullName": "Estado Ainda Mais Novo"})
+    _patch_data(db, user, created["id"], {"fullName": "Estado Ainda Mais Novo"})
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+    assert len(versions) == 1
+
+
+def test_list_versions_omits_data_payload_and_orders_newest_first(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"fullName": "V0"}), db=db, current_user=user,
+    ))
+    _patch_data(db, user, created["id"], {"fullName": "V1"})
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+    assert versions and "data" not in versions[0]
+    assert versions[0]["version_number"] == max(v["version_number"] for v in versions)
+
+
+def test_restore_version_creates_new_draft_copy_leaving_original_untouched(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"fullName": "Antigo"}), db=db, current_user=user,
+    ))
+    _patch_data(db, user, created["id"], {"fullName": "Atual"})
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+
+    restored = asyncio.run(_restore_version(
+        resume_id=created["id"], version_id=versions[0]["id"], db=db, current_user=user,
+    ))
+    assert restored["id"] != created["id"]  # a copy, not an overwrite
+    assert restored["data"]["fullName"] == "Antigo"
+    assert restored["is_draft"] is True and restored["is_published"] is False
+    assert "restaurada" in restored["title"]
+
+    original = asyncio.run(_get_resume(resume_id=created["id"], db=db, current_user=user))
+    assert original["data"]["fullName"] == "Atual"  # untouched
+
+
+def test_versions_are_ownership_isolated(db):
+    owner = _make_candidate(db, email="owner-v@example.com")
+    intruder = _make_candidate(db, email="intruder-v@example.com")
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"fullName": "X"}), db=db, current_user=owner,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=intruder))
     assert exc_info.value.status_code == 404
 
 

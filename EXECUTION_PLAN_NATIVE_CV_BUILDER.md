@@ -420,8 +420,32 @@ one remaining exit condition, deliberately left for you to execute via
       belongs in MANUAL_TEST_GUIDE.md §11's deploy pass.
 
 ### B4 — Versions UI
-- [ ] Version history panel (list `ResumeVersion` rows, view snapshot,
-      restore-as-copy). Backend list/restore endpoints if missing.
+- [x] Backend endpoints were indeed missing — added `GET /resumes/{id}/
+      versions` (metadata only, newest first — no data payloads in the
+      list), `GET .../versions/{vid}` (one full snapshot on demand), and
+      `POST .../versions/{vid}/restore` (restore-as-copy: the snapshot
+      becomes a NEW draft resume, never overwrites — matching the plan's
+      never-destructive rule for C2 too). Shared `_owned_resume()` helper
+      consolidates the ownership-404 check.
+      **Gap found and fixed beyond the checklist text**: versions were only
+      ever CREATED by the AI rewrite endpoint — the editor's autosave PATCH
+      never snapshotted, so the history panel would have shipped
+      permanently empty. `update_resume` now snapshots the *outgoing* state
+      before applying a data change, throttled to one per 30 minutes
+      (`VERSION_SNAPSHOT_MIN_INTERVAL_SECONDS`) so ~10s autosaves don't
+      flood the table; unchanged-data saves never snapshot.
+- [x] Editor UI: "Versões" button (ClockIcon, header row) opens a modal
+      (reused AddItemModal) listing versions with date + change summary,
+      per-row "Ver" (read-only snapshot preview through the same
+      ResumePreview dispatcher) and "Restaurar como cópia" (POST restore →
+      success toast → navigates to the new copy's editor). Empty state
+      explains when snapshots get created.
+- [x] Verify: pytest 261 passed/3 skipped (4 new: outgoing-state snapshot +
+      throttle + no-op-save behavior, list omits data & orders newest-first,
+      restore-as-copy leaves original untouched, ownership isolation),
+      tsc clean, vitest 91, editor route compiles clean in browser (auth
+      wall as always — panel interaction itself is covered by the endpoint
+      tests; live click-through belongs to MANUAL_TEST_GUIDE.md §11).
 
 ---
 

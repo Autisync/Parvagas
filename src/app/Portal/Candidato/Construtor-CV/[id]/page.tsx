@@ -12,7 +12,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import ResumePreview from "../preview/ResumePreview";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -50,6 +50,16 @@ type TemplateOption = {
   slug: string;
   description: string | null;
 };
+
+type VersionMeta = {
+  id: string;
+  version_number: number;
+  title: string;
+  change_summary: string | null;
+  created_at: string;
+};
+
+type VersionSnapshot = VersionMeta & { data: ResumeData };
 
 const SECTIONS = [
   { key: "dados", label: "Dados Pessoais" },
@@ -116,6 +126,10 @@ export default function ConstrutorCvEditorPage() {
   const [isPublished, setIsPublished] = useState(false);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [versions, setVersions] = useState<VersionMeta[]>([]);
+  const [versionPreview, setVersionPreview] = useState<VersionSnapshot | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
   const [data, setData] = useState<ResumeData>({});
@@ -199,6 +213,41 @@ export default function ConstrutorCvEditorPage() {
       notify("Ligação copiada.", "success");
     } catch {
       notify("Não foi possível copiar a ligação.", "error");
+    }
+  };
+
+  const openVersions = async () => {
+    if (!token) return;
+    setVersionsOpen(true);
+    setVersionPreview(null);
+    try {
+      setVersions(await authFetch<VersionMeta[]>(`/resumes/${resumeId}/versions`, token));
+    } catch {
+      setVersions([]);
+    }
+  };
+
+  const viewVersion = async (versionId: string) => {
+    if (!token) return;
+    try {
+      setVersionPreview(await authFetch<VersionSnapshot>(`/resumes/${resumeId}/versions/${versionId}`, token));
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível carregar a versão."), "error");
+    }
+  };
+
+  const restoreVersion = async (versionId: string) => {
+    if (!token || restoringId) return;
+    setRestoringId(versionId);
+    try {
+      const copy = await authFetch<Resume>(`/resumes/${resumeId}/versions/${versionId}/restore`, token, { method: "POST" });
+      notify("Versão restaurada como novo CV.", "success");
+      setVersionsOpen(false);
+      setRestoringId(null);
+      router.push(`/Portal/Candidato/Construtor-CV/${copy.id}`);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível restaurar a versão."), "error");
+      setRestoringId(null);
     }
   };
 
@@ -378,6 +427,13 @@ export default function ConstrutorCvEditorPage() {
             )}
             {saveState === "error" && <span className="text-red-600">Erro ao guardar</span>}
           </span>
+          <button
+            type="button"
+            onClick={openVersions}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            <ClockIcon className="h-3.5 w-3.5" /> Versões
+          </button>
           <button
             type="button"
             onClick={toggleShare}
@@ -705,6 +761,58 @@ export default function ConstrutorCvEditorPage() {
           </div>
         </div>
       )}
+
+      <AddItemModal
+        open={versionsOpen}
+        title="Histórico de versões"
+        onClose={() => setVersionsOpen(false)}
+      >
+        {versions.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Ainda não há versões guardadas. Um snapshot é criado automaticamente à medida que edita
+            (no máximo um a cada 30 minutos) e sempre que usa a reescrita com IA.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {versions.map((version) => (
+              <div key={version.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">v{version.version_number} — {version.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(version.created_at).toLocaleString("pt-PT")}
+                    {version.change_summary ? ` · ${version.change_summary}` : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => viewVersion(version.id)}
+                    className="rounded border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Ver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => restoreVersion(version.id)}
+                    disabled={restoringId !== null}
+                    className="rounded bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {restoringId === version.id ? "A restaurar…" : "Restaurar como cópia"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {versionPreview && (
+          <div className="mt-4 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-slate-100 p-3">
+            <p className="mb-2 text-center text-xs text-slate-500">
+              Pré-visualização da v{versionPreview.version_number} — só de leitura.
+            </p>
+            <ResumePreview data={versionPreview.data} templateSlug={templateSlug} />
+          </div>
+        )}
+      </AddItemModal>
 
       <AddItemModal
         open={expModalOpen}
