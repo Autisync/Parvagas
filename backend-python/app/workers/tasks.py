@@ -869,3 +869,114 @@ def generate_auto_apply_proposals() -> dict:
         return {"success": False, "error": str(e)}
     finally:
         db.close()
+
+
+@celery.task(name="app.workers.tasks.run_hibp_breach_scan", soft_time_limit=3300, time_limit=3600)
+def run_hibp_breach_scan() -> dict:
+    """Daily Have I Been Pwned account-breach scan.
+
+    Walks registered accounts oldest-checked-first (HIBP_DAILY_CHECK_LIMIT per
+    run, HIBP_REQUEST_INTERVAL_SECONDS sleep between API calls to respect the
+    rate tier). For each account found in a breach it wasn't already known to
+    be in, records a high-severity `hibp_breach` security event; at the end of
+    the run, one aggregated alert email goes to the admins listing the newly
+    affected accounts (one email per run, not per account — the first-ever run
+    will surface many old breaches at once).
+
+    No-ops when HIBP_API_KEY is unset. Never raises past the task boundary.
+    """
+    import time as _time
+
+    from app.services import hibp_service, security_service
+    from app.services.email_service import EmailService
+
+    if not hibp_service.hibp_enabled():
+        logger.info("run_hibp_breach_scan: HIBP_API_KEY not set, skipping")
+        return {"skipped": True, "reason": "no api key"}
+
+    db = SessionLocal()
+    checked = 0
+    newly_breached: list[tuple[str, list[str]]] = []
+    try:
+        users = (
+            db.query(User)
+            .filter(User.suspended.is_(False))
+            .order_by(User.hibp_checked_at.asc().nulls_first(), User.created_at.asc())
+            .limit(max(1, settings.HIBP_DAILY_CHECK_LIMIT))
+            .all()
+        )
+        for index, user in enumerate(users):
+            if index > 0:
+                _time.sleep(max(0.0, settings.HIBP_REQUEST_INTERVAL_SECONDS))
+            breaches = hibp_service.check_email_breaches(user.email)
+            if breaches is None:  # API error/rate limit — retry this user next run
+                continue
+            user.hibp_checked_at = datetime.utcnow()
+            checked += 1
+
+            if breaches:
+                known = _known_hibp_breaches(db, user.email)
+                fresh = sorted(set(breaches) - known)
+                if fresh:
+                    security_service.record_security_event(
+                        db,
+                        event_type="hibp_breach",
+                        severity="high",
+                        email=user.email,
+                        details={"breaches": fresh, "allBreaches": breaches},
+                    )
+                    newly_breached.append((user.email, fresh))
+            db.commit()
+
+        if newly_breached:
+            lines = [
+                f"A verificação diária Have I Been Pwned encontrou {len(newly_breached)} "
+                "conta(s) presentes em fugas de dados que ainda não estavam registadas:",
+            ]
+            for email, names in newly_breached[:20]:
+                lines.append(f"{email} — {', '.join(names)}")
+            if len(newly_breached) > 20:
+                lines.append(f"... e mais {len(newly_breached) - 20} conta(s) no separador Segurança.")
+            lines.append(
+                "Considere notificar os utilizadores afetados para trocarem a palavra-passe. "
+                "Detalhe completo no separador Segurança do portal de administração."
+            )
+            EmailService.send_security_alert_email(
+                subject="Contas encontradas em fugas de dados (HIBP)",
+                title="Verificação diária Have I Been Pwned",
+                lines=lines,
+            )
+
+        return {"checked": checked, "newlyBreached": len(newly_breached)}
+    except SoftTimeLimitExceeded:
+        logger.warning("run_hibp_breach_scan hit soft time limit after %d checks", checked)
+        return {"checked": checked, "newlyBreached": len(newly_breached), "timedOut": True}
+    except Exception as e:
+        logger.error(f"run_hibp_breach_scan failed: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e), "checked": checked}
+    finally:
+        db.close()
+
+
+def _known_hibp_breaches(db, email: str) -> set[str]:
+    """Breach names already recorded for this email in prior scans — so each
+    run only alerts on NEW breaches, not the same old ones every day."""
+    from app.models import SecurityEvent
+
+    known: set[str] = set()
+    rows = (
+        db.query(SecurityEvent)
+        .filter(
+            SecurityEvent.event_type == "hibp_breach",
+            SecurityEvent.email == email.strip().lower(),
+        )
+        .all()
+    )
+    for row in rows:
+        try:
+            info = json.loads(row.details or "{}")
+            known.update(info.get("allBreaches") or info.get("breaches") or [])
+        except Exception:  # noqa: BLE001
+            continue
+    return known

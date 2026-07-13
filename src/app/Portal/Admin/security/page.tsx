@@ -26,6 +26,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   login_burst: "Rajada de logins falhados",
   account_locked: "Conta bloqueada",
   email_rate_limit: "Limite de envio de emails",
+  hibp_breach: "Conta em fuga de dados (HIBP)",
   alert_sent: "Alerta enviado",
 };
 
@@ -121,6 +122,7 @@ export default function AdminSecurityPage() {
           <option value="login_burst">Rajada de logins</option>
           <option value="account_locked">Conta bloqueada</option>
           <option value="email_rate_limit">Limite de emails</option>
+          <option value="hibp_breach">Fuga de dados (HIBP)</option>
           <option value="alert_sent">Alerta enviado</option>
         </select>
         <select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }} className={adminFieldClass}>

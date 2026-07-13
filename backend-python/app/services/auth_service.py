@@ -29,6 +29,8 @@ class AuthService:
         nif: str | None = None,
     ) -> User:
         """Register a new user."""
+        AuthService._reject_pwned_password(password)
+
         # Check if user already exists
         existing_user = db.query(User).filter(User.email == email.lower()).first()
         if existing_user:
@@ -204,8 +206,27 @@ class AuthService:
         return raw_token
     
     @staticmethod
+    def _reject_pwned_password(password: str) -> None:
+        """Refuse passwords found in known breach corpora (HIBP Pwned
+        Passwords, k-anonymity — the plaintext never leaves the server).
+
+        Gated by HIBP_PASSWORD_CHECK_ENABLED (default off). A failed CHECK
+        (network error, API down) never blocks the flow — only a confirmed
+        pwned=True does.
+        """
+        from app.services.hibp_service import password_is_pwned
+
+        if password_is_pwned(password) is True:
+            raise ValidationError(
+                "Esta palavra-passe aparece em fugas de dados conhecidas. "
+                "Por segurança, escolha uma palavra-passe diferente."
+            )
+
+    @staticmethod
     def reset_password(db: Session, raw_token: str, new_password: str) -> User:
         """Reset user password with token."""
+        AuthService._reject_pwned_password(new_password)
+
         token_hash = hash_token(raw_token)
         
         # Find token

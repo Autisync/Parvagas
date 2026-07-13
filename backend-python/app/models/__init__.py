@@ -56,6 +56,12 @@ class User(Base, TimestampMixin):
     is_guest_account = Column(Boolean, nullable=False, default=False)
     guest_claim_email_sent_at = Column(DateTime, nullable=True)
 
+    # Have I Been Pwned daily breach scan — when this email was last checked
+    # against the HIBP v3 breach API (app.services.hibp_service). Oldest /
+    # never-checked accounts go first each run.
+    hibp_checked_at = Column(DateTime, nullable=True)
+
+
     # Relations
     candidate_profile = relationship("CandidateProfile", back_populates="user", uselist=False)
     company = relationship("Company", back_populates="owner", uselist=False, foreign_keys="Company.owner_user_id")

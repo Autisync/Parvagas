@@ -217,6 +217,19 @@ class Settings(BaseSettings):
     # priority bypass). 0 disables the cap.
     EMAIL_MAX_PER_HOUR: int = int(os.getenv("EMAIL_MAX_PER_HOUR", 200))
 
+    # Have I Been Pwned (app.services.hibp_service).
+    # HIBP_API_KEY: paid subscription key for the v3 breachedaccount API —
+    # empty (default) disables the daily account-breach scan entirely.
+    # The scan walks accounts oldest-checked-first, capped per run, with a
+    # sleep between calls sized for the cheapest HIBP rate tier (10 rpm).
+    HIBP_API_KEY: str = os.getenv("HIBP_API_KEY", "")
+    HIBP_DAILY_CHECK_LIMIT: int = int(os.getenv("HIBP_DAILY_CHECK_LIMIT", 300))
+    HIBP_REQUEST_INTERVAL_SECONDS: float = float(os.getenv("HIBP_REQUEST_INTERVAL_SECONDS", 6.5))
+    # Pwned Passwords k-anonymity check at registration/password-reset (free,
+    # no key). Off by default (ship dark): flipping it on makes those flows
+    # reject passwords found in breach corpora with a friendly PT message.
+    HIBP_PASSWORD_CHECK_ENABLED: bool = os.getenv("HIBP_PASSWORD_CHECK_ENABLED", "false").lower() == "true"
+
     # Observability
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
     SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0"))

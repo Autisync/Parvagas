@@ -52,6 +52,9 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_templated_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
+    # Slow by design (rate-limit sleeps between HIBP API calls, up to ~35 min
+    # per run) — cleanup queue keeps it away from web-facing email/parsing work.
+    'app.workers.tasks.run_hibp_breach_scan': {'queue': 'cleanup'},
     'app.workers.tasks.scrape_external_jobs': {'queue': 'scraping'},
     'app.workers.tasks.expire_stale_aggregated_jobs': {'queue': 'scraping'},
     'app.workers.tasks.publish_scheduled_scraped_jobs': {'queue': 'scraping'},
@@ -94,5 +97,11 @@ celery.conf.beat_schedule = {
     'generate-auto-apply-proposals': {
         'task': 'app.workers.tasks.generate_auto_apply_proposals',
         'schedule': crontab(minute=0, hour='*/6'),
+    },
+    # Have I Been Pwned daily breach scan — no-ops unless HIBP_API_KEY is set.
+    # 03:00 UTC keeps its rate-limit sleeps clear of the morning digest tasks.
+    'hibp-breach-scan-daily': {
+        'task': 'app.workers.tasks.run_hibp_breach_scan',
+        'schedule': crontab(hour=3, minute=0),  # 03:00 UTC daily
     },
 }
