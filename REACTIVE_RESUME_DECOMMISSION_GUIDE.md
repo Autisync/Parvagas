@@ -1,78 +1,59 @@
 # Decommissioning Reactive Resume (cv.parvagas.pt) — step-by-step
 
-## Why this exists
+## Status: code-side cleanup done. Server deploy is the only remaining step.
 
-`EXECUTION_PLAN_NATIVE_CV_BUILDER.md`'s Phase A (A1-A6, all shipped and
-committed) replaced the embedded Reactive Resume CV builder with a fully
-native one inside the portal (`/Portal/Candidato/Construtor-CV`). As of A5,
-nothing in the frontend links to `cv.parvagas.pt` or mints an SSO
-handoff/authorization code anymore — the OIDC bridge in
-`backend-python/app/api/v1/resume_sso.py` (`/oauth/authorize`, `/oauth/token`,
-`/oauth/userinfo`, `/.well-known/openid-configuration`) has zero live callers.
+`EXECUTION_PLAN_NATIVE_CV_BUILDER.md`'s Phase A (A1-A7) replaced the
+embedded Reactive Resume CV builder with a fully native one inside the
+portal (`/Portal/Candidato/Construtor-CV`). The CV builder is not a
+separate app or subdomain — it's part of the main system, served by the
+same backend-api container as everything else.
 
-**This guide's three steps were deliberately NOT executed automatically.**
-Retiring `cv-builder` is a one-way move for real users still mid-CV over
-there, and the sandbox that built the native replacement has no way to
-authenticate past `/Login` — it could verify the code compiles and the
-routes respond, but never watched a real candidate create/edit/export a CV
-against a live backend. **Do not run these steps until you've personally
-walked through [`MANUAL_TEST_GUIDE.md`](MANUAL_TEST_GUIDE.md)'s §11
-"Construtor de CV nativo" against production (or staging) and it all
-worked.** Once that's confirmed, this doc is the exact sequence.
+All of the **code** changes below are already committed to `staging`:
+- `resume_sso.py`'s OIDC bridge (`/oauth/authorize`, `/oauth/token`,
+  `/oauth/userinfo`, `/.well-known/openid-configuration`, and the
+  `POST /resume-sso/handoff` code-minting endpoint) is deleted. `guest_start`
+  (JWT-based, unrelated to that bridge) is the only thing left in the file.
+- `SSOHandoffCode`/`OAuthAuthorizationCode` models are deleted; migration
+  `20260713_0033` drops their tables.
+- `RESUME_BUILDER_URL`/`RESUME_BUILDER_SECRET`/`RESUME_SSO_CLIENT_ID`/
+  `RESUME_SSO_REDIRECT_URI` are deleted from `config.py` (nothing reads them
+  anymore).
+- `src/lib/resumeBuilder.ts` is deleted (was already unreferenced since A5).
+- The `cv-builder` service is deleted from `docker-compose.prod.yml`,
+  `docker-compose.dev.yml`, and `docker-compose.yml` (including the local
+  one that built from the `./reactive-resume` gitlink — the original source
+  of this whole session's first production incident).
+- `deploy/traefik/dynamic/parvagas.yml`'s `parvagas-cv`/`dev-parvagas-cv`
+  routers now 301-redirect to the native route
+  (`/Portal/Candidato/Construtor-CV`) via a `redirectRegex` middleware,
+  instead of proxying to a container that no longer exists.
+- `test_resume_sso.py` (OIDC-bridge tests) is deleted; `test_resume_sso_
+  guest.py` (guest_start tests) stays and still passes.
 
-## What's safe to remove vs. what must stay
+Full verification after this cleanup: pytest 293 passed/3 skipped
+(15 fewer than before — the deleted OIDC tests — everything else
+unaffected), migration chain still single-head, tsc clean, vitest 91,
+browser check clean.
 
-- **Remove**: the `cv-builder` service block in `docker-compose.prod.yml`
-  and its `OAUTH_*`/token-secret env vars. This is Reactive Resume itself —
-  nothing else depends on this container.
-- **Keep**: `ollama` — it's shared infrastructure for the backend's own LLM
-  features (`OLLAMA_BASE_URL`/`OLLAMA_MODEL` in `docker-compose.prod.yml`,
-  used by `resume_ai_service.py` etc.), not something Reactive Resume owns.
-  Nothing in this decommission touches it.
-- **Keep for one more release**: `resume_sso.py`'s OIDC routes and their
-  `SSOHandoffCode`/`OAuthAuthorizationCode` tables. Per the execution plan's
-  own A7 checklist, these stay dark for one release cycle after the native
-  builder is confirmed live — cheap insurance in case something in
-  production still has an old bookmark or cached link pointing at the OIDC
-  flow. `guest_start` (now JWT-based since A5) is unaffected either way.
+## What's left — the live server, which this sandbox cannot touch
 
-## Step 1 — Confirm Phase A works live
+The **only** remaining step is deploying these changes to the real
+infrastructure. This requires SSH/Portainer access this sandbox doesn't
+have, so it must be done manually:
 
-Walk `MANUAL_TEST_GUIDE.md` §11 end to end on the real deployed backend:
-pre-fill from profile, autosave, live preview (desktop + mobile sheet),
-experience/education modals, PDF/DOCX/JSON export, duplicate/delete, and
-the full guest journey (new account + revisit-same-email). If anything
-fails, fix it and re-verify before touching anything below.
+### 1. Deploy the updated Traefik config
 
-## Step 2 — Traefik: point cv.parvagas.pt at the native route
-
-Add a redirect router to `deploy/traefik/dynamic/parvagas.yml` (same file
-`TRAEFIK_FIX_GUIDE.md` documents deploying) — a `redirectregex` middleware
-sending every `cv.parvagas.pt/*` request to
-`https://parvagas.pt/Portal/Candidato/Construtor-CV`, so old bookmarks and
-any indexed links keep working instead of 404ing once the container is gone:
-
-```yaml
-# add under http.middlewares:
-    cv-to-native-redirect:
-      redirectRegex:
-        regex: "^https://cv\\.parvagas\\.pt/.*"
-        replacement: "https://parvagas.pt/Portal/Candidato/Construtor-CV"
-        permanent: true
-
-# change the existing parvagas-cv router to use it instead of forwarding
-# to the cv-builder service:
-    parvagas-cv:
-      rule: "Host(`cv.parvagas.pt`)"
-      entryPoints: [websecure]
-      middlewares: [cv-to-native-redirect]
-      service: parvagas-cv          # service block can stay; middleware short-circuits before it's reached
-      tls:
-        certResolver: letsencrypt
+```bash
+# from your machine, on the branch with these changes
+sudo cp /home/autisync/infra/traefik/dynamic/parvagas.yml \
+        /home/autisync/infra/traefik/dynamic/parvagas.yml.bak-$(date +%Y%m%d-%H%M)
+scp deploy/traefik/dynamic/parvagas.yml \
+    <your-ssh-user>@<server>:/tmp/parvagas.yml
+# then on the server:
+sudo mv /tmp/parvagas.yml /home/autisync/infra/traefik/dynamic/parvagas.yml
+sudo chown 1000:1000 /home/autisync/infra/traefik/dynamic/parvagas.yml
 ```
 
-Deploy the same way `TRAEFIK_FIX_GUIDE.md` describes: `scp` the updated file
-to `/home/autisync/infra/traefik/dynamic/parvagas.yml` on the server,
 Traefik hot-reloads it (`watch: true`, no restart needed). Verify:
 
 ```bash
@@ -80,53 +61,32 @@ curl -sI https://cv.parvagas.pt/anything
 # Expect: HTTP/2 301, location: https://parvagas.pt/Portal/Candidato/Construtor-CV
 ```
 
-This step is reversible independently of Step 3 — you can ship the redirect
-and leave the `cv-builder` container running for a few days as a safety net
-before removing it in Step 3.
+### 2. Redeploy the backend stack via Portainer
 
-## Step 3 — Remove the cv-builder service from docker-compose.prod.yml
-
-Delete the entire `cv-builder:` service block (currently lines ~318-386 —
-confirm the exact range in your checkout, since other edits may have shifted
-it) including its `depends_on`/`networks`/`labels`/`healthcheck`. Also
-remove these now-orphaned env vars if nothing else references them (grep
-first — `RESUME_BUILDER_SECRET` and `RESUME_SSO_CLIENT_ID` are also read by
-`backend-python`'s `resume_sso.py`, so leave those two until the OIDC routes
-themselves are removed; only drop compose-local ones like
-`RESUME_BUILDER_REFRESH_SECRET` if truly unused elsewhere).
-
-Redeploy via Portainer (pull latest `docker-compose.prod.yml`, redeploy the
-stack) — this stops and removes the `cv-builder` container. Verify:
+Pull this branch, redeploy `docker-compose.prod.yml` — this runs migration
+`20260713_0033` (drops the two OIDC tables) and stops/removes the
+`cv-builder` container in the same deploy. Verify:
 
 ```bash
 docker ps | grep parvagas-cv   # should return nothing
-curl -sI https://cv.parvagas.pt/anything  # still 301s (Traefik redirect from Step 2, independent of the container)
+curl -sI https://cv.parvagas.pt/anything  # still 301s (Traefik, independent of the container)
+curl -sI https://parvagas.pt/Portal/Candidato/Construtor-CV  # your normal app, 200
 ```
 
-## Step 4 — One release later: remove the OIDC bridge itself (separate commit)
+### 3. Sanity-check the native builder live
 
-Once Step 3 has been live for a full release cycle with no issues, remove
-in one clean commit:
-- `backend-python/app/api/v1/resume_sso.py`'s `/oauth/authorize`,
-  `/oauth/token`, `/oauth/userinfo`, `/.well-known/openid-configuration`
-  routes and the `create_handoff_code` endpoint (`guest_start` stays — it's
-  JWT-based since A5, unrelated to OIDC).
-- `SSOHandoffCode`/`OAuthAuthorizationCode` models + a migration dropping
-  their tables.
-- `RESUME_SSO_CLIENT_ID`/`RESUME_SSO_REDIRECT_URI` from
-  `backend-python/app/core/config.py`.
-- `src/lib/resumeBuilder.ts` (already unreferenced by any frontend code
-  since A5 — safe to delete outright).
-- `backend-python/tests/test_resume_sso.py` (the guest-flow tests in
-  `test_resume_sso_guest.py` stay; only the OIDC-bridge tests go).
+Walk `MANUAL_TEST_GUIDE.md`'s §11 "Construtor de CV nativo" end to end
+against production: pre-fill from profile, autosave, live preview,
+experience/education modals, PDF/DOCX/JSON export, duplicate/delete, the
+full guest journey (new account + revisit-same-email no-duplicate check),
+and the D1 apply-with-a-chosen-CV flow.
 
 ## Rollback
 
-- Step 2 (Traefik): restore the previous `parvagas.yml` from the
-  `.bak-<timestamp>` file the way `TRAEFIK_FIX_GUIDE.md` describes.
-- Step 3 (compose): re-add the `cv-builder` service block from git history
-  (`git show <commit>:docker-compose.prod.yml`) and redeploy — the image
-  (`amruthpillai/reactive-resume:v5.2.3`) is unchanged and still pullable,
-  so the container comes back exactly as it was.
-- Step 4: this is why it's a separate, later commit — reverting it doesn't
-  touch anything from Steps 1-3.
+- Traefik: restore the previous `parvagas.yml` from the `.bak-<timestamp>`
+  file — hot-reloads within seconds.
+- Compose/migration: `git revert` this branch's commits and redeploy —
+  migration `20260713_0033`'s `downgrade()` recreates both dropped tables
+  if you need to roll all the way back (you won't; nothing in production
+  ever read them once `CANDIDATE_PREMIUM_ENABLED`-style dark-release safety
+  applied — these tables were unused in prod already).

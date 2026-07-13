@@ -1,15 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Parvagas — DEVELOPMENT stack (docker-compose.dev.yml)
 #
-# Runs the full backend + CV builder (Reactive Resume) so new features can be
-# tested in a staging environment before any push to production.
+# Runs the full backend so new features can be tested in a staging
+# environment before any push to production. The CV builder is NOT a
+# separate service/subdomain — it's the native Construtor de CV built
+# directly into the main portal (parvagas.pt/Portal/Candidato/
+# Construtor-CV), served by the same backend-api container below.
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up --build
 #
 # Access (via Traefik on the shared 'proxy' network):
 #   Backend API           → https://api.dev.parvagas.pt
-#   CV Builder            → https://cv.dev.parvagas.pt
 #   MinIO S3              → https://storage.dev.parvagas.pt
 #   MinIO console         → http://localhost:9001  (internal only)
 #   Mailhog (email UI)    → http://localhost:8025  (internal only)
@@ -19,9 +21,9 @@
 #   - Vercel (deployed):  https://dev-parvagas.vercel.app (set in FRONTEND_URL)
 #
 # DNS: point *.dev.parvagas.pt at your server (wildcard A record or individual
-# records for api, cv, storage subdomains under dev.parvagas.pt)
+# records for api, storage subdomains under dev.parvagas.pt)
 # For pure-local testing add to /etc/hosts:
-#   127.0.0.1 api.dev.parvagas.pt cv.dev.parvagas.pt storage.dev.parvagas.pt
+#   127.0.0.1 api.dev.parvagas.pt storage.dev.parvagas.pt
 #
 # Vercel Frontend Configuration:
 # If using Vercel for the frontend:
@@ -46,7 +48,7 @@ x-backend-env: &backend-env
   SUPER_ADMIN_EMAIL: admin@parvagas.pt
   FRONTEND_URL: https://dev.parvagas.pt
   BACKEND_URL: https://api.dev.parvagas.pt
-  CORS_ORIGIN: "https://dev.parvagas.pt,https://cv.dev.parvagas.pt"
+  CORS_ORIGIN: "https://dev.parvagas.pt"
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/1
   CELERY_RESULT_BACKEND: redis://redis:6379/2
@@ -65,9 +67,6 @@ x-backend-env: &backend-env
   SMTP_USER: ""
   SMTP_PASS: ""
   SMTP_FROM: dev@parvagas.pt
-  # CV Builder integration
-  RESUME_BUILDER_URL: https://cv.dev.parvagas.pt
-  RESUME_BUILDER_SECRET: dev-cv-builder-secret
   # Ollama (free-tier AI — dev instance)
   OLLAMA_BASE_URL: http://ollama:11434
   OLLAMA_MODEL: qwen2.5:3b
@@ -161,7 +160,6 @@ services:
       /bin/sh -c "
         mc alias set local http://minio:9000 minioadmin minioadmin;
         mc mb -p local/cvs || true;
-        mc mb -p local/reactive-resume || true;
         echo 'buckets ready';
       "
     restart: "no"
@@ -237,70 +235,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # ── CV Builder (Reactive Resume — Parvagas-branded) ────────────────────────
-  #
-  # Runs on port 3050 so it doesn't clash with the Next.js dev server (3000).
-  # The reactive-resume submodule is built from local source so Parvagas theme
-  # overrides (packages/ui/src/styles/globals.css) are picked up automatically.
-  cv-builder:
-    build:
-      context: ./reactive-resume
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    networks:
-      default: {}
-      traefik-net:
-        aliases:
-          - dev-parvagas-cv
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - traefik.http.routers.dev-parvagas-cv.rule=Host(`cv.dev.parvagas.pt`)
-      - traefik.http.routers.dev-parvagas-cv.entrypoints=websecure
-      - traefik.http.routers.dev-parvagas-cv.tls=true
-      - traefik.http.routers.dev-parvagas-cv.tls.certresolver=letsencrypt
-      - traefik.http.routers.dev-parvagas-cv.service=dev-parvagas-cv-svc
-      - traefik.http.services.dev-parvagas-cv-svc.loadbalancer.server.port=3000
-    environment:
-      # ── Storage ──────────────────────────────────────────────────────────
-      STORAGE_PROVIDER: minio
-      STORAGE_ENDPOINT: minio
-      STORAGE_PORT: "9000"
-      STORAGE_REGION: us-east-1
-      STORAGE_BUCKET: reactive-resume
-      STORAGE_ACCESS_KEY: minioadmin
-      STORAGE_SECRET_KEY: minioadmin
-      STORAGE_USE_SSL: "false"
-      STORAGE_SKIP_BUCKET_CHECK: "false"
-      STORAGE_URL_PREFIX: https://storage.dev.parvagas.pt/reactive-resume
-      # ── Database ─────────────────────────────────────────────────────────
-      DATABASE_URL: postgresql://parvagas:devpass@postgres:5432/parvagas
-      # ── Auth ─────────────────────────────────────────────────────────────
-      ACCESS_TOKEN_SECRET: dev-cv-builder-secret
-      REFRESH_TOKEN_SECRET: dev-cv-builder-refresh-secret
-      # ── Public URL ───────────────────────────────────────────────────────
-      PUBLIC_URL: https://cv.dev.parvagas.pt
-      # ── Branding ─────────────────────────────────────────────────────────
-      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Dev)"
-      NEXT_PUBLIC_APP_URL: https://cv.dev.parvagas.pt
-      # ── Mail ─────────────────────────────────────────────────────────────
-      MAIL_FROM: noreply@parvagas.pt
-      SMTP_URL: smtp://mailhog:1025
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
-      start_period: 30s
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # ── Ollama (free-tier AI — powers CV builder for non-subscribers) ──────────
+  # ── Ollama (free-tier AI — powers the native CV builder for non-subscribers) ──
   # Pull the model on first boot: docker exec -it parvagas-dev-ollama-1 ollama pull qwen2.5:3b
   ollama:
     image: ollama/ollama:latest

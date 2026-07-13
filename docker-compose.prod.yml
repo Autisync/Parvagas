@@ -17,8 +17,14 @@
 #
 # Routing: Traefik Docker-label provider (preferred).
 #   api.parvagas.pt      → backend-python :8000
-#   cv.parvagas.pt       → cv-builder :3000
 #   storage.parvagas.pt  → minio :9000
+#
+# The CV builder is NOT a separate app/subdomain — it's the native
+# Construtor de CV built directly into the main portal at
+# parvagas.pt/Portal/Candidato/Construtor-CV. The old external instance at
+# cv.parvagas.pt (self-hosted Reactive Resume, plus the OIDC bridge that
+# logged candidates into it) has been fully decommissioned — see
+# REACTIVE_RESUME_DECOMMISSION_GUIDE.md.
 #
 # The legacy FILE provider config (deploy/traefik/dynamic/parvagas.yml) still
 # works as a fallback — labels take precedence when the Docker provider is
@@ -77,16 +83,7 @@ x-backend-env: &backend-env
   UPLOAD_DIR: /app/uploads
   MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
   WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
-  # CV Builder + Ollama
-  RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-  RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET}
-  CV_HOST: ${CV_HOST:-cv.parvagas.pt}
-  # SSO bridge — Parvagas as OIDC provider for the CV builder (see
-  # backend-python/app/api/v1/resume_sso.py). Must match the cv-builder
-  # service's OAUTH_CLIENT_ID/OAUTH_TOKEN_URL redirect_uri exactly.
-  RESUME_SSO_CLIENT_ID: ${RESUME_SSO_CLIENT_ID:-reactive-resume}
-  RESUME_SSO_REDIRECT_URI: ${RESUME_SSO_REDIRECT_URI}
-  # Ollama (free-tier AI)
+  # Ollama (free-tier AI for the native CV builder's score/rewrite tools)
   OLLAMA_BASE_URL: http://ollama:11434
   OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
   OLLAMA_FREE_TIER_ENABLED: ${OLLAMA_FREE_TIER_ENABLED:-true}
@@ -306,84 +303,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  # ── CV Builder (Reactive Resume — cv.parvagas.pt) ─────────────────────────
-  # Uses the official prebuilt image (docker.io/amruthpillai/reactive-resume)
-  # instead of building from ./reactive-resume: that directory was committed
-  # as a bare gitlink (mode 160000) with no .gitmodules, so it clones as an
-  # empty folder on any fresh checkout — Portainer's `git pull` never had a
-  # Dockerfile to build. If a customized fork/build is ever needed, restore
-  # this as a `build:` block with the source properly vendored into the repo
-  # (not a submodule — Portainer's git-stack integration doesn't fetch those).
-  cv-builder:
-    image: amruthpillai/reactive-resume:v5.2.3
-    restart: unless-stopped
-    environment:
-      APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-      AUTH_SECRET: ${RESUME_BUILDER_SECRET}
-      STORAGE_PROVIDER: minio
-      STORAGE_ENDPOINT: minio
-      STORAGE_PORT: "9000"
-      STORAGE_REGION: ${S3_REGION:-us-east-1}
-      STORAGE_BUCKET: reactive-resume
-      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER}
-      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
-      STORAGE_USE_SSL: "false"
-      STORAGE_SKIP_BUCKET_CHECK: "false"
-      STORAGE_URL_PREFIX: ${S3_ENDPOINT_URL:-https://storage.parvagas.pt}/reactive-resume
-      # Reactive Resume's env validator (Zod, strict WHATWG URL parsing) rejects
-      # reserved characters like `#` in the password segment — unlike
-      # backend-python's DATABASE_URL above, which SQLAlchemy parses fine even
-      # with `#` in it (its rfc1738-style parser is more lenient). Rather than
-      # touch the shared POSTGRES_PASSWORD (used everywhere else, working), set
-      # POSTGRES_PASSWORD_URLENC in Portainer to the percent-encoded form of the
-      # same password (e.g. `#` -> `%23`, `!` -> `%21`) if it contains reserved
-      # URL characters. Falls back to the raw password when unset, so this is a
-      # no-op until you actually add the encoded var.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-parvagas}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB:-parvagas}
-      ACCESS_TOKEN_SECRET: ${RESUME_BUILDER_SECRET}
-      REFRESH_TOKEN_SECRET: ${RESUME_BUILDER_REFRESH_SECRET:-${RESUME_BUILDER_SECRET}}
-      # OIDC client config — Parvagas acts as the identity provider so a
-      # logged-in candidate lands here already authenticated as themselves
-      # (see backend-python/app/api/v1/resume_sso.py). Manual endpoint URLs,
-      # no discovery/JWKS needed: single client, shared HS256 secret.
-      OAUTH_PROVIDER_NAME: "Parvagas"
-      OAUTH_CLIENT_ID: ${RESUME_SSO_CLIENT_ID:-reactive-resume}
-      OAUTH_CLIENT_SECRET: ${RESUME_BUILDER_SECRET}
-      OAUTH_AUTHORIZATION_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/authorize
-      OAUTH_TOKEN_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/token
-      OAUTH_USER_INFO_URL: ${BACKEND_URL:-https://api.parvagas.pt}/api/v1/oauth/userinfo
-      OAUTH_SCOPES: "openid profile email"
-      PUBLIC_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder"
-      NEXT_PUBLIC_APP_URL: ${RESUME_BUILDER_URL:-https://cv.parvagas.pt}
-      MAIL_FROM: ${SMTP_FROM:-noreply@parvagas.pt}
-      SMTP_URL: smtp://${SMTP_USER:-}:${SMTP_PASS:-}@${SMTP_HOST}:${SMTP_PORT:-587}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      default: {}
-      traefik-net:
-        aliases:
-          - parvagas-cv
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
-      - traefik.http.routers.parvagas-cv.rule=Host(`${CV_HOST:-cv.parvagas.pt}`)
-      - traefik.http.routers.parvagas-cv.entrypoints=websecure
-      - traefik.http.routers.parvagas-cv.tls=true
-      - traefik.http.routers.parvagas-cv.tls.certresolver=letsencrypt
-      - traefik.http.routers.parvagas-cv.service=parvagas-cv-svc
-      - traefik.http.services.parvagas-cv-svc.loadbalancer.server.port=3000
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
-      start_period: 40s
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # ── Ollama (free-tier AI for CV builder — no subscription required) ────────
   # Powers the embedded CV assistant on parvagas.pt for free/limited-tier users.

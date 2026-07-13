@@ -264,31 +264,59 @@ design system (red-600 primary on white).
       audit as a manual step since the sandbox can't run it.
 
 ### A7 — Decommission Reactive Resume (deploy-time; manual steps flagged)
-- [ ] Remove the `cv-builder` service + OAUTH_* env from
-      docker-compose.prod.yml (needs deploy verification on server).
-      **Not applied** — documented as Step 3 of
-      [`REACTIVE_RESUME_DECOMMISSION_GUIDE.md`](REACTIVE_RESUME_DECOMMISSION_GUIDE.md)
-      instead of edited directly. Reason: this retires a container real
-      candidates may still be mid-CV in, and the sandbox has no way to
-      confirm the native builder actually works end-to-end against a live
-      backend (no auth past `/Login`). Gated on you running
-      `MANUAL_TEST_GUIDE.md` §11 against production first — that's Step 1
-      of the guide.
-- [ ] Mark the OIDC endpoints deprecated (keep dark one release, then a
-      cleanup commit removes resume_sso OIDC routes + tables via migration;
-      guest-start stays, it's now JWT-based). **Docstring-level deprecation
-      already landed in A5** (see resume_sso.py's module docstring "PIVOT"
-      note); actual route/table removal documented as Step 4 of the
-      decommission guide, intentionally deferred a full release past Step 3.
-- [ ] Traefik: cv.parvagas.pt router → 301 redirect to
-      parvagas.pt/Portal/Candidato/Construtor-CV. **Config written**
-      (Step 2 of the decommission guide has the exact `redirectRegex`
-      middleware + router diff for `deploy/traefik/dynamic/parvagas.yml`,
-      matching `TRAEFIK_FIX_GUIDE.md`'s deploy process) but **not applied**
-      to the live server — same live-verification gate as above, and this
-      is a manual server-side step this sandbox cannot perform regardless
-      (no SSH access), consistent with how the original `TRAEFIK_FIX_GUIDE.md`
-      fix was handled earlier this session.
+- [x] Remove the `cv-builder` service + OAUTH_* env from
+      docker-compose.prod.yml, docker-compose.dev.yml, and docker-compose.yml
+      (the local/base file too — it had picked up a `cv-builder` service
+      built from a `./reactive-resume` gitlink as part of a colleague's
+      parallel work on `main`). **Superseded the original "wait for a live
+      verification gate" plan** per explicit user direction ("clean up the
+      code... after that") — removed at the code level now rather than left
+      staged in the guide. `RESUME_BUILDER_URL`/`RESUME_BUILDER_SECRET`/
+      `CV_HOST`/`RESUME_SSO_CLIENT_ID`/`RESUME_SSO_REDIRECT_URI` stripped
+      from all three files' env blocks. Applying this to the **live**
+      server (Portainer redeploy) remains a manual step — this sandbox has
+      no SSH/Portainer access — documented as Step 2 of
+      [`REACTIVE_RESUME_DECOMMISSION_GUIDE.md`](REACTIVE_RESUME_DECOMMISSION_GUIDE.md).
+- [x] Remove the OIDC endpoints and their tables. **Went further than the
+      original "deprecate for one release" plan**, again per explicit user
+      direction: `resume_sso.py`'s OIDC bridge (`/oauth/authorize`,
+      `/oauth/token`, `/oauth/userinfo`, `/.well-known/openid-configuration`,
+      `POST /resume-sso/handoff`) is deleted outright — only `guest_start`
+      (JWT-based, already migrated off OIDC in A5) remains in the file.
+      `SSOHandoffCode`/`OAuthAuthorizationCode` models deleted; migration
+      `20260713_0033_drop_oidc_bridge_tables.py` drops both tables
+      (reversible — `downgrade()` recreates them). `RESUME_BUILDER_URL`/
+      `RESUME_BUILDER_SECRET`/`RESUME_SSO_CLIENT_ID`/`RESUME_SSO_REDIRECT_URI`
+      removed from `config.py`; the two now-dead readiness checks removed
+      from `admin.py`'s `cv_builder_readiness()`. `test_resume_sso.py`
+      (OIDC-only tests) deleted; `test_resume_sso_guest.py` (guest_start)
+      untouched and still passes. `src/lib/resumeBuilder.ts` deleted (was
+      already fully unreferenced since A5/A6).
+- [x] Traefik: cv.parvagas.pt router → 301 redirect to
+      parvagas.pt/Portal/Candidato/Construtor-CV. Config applied directly to
+      `deploy/traefik/dynamic/parvagas.yml` (both `parvagas-cv` and
+      `dev-parvagas-cv` routers now carry a `redirectRegex` middleware and
+      no longer proxy to a container-backed service; the old
+      `parvagas-cv`/`dev-parvagas-cv` entries removed from the `services:`
+      section). YAML validated with `yaml.safe_load`. Deploying this file to
+      the live Traefik dynamic-config folder remains a manual step (no SSH
+      access from this sandbox) — Step 1 of the decommission guide.
+
+  **Verification for all three:** `pytest tests/` → 293 passed, 3 skipped
+  (down from 308 — exactly the ~15 deleted OIDC-only tests, nothing else
+  regressed); migration chain still single-head; `rm -rf .next && npx tsc
+  --noEmit` clean; `npx vitest run` → 91 passed, 8 files; comprehensive grep
+  sweep across `backend-python/app`, `backend-python/tests`, `src/`, and all
+  `docker-compose*.yml`/`parvagas.yml` confirms zero remaining references to
+  `SSOHandoffCode`, `OAuthAuthorizationCode`, `RESUME_SSO_CLIENT_ID`,
+  `RESUME_SSO_REDIRECT_URI`, `RESUME_BUILDER_URL`, `RESUME_BUILDER_SECRET`,
+  `resumeBuilder` (TS), `cv-builder`, or `reactive-resume`; browser check
+  (`/` and `/Portal/Candidato/Construtor-CV`) compiles clean, no new console
+  errors. What's genuinely still pending — because this sandbox cannot do
+  it — is deploying the Traefik file and redeploying the compose stack on
+  the live server, and re-running `MANUAL_TEST_GUIDE.md` §11 against
+  production; see `REACTIVE_RESUME_DECOMMISSION_GUIDE.md`'s updated "What's
+  left" section.
 
 **Phase A exit criterion:** a candidate (or guest) creates, edits, previews,
 and downloads a CV entirely inside the portal — **met**, confirmed via A1-A6's

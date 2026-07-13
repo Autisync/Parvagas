@@ -175,19 +175,6 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGIN: str = os.getenv("CORS_ORIGIN", FRONTEND_URL)
 
-    # CV Builder (Reactive Resume self-hosted instance)
-    RESUME_BUILDER_URL: str = os.getenv("RESUME_BUILDER_URL", "")
-    # JWT secret shared with the Reactive Resume instance for SSO pass-through.
-    # Doubles as the OIDC client_secret for app.api.v1.resume_sso — Reactive
-    # Resume is configured with OAUTH_CLIENT_SECRET set to this same value.
-    RESUME_BUILDER_SECRET: str = os.getenv("RESUME_BUILDER_SECRET", "")
-    # OIDC bridge (app.api.v1.resume_sso) — Parvagas acts as the identity
-    # provider so a logged-in candidate lands in the CV builder already
-    # authenticated as themselves. Single-client allow-list (only Reactive
-    # Resume consumes this), so no DB-backed client registry is needed.
-    RESUME_SSO_CLIENT_ID: str = os.getenv("RESUME_SSO_CLIENT_ID", "reactive-resume")
-    RESUME_SSO_REDIRECT_URI: str = os.getenv("RESUME_SSO_REDIRECT_URI", "")
-
     # Ollama — free-tier local AI for CV builder (no subscription required).
     # Runs alongside the stack; paid users fall through to RESUME_AI_* (cloud).
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")

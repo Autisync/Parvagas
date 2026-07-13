@@ -19,11 +19,15 @@
 #   Router host              Service target                         Compose alias source
 #   api.parvagas.pt          http://parvagas-backend-api:8000       backend-python
 #   api.parvagas.pt /ws      http://parvagas-websocket:8001         websocket-service
-#   cv.parvagas.pt           http://parvagas-cv:3000                cv-builder
 #   storage.parvagas.pt      http://parvagas-storage:9000           minio
 #   dev-api.parvagas.pt      http://dev-parvagas-backend-api:8000   (docker-compose.dev.yml)
-#   dev-cv.parvagas.pt       http://dev-parvagas-cv:3000            (docker-compose.dev.yml)
 #   dev-storage.parvagas.pt  http://dev-parvagas-storage:9000       (docker-compose.dev.yml)
+#
+# cv.parvagas.pt / dev-cv.parvagas.pt: the CV builder is NOT a separate app
+# anymore — it's the native Construtor de CV built into the main portal
+# (parvagas.pt/Portal/Candidato/Construtor-CV). Both hosts below just 301
+# redirect there instead of proxying to a container, so old bookmarks/links
+# still land somewhere useful. See REACTIVE_RESUME_DECOMMISSION_GUIDE.md.
 #
 # The api routers use a plain Host() rule — NO PathPrefix(`/api`) and NO
 # strip-prefix middleware. FastAPI mounts its routes at /api/v1/* itself
@@ -52,7 +56,8 @@ http:
     parvagas-cv:
       rule: "Host(`cv.parvagas.pt`)"
       entryPoints: [websecure]
-      service: parvagas-cv
+      middlewares: [cv-to-native-redirect]
+      service: parvagas-api  # unreachable — middleware always redirects first
       tls:
         certResolver: letsencrypt
 
@@ -76,7 +81,8 @@ http:
     dev-parvagas-cv:
       rule: "Host(`dev-cv.parvagas.pt`)"
       entryPoints: [websecure]
-      service: dev-parvagas-cv
+      middlewares: [dev-cv-to-native-redirect]
+      service: dev-parvagas-api  # unreachable — middleware always redirects first
       tls:
         certResolver: letsencrypt
 
@@ -104,11 +110,6 @@ http:
             secure: true
             httpOnly: true
 
-    parvagas-cv:
-      loadBalancer:
-        servers:
-          - url: "http://parvagas-cv:3000"
-
     parvagas-storage:
       loadBalancer:
         servers:
@@ -120,12 +121,20 @@ http:
         servers:
           - url: "http://dev-parvagas-backend-api:8000"
 
-    dev-parvagas-cv:
-      loadBalancer:
-        servers:
-          - url: "http://dev-parvagas-cv:3000"
-
     dev-parvagas-storage:
       loadBalancer:
         servers:
           - url: "http://dev-parvagas-storage:9000"
+
+  middlewares:
+    cv-to-native-redirect:
+      redirectRegex:
+        regex: "^https://cv\\.parvagas\\.pt/.*"
+        replacement: "https://parvagas.pt/Portal/Candidato/Construtor-CV"
+        permanent: true
+
+    dev-cv-to-native-redirect:
+      redirectRegex:
+        regex: "^https://dev-cv\\.parvagas\\.pt/.*"
+        replacement: "https://dev.parvagas.pt/Portal/Candidato/Construtor-CV"
+        permanent: true

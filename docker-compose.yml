@@ -142,44 +142,6 @@ services:
     volumes:
       - ollama-data:/root/.ollama
 
-  # CV Builder — localhost:3050 (Parvagas-branded Reactive Resume)
-  cv-builder:
-    build:
-      context: ./reactive-resume
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "3050:3000"
-    environment:
-      APP_URL: http://localhost:3050
-      AUTH_SECRET: local-cv-builder-auth-secret
-      STORAGE_PROVIDER: minio
-      STORAGE_ENDPOINT: minio
-      STORAGE_PORT: "9000"
-      STORAGE_REGION: us-east-1
-      STORAGE_BUCKET: reactive-resume
-      STORAGE_ACCESS_KEY: minioadmin
-      STORAGE_SECRET_KEY: minioadmin
-      STORAGE_USE_SSL: "false"
-      STORAGE_SKIP_BUCKET_CHECK: "false"
-      STORAGE_URL_PREFIX: http://localhost:9000/reactive-resume
-      DATABASE_URL: postgresql://parvagas_user:Pr0d_Postgres-Pass_2026_ReplaceMeNow@postgres:5432/parvagas
-      ACCESS_TOKEN_SECRET: local-cv-builder-secret
-      REFRESH_TOKEN_SECRET: local-cv-builder-refresh
-      PUBLIC_URL: http://localhost:3050
-      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Local)"
-      NEXT_PUBLIC_APP_URL: http://localhost:3050
-      MAIL_FROM: noreply@parvagas.pt
-      SMTP_URL: smtp://mailhog:1025
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    profiles:
-      - cv-builder
-
-
   celery-worker:
     build:
       context: ./backend-python

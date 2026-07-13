@@ -1984,16 +1984,6 @@ async def cv_builder_readiness(
 
     # ── Backend config ────────────────────────────────────────────────────
     _check(
-        "RESUME_BUILDER_URL configured",
-        bool(settings.RESUME_BUILDER_URL),
-        settings.RESUME_BUILDER_URL or "Not set — set RESUME_BUILDER_URL to the Reactive Resume instance URL",
-    )
-    _check(
-        "RESUME_BUILDER_SECRET configured",
-        bool(settings.RESUME_BUILDER_SECRET),
-        "Set" if settings.RESUME_BUILDER_SECRET else "Not set — required for SSO token pass-through",
-    )
-    _check(
         "Resume AI enabled",
         settings.RESUME_AI_ENABLED,
         f"RESUME_AI_ENABLED={settings.RESUME_AI_ENABLED}, model={settings.RESUME_AI_MODEL}",
@@ -2059,14 +2049,6 @@ async def cv_builder_readiness(
     _check("Resume records", True, f"{resume_count} resumes created", warn=False)
     _check("CV uploads", True, f"{cv_upload_count} CVs uploaded", warn=False)
     _check("CV subscriptions", True, f"{sub_count} candidate CV subscriptions", warn=False)
-
-    # ── Frontend ──────────────────────────────────────────────────────────
-    _check(
-        "RESUME_BUILDER_URL reachable",
-        bool(settings.RESUME_BUILDER_URL),
-        "Run manual curl/ping check against RESUME_BUILDER_URL" if settings.RESUME_BUILDER_URL else "URL not configured",
-        warn=not settings.RESUME_BUILDER_URL,
-    )
 
     passed = sum(1 for c in checks if c["status"] == "pass")
     warned = sum(1 for c in checks if c["status"] == "warn")
