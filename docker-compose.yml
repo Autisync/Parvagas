@@ -107,6 +107,7 @@ services:
       - minio_data:/data
 
   cv-builder-db-init:
+    profiles: ["cv-builder"]
     image: postgres:16-alpine
     restart: "no"
     environment:
@@ -122,6 +123,7 @@ services:
       ]
 
   cv-builder-bucket-init:
+    profiles: ["cv-builder"]
     image: minio/mc:RELEASE.2025-01-17T23-25-50Z
     restart: "no"
     environment:
@@ -143,6 +145,7 @@ services:
       "
 
   cv-builder-migrate:
+    profiles: ["cv-builder"]
     build:
       context: ./reactive-resume
       dockerfile: Dockerfile
@@ -237,6 +240,7 @@ services:
         condition: service_started
 
   cv-builder:
+    profiles: ["cv-builder"]
     build:
       context: ./reactive-resume
       dockerfile: Dockerfile

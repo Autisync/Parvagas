@@ -8,12 +8,15 @@ $required = @(
   "docker-compose.yml",
   "docker-compose.dev.yml",
   "docker-compose.dev.portainer.yml",
-  "docker-compose.prod.portainer.yml",
-  "reactive-resume/Dockerfile"
+  "docker-compose.prod.portainer.yml"
 )
 
 foreach ($f in $required) {
   if (-not (Test-Path $f)) { throw "[FAIL] Missing required file: $f" }
+}
+
+if (-not (Test-Path "reactive-resume/Dockerfile") -or -not (Test-Path "reactive-resume/package.json") -or -not (Test-Path "reactive-resume/pnpm-lock.yaml")) {
+  throw "[FAIL] Reactive Resume source is missing. Copy the full CV Builder repository contents directly into ./reactive-resume before running the local stack."
 }
 
 $retired = @("docker-compose-updated.yml", "docker-compose.prod.yml", "docker-compose.portainer.yml")
@@ -40,6 +43,11 @@ if ($LASTEXITCODE -ne 0) { throw "[FAIL] docker-compose.dev.portainer.yml config
 Write-Host "[CHECK] docker-compose.prod.portainer.yml"
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config | Out-File -Encoding utf8 .tmp-compose-prod-portainer.out
 if ($LASTEXITCODE -ne 0) { throw "[FAIL] docker-compose.prod.portainer.yml config failed" }
+
+$portainerBuildHits = Select-String -Path docker-compose.dev.portainer.yml,docker-compose.prod.portainer.yml -Pattern '^\s*build:'
+if ($portainerBuildHits) {
+  throw "[FAIL] Portainer compose files must be image-only. Remove all build directives."
+}
 
 # Duplicate exposed host ports
 $ports = Get-ChildItem .tmp-compose-*.out | ForEach-Object {
@@ -87,8 +95,14 @@ if (Select-String -Path docker-compose.prod.portainer.yml -Pattern 'parvagas_cv_
 if (Select-String -Path docker-compose.prod.portainer.yml -Pattern 'reactive-resume-dev') { throw "[FAIL] Prod references dev bucket." }
 if (Select-String -Path docker-compose.dev.portainer.yml -Pattern 'CV_BUILDER_S3_BUCKET:-reactive-resume\}') { throw "[FAIL] Dev references prod bucket." }
 
-# Nested interpolation patterns
-if (Select-String -Path $scanFiles -Pattern '\$\{[^}]*\$\{') {
+# Nested interpolation patterns (env examples only)
+$envScanFiles = @(
+  '.env.example',
+  '.env.local.example',
+  '.env.dev.portainer.example',
+  '.env.prod.portainer.example'
+)
+if (Select-String -Path $envScanFiles -Pattern '\$\{[^}]*\$\{') {
   throw "[FAIL] Nested variable interpolation detected."
 }
 

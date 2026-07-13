@@ -8,6 +8,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  compose-portainer-guard:
+    name: Compose · Portainer Image-only Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail if Portainer compose uses build directives
+        run: |
+          if grep -nE '^\s*build:' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
+            echo "Portainer stacks must be image-only. Remove build directives."
+            exit 1
+          fi
+
   frontend:
     name: Frontend · Lint · Typecheck · Test · Build
     runs-on: ubuntu-latest

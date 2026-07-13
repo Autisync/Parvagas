@@ -1,0 +1,375 @@
+﻿name: parvagas-local
+services:
+  backend:
+    build:
+      context: C:\Users\pizt1\Documents\Business\Parvagas\backend-python
+      dockerfile: Dockerfile
+      target: api-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      ADMIN_SIGNUP_KEY: x
+      APP_ENV: development
+      BACKEND_URL: http://localhost:8000
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+      DATABASE_URL: postgresql+psycopg://parvagas:devpass@postgres:5432/parvagas_local
+      EMAIL_PROVIDER: smtp
+      FRONTEND_URL: http://localhost:3000
+      JWT_ALGORITHM: HS256
+      JWT_SECRET: x
+      MAX_UPLOAD_MB: "10"
+      MODERATOR_SIGNUP_KEY: dev-mod-key
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_FREE_TIER_ENABLED: "true"
+      OLLAMA_MODEL: qwen2.5:3b
+      REDIS_URL: redis://redis:6379/0
+      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_URL: http://localhost:3050
+      RESUME_PARSER_PROVIDER: ""
+      S3_ACCESS_KEY: x
+      S3_BUCKET: cvs-local
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_REGION: us-east-1
+      S3_SECRET_KEY: x
+      SKIMA_API_KEY: ""
+      SMTP_FROM: dev@parvagas.pt
+      SMTP_HOST: mailhog
+      SMTP_PASS: ""
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SUPER_ADMIN_EMAIL: admin@parvagas.pt
+      TRUSTED_HOSTS: '*'
+      UPLOAD_DIR: /app/uploads
+      WEB_CONCURRENCY: "2"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 1m0s
+    networks:
+      default: null
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - type: volume
+        source: backend_media
+        target: /app/uploads
+        volume: {}
+      - type: volume
+        source: backend_static
+        target: /app/logs
+        volume: {}
+  frontend:
+    command:
+      - sh
+      - -c
+      - npm ci ; npm run dev -- --hostname 0.0.0.0 --port 3000
+    depends_on:
+      backend:
+        condition: service_started
+        required: true
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: development
+    image: node:20-alpine
+    networks:
+      default: null
+    restart: unless-stopped
+    working_dir: /app
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    networks:
+      default: null
+    restart: unless-stopped
+  minio:
+    command:
+      - server
+      - /data
+      - --console-address
+      - :9001
+    environment:
+      MINIO_ROOT_PASSWORD: x
+      MINIO_ROOT_USER: x
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    networks:
+      default: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: minio_data
+        target: /data
+        volume: {}
+  postgres:
+    environment:
+      POSTGRES_DB: parvagas_local
+      POSTGRES_PASSWORD: x
+      POSTGRES_USER: parvagas
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER:-parvagas} -d $${POSTGRES_DB:-parvagas_local}
+      timeout: 5s
+      interval: 10s
+      retries: 10
+      start_period: 20s
+    image: postgres:16-alpine
+    networks:
+      default: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: postgres_data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 5s
+      interval: 10s
+      retries: 10
+    image: redis:7-alpine
+    networks:
+      default: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: redis_data
+        target: /data
+        volume: {}
+  scheduler:
+    build:
+      context: C:\Users\pizt1\Documents\Business\Parvagas\backend-python
+      dockerfile: Dockerfile
+      target: api-service
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - beat
+      - --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      ADMIN_SIGNUP_KEY: x
+      APP_ENV: development
+      BACKEND_URL: http://localhost:8000
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+      DATABASE_URL: postgresql+psycopg://parvagas:devpass@postgres:5432/parvagas_local
+      EMAIL_PROVIDER: smtp
+      FRONTEND_URL: http://localhost:3000
+      JWT_ALGORITHM: HS256
+      JWT_SECRET: x
+      MAX_UPLOAD_MB: "10"
+      MODERATOR_SIGNUP_KEY: dev-mod-key
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_FREE_TIER_ENABLED: "true"
+      OLLAMA_MODEL: qwen2.5:3b
+      REDIS_URL: redis://redis:6379/0
+      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_URL: http://localhost:3050
+      RESUME_PARSER_PROVIDER: ""
+      S3_ACCESS_KEY: x
+      S3_BUCKET: cvs-local
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_REGION: us-east-1
+      S3_SECRET_KEY: x
+      SKIMA_API_KEY: ""
+      SMTP_FROM: dev@parvagas.pt
+      SMTP_HOST: mailhog
+      SMTP_PASS: ""
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SUPER_ADMIN_EMAIL: admin@parvagas.pt
+      TRUSTED_HOSTS: '*'
+      UPLOAD_DIR: /app/uploads
+      WEB_CONCURRENCY: "2"
+    networks:
+      default: null
+    restart: unless-stopped
+    user: "0:0"
+  worker:
+    build:
+      context: C:\Users\pizt1\Documents\Business\Parvagas\backend-python
+      dockerfile: Dockerfile
+      target: api-service
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --loglevel=debug
+      - --concurrency=2
+      - -Q
+      - default,emails,parsing,cleanup,scraping
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      ADMIN_SIGNUP_KEY: x
+      APP_ENV: development
+      BACKEND_URL: http://localhost:8000
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+      DATABASE_URL: postgresql+psycopg://parvagas:devpass@postgres:5432/parvagas_local
+      EMAIL_PROVIDER: smtp
+      FRONTEND_URL: http://localhost:3000
+      JWT_ALGORITHM: HS256
+      JWT_SECRET: x
+      MAX_UPLOAD_MB: "10"
+      MODERATOR_SIGNUP_KEY: dev-mod-key
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_FREE_TIER_ENABLED: "true"
+      OLLAMA_MODEL: qwen2.5:3b
+      REDIS_URL: redis://redis:6379/0
+      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_URL: http://localhost:3050
+      RESUME_PARSER_PROVIDER: ""
+      S3_ACCESS_KEY: x
+      S3_BUCKET: cvs-local
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_REGION: us-east-1
+      S3_SECRET_KEY: x
+      SKIMA_API_KEY: ""
+      SMTP_FROM: dev@parvagas.pt
+      SMTP_HOST: mailhog
+      SMTP_PASS: ""
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SUPER_ADMIN_EMAIL: admin@parvagas.pt
+      TRUSTED_HOSTS: '*'
+      UPLOAD_DIR: /app/uploads
+      WEB_CONCURRENCY: "2"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1
+      timeout: 10s
+      interval: 30s
+      retries: 5
+      start_period: 1m0s
+    networks:
+      default: null
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - type: volume
+        source: backend_media
+        target: /app/uploads
+        volume: {}
+      - type: volume
+        source: backend_static
+        target: /app/logs
+        volume: {}
+networks:
+  default:
+    name: parvagas-local_default
+volumes:
+  backend_media:
+    name: parvagas-local_backend_media
+  backend_static:
+    name: parvagas-local_backend_static
+  minio_data:
+    name: parvagas-local_minio_data
+  postgres_data:
+    name: parvagas-local_postgres_data
+  redis_data:
+    name: parvagas-local_redis_data
+x-backend-env:
+  ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+  ADMIN_SIGNUP_KEY: x
+  APP_ENV: development
+  BACKEND_URL: http://localhost:8000
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+  DATABASE_URL: postgresql+psycopg://parvagas:devpass@postgres:5432/parvagas_local
+  EMAIL_PROVIDER: smtp
+  FRONTEND_URL: http://localhost:3000
+  JWT_ALGORITHM: HS256
+  JWT_SECRET: x
+  MAX_UPLOAD_MB: "10"
+  MODERATOR_SIGNUP_KEY: dev-mod-key
+  OLLAMA_BASE_URL: http://ollama:11434
+  OLLAMA_FREE_TIER_ENABLED: "true"
+  OLLAMA_MODEL: qwen2.5:3b
+  REDIS_URL: redis://redis:6379/0
+  RESUME_BUILDER_SECRET: x
+  RESUME_BUILDER_URL: http://localhost:3050
+  RESUME_PARSER_PROVIDER: ""
+  S3_ACCESS_KEY: x
+  S3_BUCKET: cvs-local
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_REGION: us-east-1
+  S3_SECRET_KEY: x
+  SKIMA_API_KEY: ""
+  SMTP_FROM: dev@parvagas.pt
+  SMTP_HOST: mailhog
+  SMTP_PASS: ""
+  SMTP_PORT: "1025"
+  SMTP_SECURE: "false"
+  SMTP_USER: ""
+  SUPER_ADMIN_EMAIL: admin@parvagas.pt
+  TRUSTED_HOSTS: '*'
+  UPLOAD_DIR: /app/uploads
+  WEB_CONCURRENCY: "2"
+x-cv-env:
+  APP_URL: http://localhost:3050
+  AUTH_SECRET: x
+  DATABASE_URL: postgresql://parvagas:devpass@postgres:5432/parvagas_cv_builder_local
+  ENCRYPTION_SECRET: dev-cv-builder-encryption-secret-minimum-32-chars
+  FLAG_DISABLE_API_RATE_LIMIT: "false"
+  FLAG_DISABLE_EMAIL_AUTH: "false"
+  FLAG_DISABLE_SIGNUPS: "false"
+  FLAG_SHOW_SPONSORS: "false"
+  OAUTH_CLIENT_ID: ""
+  OAUTH_CLIENT_SECRET: ""
+  OAUTH_DISCOVERY_URL: ""
+  OAUTH_PROVIDER_NAME: Parvagas
+  OAUTH_SCOPES: openid profile email
+  PORT: "3000"
+  REDIS_URL: redis://redis:6379
+  S3_ACCESS_KEY_ID: x
+  S3_BUCKET: reactive-resume-local
+  S3_ENDPOINT: http://minio:9000
+  S3_FORCE_PATH_STYLE: "true"
+  S3_REGION: us-east-1
+  S3_SECRET_ACCESS_KEY: x
+  SMTP_FROM: Parvagas CV Builder <suporte@parvagas.pt>
+  SMTP_HOST: mailhog
+  SMTP_PASS: ""
+  SMTP_PORT: "1025"
+  SMTP_SECURE: "false"
+  SMTP_USER: ""

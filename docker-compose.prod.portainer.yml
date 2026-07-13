@@ -60,20 +60,6 @@ x-cv-env: &cv-env
   FLAG_DISABLE_API_RATE_LIMIT: "false"
   FLAG_SHOW_SPONSORS: "false"
 
-x-backend-build: &backend-build
-  context: .
-  dockerfile: backend-python/Dockerfile
-  target: api-service
-
-x-cv-build: &cv-build
-  context: .
-  dockerfile: reactive-resume/Dockerfile
-
-x-cv-migrate-build: &cv-migrate-build
-  context: .
-  dockerfile: reactive-resume/Dockerfile
-  target: builder
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -163,8 +149,8 @@ services:
       "
 
   cv-builder-migrate:
-    build: *cv-migrate-build
-    image: ${CV_BUILDER_MIGRATE_IMAGE:-parvagas-cv-builder-migrate:prod}
+    image: ${CV_BUILDER_MIGRATE_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder-migrate:prod}
+    pull_policy: always
     restart: "no"
     environment: *cv-env
     command: ["pnpm", "db:migrate"]
@@ -175,8 +161,8 @@ services:
         condition: service_completed_successfully
 
   backend:
-    build: *backend-build
-    image: ${BACKEND_IMAGE:-parvagas-backend:prod}
+    image: ${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
+    pull_policy: always
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
@@ -215,8 +201,8 @@ services:
       start_period: 60s
 
   worker:
-    build: *backend-build
-    image: ${WORKER_IMAGE:-parvagas-backend:prod}
+    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
+    pull_policy: always
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup,scraping
     restart: unless-stopped
     user: "0:0"
@@ -237,8 +223,8 @@ services:
       start_period: 60s
 
   scheduler:
-    build: *backend-build
-    image: ${WORKER_IMAGE:-parvagas-backend:prod}
+    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
+    pull_policy: always
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
     user: "0:0"
@@ -250,8 +236,8 @@ services:
         condition: service_healthy
 
   cv-builder:
-    build: *cv-build
-    image: ${CV_BUILDER_IMAGE:-parvagas-cv-builder:prod}
+    image: ${CV_BUILDER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder:prod}
+    pull_policy: always
     restart: unless-stopped
     environment: *cv-env
     depends_on:

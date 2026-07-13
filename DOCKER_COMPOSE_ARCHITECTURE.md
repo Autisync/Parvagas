@@ -12,12 +12,23 @@ Deployment split:
 - Frontend (Parvagas Next.js): Vercel for dev and prod
 - Backend + workers + CV Builder + infra (Postgres/Redis/MinIO): Portainer server
 
+Source vs image behavior:
+
+- Local compose builds from source.
+- Portainer compose files are image-only and pull prebuilt GHCR images.
+
 ## 1) Local development (build-context mode)
 
 Use local build contexts for development on your machine.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Main local stack with CV Builder enabled:
+
+```bash
+docker compose --profile cv-builder -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 Stop:
@@ -30,6 +41,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 Use this for server-side dev/staging backend deployments through Portainer.
 This stack does not include the Parvagas frontend container.
+Portainer must not rebuild images from source; this file is image-only.
 
 ```bash
 docker compose --env-file .env.dev.portainer.example -f docker-compose.dev.portainer.yml config
@@ -41,6 +53,7 @@ In Portainer, map environment variables from your real dev env file and deploy `
 
 Use this for production backend deployments through Portainer.
 This stack does not include the Parvagas frontend container.
+Portainer must not rebuild images from source; this file is image-only.
 
 ```bash
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config
@@ -61,6 +74,8 @@ Important:
 - `cv-builder` listens internally on port `3000`.
 - Dev and prod stacks use isolated names for volumes, DB names, buckets, and Traefik routers.
 - Set `FRONTEND_URL` and `CORS_ORIGIN` to Vercel domains for each environment.
+- GHCR credentials are required in Portainer if images are private.
+- For local source builds, copy full CV Builder sources directly into `./reactive-resume` (no nested `reactive-resume/reactive-resume-main` folder).
 
 ## Validation
 

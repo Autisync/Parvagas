@@ -9,12 +9,16 @@ required=(
   "docker-compose.dev.yml"
   "docker-compose.dev.portainer.yml"
   "docker-compose.prod.portainer.yml"
-  "reactive-resume/Dockerfile"
 )
 
 for f in "${required[@]}"; do
   [[ -f "$f" ]] || { echo "[FAIL] Missing required file: $f"; exit 1; }
 done
+
+if [[ ! -f "reactive-resume/Dockerfile" || ! -f "reactive-resume/package.json" || ! -f "reactive-resume/pnpm-lock.yaml" ]]; then
+  echo "[FAIL] Reactive Resume source is missing. Copy the full CV Builder repository contents directly into ./reactive-resume before running the local stack."
+  exit 1
+fi
 
 for retired in docker-compose-updated.yml docker-compose.prod.yml docker-compose.portainer.yml; do
   if [[ -f "$retired" ]]; then
@@ -38,6 +42,11 @@ docker compose --env-file .env.dev.portainer.example -f docker-compose.dev.porta
 
 echo "[CHECK] docker-compose.prod.portainer.yml"
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config >/tmp/compose-prod-portainer.out
+
+if grep -En '^[[:space:]]*build:' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
+  echo "[FAIL] Portainer compose files must be image-only. Remove all build directives."
+  exit 1
+fi
 
 # Detect duplicate published host ports across active files.
 ports="$(grep -hE 'published: "?[0-9]+' /tmp/compose-*.out | sed -E 's/.*published: "?([0-9]+)"?/\1/' || true)"
@@ -110,8 +119,14 @@ if grep -q 'CV_BUILDER_S3_BUCKET:-reactive-resume}' docker-compose.dev.portainer
   exit 1
 fi
 
-# Detect nested interpolation patterns that Portainer may not resolve.
-if grep -En '\$\{[^}]*\$\{' "${scan_files[@]}"; then
+# Detect nested interpolation patterns that Portainer may not resolve (env examples only).
+env_scan_files=(
+  ".env.example"
+  ".env.local.example"
+  ".env.dev.portainer.example"
+  ".env.prod.portainer.example"
+)
+if grep -En '\$\{[^}]*\$\{' "${env_scan_files[@]}"; then
   echo "[FAIL] Nested variable interpolation detected."
   exit 1
 fi
