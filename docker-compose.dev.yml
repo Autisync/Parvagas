@@ -95,7 +95,10 @@ services:
       POSTGRES_USER: parvagas
       POSTGRES_PASSWORD: devpass
     ports:
-      - "5432:5432"
+      # Host 5433, not 5432 — avoids clashing with the prod stack's Postgres
+      # (or any other Postgres) already bound to 5432 on the same host.
+      # Containers on this stack still reach it at postgres:5432 internally.
+      - "5433:5432"
     volumes:
       - dev_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -109,7 +112,9 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # Host 6380, not 6379 — same reason as Postgres above. Internal traffic
+      # still uses redis:6379 (see REDIS_URL/CELERY_* above).
+      - "6380:6379"
     volumes:
       - dev_redis_data:/data
     healthcheck:
