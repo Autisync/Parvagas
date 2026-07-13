@@ -231,6 +231,42 @@ def to_json_resume(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ── Cover-letter PDF export (Phase C3) ───────────────────────────────────────
+
+def letter_to_pdf(title: str, content: str, author_name: str = "") -> bytes:
+    """Simple A4 PDF for a cover letter — same reportlab stack and palette
+    as to_pdf() below, but just a heading + body paragraphs; a letter has
+    no sections/skills structure to lay out."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.lib.colors import HexColor
+    except ImportError as exc:
+        raise RuntimeError("reportlab is required for PDF export") from exc
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=25 * mm, rightMargin=25 * mm, topMargin=25 * mm, bottomMargin=25 * mm)
+    styles = getSampleStyleSheet()
+    st_title = ParagraphStyle("LetterTitle", parent=styles["Normal"], fontSize=14, leading=18,
+                              textColor=HexColor("#1a1a2e"), fontName="Helvetica-Bold", spaceAfter=4)
+    st_author = ParagraphStyle("LetterAuthor", parent=styles["Normal"], fontSize=9, textColor=HexColor("#555555"), spaceAfter=14)
+    st_body = ParagraphStyle("LetterBody", parent=styles["Normal"], fontSize=10.5, leading=15, spaceAfter=8)
+
+    elements = [Paragraph(_s(title) or "Carta de Apresentação", st_title)]
+    if _s(author_name):
+        elements.append(Paragraph(_s(author_name), st_author))
+    else:
+        elements.append(Spacer(1, 8))
+    for para in _s(content).split("\n\n"):
+        if para.strip():
+            elements.append(Paragraph(para.strip().replace("\n", "<br/>"), st_body))
+
+    doc.build(elements)
+    return buf.getvalue()
+
+
 # ── DOCX export ───────────────────────────────────────────────────────────────
 
 def to_docx(profile: dict[str, Any]) -> bytes:

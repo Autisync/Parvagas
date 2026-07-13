@@ -282,6 +282,12 @@ class CoverLetterCreateRequest(BaseModel):
     is_draft: Optional[bool] = True
 
 
+class CoverLetterUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    is_draft: Optional[bool] = None
+
+
 class CoverLetterResponse(BaseModel):
     id: str
     candidate_profile_id: str

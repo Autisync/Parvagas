@@ -37,6 +37,7 @@ from app.models import (
 from app.schemas import (
     CoverLetterCreateRequest,
     CoverLetterResponse,
+    CoverLetterUpdateRequest,
     JobMatchResponse,
     MessageResponse,
     ResumeCreateRequest,
@@ -49,7 +50,7 @@ from app.schemas import (
 )
 from app.core.config import get_settings
 from app.services.resume_ai_service import ResumeAIService
-from app.services.cv_export_service import to_docx, to_json_resume, to_pdf
+from app.services.cv_export_service import letter_to_pdf, to_docx, to_json_resume, to_pdf
 from app.services import resume_render_service
 from app.models import CandidateCVSubscription
 
@@ -231,6 +232,19 @@ async def list_job_matches(
     profile = _ensure_candidate_profile(db, current_user)
     matches = db.query(JobMatch).filter(JobMatch.candidate_profile_id == profile.id).order_by(JobMatch.match_percentage.desc()).all()
     return matches
+
+
+# Same registration-order rule as /matches above — /cover-letters (static)
+# must come before GET /{resume_id} (dynamic).
+@router.get("/cover-letters", response_model=list[CoverLetterResponse])
+async def list_cover_letters(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    letters = db.query(CoverLetter).filter(CoverLetter.candidate_profile_id == profile.id).order_by(CoverLetter.updated_at.desc()).all()
+    return letters
 
 
 @router.post("/", response_model=ResumeResponse)
@@ -771,3 +785,65 @@ async def create_cover_letter(
     db.refresh(cover_letter)
 
     return cover_letter
+
+
+def _owned_cover_letter(db: Session, letter_id: str, current_user: User) -> CoverLetter:
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    letter = db.query(CoverLetter).filter(CoverLetter.id == letter_id, CoverLetter.candidate_profile_id == profile.id).first()
+    if not letter:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cover letter not found")
+    return letter
+
+
+@router.patch("/cover-letters/{letter_id}", response_model=CoverLetterResponse)
+async def update_cover_letter(
+    letter_id: str,
+    payload: CoverLetterUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    letter = _owned_cover_letter(db, letter_id, current_user)
+    if payload.title is not None:
+        letter.title = payload.title.strip() or letter.title
+    if payload.content is not None:
+        letter.content = payload.content.strip()
+    if payload.is_draft is not None:
+        letter.is_draft = payload.is_draft
+        letter.is_published = not payload.is_draft
+    db.commit()
+    db.refresh(letter)
+    return letter
+
+
+@router.delete("/cover-letters/{letter_id}", response_model=MessageResponse)
+async def delete_cover_letter(
+    letter_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    letter = _owned_cover_letter(db, letter_id, current_user)
+    db.delete(letter)
+    db.commit()
+    return {"message": "Cover letter deleted"}
+
+
+@router.get("/cover-letters/{letter_id}/export")
+async def export_cover_letter(
+    letter_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    letter = _owned_cover_letter(db, letter_id, current_user)
+    try:
+        data = letter_to_pdf(letter.title, letter.content, current_user.full_name or "")
+    except Exception as exc:
+        logger.error(f"Cover letter export error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao gerar carta. Tente novamente.")
+
+    safe_name = (letter.title or "carta").strip().replace(" ", "_").lower() or "carta"
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.pdf"'},
+    )

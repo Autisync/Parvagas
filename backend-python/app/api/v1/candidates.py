@@ -17,7 +17,7 @@ from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, Company, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
+from app.models import CVUpload, CandidateProfile, Company, CoverLetter, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
 from app.services.candidate_billing_service import candidate_has_premium_access
 from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
@@ -1204,7 +1204,13 @@ async def generate_cover_letter(
     current_user: User = Depends(get_current_user),
 ):
     """Grounded cover-letter draft for a specific job. Free while
-    CANDIDATE_PREMIUM_ENABLED is off (see module note above)."""
+    CANDIDATE_PREMIUM_ENABLED is off (see module note above).
+
+    Phase C3 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): persists the generated
+    draft into the CoverLetter model — the builder's "Cartas" tab (see
+    resumes.py's /cover-letters endpoints) is the one place candidates
+    manage cover letters, instead of this being an ephemeral, never-saved
+    generation."""
     _ensure_candidate_user(current_user)
     _require_premium_access(db, current_user)
     profile = _ensure_candidate_profile(db, current_user)
@@ -1231,7 +1237,20 @@ async def generate_cover_letter(
     if not isinstance(cover_letter, str) or not cover_letter.strip():
         return {"coverLetter": "", "unavailable": True, "reason": "Não foi possível gerar uma carta neste momento."}
 
-    return {"coverLetter": cover_letter.strip(), "unavailable": False}
+    content = cover_letter.strip()
+    saved = CoverLetter(
+        candidate_profile_id=profile.id,
+        job_id=job.id,
+        title=f"Carta — {job.title}",
+        content=content,
+        is_draft=True,
+        is_published=False,
+    )
+    db.add(saved)
+    db.commit()
+    db.refresh(saved)
+
+    return {"coverLetter": content, "unavailable": False, "coverLetterId": saved.id}
 
 
 @router.get("/premium/company-snapshot/{job_id}")

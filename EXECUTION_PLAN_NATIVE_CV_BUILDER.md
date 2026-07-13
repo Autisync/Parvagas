@@ -510,10 +510,36 @@ one remaining exit condition, deliberately left for you to execute via
       deploy pass, per the plan text.
 
 ### C3 — Cover letters reconciled
-- [ ] `/premium/cover-letter` (candidates.py) saves generated letters into
-      the `CoverLetter` model; builder gets a "Cartas" tab listing them
-      (view/edit/delete/export via existing `to_pdf`-style rendering).
-- [ ] Deprecate the divergence: one generation path, one storage model.
+- [x] `/premium/cover-letter` (candidates.py) now persists each generated
+      draft as a `CoverLetter` row (title auto-derived from the job title,
+      starts as a draft) instead of returning ephemeral, never-saved text —
+      response gained `coverLetterId` so the caller can deep-link to it.
+      New `app/services/cv_export_service.letter_to_pdf()` (same reportlab
+      stack/palette as `to_pdf`, just heading + body paragraphs — a letter
+      has no CV sections to lay out) backs a new export endpoint.
+      Full CRUD added to resumes.py: `GET /cover-letters` (list),
+      `PATCH/DELETE /cover-letters/{id}`, `GET /cover-letters/{id}/export`
+      — `create_cover_letter` already existed from an earlier phase and was
+      reused as-is. **Same route-ordering class of bug as `/matches`, caught
+      before it shipped**: `GET /cover-letters` is a static single-segment
+      path and had to be registered before `GET /{resume_id}` or it'd be
+      permanently shadowed exactly like the original `/matches` bug —
+      added both the ordering AND a dedicated regression test for it,
+      matching the existing `/matches` test.
+- [x] Builder list page gained a "Currículos"/"Cartas" tab switcher — the
+      one place candidates manage both document types now. Cartas tab:
+      card grid (title, draft/finalizada badge, content preview,
+      edit/export-PDF/delete), edit opens a modal textarea → PATCH.
+      Deprecating the divergence *itself* means there's now exactly one
+      storage model (`CoverLetter`) and one edit surface (this tab) — the
+      premium generation endpoint is the entry point, this tab is where
+      the letter lives afterward.
+- [x] Verify: pytest 279 passed/3 skipped (10 new: create/list, update+
+      publish, delete, PDF export, ownership isolation, route-ordering
+      regression — plus confirmed the existing `/premium/cover-letter`
+      tests in test_candidate_premium_endpoints.py still pass unmodified
+      against the new persisting behavior), tsc clean, vitest 91, browser
+      check of the list page clean (auth wall as always).
 
 ### C4 — Billing consolidation (product decision checkpoint — confirm before executing)
 - [ ] Gate Phase 4 premium tools (interview prep/snapshot/cover letter) by

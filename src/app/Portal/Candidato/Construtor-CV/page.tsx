@@ -20,6 +20,15 @@ type ResumeSummary = {
   updated_at: string;
 };
 
+type CoverLetterSummary = {
+  id: string;
+  title: string;
+  content: string;
+  is_draft: boolean;
+  is_published: boolean;
+  updated_at: string;
+};
+
 function completenessOf(resume: ResumeSummary): number {
   // Cheap proxy until the editor's per-section state (A3) can report a real
   // score: has a summary + isn't a bare draft with nothing touched.
@@ -46,6 +55,13 @@ export default function ConstrutorCvListPage() {
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"cvs" | "cartas">("cvs");
+  const [letters, setLetters] = useState<CoverLetterSummary[]>([]);
+  const [lettersFetched, setLettersFetched] = useState(false);
+  const [editingLetter, setEditingLetter] = useState<CoverLetterSummary | null>(null);
+  const [letterDraft, setLetterDraft] = useState("");
+  const [savingLetter, setSavingLetter] = useState(false);
+  const [exportingLetterId, setExportingLetterId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -60,9 +76,24 @@ export default function ConstrutorCvListPage() {
     }
   }, [token]);
 
+  const loadLetters = useCallback(async () => {
+    if (!token) return;
+    try {
+      setLetters(await authFetch<CoverLetterSummary[]>("/resumes/cover-letters", token));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível carregar as suas cartas."));
+    } finally {
+      setLettersFetched(true);
+    }
+  }, [token]);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (tab === "cartas" && !lettersFetched) loadLetters();
+  }, [tab, lettersFetched, loadLetters]);
 
   const createResume = async (fromProfile: boolean) => {
     if (!token || creating) return;
@@ -133,6 +164,64 @@ export default function ConstrutorCvListPage() {
     }
   };
 
+  const openLetter = (letter: CoverLetterSummary) => {
+    setEditingLetter(letter);
+    setLetterDraft(letter.content);
+  };
+
+  const saveLetter = async () => {
+    if (!token || !editingLetter || savingLetter) return;
+    setSavingLetter(true);
+    try {
+      const updated = await authFetch<CoverLetterSummary>(`/resumes/cover-letters/${editingLetter.id}`, token, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: letterDraft }),
+      });
+      setLetters((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      setEditingLetter(null);
+      notify("Carta guardada.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível guardar a carta."), "error");
+    } finally {
+      setSavingLetter(false);
+    }
+  };
+
+  const deleteLetter = async (id: string) => {
+    if (!token) return;
+    if (!window.confirm("Eliminar esta carta? Esta ação não pode ser revertida.")) return;
+    try {
+      await authFetch(`/resumes/cover-letters/${id}`, token, { method: "DELETE" });
+      setLetters((prev) => prev.filter((l) => l.id !== id));
+      notify("Carta eliminada.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível eliminar a carta."), "error");
+    }
+  };
+
+  const exportLetter = async (id: string) => {
+    if (!token) return;
+    setExportingLetterId(id);
+    try {
+      const res = await authFetchRaw(`/resumes/cover-letters/${id}/export`, token);
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "carta.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(href);
+      notify("Carta exportada em PDF.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível exportar a carta."), "error");
+    } finally {
+      setExportingLetterId(null);
+    }
+  };
+
   if (loading || fetching) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -152,6 +241,98 @@ export default function ConstrutorCvListPage() {
 
       {error && <div className="mb-6"><BannerError title="Erro" message={error} /></div>}
 
+      <div className="mb-6 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <button
+          type="button"
+          onClick={() => setTab("cvs")}
+          className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${tab === "cvs" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          Currículos
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("cartas")}
+          className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${tab === "cartas" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          Cartas
+        </button>
+      </div>
+
+      {tab === "cartas" ? (
+        <>
+          <p className="mb-4 text-sm text-slate-600">
+            Cartas de apresentação geradas na candidatura premium ficam guardadas aqui — reveja, edite e exporte.
+          </p>
+          {letters.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+              <p className="text-sm text-slate-600">Ainda não tem nenhuma carta de apresentação.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {letters.map((letter) => (
+                <div key={letter.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-slate-900">{letter.title}</h3>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${letter.is_published ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      {letter.is_published ? "Finalizada" : "Rascunho"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Atualizada em {formatDate(letter.updated_at)}</p>
+                  <p className="mt-3 line-clamp-3 text-xs text-slate-600">{letter.content}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openLetter(letter)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <PencilIcon className="h-3.5 w-3.5" /> Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportLetter(letter.id)}
+                      disabled={exportingLetterId === letter.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      <ArrowDownTrayIcon className="h-3.5 w-3.5" /> {exportingLetterId === letter.id ? "…" : "PDF"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteLetter(letter.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                    >
+                      <TrashIcon className="h-3.5 w-3.5" /> Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {editingLetter && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-900">{editingLetter.title}</h3>
+                  <button type="button" onClick={() => setEditingLetter(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <textarea
+                  value={letterDraft}
+                  onChange={(e) => setLetterDraft(e.target.value)}
+                  rows={14}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-red-300 focus:ring-4 focus:ring-red-100"
+                />
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditingLetter(null)} className="rounded border border-slate-300 px-3 py-1.5 text-sm">Cancelar</button>
+                  <button type="button" onClick={saveLetter} disabled={savingLetter} className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60">
+                    {savingLetter ? "A guardar…" : "Guardar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <button
           type="button"
@@ -246,6 +427,8 @@ export default function ConstrutorCvListPage() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );

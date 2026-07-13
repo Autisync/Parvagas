@@ -23,8 +23,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.v1 import resumes as resumes_module
 from app.db.base import Base
-from app.models import CandidateProfile, Resume, ResumeVersion, User, UserRole
-from app.schemas import ResumeCreateRequest, ResumeUpdateRequest
+from app.models import CandidateProfile, CoverLetter, Resume, ResumeVersion, User, UserRole
+from app.schemas import CoverLetterCreateRequest, CoverLetterUpdateRequest, ResumeCreateRequest, ResumeUpdateRequest
 
 _list_resumes = resumes_module.list_resumes
 _create_resume = resumes_module.create_resume
@@ -39,6 +39,11 @@ _get_public_resume = resumes_module.get_public_resume
 _list_versions = resumes_module.list_resume_versions
 _get_version = resumes_module.get_resume_version
 _restore_version = resumes_module.restore_resume_version
+_list_cover_letters = resumes_module.list_cover_letters
+_create_cover_letter = resumes_module.create_cover_letter
+_update_cover_letter = resumes_module.update_cover_letter
+_delete_cover_letter = resumes_module.delete_cover_letter
+_export_cover_letter = resumes_module.export_cover_letter
 
 
 @pytest.fixture()
@@ -520,6 +525,70 @@ def test_adapt_unknown_job_404s(db):
     assert exc_info.value.status_code == 404
 
 
+# --------------------------- cover letters (Phase C3) ----------------------- #
+
+def test_create_and_list_cover_letters(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_cover_letter(
+        payload=CoverLetterCreateRequest(title="Carta X", content="Conteúdo da carta."),
+        db=db, current_user=user,
+    ))
+    assert created.title == "Carta X"
+    assert created.is_draft is True
+
+    letters = asyncio.run(_list_cover_letters(db=db, current_user=user))
+    assert len(letters) == 1
+    assert letters[0].id == created.id
+
+
+def test_update_cover_letter_content_and_publish(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_cover_letter(
+        payload=CoverLetterCreateRequest(title="Carta", content="V1"), db=db, current_user=user,
+    ))
+    updated = asyncio.run(_update_cover_letter(
+        letter_id=created.id,
+        payload=CoverLetterUpdateRequest(content="V2", is_draft=False),
+        db=db, current_user=user,
+    ))
+    assert updated.content == "V2"
+    assert updated.is_draft is False
+    assert updated.is_published is True
+
+
+def test_delete_cover_letter(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_cover_letter(
+        payload=CoverLetterCreateRequest(title="Carta", content="X"), db=db, current_user=user,
+    ))
+    asyncio.run(_delete_cover_letter(letter_id=created.id, db=db, current_user=user))
+    assert asyncio.run(_list_cover_letters(db=db, current_user=user)) == []
+
+
+def test_export_cover_letter_returns_pdf_bytes(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_cover_letter(
+        payload=CoverLetterCreateRequest(title="Carta de Apresentação", content="Parágrafo um.\n\nParágrafo dois."),
+        db=db, current_user=user,
+    ))
+    response = asyncio.run(_export_cover_letter(letter_id=created.id, db=db, current_user=user))
+    assert response.media_type == "application/pdf"
+    assert response.body.startswith(b"%PDF")
+
+
+def test_cover_letters_are_ownership_isolated(db):
+    owner = _make_candidate(db, email="owner-cl@example.com")
+    intruder = _make_candidate(db, email="intruder-cl@example.com")
+    created = asyncio.run(_create_cover_letter(
+        payload=CoverLetterCreateRequest(title="Carta", content="X"), db=db, current_user=owner,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_update_cover_letter(
+            letter_id=created.id, payload=CoverLetterUpdateRequest(content="Hack"), db=db, current_user=intruder,
+        ))
+    assert exc_info.value.status_code == 404
+
+
 # ------------------------------ route ordering ----------------------------- #
 
 def test_matches_route_registered_before_dynamic_resume_id_route():
@@ -534,3 +603,16 @@ def test_matches_route_registered_before_dynamic_resume_id_route():
     matches_index = get_paths_in_order.index("/resumes/matches")
     dynamic_index = get_paths_in_order.index("/resumes/{resume_id}")
     assert matches_index < dynamic_index
+
+
+def test_cover_letters_list_route_registered_before_dynamic_resume_id_route():
+    """Same bug class, same fix (Phase C3): GET /cover-letters is a static
+    single-segment path added after this endpoint existed in name only —
+    it must be registered before GET /{resume_id} or it's permanently
+    shadowed exactly like /matches was."""
+    get_paths_in_order = [
+        r.path for r in resumes_module.router.routes if "GET" in r.methods
+    ]
+    letters_index = get_paths_in_order.index("/resumes/cover-letters")
+    dynamic_index = get_paths_in_order.index("/resumes/{resume_id}")
+    assert letters_index < dynamic_index
