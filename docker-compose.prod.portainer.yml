@@ -62,16 +62,16 @@ x-cv-env: &cv-env
 
 x-backend-build: &backend-build
   context: ./backend-python
-  dockerfile: Dockerfile.prod
+  dockerfile: Dockerfile
   target: api-service
 
 x-cv-build: &cv-build
   context: ./reactive-resume
-  dockerfile: Dockerfile.prod
+  dockerfile: Dockerfile
 
 x-cv-migrate-build: &cv-migrate-build
   context: ./reactive-resume
-  dockerfile: Dockerfile.prod
+  dockerfile: Dockerfile
   target: builder
 
 services:
