@@ -1,6 +1,7 @@
 import { CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { toneStyles, type FeedbackTone } from "@/app/components/errors/toneStyles";
 
-export type FeedbackVariant = "error" | "success" | "warning" | "info";
+export type FeedbackVariant = FeedbackTone;
 
 export type FeedbackAlertProps = {
   variant: FeedbackVariant;
@@ -10,40 +11,6 @@ export type FeedbackAlertProps = {
   onAction?: () => void;
   onDismiss?: () => void;
   className?: string;
-};
-
-const variantStyles: Record<FeedbackVariant, { container: string; title: string; message: string; button: string; icon: string }> = {
-  error: {
-    container: "border-rose-200 bg-rose-50",
-    title: "text-rose-800",
-    message: "text-rose-700",
-    button: "border-rose-200 bg-white text-rose-800 hover:bg-rose-100",
-    icon: "text-rose-500",
-  },
-  success: {
-    container: "border-emerald-200 bg-emerald-50",
-    title: "text-emerald-800",
-    message: "text-emerald-700",
-    button: "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100",
-    icon: "text-emerald-500",
-  },
-  // Left accent bar (unlike the other variants) keeps this readable as an
-  // urgent notice rather than a muted tip — amber-50/200 alone read as too
-  // soft next to the app's saturated brand-red surfaces.
-  warning: {
-    container: "border-amber-200 border-l-4 border-l-amber-500 bg-amber-50",
-    title: "text-amber-900",
-    message: "text-amber-800",
-    button: "border-amber-300 bg-white text-amber-900 hover:bg-amber-100",
-    icon: "text-amber-600",
-  },
-  info: {
-    container: "border-slate-200 bg-slate-50",
-    title: "text-slate-800",
-    message: "text-slate-700",
-    button: "border-slate-200 bg-white text-slate-800 hover:bg-slate-100",
-    icon: "text-slate-500",
-  },
 };
 
 function variantIcon(variant: FeedbackVariant) {
@@ -61,7 +28,7 @@ export default function FeedbackAlert({
   onDismiss,
   className = "",
 }: FeedbackAlertProps) {
-  const styles = variantStyles[variant];
+  const styles = toneStyles[variant];
   const Icon = variantIcon(variant);
   const role = variant === "success" || variant === "info" ? "status" : "alert";
 

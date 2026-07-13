@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, InformationCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import { toneStyles, type FeedbackTone } from "@/app/components/errors/toneStyles";
 
-type ToastTone = "success" | "error" | "warning" | "info";
+type ToastTone = FeedbackTone;
 
 export type ToastErrorProps = {
   id: number;
@@ -12,43 +13,6 @@ export type ToastErrorProps = {
   onDismiss: (id: number) => void;
   onRetry?: () => void;
 };
-
-function toneStyle(tone: ToastTone) {
-  if (tone === "success") {
-    return {
-      root: "border-emerald-200 bg-emerald-50",
-      title: "text-emerald-800",
-      message: "text-emerald-700",
-      icon: "text-emerald-500",
-      button: "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100",
-    };
-  }
-  if (tone === "warning") {
-    return {
-      root: "border-amber-200 bg-amber-50",
-      title: "text-amber-900",
-      message: "text-amber-800",
-      icon: "text-amber-500",
-      button: "border-amber-200 bg-white text-amber-900 hover:bg-amber-100",
-    };
-  }
-  if (tone === "info") {
-    return {
-      root: "border-slate-200 bg-slate-50",
-      title: "text-slate-800",
-      message: "text-slate-700",
-      icon: "text-slate-500",
-      button: "border-slate-200 bg-white text-slate-800 hover:bg-slate-100",
-    };
-  }
-  return {
-    root: "border-rose-200 bg-rose-50",
-    title: "text-rose-800",
-    message: "text-rose-700",
-    icon: "text-rose-500",
-    button: "border-rose-200 bg-white text-rose-800 hover:bg-rose-100",
-  };
-}
 
 function ToneIcon({ tone }: { tone: ToastTone }) {
   if (tone === "success") return <CheckCircleIcon className="mt-0.5 h-4.5 w-4.5 shrink-0 text-emerald-500" aria-hidden="true" />;
@@ -65,7 +29,7 @@ export default function ToastError({
   onDismiss,
   onRetry,
 }: ToastErrorProps) {
-  const styles = toneStyle(tone);
+  const styles = toneStyles[tone];
 
   useEffect(() => {
     const timer = window.setTimeout(() => onDismiss(id), durationMs);
@@ -75,7 +39,7 @@ export default function ToastError({
   return (
     <div
       role="alert"
-      className={`pointer-events-auto rounded-2xl border p-3.5 shadow-lg ${styles.root}`}
+      className={`pointer-events-auto rounded-2xl border p-3.5 shadow-lg ${styles.container}`}
     >
       <div className="flex items-start gap-3">
         <div className={styles.icon}>

@@ -13,7 +13,15 @@ export default function BannerError({
   message,
   actionLabel,
   onAction,
-  onDismiss: _onDismiss,
+  onDismiss,
 }: BannerErrorProps) {
-  return <AppErrorBanner title={title} message={message} actionLabel={actionLabel} onAction={onAction} />;
+  return (
+    <AppErrorBanner
+      title={title}
+      message={message}
+      actionLabel={actionLabel}
+      onAction={onAction}
+      onDismiss={onDismiss}
+    />
+  );
 }

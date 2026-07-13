@@ -6,7 +6,7 @@ import HomeCarousel, { CarouselSlide } from "./components/HomeCarousel";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
-import CvBuilderCta from "./components/CvBuilderCta";
+import { BanknotesIcon, ClockIcon, MapPinIcon } from "@heroicons/react/24/outline";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -111,28 +111,29 @@ export default async function Home() {
       ctaLabel: dict.home.ctaViewJobs,
       illustration: "jobs",
     },
+    {
+      eyebrow: dict.home.cvBuilderEyebrow,
+      title: dict.home.cvBuilderTitle,
+      description: dict.home.cvBuilderDesc,
+      note: dict.home.cvBuilderNote,
+      ctaHref: "/Submission/#criar-cv",
+      ctaLabel: dict.home.ctaCvBuilder,
+      illustration: "cvBuilder",
+    },
   ];
 
   return (
     <div className="bg-white text-gray-900">
       <Header />
 
-      {/* Hero carousel */}
-      <section className="pt-12 pb-16 px-6 bg-gradient-to-b from-red-50 to-white">
-        <div className="mx-auto max-w-6xl pv-animate-in">
-          <HomeCarousel
-            slides={heroSlides}
-            prevLabel={dict.home.carouselPrev}
-            nextLabel={dict.home.carouselNext}
-            slideLabels={heroSlides.map((_, i) => dict.home.carouselSlideLabel(i + 1))}
-          />
-          <div className="mt-6 flex justify-center md:justify-start">
-            <CvBuilderCta
-              label={dict.home.ctaCvBuilder}
-              className="inline-flex items-center rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50 disabled:opacity-60"
-            />
-          </div>
-        </div>
+      {/* Hero — full-screen carousel, edge-to-edge */}
+      <section className="relative">
+        <HomeCarousel
+          slides={heroSlides}
+          prevLabel={dict.home.carouselPrev}
+          nextLabel={dict.home.carouselNext}
+          slideLabels={heroSlides.map((_, i) => dict.home.carouselSlideLabel(i + 1))}
+        />
       </section>
 
       {/* Featured Jobs — DB-driven, up to 6 */}
@@ -164,14 +165,20 @@ export default async function Home() {
                     </span>
                     <h3 className="font-bold text-base mt-2 leading-snug">{job.title}</h3>
                     <p className="text-sm text-gray-500 mt-1">{companyName}</p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-                      {job.location && <span>📍 {job.location}</span>}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                      {job.location && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPinIcon className="h-3.5 w-3.5" aria-hidden="true" /> {job.location}
+                        </span>
+                      )}
                       {(job.workMode ?? job.mode) && (
                         <span>· {job.workMode ?? job.mode}</span>
                       )}
                     </div>
                     {salary && (
-                      <p className="mt-2 text-sm font-semibold text-gray-700">💰 {salary}</p>
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                        <BanknotesIcon className="h-4 w-4 text-gray-500" aria-hidden="true" /> {salary}
+                      </p>
                     )}
                     <Link
                       href={`/Vagas-Disponiveis/${job._id}`}
@@ -220,7 +227,9 @@ export default async function Home() {
                       <p className="text-sm text-gray-500 mt-1 line-clamp-2">{post.excerpt}</p>
                     )}
                     {post.readTime && (
-                      <p className="text-xs text-gray-500 mt-2">⏱ {post.readTime}</p>
+                      <p className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500">
+                        <ClockIcon className="h-3.5 w-3.5" aria-hidden="true" /> {post.readTime}
+                      </p>
                     )}
                   </Link>
                 ))}

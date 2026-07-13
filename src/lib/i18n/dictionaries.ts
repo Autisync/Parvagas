@@ -30,6 +30,10 @@ export type Dictionary = {
     hiringTitle: string;
     hiringDesc: string;
     hiringCta: string;
+    cvBuilderEyebrow: string;
+    cvBuilderTitle: string;
+    cvBuilderDesc: string;
+    cvBuilderNote: string;
     featuredJobsTitle: string;
     viewAll: string;
     noFeaturedJobs: string;
@@ -367,6 +371,10 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       hiringTitle: "Contratação para Empresas",
       hiringDesc: "Crie conta empresarial, valide a empresa e publique vagas públicas ou privadas com rastreio de candidaturas.",
       hiringCta: "Criar Conta Empresarial",
+      cvBuilderEyebrow: "Novo — Construtor de CV nativo",
+      cvBuilderTitle: "Crie um CV profissional dentro do Parvagas, sem sair da plataforma",
+      cvBuilderDesc: "Modelos prontos para ATS, pontuação e reescrita por IA, exportação em PDF, DOCX e JSON, histórico de versões e partilha por link — tudo integrado com o seu perfil de candidato.",
+      cvBuilderNote: "🎁 Grátis para começar — sem instalar nada.",
       featuredJobsTitle: "Vagas em Destaque",
       viewAll: "Ver todas",
       noFeaturedJobs: "Sem vagas em destaque de momento.",
@@ -698,6 +706,10 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       hiringTitle: "Hiring for Companies",
       hiringDesc: "Create a company account, verify your company, and publish public or private jobs with applicant tracking.",
       hiringCta: "Create a Company Account",
+      cvBuilderEyebrow: "New — Native CV Builder",
+      cvBuilderTitle: "Build a professional CV inside Parvagas, without leaving the platform",
+      cvBuilderDesc: "ATS-ready templates, AI scoring and rewriting, PDF/DOCX/JSON export, version history, and shareable links — all integrated with your candidate profile.",
+      cvBuilderNote: "🎁 Free to start — nothing to install.",
       featuredJobsTitle: "Featured Jobs",
       viewAll: "View all",
       noFeaturedJobs: "No featured jobs at the moment.",

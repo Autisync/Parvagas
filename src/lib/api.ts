@@ -359,6 +359,13 @@ export async function apiFetch<T = unknown>(
           message,
           action: "retry",
         });
+      } else if (res.status === 400 || res.status === 422) {
+        // Validation-shaped responses: every caller that hits these already
+        // catches the thrown ApiError and renders it inline (a field error,
+        // a form-level FeedbackAlert). Auto-toasting the same message here
+        // would show it twice — once inline, once as a floating pill — for
+        // a single error instance. Skip the global dispatch; the throw
+        // below still surfaces the error to the caller as normal.
       } else {
         getGlobalErrorDispatch()?.appError?.({
           type: "server",

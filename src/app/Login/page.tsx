@@ -202,6 +202,7 @@ function LoginContent() {
     setSubmitted(true);
 
     if (!email.trim() || !password.trim()) {
+      document.getElementById(!email.trim() ? "email" : "password")?.focus();
       return;
     }
 
@@ -344,16 +345,19 @@ function LoginContent() {
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
+      document.getElementById(!newPassword.trim() ? "password" : "confirmNewPassword")?.focus();
       return;
     }
     if (newPassword !== confirmNewPassword) {
       showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
+      document.getElementById("confirmNewPassword")?.focus();
       return;
     }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
       showFeedback({ variant: "error", message: passwordError });
+      document.getElementById("password")?.focus();
       return;
     }
 
@@ -413,16 +417,19 @@ function LoginContent() {
 
     if (!newPassword.trim() || !confirmNewPassword.trim()) {
       showFeedback({ variant: "error", message: "Preencha e confirme a nova password." });
+      document.getElementById(!newPassword.trim() ? "password" : "confirmNewPassword")?.focus();
       return;
     }
     if (newPassword !== confirmNewPassword) {
       showFeedback({ variant: "error", message: "As novas palavras-passe não coincidem." });
+      document.getElementById("confirmNewPassword")?.focus();
       return;
     }
 
     const passwordError = validatePasswordStrength(newPassword);
     if (passwordError) {
       showFeedback({ variant: "error", message: passwordError });
+      document.getElementById("password")?.focus();
       return;
     }
 

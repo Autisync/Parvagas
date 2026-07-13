@@ -115,34 +115,40 @@ function SignUpContent() {
 
     if (!fullName.trim() || !email.trim() || !password.trim()) {
       setError(dict.auth.signup.errorFillRequired);
+      document.getElementById(!fullName.trim() ? "fullName" : !email.trim() ? "email" : "password")?.focus();
       return;
     }
 
     if (password !== confirmPassword) {
       setError(dict.auth.signup.errorPasswordsMismatch);
+      document.getElementById("confirmPassword")?.focus();
       return;
     }
 
     if (selectedRole === "company" && !inviteToken) {
       if (!companyName.trim()) {
         setError(dict.auth.signup.errorCompanyNameRequired);
+        document.getElementById("companyName")?.focus();
         return;
       }
 
       const normalizedIdentifier = normalizeCompanyIdentifier(companyIdentifier);
       if (!normalizedIdentifier) {
         setError(dict.auth.signup.errorIdentifierRequired);
+        document.getElementById("companyIdentifier")?.focus();
         return;
       }
 
       if (!/^[A-Z0-9]{6,20}$/.test(normalizedIdentifier)) {
         setError(dict.auth.signup.errorIdentifierInvalid);
+        document.getElementById("companyIdentifier")?.focus();
         return;
       }
     }
 
     if (!acceptConsent) {
       setError("É obrigatório aceitar os Termos de Uso e a Política de Privacidade para continuar.");
+      document.getElementById("acceptConsent")?.focus();
       return;
     }
 
@@ -404,6 +410,7 @@ function SignUpContent() {
                 {/* Required: T&C + Privacy combined */}
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
+                    id="acceptConsent"
                     type="checkbox"
                     checked={acceptConsent}
                     onChange={(e) => setAcceptConsent(e.target.checked)}

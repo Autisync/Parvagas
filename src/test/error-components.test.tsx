@@ -68,7 +68,7 @@ describe("Error UI components", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("Atenção");
-    expect(alert.className).toContain("border-l-amber-500");
+    expect(alert.className).toContain("border-l-amber-600");
     expect(alert.className).toContain("bg-amber-50");
   });
 });

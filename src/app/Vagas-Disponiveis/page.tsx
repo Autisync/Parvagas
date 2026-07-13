@@ -11,6 +11,7 @@ import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import SponsoredAdSlot from "@/app/components/SponsoredAdSlot";
 import { CheckBadgeIcon } from "@heroicons/react/24/solid";
+import { AcademicCapIcon, BanknotesIcon, ClockIcon, MapPinIcon } from "@heroicons/react/24/outline";
 import { track } from "@/lib/analytics";
 
 export type Job = {
@@ -232,7 +233,7 @@ function VagasDisponiveisContent() {
   return (
     <div className="bg-white min-h-screen">
       <Header />
-      <main className="px-6 py-8 mx-auto max-w-6xl">
+      <main className="px-6 py-8 mx-auto max-w-7xl">
         <div className="mb-8">
           <p className="text-sm font-semibold uppercase tracking-widest text-red-600">{dict.jobsList.eyebrow}</p>
           <h1 className="mt-2 text-4xl font-bold">{dict.jobsList.title}</h1>
@@ -323,19 +324,18 @@ function VagasDisponiveisContent() {
           </div>
         )}
         {loading && (
-          <div className="mt-8 grid gap-4" aria-hidden>
-            {Array.from({ length: 5 }).map((_, i) => (
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+            {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="app-card p-5">
                 <div className="flex items-start gap-3">
                   <div className="app-skeleton h-11 w-11 rounded-xl" />
                   <div className="flex-1">
-                    <div className="app-skeleton h-5 w-1/2" />
-                    <div className="app-skeleton mt-2 h-3.5 w-1/3" />
+                    <div className="app-skeleton h-5 w-4/5" />
+                    <div className="app-skeleton mt-2 h-3.5 w-1/2" />
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <div className="app-skeleton h-5 w-20 rounded-full" />
-                  <div className="app-skeleton h-5 w-24 rounded-full" />
                   <div className="app-skeleton h-5 w-16 rounded-full" />
                 </div>
               </div>
@@ -344,14 +344,16 @@ function VagasDisponiveisContent() {
         )}
 
         {!loading && !error && (
-          <div className="mt-8 grid gap-4 pv-stagger">
-            {jobs.length === 0 && <p className="text-gray-500 text-center py-12">{dict.jobsList.empty}</p>}
+          <div className="mt-8 grid items-stretch gap-5 pv-stagger sm:grid-cols-2 xl:grid-cols-3">
+            {jobs.length === 0 && (
+              <p className="col-span-full py-12 text-center text-gray-500">{dict.jobsList.empty}</p>
+            )}
             {jobs.map((job, index) => {
               const mode = job.workMode || job.mode || "";
               const name = companyName(job);
               const logo = companyLogo(job);
               return [
-                <article key={job._id} className="app-card app-card-interactive p-5">
+                <article key={job._id} className="app-card app-card-interactive flex h-full flex-col p-5">
                   <div className="flex items-start gap-3">
                     {logo ? (
                       <Image src={logo} alt={`Logo ${name}`} width={44} height={44} className="shrink-0 h-11 w-11 rounded-xl border border-gray-200 object-cover" unoptimized />
@@ -360,12 +362,12 @@ function VagasDisponiveisContent() {
                         {name.slice(0, 2).toUpperCase()}
                       </div>
                     )}
-                    <div>
-                      <h2 className="text-lg font-bold leading-snug">{job.title}</h2>
-                      <p className="flex items-center gap-1.5 text-sm text-gray-500">
-                        {name}
+                    <div className="min-w-0">
+                      <h2 className="line-clamp-2 text-base font-bold leading-snug">{job.title}</h2>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
+                        <span className="truncate">{name}</span>
                         {!job.externalCompanyName && job.companyId && typeof job.companyId === "object" && job.companyId.verified && (
-                          <span className="app-badge app-badge-success" title="Empresa verificada">
+                          <span className="app-badge app-badge-success shrink-0" title="Empresa verificada">
                             <CheckBadgeIcon className="h-3.5 w-3.5" /> Verificada
                           </span>
                         )}
@@ -373,23 +375,35 @@ function VagasDisponiveisContent() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {job.location && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">📍 {job.location}</span>}
+                    {job.location && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                        <MapPinIcon className="h-3 w-3" aria-hidden="true" /> {job.location}
+                      </span>
+                    )}
                     {mode && <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${modeColor[mode] ?? "bg-gray-100 text-gray-700"}`}>{modeLabels[mode] ?? mode}</span>}
                     {job.category && <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${categoryColor[job.category] ?? "bg-gray-100 text-gray-700"}`}>{job.category}</span>}
                     {(job.contractType || job.jobType) && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{job.contractType || job.jobType}</span>}
                   </div>
                   {job.requiredSkills && job.requiredSkills.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {job.requiredSkills.slice(0, 5).map(s => <span key={s} className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-gray-600">{s}</span>)}
+                      {job.requiredSkills.slice(0, 4).map(s => <span key={s} className="text-xs border border-gray-200 rounded-lg px-2 py-0.5 text-gray-600">{s}</span>)}
                     </div>
                   )}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                      {job.salaryRange && <span>💰 {job.salaryRange}</span>}
-                      {(job.requiredExperienceYears ?? 0) > 0 && <span>🎓 {dict.jobDetail.yearsExperience(job.requiredExperienceYears ?? 0)}</span>}
-                      {job.expiresAt && <span>⏳ Expira {new Date(job.expiresAt).toLocaleDateString("pt-AO", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                  <div className="mt-auto pt-4">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-gray-500">
+                      {job.salaryRange && (
+                        <span className="inline-flex items-center gap-1"><BanknotesIcon className="h-3.5 w-3.5" aria-hidden="true" /> {job.salaryRange}</span>
+                      )}
+                      {(job.requiredExperienceYears ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1"><AcademicCapIcon className="h-3.5 w-3.5" aria-hidden="true" /> {dict.jobDetail.yearsExperience(job.requiredExperienceYears ?? 0)}</span>
+                      )}
+                      {job.expiresAt && (
+                        <span className="inline-flex items-center gap-1"><ClockIcon className="h-3.5 w-3.5" aria-hidden="true" /> {new Date(job.expiresAt).toLocaleDateString("pt-AO", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      )}
                     </div>
-                    <Link href={`/Vagas-Disponiveis/${job._id}`} className="app-btn-secondary text-sm px-4 py-1.5">{dict.jobsList.viewDetails}</Link>
+                    <Link href={`/Vagas-Disponiveis/${job._id}`} className="app-btn-secondary mt-3 block w-full py-2 text-center text-sm">
+                      {dict.jobsList.viewDetails}
+                    </Link>
                   </div>
                 </article>,
                 (index + 1) % 6 === 0 ? (
@@ -398,6 +412,7 @@ function VagasDisponiveisContent() {
                     placement="job_list"
                     fallbackTitle=""
                     fallbackDescription=""
+                    className="sm:col-span-2 xl:col-span-3"
                   />
                 ) : null,
               ];
