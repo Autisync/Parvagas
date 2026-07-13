@@ -733,6 +733,21 @@ class CandidateCVSubscription(Base, TimestampMixin):
     candidate_profile = relationship("CandidateProfile")
 
 
+class CVBuilderSyncEvent(Base, TimestampMixin):
+    """Inbound CV Builder event ledger for replay prevention and diagnostics."""
+    __tablename__ = "cv_builder_sync_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id = Column(String(80), nullable=False, unique=True, index=True)
+    event_type = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending|processed|failed
+    external_user_id = Column(String(255), nullable=False, index=True)
+    external_resume_id = Column(String(255), nullable=False, index=True)
+    occurred_at = Column(DateTime, nullable=False)
+    processed_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+
+
 class OtpCode(Base, TimestampMixin):
     """One-time code for phone login / verification."""
     __tablename__ = "otp_codes"

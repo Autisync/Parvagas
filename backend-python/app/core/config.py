@@ -171,6 +171,11 @@ class Settings(BaseSettings):
     RESUME_BUILDER_URL: str = os.getenv("RESUME_BUILDER_URL", "")
     # JWT secret shared with the Parvagas CV Builder instance for SSO pass-through.
     RESUME_BUILDER_SECRET: str = os.getenv("RESUME_BUILDER_SECRET", "")
+    # HMAC secret used for CV Builder webhook signatures.
+    PARVAGAS_WEBHOOK_SECRET: str = os.getenv("PARVAGAS_WEBHOOK_SECRET", "")
+    PARVAGAS_WEBHOOK_TOLERANCE_SECONDS: int = int(os.getenv("PARVAGAS_WEBHOOK_TOLERANCE_SECONDS", "300"))
+    # Optional API key for server-to-server calls from CV Builder.
+    PARVAGAS_API_KEY: str = os.getenv("PARVAGAS_API_KEY", "")
 
     # Ollama — free-tier local AI for CV builder (no subscription required).
     # Runs alongside the stack; paid users fall through to RESUME_AI_* (cloud).

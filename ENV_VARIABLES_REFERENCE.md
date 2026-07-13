@@ -205,6 +205,27 @@ When making changes, update these files consistently:
 | `.env.example` / `.env.prod` | Backend env template | adding new config options |
 | Vercel Project Settings | Frontend env vars | after updating backend config |
 
+## CV Builder (Reactive Resume) Variables
+
+Use these variables for the `cv-builder` container (do not use legacy `STORAGE_*`, `BETTER_AUTH_SECRET`, `ACCESS_TOKEN_SECRET`, `REFRESH_TOKEN_SECRET`, `PUBLIC_URL`, `NEXT_PUBLIC_APP_URL`, or `NEXT_PUBLIC_APP_NAME` in Compose):
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `RESUME_BUILDER_URL` | `https://cv.parvagas.pt` | Public URL for CV Builder |
+| `CV_BUILDER_DATABASE_URL` | `postgresql://user:pass@postgres:5432/parvagas_cv_builder` | Dedicated CV Builder database |
+| `RESUME_BUILDER_SECRET` | `***` | Better Auth secret (`AUTH_SECRET`) |
+| `CV_BUILDER_ENCRYPTION_SECRET` | `*** (32+ chars)` | Agent/workspace encryption secret |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | `***` | S3 credentials for `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` |
+| `S3_REGION` | `us-east-1` | S3 region |
+| `PARVAGAS_OAUTH_CLIENT_ID` | `***` | OAuth client id |
+| `PARVAGAS_OAUTH_CLIENT_SECRET` | `***` | OAuth client secret |
+| `PARVAGAS_OAUTH_DISCOVERY_URL` | `https://api.parvagas.pt/.well-known/openid-configuration` | OIDC discovery |
+| `PARVAGAS_RESUME_SYNC_ENABLED` | `true` | Enable outbound CV sync |
+| `PARVAGAS_API_URL` | `https://api.parvagas.pt` | Parvagas API base URL |
+| `PARVAGAS_API_KEY` | `***` | Sync API key (server-to-server) |
+| `PARVAGAS_RESUME_SYNC_PATH` | `/api/v1/integrations/cv-builder/resumes/sync` | Sync endpoint path |
+| `PARVAGAS_WEBHOOK_SECRET` | `***` | HMAC secret for integration webhooks |
+
 ## Testing the Full Flow
 
 ```bash

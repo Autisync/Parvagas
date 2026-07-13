@@ -166,6 +166,53 @@ services:
       "
     restart: "no"
 
+  cv-builder-db-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: devpass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      [
+        "sh",
+        "-c",
+        "psql -h postgres -U parvagas -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='parvagas_cv_builder'\" | grep -q 1 || psql -h postgres -U parvagas -d postgres -c \"CREATE DATABASE parvagas_cv_builder\""
+      ]
+
+  cv-builder-bucket-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do echo 'waiting for minio'; sleep 2; done;
+      mc mb --ignore-existing local/reactive-resume;
+      mc anonymous set none local/reactive-resume;
+      echo 'cv-builder bucket ready';
+      "
+
+  cv-builder-migrate:
+    build:
+      context: ./reactive-resume
+      dockerfile: Dockerfile
+      target: builder
+    restart: "no"
+    environment:
+      PORT: "3000"
+      APP_URL: ${RESUME_BUILDER_URL:-https://dev-cv.parvagas.pt}
+      AUTH_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
+      DATABASE_URL: ${CV_BUILDER_DATABASE_URL:-postgresql://parvagas:devpass@postgres:5432/parvagas_cv_builder}
+    command: ["pnpm", "db:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      cv-builder-db-init:
+        condition: service_completed_successfully
+
   # ── Email catch-all (dev only) ─────────────────────────────────────────────
   mailhog:
     image: mailhog/mailhog:latest
@@ -263,33 +310,25 @@ services:
       - traefik.http.services.dev-parvagas-cv-svc.loadbalancer.server.port=3000
     environment:
       PORT: "3000"
+      SERVER_PORT: "3000"
+      NODE_ENV: production
       APP_NAME: "Parvagas CV Builder"
       SUPPORT_EMAIL: suporte@parvagas.pt
       SUPPORT_URL: https://parvagas.pt
       # ── Storage ──────────────────────────────────────────────────────────
-      STORAGE_PROVIDER: minio
-      STORAGE_ENDPOINT: minio
-      STORAGE_PORT: "9000"
-      STORAGE_REGION: us-east-1
-      STORAGE_BUCKET: reactive-resume
-      STORAGE_ACCESS_KEY: minioadmin
-      STORAGE_SECRET_KEY: minioadmin
-      STORAGE_USE_SSL: "false"
-      STORAGE_SKIP_BUCKET_CHECK: "false"
-      STORAGE_URL_PREFIX: https://dev-storage.parvagas.pt/reactive-resume
+      APP_URL: ${RESUME_BUILDER_URL:-https://dev-cv.parvagas.pt}
+      AUTH_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
+      DATABASE_URL: ${CV_BUILDER_DATABASE_URL:-postgresql://parvagas:devpass@postgres:5432/parvagas_cv_builder}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: reactive-resume
+      S3_FORCE_PATH_STYLE: "true"
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_SECRET: ${CV_BUILDER_ENCRYPTION_SECRET:-dev-cv-builder-encryption-secret-minimum-32-chars}
       # ── Database ─────────────────────────────────────────────────────────
-      DATABASE_URL: postgresql://parvagas:devpass@postgres:5432/parvagas
-      # ── Auth ─────────────────────────────────────────────────────────────
-      AUTH_SECRET: dev-cv-builder-secret
-      BETTER_AUTH_SECRET: dev-cv-builder-secret
-      ACCESS_TOKEN_SECRET: dev-cv-builder-secret
-      REFRESH_TOKEN_SECRET: dev-cv-builder-refresh-secret
-      # ── Public URL ───────────────────────────────────────────────────────
-      APP_URL: https://dev-cv.parvagas.pt
-      PUBLIC_URL: https://dev-cv.parvagas.pt
-      # ── Branding ─────────────────────────────────────────────────────────
-      NEXT_PUBLIC_APP_NAME: "Parvagas CV Builder (Dev)"
-      NEXT_PUBLIC_APP_URL: https://dev-cv.parvagas.pt
+      LEGACY_DATABASE_URL: postgresql://parvagas:devpass@postgres:5432/parvagas
       # ── Mail ─────────────────────────────────────────────────────────────
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"
@@ -298,30 +337,49 @@ services:
       SMTP_PASS: ""
       SMTP_FROM: "Parvagas CV Builder <suporte@parvagas.pt>"
       # ── Parvagas Account SSO (optional) ─────────────────────────────────
-      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas Account}
+      OAUTH_PROVIDER_NAME: ${PARVAGAS_OAUTH_PROVIDER_NAME:-Parvagas}
       OAUTH_CLIENT_ID: ${PARVAGAS_OAUTH_CLIENT_ID:-}
       OAUTH_CLIENT_SECRET: ${PARVAGAS_OAUTH_CLIENT_SECRET:-}
       OAUTH_DISCOVERY_URL: ${PARVAGAS_OAUTH_DISCOVERY_URL:-}
+      OAUTH_SCOPES: "openid profile email"
       # ── Sync resumes to Parvagas API (optional) ─────────────────────────
       PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-false}
       PARVAGAS_API_URL: ${PARVAGAS_API_URL:-https://dev-api.parvagas.pt}
       PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
       PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
+      PARVAGAS_WEBHOOK_SECRET: ${PARVAGAS_WEBHOOK_SECRET:-}
+      FLAG_DISABLE_SIGNUPS: ${CV_BUILDER_DISABLE_SIGNUPS:-false}
+      FLAG_DISABLE_EMAIL_AUTH: ${CV_BUILDER_DISABLE_EMAIL_AUTH:-false}
+      FLAG_DISABLE_IMAGE_PROCESSING: ${CV_BUILDER_DISABLE_IMAGE_PROCESSING:-false}
+      FLAG_DISABLE_API_RATE_LIMIT: "false"
+      FLAG_SHOW_SPONSORS: "false"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      minio:
+        condition: service_healthy
+      cv-builder-db-init:
+        condition: service_completed_successfully
+      cv-builder-bucket-init:
+        condition: service_completed_successfully
+      cv-builder-migrate:
         condition: service_completed_successfully
       mailhog:
         condition: service_started
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1));"]
-      start_period: 30s
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      start_period: 60s
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
 
   # ── Ollama (free-tier AI — powers CV builder for non-subscribers) ──────────
   # Pull the model on first boot: docker exec -it parvagas-dev-ollama-1 ollama pull qwen2.5:3b

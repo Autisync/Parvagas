@@ -142,14 +142,37 @@ Restore database:
 docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < backup.sql
 ```
 
-## 8) Update and Restart
+CV Builder database backup (isolated database):
+
+```bash
+docker compose exec -T postgres pg_dump -U "$POSTGRES_USER" -d parvagas_cv_builder > backup-cv-builder.sql
+```
+
+CV Builder database restore:
+
+```bash
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d parvagas_cv_builder < backup-cv-builder.sql
+```
+
+## 8) CV Builder Integration Order
+
+The stack now uses one-shot bootstrap services:
+
+1. `cv-builder-db-init` (creates `parvagas_cv_builder` if missing)
+2. `cv-builder-bucket-init` (creates `reactive-resume` bucket in MinIO)
+3. `cv-builder-migrate` (`pnpm db:migrate` in `reactive-resume`)
+4. `cv-builder` starts only after these complete
+
+This prevents startup against the wrong database or missing storage bucket.
+
+## 9) Update and Restart
 
 ```bash
 docker compose pull
 docker compose --env-file .env.docker up -d --build
 ```
 
-## 9) Stop Stack
+## 10) Stop Stack
 
 ```bash
 docker compose down

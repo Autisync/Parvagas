@@ -93,3 +93,14 @@ Invoke-RestMethod -Uri 'http://localhost:8000/ready' -Method Get
 - Celery queue issues: docker compose logs celery-worker
 - Redis connectivity: docker compose exec redis redis-cli ping
 - DB connectivity: docker compose exec postgres pg_isready
+
+## CV Builder (Reactive Resume) Server Notes
+
+- Use `CV_BUILDER_DATABASE_URL` pointing to `parvagas_cv_builder` (not `parvagas`).
+- Ensure MinIO bucket `reactive-resume` exists before CV Builder startup.
+- Ensure `RESUME_BUILDER_SECRET`, `CV_BUILDER_ENCRYPTION_SECRET`, and OAuth variables are configured.
+- Run preflight checks before deployment:
+
+```bash
+./scripts/check-cv-builder-integration.sh
+```

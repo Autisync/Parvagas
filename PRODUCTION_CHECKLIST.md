@@ -30,6 +30,8 @@ Complete this checklist before deploying Parvagas to production.
 - [ ] Backups enabled and tested
 - [ ] Connection pooling configured if needed
 - [ ] Storage buckets created and accessible
+- [ ] `parvagas_cv_builder` database exists and is isolated from `parvagas`
+- [ ] CV Builder migrations executed successfully (`cv-builder-migrate`)
 
 ### Email Service
 - [ ] Email service account set up (SendGrid, Gmail, Mailgun, etc.)
@@ -47,6 +49,8 @@ Complete this checklist before deploying Parvagas to production.
 - [ ] No shared/generic credentials used
 - [ ] CORS_ORIGIN set to production domain(s) only
 - [ ] NEXT_PUBLIC_API_URL set to production URL
+- [ ] `RESUME_BUILDER_SECRET` and `CV_BUILDER_ENCRYPTION_SECRET` are set and rotated
+- [ ] `PARVAGAS_WEBHOOK_SECRET` configured for integration signature validation
 
 ### Frontend Build
 - [ ] Build completes without errors: `npm run build`
@@ -120,6 +124,9 @@ Complete this checklist before deploying Parvagas to production.
 - [ ] Error handling returns correct response format
 - [ ] Rate limiting working correctly
 - [ ] CORS headers correct for production domain
+- [ ] CV Builder health check works: `GET /api/health` on `cv.parvagas.pt`
+- [ ] Parvagas OAuth discovery reachable and login flow validated
+- [ ] CV sync endpoint accepts idempotent retries safely
 
 ### Security Testing
 - [ ] SQL injection attempts blocked

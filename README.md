@@ -13,6 +13,30 @@ Plataforma de recrutamento Angola-first com foco em:
 - Adapters para IA, Storage, Notificações
 - MeiliSearch (opcional) para indexação de vagas públicas
 
+## CV Builder (Reactive Resume) Setup
+
+```bash
+# 1) Validate configuration
+./scripts/check-cv-builder-integration.sh
+
+# 2) Validate compose files
+docker compose config
+docker compose -f docker-compose.dev.yml config
+docker compose -f docker-compose.prod.yml config
+
+# 3) Build CV Builder image
+docker build -t parvagas-cv-builder-test ./reactive-resume
+
+# 4) Start CV Builder profile (local)
+docker compose --profile cv-builder up -d --build
+```
+
+Windows PowerShell preflight:
+
+```powershell
+.\scripts\check-cv-builder-integration.ps1
+```
+
 ## Novos módulos implementados
 
 ### Site público

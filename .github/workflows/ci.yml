@@ -67,3 +67,49 @@ jobs:
 
       - name: Pytest (config, security, migrations, serializers)
         run: pytest -q
+
+  cv-builder:
+    name: CV Builder · Typecheck · Test · Build · Docker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reactive-resume
+    env:
+      APP_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/reactive_resume_ci
+      AUTH_SECRET: ci-cv-builder-auth-secret-please-change-1234567890
+      ENCRYPTION_SECRET: ci-cv-builder-encryption-secret-please-change-1234567890
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (CI)
+        run: pnpm test:ci
+
+      - name: Build
+        run: pnpm build
+
+      - name: Docker build (Reactive Resume)
+        run: docker build -t parvagas-cv-builder-test ./reactive-resume
+        working-directory: ..
+
+      - name: Validate Compose files
+        run: |
+          docker compose config
+          docker compose -f docker-compose.dev.yml config
+          docker compose -f docker-compose.prod.yml config
+        working-directory: ..
