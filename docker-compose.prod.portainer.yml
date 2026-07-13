@@ -149,8 +149,8 @@ services:
       "
 
   cv-builder-migrate:
-    image: ${CV_BUILDER_MIGRATE_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder-migrate:prod}
-    pull_policy: always
+    image: ${CV_BUILDER_MIGRATE_IMAGE:-parvagas-cv-builder-migrate:prod}
+    pull_policy: if_not_present
     restart: "no"
     environment: *cv-env
     command: ["pnpm", "db:migrate"]
@@ -161,8 +161,8 @@ services:
         condition: service_completed_successfully
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
-    pull_policy: always
+    image: ${BACKEND_IMAGE:-parvagas-backend:prod}
+    pull_policy: if_not_present
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
@@ -201,8 +201,8 @@ services:
       start_period: 60s
 
   worker:
-    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
-    pull_policy: always
+    image: ${WORKER_IMAGE:-parvagas-backend:prod}
+    pull_policy: if_not_present
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup,scraping
     restart: unless-stopped
     user: "0:0"
@@ -223,8 +223,8 @@ services:
       start_period: 60s
 
   scheduler:
-    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
-    pull_policy: always
+    image: ${WORKER_IMAGE:-parvagas-backend:prod}
+    pull_policy: if_not_present
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
     user: "0:0"
@@ -236,8 +236,8 @@ services:
         condition: service_healthy
 
   cv-builder:
-    image: ${CV_BUILDER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-cv-builder:prod}
-    pull_policy: always
+    image: ${CV_BUILDER_IMAGE:-parvagas-cv-builder:prod}
+    pull_policy: if_not_present
     restart: unless-stopped
     environment: *cv-env
     depends_on:
@@ -278,8 +278,8 @@ services:
       start_period: 60s
 
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-frontend:prod}
-    pull_policy: always
+    image: ${FRONTEND_IMAGE:-parvagas-frontend:prod}
+    pull_policy: if_not_present
     restart: unless-stopped
     networks:
       default: {}
