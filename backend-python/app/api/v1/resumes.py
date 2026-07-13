@@ -577,6 +577,68 @@ async def restore_resume_version(
     return _resume_payload(copy)
 
 
+class ResumeAdaptRequest(BaseModel):
+    job_id: str
+
+
+@router.post("/{resume_id}/adapt")
+async def adapt_resume_to_job(
+    resume_id: str,
+    payload: ResumeAdaptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """"Adaptar a esta vaga" (Phase C2): tailor Resume.data toward a job via
+    the already-tested inject_job_keywords grounding pipeline. Never
+    destructive — the pre-adaptation state is snapshotted as a version
+    first, and inject_job_keywords itself only touches summary + skills
+    (adding only skills the job actually lists). With
+    CV_EXPORT_LLM_INJECTION_ENABLED off or the LLM unreachable, the data
+    comes back unchanged and the response says so (changed=false) instead
+    of failing."""
+    from app.api.v1.jobs import serialize_job
+    from app.models import Job
+    from app.services.cv_export_service import inject_job_keywords
+
+    resume = _owned_resume(db, resume_id, current_user)
+    job = db.query(Job).filter(Job.id == payload.job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    original = _load_json_field(resume.data) or {}
+    tailored = inject_job_keywords(original, serialize_job(job))
+
+    original_skills = {str(s).lower() for s in (original.get("skills") or [])}
+    added_skills = [s for s in (tailored.get("skills") or []) if str(s).lower() not in original_skills]
+    summary_changed = (tailored.get("professionalSummary") or "") != (original.get("professionalSummary") or "")
+    changed = bool(added_skills or summary_changed)
+
+    # inject_job_keywords appends to the flat `skills` list, but both the
+    # editor's Competências section and the exporters render `hardSkills`
+    # whenever it's non-empty (flat skills is only their fallback) — so on
+    # resumes created from a profile, additions would be invisible. Mirror
+    # them into hardSkills so the candidate can actually see and edit them.
+    if added_skills and tailored.get("hardSkills"):
+        existing_hard = {str(s).lower() for s in tailored["hardSkills"]}
+        tailored = dict(tailored)
+        tailored["hardSkills"] = list(tailored["hardSkills"]) + [
+            s for s in added_skills if str(s).lower() not in existing_hard
+        ]
+
+    if changed:
+        _create_resume_version(db, resume, current_user.id, f"Antes de adaptar à vaga: {job.title}")
+        resume.data = json.dumps(tailored, ensure_ascii=False)
+        db.commit()
+        db.refresh(resume)
+
+    return {
+        "resume": _resume_payload(resume),
+        "changed": changed,
+        "diff": {"summary_changed": summary_changed, "added_skills": added_skills},
+        "job_title": job.title,
+    }
+
+
 # Public share page (B3) — its own router so the URL is /public/resumes/…,
 # outside this file's authenticated /resumes prefix, matching the existing
 # /public/cv-submissions and /public/resume-sso/* convention.

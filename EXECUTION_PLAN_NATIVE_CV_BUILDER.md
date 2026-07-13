@@ -479,15 +479,35 @@ one remaining exit condition, deliberately left for you to execute via
       no browser surface.
 
 ### C2 — In-editor AI actions
-- [ ] "Adaptar a esta vaga": job picker (saved jobs, reuse the
-      CV-e-Documentos selector) → `inject_job_keywords` applied to
-      `Resume.data` as a **new version** (never destructive) with a diff
-      summary shown. Grounding rules already tested — reuse, don't rewrite.
-- [ ] "Avaliar CV" (score) + "Melhorar texto" (rewrite) buttons wired to
-      the existing endpoints; results rendered as actionable panels
-      (score breakdown with next-step hints, not bare numbers).
-- [ ] Verify: browser workflow with flags off (buttons degrade gracefully
-      to "indisponível") — live-LLM verification flagged for deploy.
+- [x] "Adaptar a esta vaga": new `POST /resumes/{id}/adapt` reuses the
+      already-tested `inject_job_keywords` grounding pipeline verbatim
+      (via `serialize_job`, same as candidates.py's tailored export) —
+      pre-adaptation state snapshotted as a version first, response carries
+      a diff (`summary_changed` + `added_skills`) the editor shows in the
+      success toast, and `changed=false` (flag off / LLM down / nothing to
+      add) is a clean no-op with no version created. Editor picker uses the
+      same saved-jobs source+shape as CV-e-Documentos's selector.
+      **Integration gap found and fixed**: inject_job_keywords appends to
+      the flat `skills` list, but the editor's Competências section AND the
+      exporters render `hardSkills` whenever non-empty — added skills would
+      have been invisible on any from-profile resume; the endpoint now
+      mirrors additions into hardSkills.
+- [x] "Avaliar CV" + "Melhorar texto" wired to the existing score/rewrite
+      endpoints in a new "Ferramentas IA" card: score renders a 5-tile
+      breakdown plus a next-step hint derived from the weakest dimension
+      (not bare numbers); rewrite mirrors the returned title/summary into
+      the editor state (title + data.professionalSummary) so the next
+      autosave doesn't silently revert the rewrite — a real footgun, since
+      the endpoint only updates the DB columns, not the data blob the
+      editor round-trips.
+- [x] Verify: pytest 270 passed/3 skipped (3 new adapt tests: flag-off
+      no-op with no version, grounded changes + snapshot + hardSkills
+      mirroring with the LLM mocked at C1's chat_json seam, unknown-job
+      404), tsc clean, vitest 91, editor route compiles clean in browser
+      (auth wall — button-level degradation is exercised by the flag-off
+      test; the score path always succeeds via heuristic fallback).
+      Live-LLM verification (real Ollama round trip) flagged for the
+      deploy pass, per the plan text.
 
 ### C3 — Cover letters reconciled
 - [ ] `/premium/cover-letter` (candidates.py) saves generated letters into

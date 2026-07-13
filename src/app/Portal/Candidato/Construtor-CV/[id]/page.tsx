@@ -12,7 +12,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import ResumePreview from "../preview/ResumePreview";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -61,6 +61,22 @@ type VersionMeta = {
 
 type VersionSnapshot = VersionMeta & { data: ResumeData };
 
+type ScoreResult = {
+  overall_score: number | null;
+  skills_score: number | null;
+  experience_score: number | null;
+  formatting_score: number | null;
+  ats_score: number | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type AdaptResult = {
+  resume: Resume;
+  changed: boolean;
+  diff: { summary_changed: boolean; added_skills: string[] };
+  job_title: string;
+};
+
 const SECTIONS = [
   { key: "dados", label: "Dados Pessoais" },
   { key: "resumo", label: "Resumo" },
@@ -108,6 +124,19 @@ function completenessOf(title: string, data: ResumeData): { percent: number; nex
   return { percent, nextAction };
 }
 
+function percentileHint(score: ScoreResult): string {
+  const dims: [string, number | null][] = [
+    ["Adicione mais competências relevantes para subir a pontuação de competências.", score.skills_score],
+    ["Detalhe mais a experiência profissional (resultados, números) para subir essa pontuação.", score.experience_score],
+    ["Dê um título ao CV e escreva um resumo para melhorar a formatação.", score.formatting_score],
+    ["Use palavras-chave das vagas a que se candidata para melhorar a leitura por ATS.", score.ats_score],
+  ];
+  const scored = dims.filter((d): d is [string, number] => d[1] != null);
+  if (!scored.length) return "Avaliação concluída.";
+  const [hint, value] = scored.reduce((min, cur) => (cur[1] < min[1] ? cur : min));
+  return value >= 85 ? "Excelente — o seu CV está bem otimizado." : `Próximo passo: ${hint}`;
+}
+
 export default function ConstrutorCvEditorPage() {
   const { token, loading: authLoading } = useAuth("candidate", { allowAdmin: false });
   const params = useParams<{ id: string }>();
@@ -130,6 +159,10 @@ export default function ConstrutorCvEditorPage() {
   const [versions, setVersions] = useState<VersionMeta[]>([]);
   const [versionPreview, setVersionPreview] = useState<VersionSnapshot | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState<"score" | "rewrite" | "adapt" | null>(null);
+  const [score, setScore] = useState<ScoreResult | null>(null);
+  const [savedJobs, setSavedJobs] = useState<{ id: string; title: string }[]>([]);
+  const [adaptJobId, setAdaptJobId] = useState("");
 
   const [title, setTitle] = useState("");
   const [data, setData] = useState<ResumeData>({});
@@ -183,7 +216,83 @@ export default function ConstrutorCvEditorPage() {
     authFetch<TemplateOption[]>("/resumes/templates", token)
       .then(setTemplates)
       .catch(() => setTemplates([]));
+    // Saved jobs feed the "Adaptar a esta vaga" picker — same source and
+    // shape as CV-e-Documentos's tailored-export selector.
+    authFetch<{ jobs: { job?: { _id: string; title?: string } }[] }>("/candidates/jobs/saved?page=1&limit=20", token)
+      .then((d) => {
+        const options = (d.jobs || [])
+          .filter((item): item is { job: { _id: string; title?: string } } => Boolean(item.job?._id))
+          .map((item) => ({ id: item.job._id, title: item.job.title || "Vaga" }));
+        setSavedJobs(options);
+      })
+      .catch(() => setSavedJobs([]));
   }, [token]);
+
+  const runScore = async () => {
+    if (!token || aiBusy) return;
+    setAiBusy("score");
+    try {
+      const result = await authFetch<ScoreResult>("/resumes/score", token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_id: resumeId }),
+      });
+      setScore(result);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível avaliar o CV."), "error");
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const runRewrite = async () => {
+    if (!token || aiBusy) return;
+    setAiBusy("rewrite");
+    try {
+      const result = await authFetch<{ title: string; summary: string; notes?: string }>("/resumes/rewrite", token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_id: resumeId, tone: "professional" }),
+      });
+      // The endpoint updates the resume's title/summary columns server-side;
+      // mirror both into the editor state (summary lives in data.professionalSummary
+      // here) so the next autosave doesn't silently revert the rewrite.
+      if (result.title) setTitle(result.title);
+      if (result.summary) setData((prev) => ({ ...prev, professionalSummary: result.summary }));
+      notify(result.notes || "Texto melhorado.", result.summary ? "success" : "info");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível melhorar o texto."), "error");
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const runAdapt = async () => {
+    if (!token || aiBusy || !adaptJobId) return;
+    setAiBusy("adapt");
+    try {
+      const result = await authFetch<AdaptResult>(`/resumes/${resumeId}/adapt`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: adaptJobId }),
+      });
+      if (result.changed) {
+        setData(result.resume.data || {});
+        lastSavedJson.current = JSON.stringify({ title: result.resume.title, data: result.resume.data || {} });
+        const parts = [
+          result.diff.summary_changed ? "resumo atualizado" : null,
+          result.diff.added_skills.length ? `+${result.diff.added_skills.length} competências (${result.diff.added_skills.join(", ")})` : null,
+        ].filter(Boolean);
+        notify(`CV adaptado à vaga "${result.job_title}": ${parts.join("; ")}. A versão anterior está no histórico.`, "success");
+      } else {
+        notify("Sem alterações — a adaptação por IA está indisponível ou a vaga não acrescenta nada ao seu CV.", "info");
+      }
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível adaptar o CV."), "error");
+    } finally {
+      setAiBusy(null);
+    }
+  };
 
   const templateSlug = templates.find((t) => t.id === templateId)?.slug || null;
 
@@ -492,6 +601,76 @@ export default function ConstrutorCvEditorPage() {
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-red-600 transition-all" style={{ width: `${percent}%` }} />
         </div>
+      </div>
+
+      {/* AI tools (C2) — every action degrades gracefully: score falls back
+          to the heuristic, rewrite/adapt report "no change" instead of
+          failing when the LLM flags are off or the model is unreachable. */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+          <SparklesIcon className="h-4 w-4 text-red-600" /> Ferramentas IA
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runScore}
+            disabled={aiBusy !== null}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            {aiBusy === "score" ? "A avaliar…" : "Avaliar CV"}
+          </button>
+          <button
+            type="button"
+            onClick={runRewrite}
+            disabled={aiBusy !== null}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            {aiBusy === "rewrite" ? "A melhorar…" : "Melhorar texto"}
+          </button>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={adaptJobId}
+              onChange={(e) => setAdaptJobId(e.target.value)}
+              disabled={savedJobs.length === 0}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 disabled:opacity-60"
+            >
+              <option value="">
+                {savedJobs.length === 0 ? "Sem vagas guardadas" : "Adaptar a vaga…"}
+              </option>
+              {savedJobs.map((job) => (
+                <option key={job.id} value={job.id}>{job.title}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={runAdapt}
+              disabled={aiBusy !== null || !adaptJobId}
+              className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {aiBusy === "adapt" ? "A adaptar…" : "Adaptar"}
+            </button>
+          </div>
+        </div>
+
+        {score && (
+          <div className="mt-4 grid gap-2 sm:grid-cols-5">
+            {([
+              ["Geral", score.overall_score],
+              ["Competências", score.skills_score],
+              ["Experiência", score.experience_score],
+              ["Formatação", score.formatting_score],
+              ["ATS", score.ats_score],
+            ] as const).map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-center">
+                <p className="text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</p>
+                <p className="text-[11px] text-slate-500">{label}</p>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500 sm:col-span-5">
+              {percentileHint(score)}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[240px,1fr,1fr]">

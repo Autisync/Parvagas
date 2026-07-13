@@ -432,6 +432,94 @@ def test_versions_are_ownership_isolated(db):
     assert exc_info.value.status_code == 404
 
 
+# ------------------------- adapt-to-job (Phase C2) -------------------------- #
+
+def _make_job(db, title="Engenheira de Dados"):
+    from app.models import Job, Company, User as UserModel, UserRole as UR
+    company_user = UserModel(email=f"c-{uuid.uuid4()}@example.com", full_name="Empresa", password_hash="x", role=UR.company)
+    db.add(company_user)
+    db.flush()
+    company = Company(owner_user_id=company_user.id, name="Empresa X")
+    db.add(company)
+    db.flush()
+    job = Job(company_id=company.id, title=title, description="desc", category="TI", location="Luanda")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def test_adapt_with_flag_off_changes_nothing_and_says_so(db):
+    """CV_EXPORT_LLM_INJECTION_ENABLED defaults false → inject_job_keywords
+    returns the profile unchanged → the endpoint must report changed=false,
+    create NO version, and leave Resume.data byte-identical."""
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    job = _make_job(db)
+
+    result = asyncio.run(resumes_module.adapt_resume_to_job(
+        resume_id=created["id"], payload=resumes_module.ResumeAdaptRequest(job_id=job.id), db=db, current_user=user,
+    ))
+    assert result["changed"] is False
+    assert result["diff"]["added_skills"] == []
+    assert result["resume"]["data"] == created["data"]
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+    assert versions == []
+
+
+def test_adapt_applies_grounded_changes_with_version_snapshot(db, monkeypatch):
+    """With the flag on and the LLM (mocked at the C1 chat_json seam)
+    suggesting skills, only job-listed skills are added, the summary is
+    replaced, a pre-adaptation version exists, and additions are mirrored
+    into hardSkills (where the editor/exporters actually render them)."""
+    from app.services import cv_export_service as ces
+
+    monkeypatch.setattr(ces.settings, "CV_EXPORT_LLM_INJECTION_ENABLED", True)
+    monkeypatch.setattr(ces.llm_service, "chat_json", lambda *a, **k: {
+        "professionalSummary": "Resumo adaptado à vaga.",
+        "suggestedSkills": ["Spark", "Habilidade Inventada"],
+    })
+
+    user = _make_candidate(db)
+    data = dict(_EXPORTABLE_DATA)
+    data["skills"] = ["Python"]
+    data["hardSkills"] = ["Python", "SQL"]
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=data), db=db, current_user=user,
+    ))
+    job = _make_job(db)
+    job.required_skills = json.dumps(["Spark", "Python"])
+    db.commit()
+
+    result = asyncio.run(resumes_module.adapt_resume_to_job(
+        resume_id=created["id"], payload=resumes_module.ResumeAdaptRequest(job_id=job.id), db=db, current_user=user,
+    ))
+    assert result["changed"] is True
+    assert result["diff"]["summary_changed"] is True
+    assert result["diff"]["added_skills"] == ["Spark"]  # job-listed only; nothing invented
+    assert result["resume"]["data"]["professionalSummary"] == "Resumo adaptado à vaga."
+    assert "Spark" in result["resume"]["data"]["hardSkills"]
+
+    versions = asyncio.run(_list_versions(resume_id=created["id"], db=db, current_user=user))
+    assert len(versions) == 1 and "adaptar" in (versions[0]["change_summary"] or "").lower()
+    snapshot = asyncio.run(_get_version(resume_id=created["id"], version_id=versions[0]["id"], db=db, current_user=user))
+    assert snapshot["data"]["professionalSummary"] == _EXPORTABLE_DATA["professionalSummary"]
+
+
+def test_adapt_unknown_job_404s(db):
+    user = _make_candidate(db)
+    created = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(resumes_module.adapt_resume_to_job(
+            resume_id=created["id"], payload=resumes_module.ResumeAdaptRequest(job_id=str(uuid.uuid4())), db=db, current_user=user,
+        ))
+    assert exc_info.value.status_code == 404
+
+
 # ------------------------------ route ordering ----------------------------- #
 
 def test_matches_route_registered_before_dynamic_resume_id_route():
