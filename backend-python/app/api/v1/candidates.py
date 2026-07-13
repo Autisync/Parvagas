@@ -17,7 +17,7 @@ from app.api.v1.jobs import PUBLIC_JOB_STATUSES, serialize_job
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.db.session import get_db
-from app.models import CVUpload, CandidateProfile, Company, CoverLetter, Job, JobAlert, JobApplication, JobMatchProposal, SavedJob, User, UserRole
+from app.models import CVUpload, CandidateProfile, Company, CoverLetter, Job, JobAlert, JobApplication, JobMatchProposal, Resume, SavedJob, User, UserRole
 from app.services.candidate_billing_service import candidate_has_premium_access
 from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
@@ -123,6 +123,37 @@ def _latest_cv_document(db: Session, profile: CandidateProfile) -> dict[str, Any
         "createdAt": latest.created_at.isoformat() if latest.created_at else None,
         "type": "cv",
     }
+
+
+def _suggested_resume(db: Session, profile: CandidateProfile, job: Job | None) -> Resume | None:
+    """D2 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): the Construtor de CV resume
+    auto-apply should attach, if the candidate has any. Prefers one whose
+    title/professional title mentions the job's category (Resume has no
+    dedicated category field to match on precisely); falls back to the
+    most recently updated resume. Computed fresh on every call rather than
+    stored on the proposal, so a resume added/edited after the proposal
+    was created is still picked up — a proposal can sit pending for days."""
+    resumes = (
+        db.query(Resume)
+        .filter(Resume.candidate_profile_id == profile.id)
+        .order_by(Resume.updated_at.desc())
+        .all()
+    )
+    if not resumes:
+        return None
+
+    category = (job.category or "").strip().lower() if job else ""
+    if category:
+        for resume in resumes:
+            data = _json_load(resume.data, {})
+            haystack = " ".join(filter(None, [
+                resume.title,
+                data.get("professionalTitle") if isinstance(data, dict) else None,
+            ])).lower()
+            if category in haystack:
+                return resume
+
+    return resumes[0]
 
 
 def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfile) -> dict[str, Any]:
@@ -989,7 +1020,7 @@ async def delete_cv_profile(profile_id: str, current_user: User = Depends(get_cu
 # jobs against opted-in candidates and drops proposals here. Nothing is ever
 # submitted to an employer until the candidate explicitly approves one.
 
-def _serialize_proposal(proposal: JobMatchProposal, job: Job | None) -> dict[str, Any]:
+def _serialize_proposal(proposal: JobMatchProposal, job: Job | None, suggested_resume: Resume | None = None) -> dict[str, Any]:
     return {
         "_id": proposal.id,
         "jobId": proposal.job_id,
@@ -999,6 +1030,8 @@ def _serialize_proposal(proposal: JobMatchProposal, job: Job | None) -> dict[str
         "status": proposal.status,
         "createdAt": proposal.created_at.isoformat() if proposal.created_at else None,
         "reviewedAt": proposal.reviewed_at.isoformat() if proposal.reviewed_at else None,
+        "suggestedResumeId": suggested_resume.id if suggested_resume else None,
+        "suggestedResumeTitle": suggested_resume.title if suggested_resume else None,
     }
 
 
@@ -1019,8 +1052,13 @@ async def list_auto_apply_proposals(
 
     job_ids = [p.job_id for p in proposals]
     jobs_by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(job_ids)).all()} if job_ids else {}
-
-    return {"proposals": [_serialize_proposal(p, jobs_by_id.get(p.job_id)) for p in proposals]}
+    # Per-proposal, since the category-matched pick can differ by job —
+    # cheap (candidates rarely have more than a handful of resumes) and
+    # this list is capped at 50 rows.
+    return {"proposals": [
+        _serialize_proposal(p, jobs_by_id.get(p.job_id), _suggested_resume(db, profile, jobs_by_id.get(p.job_id)))
+        for p in proposals
+    ]}
 
 
 @router.post("/auto-apply/proposals/{proposal_id}/approve")
@@ -1052,7 +1090,11 @@ async def approve_auto_apply_proposal(
         db.commit()
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Esta vaga já não está disponível")
 
-    latest_cv = _latest_cv_document(db, profile)
+    # D2: prefer a native Construtor de CV resume over the CVUpload
+    # fallback — same "propose then approve" trust boundary, just a
+    # better-informed choice of document at the moment of the real submit.
+    suggested_resume = _suggested_resume(db, profile, job)
+    latest_cv = _latest_cv_document(db, profile) if not suggested_resume else None
     application = JobApplication(
         job_id=job.id,
         company_id=job.company_id,
@@ -1061,9 +1103,10 @@ async def approve_auto_apply_proposal(
         applicant_email=current_user.email,
         applicant_phone=profile.phone,
         applicant_location=profile.location,
-        profile_source="auto_apply",
+        profile_source="auto_apply_resume" if suggested_resume else "auto_apply",
         status="submitted",
         saved_cv_document_id=latest_cv["_id"] if latest_cv else None,
+        resume_id=suggested_resume.id if suggested_resume else None,
     )
     db.add(application)
     proposal.status = "approved"

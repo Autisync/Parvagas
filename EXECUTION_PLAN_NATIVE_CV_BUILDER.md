@@ -646,9 +646,31 @@ one remaining exit condition, deliberately left for you to execute via
       clean, vitest 91, browser check of both `/Aplicar/[id]` and
       `/Portal/Empresa/Candidaturas` clean (auth wall on the latter).
 ### D2 — Auto-apply uses documents
-- [ ] `JobMatchProposal` carries a suggested resume (default: the one
-      matching the job's category, else newest); approval creates the
-      application with that `resume_id`.
+- [x] New `_suggested_resume(db, profile, job)` in candidates.py: prefers a
+      resume whose title/professionalTitle mentions the job's category
+      (Resume has no dedicated category field to match on precisely — a
+      substring check on the two free-text fields it does have), else the
+      most recently updated resume. `approve_auto_apply_proposal` attaches
+      it (`resume_id`) instead of the `CVUpload` fallback when one exists,
+      tagging `profile_source="auto_apply_resume"` (vs. plain
+      `"auto_apply"`) so the distinction is visible in the data.
+      **Deviation from the plan's literal "carries a suggested resume"
+      wording**: NOT stored on `JobMatchProposal` as a persisted field —
+      computed fresh on every read/approve instead. A proposal can sit
+      pending for days; persisting the pick risks staleness the moment the
+      candidate edits or adds a resume after the proposal was created.
+      Exposed in `GET /auto-apply/proposals`'s response
+      (`suggestedResumeId`/`suggestedResumeTitle`) too, computed per-job
+      since the category match can differ per proposal — no frontend
+      surfacing added yet (out of scope for this iteration; the existing
+      proposals list UI doesn't render per-proposal document info at all
+      today, so this is additive data the UI can pick up later without a
+      backend change).
+- [x] Verify: pytest 308 passed/3 skipped (4 new: category-match wins over
+      newest, falls back to newest when no title matches, CVUpload
+      fallback preserved when the candidate has zero resumes, list
+      endpoint exposes the suggestion), tsc clean. Backend-only iteration,
+      no frontend surface — vitest/browser unchanged from D1.
 ### D3 — Analytics
 - [ ] Track (existing `track()`/analytics pattern): builder_opened,
       section_completed, cv_exported, template_changed, ai_action_used,

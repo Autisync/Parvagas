@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models import CandidateProfile, Company, CVUpload, Job, JobApplication, JobMatchProposal, User, UserRole
+from app.models import CandidateProfile, Company, CVUpload, Job, JobApplication, JobMatchProposal, Resume, User, UserRole
 from app.api.v1.candidates import (
     approve_auto_apply_proposal,
     dismiss_auto_apply_proposal,
@@ -107,6 +107,64 @@ def test_cannot_approve_another_candidates_proposal(db):
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(approve_auto_apply_proposal(proposal.id, db=db, current_user=other))
     assert exc_info.value.status_code == 404
+
+
+# -------------------- suggested resume attachment (D2) --------------------- #
+
+def test_approve_attaches_category_matching_resume(db, monkeypatch):
+    """D2: when the candidate has a resume whose title mentions the job's
+    category, approval attaches it (resume_id) instead of the CVUpload
+    fallback, and tags profile_source distinctly."""
+    user, profile, job, proposal = _setup(db)
+    monkeypatch.setattr("app.api.v1.candidates.send_application_received_email.delay", lambda *a, **k: None)
+    other_resume = Resume(candidate_profile_id=profile.id, title="CV Genérico", data=json.dumps({}))
+    matching_resume = Resume(candidate_profile_id=profile.id, title="CV Tecnologia", data=json.dumps({}))
+    db.add_all([other_resume, matching_resume])
+    db.commit()
+
+    result = asyncio.run(approve_auto_apply_proposal(proposal.id, db=db, current_user=user))
+    app_row = db.query(JobApplication).filter(JobApplication.id == result["applicationId"]).first()
+    assert app_row.resume_id == matching_resume.id
+    assert app_row.profile_source == "auto_apply_resume"
+    assert app_row.saved_cv_document_id is None  # resume wins over the CVUpload fallback
+
+
+def test_approve_falls_back_to_newest_resume_without_category_match(db, monkeypatch):
+    user, profile, job, proposal = _setup(db)
+    monkeypatch.setattr("app.api.v1.candidates.send_application_received_email.delay", lambda *a, **k: None)
+    older = Resume(candidate_profile_id=profile.id, title="CV Vendas", data=json.dumps({}))
+    db.add(older)
+    db.commit()
+    newer = Resume(candidate_profile_id=profile.id, title="CV Marketing", data=json.dumps({}))
+    db.add(newer)
+    db.commit()
+
+    result = asyncio.run(approve_auto_apply_proposal(proposal.id, db=db, current_user=user))
+    app_row = db.query(JobApplication).filter(JobApplication.id == result["applicationId"]).first()
+    assert app_row.resume_id == newer.id  # newest, since neither title matches "Tecnologia"
+
+
+def test_approve_uses_cvupload_fallback_when_candidate_has_no_resumes(db, monkeypatch):
+    user, profile, job, proposal = _setup(db)
+    monkeypatch.setattr("app.api.v1.candidates.send_application_received_email.delay", lambda *a, **k: None)
+
+    result = asyncio.run(approve_auto_apply_proposal(proposal.id, db=db, current_user=user))
+    app_row = db.query(JobApplication).filter(JobApplication.id == result["applicationId"]).first()
+    assert app_row.resume_id is None
+    assert app_row.saved_cv_document_id is not None
+    assert app_row.profile_source == "auto_apply"
+
+
+def test_list_proposals_exposes_suggested_resume(db):
+    user, profile, job, proposal = _setup(db)
+    resume = Resume(candidate_profile_id=profile.id, title="CV Tecnologia", data=json.dumps({}))
+    db.add(resume)
+    db.commit()
+
+    result = asyncio.run(list_auto_apply_proposals(status_filter="pending", db=db, current_user=user))
+    listed = next(p for p in result["proposals"] if p["_id"] == proposal.id)
+    assert listed["suggestedResumeId"] == resume.id
+    assert listed["suggestedResumeTitle"] == "CV Tecnologia"
 
 
 def test_list_defaults_to_pending_only(db):
