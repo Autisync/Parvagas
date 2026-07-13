@@ -10,7 +10,8 @@ import FormFieldError from "@/app/components/errors/FormFieldError";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function RestorePass() {
+export default function RestorePass(props) {
+  const onSent = props?.onSent;
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [step, setStep] = useState("idle"); // "idle" | "loading" | "sent"
@@ -69,6 +70,7 @@ export default function RestorePass() {
         body: JSON.stringify({ email: trimmed }),
       });
       setStep("sent");
+      onSent?.();
     } catch {
       setStep("idle");
       setError("Não foi possível enviar o pedido. Tente novamente.");

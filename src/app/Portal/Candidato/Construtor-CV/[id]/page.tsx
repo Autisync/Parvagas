@@ -13,6 +13,7 @@ import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/Ex
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import ResumePreview from "../preview/ResumePreview";
 import RestorePass from "@/app/components/RestorePass";
+import { track } from "@/lib/analytics";
 import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
@@ -174,6 +175,7 @@ export default function ConstrutorCvEditorPage() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydrated = useRef(false);
   const lastSavedJson = useRef("");
+  const completedSections = useRef<Set<SectionKey>>(new Set());
 
   // Experience/education modal state (mirrors the pattern already used in
   // CV-e-Documentos for the exact same ExperienceItem/EducationItem shapes).
@@ -200,6 +202,8 @@ export default function ConstrutorCvEditorPage() {
       setShareSlug(fetched.share_slug || null);
       lastSavedJson.current = JSON.stringify({ title: fetched.title, data: fetched.data || {} });
       hydrated.current = true;
+      completedSections.current = new Set(SECTIONS.filter((s) => sectionHasContent(fetched.data || {}, s.key)).map((s) => s.key));
+      track("builder_opened");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível carregar este CV."));
     } finally {
@@ -210,6 +214,18 @@ export default function ConstrutorCvEditorPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // D3: fire section_completed exactly once per section, the moment it
+  // transitions from empty/partial to done — not on every keystroke.
+  useEffect(() => {
+    if (!hydrated.current) return;
+    for (const section of SECTIONS) {
+      if (sectionHasContent(data, section.key) && !completedSections.current.has(section.key)) {
+        completedSections.current.add(section.key);
+        track("section_completed", { section: section.key });
+      }
+    }
+  }, [data]);
 
   // Template list is public metadata — load once, failure is non-fatal
   // (picker simply doesn't render and the default template applies).
@@ -240,6 +256,7 @@ export default function ConstrutorCvEditorPage() {
         body: JSON.stringify({ resume_id: resumeId }),
       });
       setScore(result);
+      track("ai_action_used", { action: "score" });
     } catch (err: unknown) {
       notify(getErrorMessage(err, "Não foi possível avaliar o CV."), "error");
     } finally {
@@ -261,6 +278,7 @@ export default function ConstrutorCvEditorPage() {
       // here) so the next autosave doesn't silently revert the rewrite.
       if (result.title) setTitle(result.title);
       if (result.summary) setData((prev) => ({ ...prev, professionalSummary: result.summary }));
+      track("ai_action_used", { action: "rewrite" });
       notify(result.notes || "Texto melhorado.", result.summary ? "success" : "info");
     } catch (err: unknown) {
       notify(getErrorMessage(err, "Não foi possível melhorar o texto."), "error");
@@ -278,6 +296,7 @@ export default function ConstrutorCvEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_id: adaptJobId }),
       });
+      track("ai_action_used", { action: "adapt" });
       if (result.changed) {
         setData(result.resume.data || {});
         lastSavedJson.current = JSON.stringify({ title: result.resume.title, data: result.resume.data || {} });
@@ -372,6 +391,7 @@ export default function ConstrutorCvEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ template_id: template.id }),
       });
+      track("template_changed", { template: template.slug });
     } catch (err: unknown) {
       setTemplateId(previous);
       setError(getErrorMessage(err, "Não foi possível mudar o modelo."));
@@ -422,6 +442,7 @@ export default function ConstrutorCvEditorPage() {
       anchor.click();
       document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
+      track("cv_exported", { format });
       notify(`CV exportado em ${format.toUpperCase()}.`, "success");
       if (user?.isGuestAccount) setShowClaimPrompt(true);
     } catch (err: unknown) {
@@ -595,7 +616,7 @@ export default function ConstrutorCvEditorPage() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <RestorePass />
+            <RestorePass onSent={() => track("guest_converted")} />
             <button
               type="button"
               onClick={() => setShowClaimPrompt(false)}

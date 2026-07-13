@@ -21,7 +21,14 @@ export type FunnelEvent =
   | "alert_created"
   | "register_success"
   | "company_job_posted"
-  | "subscribe_start";
+  | "subscribe_start"
+  // Native CV builder funnel (D3, EXECUTION_PLAN_NATIVE_CV_BUILDER.md)
+  | "builder_opened"
+  | "section_completed"
+  | "cv_exported"
+  | "template_changed"
+  | "ai_action_used"
+  | "guest_converted";
 
 export function track(event: FunnelEvent, props?: Props): void {
   if (typeof window === "undefined") return;

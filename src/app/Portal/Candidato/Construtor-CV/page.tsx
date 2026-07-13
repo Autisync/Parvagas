@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
 import { useAppNotifier } from "@/app/components/AppNotifier";
+import { track } from "@/lib/analytics";
 import {
   PlusIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon,
 } from "@heroicons/react/24/outline";
@@ -156,6 +157,7 @@ export default function ConstrutorCvListPage() {
       anchor.click();
       document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
+      track("cv_exported", { format });
       notify(`CV exportado em ${format.toUpperCase()}.`, "success");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar o CV."));

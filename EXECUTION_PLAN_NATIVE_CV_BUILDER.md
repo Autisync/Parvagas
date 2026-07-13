@@ -672,9 +672,38 @@ one remaining exit condition, deliberately left for you to execute via
       endpoint exposes the suggestion), tsc clean. Backend-only iteration,
       no frontend surface — vitest/browser unchanged from D1.
 ### D3 — Analytics
-- [ ] Track (existing `track()`/analytics pattern): builder_opened,
-      section_completed, cv_exported, template_changed, ai_action_used,
-      guest_converted. These are the funnel KPIs from the feasibility doc.
+- [x] All 6 funnel events added to `FunnelEvent` and wired via the existing
+      `track()` no-op-safe wrapper:
+      - `builder_opened` — on successful resume load in the editor.
+      - `section_completed` — fires once per section, the moment it
+        transitions from empty/partial to done (a `Set` ref seeded from the
+        loaded data so already-complete sections at open-time don't
+        spuriously fire, diffed on every `data` change — not on every
+        keystroke, only on the false→true edge).
+      - `cv_exported` — both the list page's and the editor's export
+        handlers, with `{format}`.
+      - `template_changed` — on a successful template PATCH, with
+        `{template: slug}`.
+      - `ai_action_used` — score/rewrite/adapt, with `{action}`.
+      - `guest_converted` — fires when a guest successfully requests the
+        claim/reset email (`RestorePass`'s "sent" step), not when they
+        actually complete the password reset on a later page/session.
+        **Deviation, documented**: true end-to-end conversion (password
+        actually set) isn't attributable from the client with a lightweight
+        Plausible-style tracker without deeper cross-page session linking;
+        "requested claim" is the actionable, measurable proxy and the
+        meaningful funnel step for growth purposes. Implemented via a new
+        optional `onSent` callback prop on the shared `RestorePass.tsx`
+        (used unmodified in its other two call sites — Login page, Admin
+        Login — since the prop is optional and unused there).
+- [x] Verify: tsc clean (one real issue caught and fixed: destructuring
+      `RestorePass`'s new prop with a `= {}` default made TypeScript infer
+      an empty `{}` parameter type via `allowJs`, rejecting the `onSent`
+      prop at every call site — switched to `props?.onSent` instead), vitest
+      91 (unaffected — analytics wrapper already covered), pytest 308/3
+      skipped (unaffected, backend untouched), browser check of the editor
+      route clean. **This closes Phase D (D1-D3) — the entire execution
+      plan (Phases A→D) is now complete.**
 
 ---
 
