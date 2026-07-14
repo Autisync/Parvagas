@@ -50,6 +50,11 @@ x-backend-env: &backend-env
   FRONTEND_URL: https://dev.parvagas.pt
   BACKEND_URL: https://dev-api.parvagas.pt
   CORS_ORIGIN: "https://dev.parvagas.pt"
+  # Same OAuth client as production — must match the frontend's
+  # NEXT_PUBLIC_GOOGLE_CLIENT_ID (Google validates the ID token's `aud`
+  # against this). Not a secret: Google client IDs ship in client-side JS
+  # by design, this one is already public in prod's bundle.
+  GOOGLE_CLIENT_ID: 41137142403-don99foesnrfv8q6347ck9idnbau67j3.apps.googleusercontent.com
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/1
   CELERY_RESULT_BACKEND: redis://redis:6379/2
