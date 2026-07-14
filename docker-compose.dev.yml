@@ -11,8 +11,8 @@
 #   docker compose -f docker-compose.dev.yml up --build
 #
 # Access (via Traefik on the shared 'proxy' network):
-#   Backend API           → https://api.dev.parvagas.pt
-#   MinIO S3              → https://storage.dev.parvagas.pt
+#   Backend API           → https://dev-api.parvagas.pt
+#   MinIO S3              → https://dev-storage.parvagas.pt
 #   MinIO console         → http://localhost:9001  (internal only)
 #   Mailhog (email UI)    → http://localhost:8025  (internal only)
 #
@@ -20,10 +20,11 @@
 #   - Local Next.js dev:  npm run dev → http://localhost:3000
 #   - Vercel (deployed):  https://dev-parvagas.vercel.app (set in FRONTEND_URL)
 #
-# DNS: point *.dev.parvagas.pt at your server (wildcard A record or individual
-# records for api, storage subdomains under dev.parvagas.pt)
+# DNS: point dev-api.parvagas.pt and dev-storage.parvagas.pt (A records, proxied
+# through Cloudflare) at your server — same pattern as api.parvagas.pt/prod.
+# Note the hyphen: dev-api.parvagas.pt, NOT api.dev.parvagas.pt.
 # For pure-local testing add to /etc/hosts:
-#   127.0.0.1 api.dev.parvagas.pt storage.dev.parvagas.pt
+#   127.0.0.1 dev-api.parvagas.pt dev-storage.parvagas.pt
 #
 # Vercel Frontend Configuration:
 # If using Vercel for the frontend:
@@ -47,14 +48,14 @@ x-backend-env: &backend-env
   MODERATOR_SIGNUP_KEY: dev-mod-key
   SUPER_ADMIN_EMAIL: admin@parvagas.pt
   FRONTEND_URL: https://dev.parvagas.pt
-  BACKEND_URL: https://api.dev.parvagas.pt
+  BACKEND_URL: https://dev-api.parvagas.pt
   CORS_ORIGIN: "https://dev.parvagas.pt"
   REDIS_URL: redis://redis:6379/0
   CELERY_BROKER_URL: redis://redis:6379/1
   CELERY_RESULT_BACKEND: redis://redis:6379/2
   # Storage — MinIO (S3-compatible, self-hosted dev)
   STORAGE_PROVIDER: server
-  S3_ENDPOINT_URL: https://storage.dev.parvagas.pt
+  S3_ENDPOINT_URL: https://dev-storage.parvagas.pt
   S3_BUCKET: cvs
   S3_ACCESS_KEY: minioadmin
   S3_SECRET_KEY: minioadmin
@@ -143,7 +144,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-      - traefik.http.routers.dev-parvagas-storage.rule=Host(`storage.dev.parvagas.pt`)
+      - traefik.http.routers.dev-parvagas-storage.rule=Host(`dev-storage.parvagas.pt`)
       - traefik.http.routers.dev-parvagas-storage.entrypoints=websecure
       - traefik.http.routers.dev-parvagas-storage.tls=true
       - traefik.http.routers.dev-parvagas-storage.tls.certresolver=letsencrypt
@@ -201,7 +202,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy
-      - traefik.http.routers.dev-parvagas-backend.rule=Host(`api.dev.parvagas.pt`)
+      - traefik.http.routers.dev-parvagas-backend.rule=Host(`dev-api.parvagas.pt`)
       - traefik.http.routers.dev-parvagas-backend.entrypoints=websecure
       - traefik.http.routers.dev-parvagas-backend.tls=true
       - traefik.http.routers.dev-parvagas-backend.tls.certresolver=letsencrypt
