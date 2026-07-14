@@ -22,6 +22,7 @@ has the most decorator+body-param endpoints of any of them.
 
 import json
 import secrets
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
@@ -36,6 +37,7 @@ from app.core.observability import limiter
 from app.db.session import get_db
 from app.models import (
     CandidateProfile,
+    CVUpload,
     Resume,
     ResumeTemplate,
     ResumeVersion,
@@ -51,6 +53,7 @@ from app.schemas import (
     CoverLetterUpdateRequest,
     JobMatchResponse,
     MessageResponse,
+    ResumeApplyToProfileResponse,
     ResumeCreateRequest,
     ResumeResponse,
     ResumeRewriteRequest,
@@ -64,6 +67,7 @@ from app.services.auth_service import AuthService
 from app.services.resume_ai_service import ResumeAIService
 from app.services.cv_export_service import letter_to_pdf, to_docx, to_json_resume, to_pdf
 from app.services import resume_render_service
+from app.services.storage_service import StorageService
 from app.services.candidate_billing_service import (
     assert_cover_letters_allowed,
     assert_resume_quota,
@@ -346,6 +350,114 @@ async def duplicate_resume(
     db.commit()
     db.refresh(copy)
     return _resume_payload(copy)
+
+
+# Resume.data field -> CandidateProfile column, for apply_resume_to_profile
+# below. Deliberately excludes fullName/email — those live on User, and an
+# email change in particular must never happen through a CV sync (it's the
+# login identifier; changing it needs a dedicated verified flow, not a
+# side-effect of "Aplicar ao perfil"). "skills" (the flat combined list) is
+# also excluded: the builder UI has no field for it (only hardSkills/
+# techniques/tools), so resume.data never actually carries it — mapping it
+# would only ever silently do nothing, not worth the confusion of listing it.
+_RESUME_TO_PROFILE_FIELDS: list[tuple[str, str]] = [
+    ("phone", "phone"),
+    ("location", "location"),
+    ("postcode", "postcode"),
+    ("linkedinUrl", "linkedin_url"),
+    ("portfolioUrl", "portfolio_url"),
+    ("githubUrl", "github_url"),
+    ("professionalTitle", "job_title"),
+    ("professionalSummary", "professional_summary"),
+]
+_RESUME_TO_PROFILE_JSON_FIELDS: list[tuple[str, str]] = [
+    ("hardSkills", "hard_skills"),
+    ("techniques", "techniques"),
+    ("tools", "tools"),
+    ("languages", "languages"),
+    ("certifications", "certifications"),
+    ("workExperience", "work_experience"),
+    ("education", "education"),
+]
+
+
+@router.post("/{resume_id}/apply-to-profile", response_model=ResumeApplyToProfileResponse)
+@limiter.limit("20/hour")
+async def apply_resume_to_profile(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+):
+    """"Aplicar ao perfil" — the inverse of "A partir do meu perfil":
+    syncs this resume's content back onto the candidate's profile, so a CV
+    built/edited in the Construtor doesn't require a manual download +
+    re-upload round-trip to update the profile recruiters/matching see.
+
+    Never blanks a profile field: a field is only overwritten when the
+    resume actually has non-empty content for it. Also renders the resume
+    as a PDF and attaches it as the candidate's latest CV document (the
+    same CVUpload record CV-e-Documentos/Meu-Perfil already read), via the
+    same StorageService path /cv/upload uses — not a raw filesystem path
+    (file_path is a "server:<key>" ref)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    data = _load_json_field(resume.data) or {}
+    updated_fields: list[str] = []
+
+    for data_key, profile_attr in _RESUME_TO_PROFILE_FIELDS:
+        value = data.get(data_key)
+        if isinstance(value, str) and value.strip():
+            if getattr(profile, profile_attr) != value:
+                setattr(profile, profile_attr, value)
+                updated_fields.append(profile_attr)
+
+    for data_key, profile_attr in _RESUME_TO_PROFILE_JSON_FIELDS:
+        value = data.get(data_key)
+        if isinstance(value, list) and value:
+            encoded = json.dumps(value, ensure_ascii=False)
+            if getattr(profile, profile_attr) != encoded:
+                setattr(profile, profile_attr, encoded)
+                updated_fields.append(profile_attr)
+
+    db.commit()
+
+    cv_document_id = None
+    try:
+        pdf_bytes = None
+        if settings.RESUME_WEASYPRINT_ENABLED:
+            try:
+                pdf_bytes = resume_render_service.render_pdf(data, _template_slug(db, resume.template_id))
+            except Exception as exc:
+                logger.error(f"WeasyPrint render failed during apply-to-profile, falling back to reportlab: {exc}")
+        if pdf_bytes is None:
+            pdf_bytes = to_pdf(data)
+
+        safe_name = (resume.title or "cv").strip().replace(" ", "_").lower() or "cv"
+        file_name = f"{uuid.uuid4()}_{safe_name}.pdf"
+        file_path = StorageService.save_file(pdf_bytes, file_name)
+        cv_upload = CVUpload(
+            candidate_id=profile.id,
+            file_name=f"{resume.title or 'CV'}.pdf",
+            file_path=file_path,
+            file_size=len(pdf_bytes),
+            mime_type="application/pdf",
+            parse_status="skipped",  # source is already structured Resume.data — no parsing needed
+        )
+        db.add(cv_upload)
+        db.commit()
+        db.refresh(cv_upload)
+        cv_document_id = cv_upload.id
+    except Exception as exc:
+        # Profile fields already synced and committed above — a PDF/storage
+        # failure here shouldn't roll that back or fail the whole request.
+        logger.error(f"apply-to-profile: failed to attach rendered PDF as CV document: {exc}")
+
+    return ResumeApplyToProfileResponse(updated_fields=updated_fields, cv_document_id=cv_document_id)
 
 
 @router.delete("/{resume_id}", response_model=MessageResponse)

@@ -15,7 +15,7 @@ import ResumePreview from "../preview/ResumePreview";
 import RestorePass from "@/app/components/RestorePass";
 import { track } from "@/lib/analytics";
 import { SKILL_SUGGESTIONS, LANGUAGE_SUGGESTIONS, CERT_SUGGESTIONS } from "@/lib/suggestionCatalogs";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, UserIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -502,6 +502,36 @@ export default function ConstrutorCvEditorPage() {
     }
   };
 
+  const [applyingToProfile, setApplyingToProfile] = useState(false);
+  const applyToProfile = async () => {
+    if (!token) return;
+    if (!window.confirm("Isto vai atualizar os campos do seu perfil (contactos, resumo, competências, experiência) com o conteúdo deste CV. Campos que este CV não preenche mantêm-se como estão. Continuar?")) return;
+    setApplyingToProfile(true);
+    try {
+      const result = await authFetch<{ updated_fields: string[]; cv_document_id: string | null }>(
+        `/resumes/${resumeId}/apply-to-profile`, token, { method: "POST" },
+      );
+      if (result.updated_fields.length === 0) {
+        notify("O perfil já estava atualizado — nada para sincronizar.", "info");
+      } else {
+        const labels: Record<string, string> = {
+          phone: "telefone", location: "localização", postcode: "código postal",
+          linkedin_url: "LinkedIn", portfolio_url: "portefólio", github_url: "GitHub",
+          job_title: "título profissional", professional_summary: "resumo",
+          hard_skills: "competências técnicas", techniques: "técnicas/metodologias",
+          tools: "ferramentas", languages: "idiomas", certifications: "certificações",
+          work_experience: "experiência profissional", education: "educação",
+        };
+        const readable = result.updated_fields.map((f) => labels[f] || f).join(", ");
+        notify(`Perfil atualizado: ${readable}.`, "success");
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível aplicar o CV ao perfil."));
+    } finally {
+      setApplyingToProfile(false);
+    }
+  };
+
   // ---- Experience handlers ----
   const experienceList = data.workExperience || [];
   const openAddExperience = () => {
@@ -639,6 +669,15 @@ export default function ConstrutorCvEditorPage() {
               <LinkIcon className="h-3.5 w-3.5" /> Copiar ligação
             </button>
           )}
+          <button
+            type="button"
+            onClick={applyToProfile}
+            disabled={applyingToProfile}
+            title="Atualizar o seu perfil com o conteúdo deste CV"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            <UserIcon className="h-3.5 w-3.5" /> {applyingToProfile ? "…" : "Aplicar ao perfil"}
+          </button>
           <div className="flex gap-1.5">
             {(["pdf", "docx", "json"] as const).map((fmt) => (
               <button

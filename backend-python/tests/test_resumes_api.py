@@ -177,6 +177,104 @@ def test_duplicate_missing_resume_404s(db):
     assert exc_info.value.status_code == 404
 
 
+# --------------------------- apply-to-profile ------------------------------ #
+
+_apply_resume_to_profile = resumes_module.apply_resume_to_profile
+
+
+def test_apply_to_profile_updates_only_non_empty_fields(db, monkeypatch, tmp_path):
+    monkeypatch.setattr(resumes_module.settings, "UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", False)
+
+    user = _make_candidate(db)
+    profile = _make_profile(db, user, phone="900000000", location="Luanda")
+    resume_data = {
+        "phone": "911111111",  # differs from profile — should update
+        "location": "Luanda",  # same as profile — not counted as updated
+        "professionalSummary": "Novo resumo vindo do CV.",
+        "hardSkills": ["Python", "SQL"],
+        # linkedinUrl / githubUrl / education intentionally absent — must
+        # never blank out whatever the profile already had.
+    }
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data=resume_data), db=db, current_user=user,
+    ))
+
+    result = asyncio.run(_apply_resume_to_profile(resume_id=resume["id"], db=db, current_user=user))
+
+    assert "phone" in result.updated_fields
+    assert "location" not in result.updated_fields  # unchanged value, not reported as updated
+    assert "professional_summary" in result.updated_fields
+    assert "hard_skills" in result.updated_fields
+    assert "linkedin_url" not in result.updated_fields
+    assert result.cv_document_id is not None  # PDF attached as a CV document
+
+    db.refresh(profile)
+    assert profile.phone == "911111111"
+    assert profile.professional_summary == "Novo resumo vindo do CV."
+    assert json.loads(profile.hard_skills) == ["Python", "SQL"]
+
+
+def test_apply_to_profile_never_blanks_existing_data(db, monkeypatch, tmp_path):
+    monkeypatch.setattr(resumes_module.settings, "UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", False)
+
+    user = _make_candidate(db)
+    profile = _make_profile(db, user, phone="900000000", professional_summary="Resumo original.")
+    # A resume with no content for these fields at all (e.g. "Começar do
+    # zero" never touched).
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV vazio", data={}), db=db, current_user=user,
+    ))
+
+    result = asyncio.run(_apply_resume_to_profile(resume_id=resume["id"], db=db, current_user=user))
+
+    assert result.updated_fields == []
+    db.refresh(profile)
+    assert profile.phone == "900000000"
+    assert profile.professional_summary == "Resumo original."
+
+
+def test_apply_to_profile_missing_resume_404s(db):
+    user = _make_candidate(db)
+    _make_profile(db, user)
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_apply_resume_to_profile(resume_id=str(uuid.uuid4()), db=db, current_user=user))
+    assert exc_info.value.status_code == 404
+
+
+def test_apply_to_profile_survives_storage_failure(db, monkeypatch):
+    # UPLOAD_DIR pointed at an unwritable path — the profile sync must
+    # still succeed even though the PDF-attach step fails.
+    monkeypatch.setattr(resumes_module.settings, "UPLOAD_DIR", "/nonexistent/no-permission")
+    monkeypatch.setattr(resumes_module.settings, "RESUME_WEASYPRINT_ENABLED", False)
+
+    user = _make_candidate(db)
+    profile = _make_profile(db, user, phone="900000000")
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"phone": "922222222"}), db=db, current_user=user,
+    ))
+
+    result = asyncio.run(_apply_resume_to_profile(resume_id=resume["id"], db=db, current_user=user))
+    assert "phone" in result.updated_fields
+    assert result.cv_document_id is None
+    db.refresh(profile)
+    assert profile.phone == "922222222"
+
+
+def test_apply_to_profile_ownership_isolation(db):
+    owner = _make_candidate(db, email="owner@example.com")
+    other = _make_candidate(db, email="other@example.com")
+    _make_profile(db, owner)
+    _make_profile(db, other)
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={"phone": "900000000"}), db=db, current_user=owner,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_apply_resume_to_profile(resume_id=resume["id"], db=db, current_user=other))
+    assert exc_info.value.status_code == 404
+
+
 # ---------------------------------- delete --------------------------------- #
 
 def test_delete_resume_also_removes_versions(db):

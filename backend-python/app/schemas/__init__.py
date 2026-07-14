@@ -252,6 +252,13 @@ class ResumeScoreResponse(BaseModel):
     explanations: Optional[List[Dict[str, Any]]] = None
 
 
+class ResumeApplyToProfileResponse(BaseModel):
+    """Result of syncing a built resume's content back onto the candidate's
+    profile ("Aplicar ao perfil") — the inverse of "A partir do meu perfil"."""
+    updated_fields: List[str]
+    cv_document_id: Optional[str] = None
+
+
 class ResumeRewriteResponse(BaseModel):
     id: str
     candidate_profile_id: str

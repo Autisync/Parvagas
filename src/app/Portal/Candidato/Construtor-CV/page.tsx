@@ -9,7 +9,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { track } from "@/lib/analytics";
 import {
   PlusIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon,
-  LinkIcon, ClipboardDocumentIcon, ArrowTopRightOnSquareIcon,
+  LinkIcon, ClipboardDocumentIcon, ArrowTopRightOnSquareIcon, UserIcon,
 } from "@heroicons/react/24/outline";
 
 type ResumeSummary = {
@@ -150,6 +150,33 @@ export default function ConstrutorCvListPage() {
       notify("Ligação copiada.", "success");
     } catch {
       notify("Não foi possível copiar a ligação.", "error");
+    }
+  };
+
+  const applyToProfile = async (id: string) => {
+    if (!token) return;
+    if (!window.confirm("Isto vai atualizar os campos do seu perfil (contactos, resumo, competências, experiência) com o conteúdo deste CV. Campos que este CV não preenche mantêm-se como estão. Continuar?")) return;
+    setError("");
+    try {
+      const result = await authFetch<{ updated_fields: string[]; cv_document_id: string | null }>(
+        `/resumes/${id}/apply-to-profile`, token, { method: "POST" },
+      );
+      if (result.updated_fields.length === 0) {
+        notify("O perfil já estava atualizado — nada para sincronizar.", "info");
+      } else {
+        const labels: Record<string, string> = {
+          phone: "telefone", location: "localização", postcode: "código postal",
+          linkedin_url: "LinkedIn", portfolio_url: "portefólio", github_url: "GitHub",
+          job_title: "título profissional", professional_summary: "resumo",
+          hard_skills: "competências técnicas", techniques: "técnicas/metodologias",
+          tools: "ferramentas", languages: "idiomas", certifications: "certificações",
+          work_experience: "experiência profissional", education: "educação",
+        };
+        const readable = result.updated_fields.map((f) => labels[f] || f).join(", ");
+        notify(`Perfil atualizado: ${readable}.`, "success");
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível aplicar o CV ao perfil."));
     }
   };
 
@@ -416,6 +443,14 @@ export default function ConstrutorCvListPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     <DocumentDuplicateIcon className="h-3.5 w-3.5" /> Duplicar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyToProfile(resume.id)}
+                    title="Atualizar o seu perfil com o conteúdo deste CV"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <UserIcon className="h-3.5 w-3.5" /> Aplicar ao perfil
                   </button>
                   {(["pdf", "docx", "json"] as const).map((fmt) => (
                     <button
