@@ -250,7 +250,11 @@ services:
     volumes:
       - dev_ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:11434/api/tags || exit 1"]
+      # curl/wget aren't in this image (well-known ollama/ollama gotcha —
+      # "executable file not found" fails the check even though the server
+      # itself is fine). `ollama list` uses the CLI binary that's always
+      # present (it's the container's own entrypoint) to hit the local API.
+      test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
