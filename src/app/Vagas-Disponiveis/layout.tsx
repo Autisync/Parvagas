@@ -11,9 +11,12 @@ export const metadata: Metadata = {
     url: "/Vagas-Disponiveis",
     type: "website",
     siteName: "Parvagas",
+    // Explicit ref to the branded generated OG image (nested routes with their
+    // own openGraph don't inherit the root file-based one).
+    images: ["/opengraph-image"],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Vagas Disponíveis em Angola | Parvagas",
     description: "Explore centenas de vagas de emprego em Angola.",
   },

@@ -75,8 +75,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       url: `/Vagas-Disponiveis/${id}`,
       type: "website",
       siteName: "Parvagas",
+      // Explicit ref to the branded generated OG image (nested routes with
+      // their own openGraph don't inherit the root file-based one).
+      images: ["/opengraph-image"],
     },
-    twitter: { card: "summary", title: `${title} | Parvagas`, description },
+    twitter: { card: "summary_large_image", title: `${title} | Parvagas`, description },
   };
 }
 
@@ -109,6 +112,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     title: job.title,
     description: job.description || job.title,
     datePosted: job.createdAt,
+    ...(job.expiresAt ? { validThrough: job.expiresAt } : {}),
     employmentType: job.contractType || job.jobType || undefined,
     hiringOrganization: {
       "@type": "Organization",
