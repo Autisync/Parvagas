@@ -16,7 +16,7 @@ import json
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -281,7 +281,7 @@ async def list_cover_letters(
 @router.post("/", response_model=ResumeResponse)
 @limiter.limit("30/hour")
 async def create_resume(
-    payload: ResumeCreateRequest,
+    payload: ResumeCreateRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -509,7 +509,7 @@ class ResumeShareRequest(BaseModel):
 @limiter.limit("30/hour")
 async def share_resume(
     resume_id: str,
-    payload: ResumeShareRequest,
+    payload: ResumeShareRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -644,7 +644,7 @@ class ResumeAdaptRequest(BaseModel):
 @limiter.limit("30/hour")
 async def adapt_resume_to_job(
     resume_id: str,
-    payload: ResumeAdaptRequest,
+    payload: ResumeAdaptRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -730,7 +730,7 @@ async def get_public_resume(
 @router.post("/score", response_model=ResumeScoreResponse)
 @limiter.limit("20/hour")
 async def score_resume(
-    payload: dict[str, str],
+    payload: dict[str, str] = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -764,7 +764,7 @@ async def score_resume(
 @router.post("/rewrite", response_model=ResumeRewriteResponse)
 @limiter.limit("15/hour")
 async def rewrite_resume(
-    payload: ResumeRewriteRequest,
+    payload: ResumeRewriteRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,
@@ -807,7 +807,7 @@ async def rewrite_resume(
 @router.post("/cover-letters", response_model=CoverLetterResponse)
 @limiter.limit("30/hour")
 async def create_cover_letter(
-    payload: CoverLetterCreateRequest,
+    payload: CoverLetterCreateRequest = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     request: Request = None,

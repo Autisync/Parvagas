@@ -308,10 +308,24 @@ export async function apiFetch<T = unknown>(
       typeof (responseBody.error as { message?: unknown }).message === "string"
         ? String((responseBody.error as { message?: string }).message)
         : "";
+    // FastAPI's own request-validation errors (422) send `detail` as an
+    // array of {loc, msg, type}, not a string — without this, those errors
+    // silently fall through to the generic "Dados inválidos" message.
+    const detailFromValidationErrors = Array.isArray(responseBody.detail)
+      ? responseBody.detail
+          .map((item) =>
+            item && typeof item === "object" && typeof (item as { msg?: unknown }).msg === "string"
+              ? String((item as { msg: string }).msg)
+              : "",
+          )
+          .filter(Boolean)
+          .join("; ")
+      : "";
     const messageFromBody =
       (typeof responseBody.error === "string" ? String(responseBody.error) : "") ||
       nestedErrorMessage ||
       (typeof responseBody.detail === "string" ? String(responseBody.detail) : "") ||
+      detailFromValidationErrors ||
       (typeof responseBody.message === "string" ? String(responseBody.message) : "");
     const message = normalizeErrorMessage(messageFromBody) || fallbackStatusMessage(res.status);
 
