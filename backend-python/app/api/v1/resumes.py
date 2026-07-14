@@ -8,9 +8,17 @@ languages, certifications, workExperience, education) — see
 _profile_to_resume_data() below. This means export needs zero translation
 layer: `json.loads(resume.data)` is already what to_pdf/to_docx/
 to_json_resume expect.
-"""
 
-from __future__ import annotations
+Deliberately does NOT use `from __future__ import annotations` — every
+@limiter.limit(...)-decorated endpoint here takes a Pydantic body param, and
+on this repo's pinned fastapi==0.104.1, deferred (string/ForwardRef) type
+hints combined with slowapi's decorator wrapping breaks FastAPI/Pydantic's
+ability to resolve the body model at request time (either silently
+misreading it as a missing query param, or crashing with
+`PydanticUserError: ... is not fully defined`). Every other file in this
+API package has the future import; this one must not, precisely because it
+has the most decorator+body-param endpoints of any of them.
+"""
 
 import json
 import secrets
