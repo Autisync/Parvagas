@@ -182,6 +182,7 @@ services:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
+      target: api-service
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
@@ -207,7 +208,6 @@ services:
       - traefik.http.routers.dev-parvagas-backend.service=dev-parvagas-backend-svc
       - traefik.http.services.dev-parvagas-backend-svc.loadbalancer.server.port=8000
     volumes:
-      - ./backend-python:/app          # live-reload source
       - dev_uploads:/app/uploads
       - dev_logs:/app/logs
     healthcheck:
@@ -231,7 +231,6 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend-python:/app
       - dev_uploads:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1"]
