@@ -468,7 +468,11 @@ async def export_resume(
                     # Ship-dark guarantee: a WeasyPrint-specific failure (missing
                     # pango at runtime, a malformed template) never 500s the
                     # export — it silently falls through to the Phase A path.
-                    logger.warning(f"WeasyPrint render failed, falling back to reportlab: {exc}")
+                    # error (not warning): the fallback renderer is ATS-only —
+                    # a template-selecting user's download silently stops
+                    # matching their share page. That's a regression worth
+                    # paging on, not a quiet log line.
+                    logger.error(f"WeasyPrint render failed, falling back to ATS-only reportlab renderer: {exc}")
             if data is None:
                 data = to_pdf(resume_data)
             return Response(

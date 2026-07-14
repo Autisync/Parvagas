@@ -16,6 +16,7 @@ import AddItemModal from "@/app/components/profile/AddItemModal";
 import ExperienceCard, { type ExperienceItem } from "@/app/components/profile/ExperienceCard";
 import EducationCard, { type EducationItem } from "@/app/components/profile/EducationCard";
 import { applyParsedCvDraftToProfile } from "@/lib/cvProfile";
+import { SKILL_SUGGESTIONS, LANGUAGE_SUGGESTIONS, CERT_SUGGESTIONS } from "@/lib/suggestionCatalogs";
 
 const CV_DRAFT_SESSION_KEY = "parvagas_cv_parse_draft";
 
@@ -79,10 +80,6 @@ const AVAILABILITY_OPTIONS = [
   { value: "a_combinar", label: "A combinar" },
 ];
 
-const SKILL_SUGGESTIONS = ["React", "Node.js", "TypeScript", "JavaScript", "UX", "Figma", "SQL", "Excel", "Power BI", "Atendimento ao cliente"];
-
-const CERT_SUGGESTIONS = ["Google UX", "AWS Cloud Practitioner", "Scrum Foundation", "Meta Front-End", "PMI", "Cisco CCNA"];
-const LANGUAGE_SUGGESTIONS = ["Português", "Inglês", "Francês", "Espanhol"];
 
 const DEFAULT_EXPERIENCE: ExperienceItem = {
   jobTitle: "",

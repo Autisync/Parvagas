@@ -14,6 +14,7 @@ import EducationCard, { type EducationItem } from "@/app/components/profile/Educ
 import ResumePreview from "../preview/ResumePreview";
 import RestorePass from "@/app/components/RestorePass";
 import { track } from "@/lib/analytics";
+import { SKILL_SUGGESTIONS, LANGUAGE_SUGGESTIONS, CERT_SUGGESTIONS } from "@/lib/suggestionCatalogs";
 import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 type ResumeData = {
@@ -973,18 +974,21 @@ export default function ConstrutorCvEditorPage() {
                 placeholder="Ex: Python, Excel, Gestão de projetos"
                 values={data.hardSkills || []}
                 onChange={(next) => setData((prev) => ({ ...prev, hardSkills: next }))}
+                suggestions={SKILL_SUGGESTIONS}
               />
               <TagInput
                 label="Técnicas / Metodologias"
                 placeholder="Ex: Scrum, Vendas B2B"
                 values={data.techniques || []}
                 onChange={(next) => setData((prev) => ({ ...prev, techniques: next }))}
+                suggestions={SKILL_SUGGESTIONS}
               />
               <TagInput
                 label="Ferramentas"
                 placeholder="Ex: Docker, Photoshop, SAP"
                 values={data.tools || []}
                 onChange={(next) => setData((prev) => ({ ...prev, tools: next }))}
+                suggestions={SKILL_SUGGESTIONS}
               />
             </div>
           )}
@@ -995,6 +999,7 @@ export default function ConstrutorCvEditorPage() {
               placeholder="Ex: Português (nativo), Inglês"
               values={data.languages || []}
               onChange={(next) => setData((prev) => ({ ...prev, languages: next }))}
+              suggestions={LANGUAGE_SUGGESTIONS}
             />
           )}
 
@@ -1004,6 +1009,7 @@ export default function ConstrutorCvEditorPage() {
               placeholder="Ex: AWS Certified, PMP"
               values={data.certifications || []}
               onChange={(next) => setData((prev) => ({ ...prev, certifications: next }))}
+              suggestions={CERT_SUGGESTIONS}
             />
           )}
         </div>

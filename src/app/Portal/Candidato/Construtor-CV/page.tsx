@@ -9,6 +9,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { track } from "@/lib/analytics";
 import {
   PlusIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon,
+  LinkIcon, ClipboardDocumentIcon, ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/24/outline";
 
 type ResumeSummary = {
@@ -18,6 +19,7 @@ type ResumeSummary = {
   template_id: string | null;
   is_draft: boolean;
   is_published: boolean;
+  share_slug: string | null;
   updated_at: string;
 };
 
@@ -139,6 +141,15 @@ export default function ConstrutorCvListPage() {
       notify("CV eliminado.", "success");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível eliminar o CV."));
+    }
+  };
+
+  const copyShareLink = async (shareSlug: string) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/cv/${shareSlug}`);
+      notify("Ligação copiada.", "success");
+    } catch {
+      notify("Não foi possível copiar a ligação.", "error");
     }
   };
 
@@ -425,6 +436,37 @@ export default function ConstrutorCvListPage() {
                     <TrashIcon className="h-3.5 w-3.5" /> Eliminar
                   </button>
                 </div>
+
+                {resume.is_published && resume.share_slug && (
+                  <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-2 text-xs">
+                    <LinkIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <a
+                      href={`/cv/${resume.share_slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 truncate text-slate-600 hover:text-red-700 hover:underline"
+                    >
+                      {typeof window !== "undefined" ? window.location.host : "parvagas.pt"}/cv/{resume.share_slug}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => copyShareLink(resume.share_slug as string)}
+                      title="Copiar ligação"
+                      className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                    >
+                      <ClipboardDocumentIcon className="h-3.5 w-3.5" />
+                    </button>
+                    <a
+                      href={`/cv/${resume.share_slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Abrir ligação"
+                      className="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                    >
+                      <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })}

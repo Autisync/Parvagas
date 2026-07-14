@@ -86,6 +86,12 @@ x-backend-env: &backend-env
   CV_PARSER_AI_ENABLED: "false"
   CV_PARSER_AI_API_KEY: ""
   CV_PARSER_AI_MODEL: gpt-4.1-mini
+  # Templated PDF export (WeasyPrint) — without this, /resumes/{id}/export
+  # always falls back to the reportlab ATS-only renderer regardless of the
+  # resume's chosen template, so downloads silently stop matching what the
+  # public share page shows. Runtime deps (pango/harfbuzz/fontconfig,
+  # DejaVu font) are already installed in the Dockerfile for exactly this.
+  RESUME_WEASYPRINT_ENABLED: "true"
   # Security — relaxed for dev
   TRUSTED_HOSTS: "*"
   CAPTCHA_REQUIRED: "false"

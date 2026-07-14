@@ -87,6 +87,12 @@ x-backend-env: &backend-env
   OLLAMA_BASE_URL: http://ollama:11434
   OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
   OLLAMA_FREE_TIER_ENABLED: ${OLLAMA_FREE_TIER_ENABLED:-true}
+  # Templated PDF export (WeasyPrint) — without this, /resumes/{id}/export
+  # always falls back to the reportlab ATS-only renderer regardless of the
+  # resume's chosen template, so downloads silently stop matching what the
+  # public share page shows. Runtime deps (pango/harfbuzz/fontconfig,
+  # DejaVu font) are already installed in the Dockerfile for exactly this.
+  RESUME_WEASYPRINT_ENABLED: ${RESUME_WEASYPRINT_ENABLED:-true}
   # Default "*" disables TrustedHostMiddleware. The app sits behind Cloudflare +
   # Traefik, which already enforce host-based routing, and the container
   # healthcheck calls in via Host: localhost. Restricting this to a single host
