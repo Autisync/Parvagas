@@ -9,7 +9,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { track } from "@/lib/analytics";
 import {
   PlusIcon, DocumentDuplicateIcon, TrashIcon, ArrowDownTrayIcon, PencilIcon,
-  LinkIcon, ClipboardDocumentIcon, ArrowTopRightOnSquareIcon, UserIcon,
+  LinkIcon, ClipboardDocumentIcon, ArrowTopRightOnSquareIcon, UserIcon, ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
 type ResumeSummary = {
@@ -65,6 +65,7 @@ export default function ConstrutorCvListPage() {
   const [letterDraft, setLetterDraft] = useState("");
   const [savingLetter, setSavingLetter] = useState(false);
   const [exportingLetterId, setExportingLetterId] = useState<string | null>(null);
+  const [profileUpdatedAt, setProfileUpdatedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -77,6 +78,13 @@ export default function ConstrutorCvListPage() {
     } finally {
       setFetching(false);
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch<{ profile?: { updatedAt?: string } }>("/candidates/profile", token, { suppressGlobalErrors: true })
+      .then((d) => setProfileUpdatedAt(d.profile?.updatedAt || null))
+      .catch(() => {});
   }, [token]);
 
   const loadLetters = useCallback(async () => {
@@ -177,6 +185,19 @@ export default function ConstrutorCvListPage() {
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível aplicar o CV ao perfil."));
+    }
+  };
+
+  const refreshFromProfile = async (id: string) => {
+    if (!token) return;
+    if (!window.confirm("Isto vai substituir o conteúdo deste CV pelos dados atuais do seu perfil. Continuar?")) return;
+    setError("");
+    try {
+      await authFetch(`/resumes/${id}/refresh-from-profile`, token, { method: "POST" });
+      notify("CV atualizado com os dados mais recentes do seu perfil.", "success");
+      load();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Não foi possível atualizar o CV a partir do perfil."));
     }
   };
 
@@ -428,6 +449,17 @@ export default function ConstrutorCvListPage() {
                   </div>
                   <p className="mt-1 text-xs text-slate-500">{completeness}% completo</p>
                 </div>
+
+                {profileUpdatedAt && new Date(profileUpdatedAt) > new Date(resume.updated_at) && (
+                  <button
+                    type="button"
+                    onClick={() => refreshFromProfile(resume.id)}
+                    className="mt-3 flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-2 text-left text-xs text-blue-700 transition hover:bg-blue-100"
+                  >
+                    <ArrowPathIcon className="h-3.5 w-3.5 shrink-0" />
+                    O seu perfil mudou desde que criou este CV — atualizar?
+                  </button>
+                )}
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button

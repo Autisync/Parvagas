@@ -200,6 +200,7 @@ def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfi
         "autoApplyOptIn": bool(getattr(profile, "auto_apply_opt_in", False)),
         "hasCompletedOnboarding": bool(profile.has_completed_onboarding),
         "hasSeenTutorial": bool(profile.has_seen_tutorial),
+        "updatedAt": profile.updated_at.isoformat() if profile.updated_at else None,
     }
 
     payload["completionScore"] = _profile_completion_score(payload, has_cv=_latest_cv_document(db, profile) is not None)

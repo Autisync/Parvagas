@@ -275,6 +275,52 @@ def test_apply_to_profile_ownership_isolation(db):
     assert exc_info.value.status_code == 404
 
 
+# -------------------------- refresh-from-profile ---------------------------- #
+
+_refresh_resume_from_profile = resumes_module.refresh_resume_from_profile
+
+
+def test_refresh_from_profile_pulls_current_profile_data(db):
+    user = _make_candidate(db)
+    profile = _make_profile(db, user, phone="900000000", professional_summary="Resumo antigo do perfil.")
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV a atualizar", data={"professionalSummary": "Resumo desatualizado do CV."}),
+        db=db, current_user=user,
+    ))
+
+    # Profile changes after the resume was created — the exact scenario the
+    # freshness nudge exists for.
+    profile.professional_summary = "Resumo novo do perfil."
+    db.commit()
+
+    refreshed = asyncio.run(_refresh_resume_from_profile(resume_id=resume["id"], db=db, current_user=user))
+    assert refreshed["data"]["professionalSummary"] == "Resumo novo do perfil."
+    assert refreshed["summary"] == "Resumo novo do perfil."
+    assert refreshed["title"] == "CV a atualizar"  # title/id untouched — only content refreshes
+    assert refreshed["id"] == resume["id"]
+
+
+def test_refresh_from_profile_missing_resume_404s(db):
+    user = _make_candidate(db)
+    _make_profile(db, user)
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_refresh_resume_from_profile(resume_id=str(uuid.uuid4()), db=db, current_user=user))
+    assert exc_info.value.status_code == 404
+
+
+def test_refresh_from_profile_ownership_isolation(db):
+    owner = _make_candidate(db, email="owner2@example.com")
+    other = _make_candidate(db, email="other2@example.com")
+    _make_profile(db, owner)
+    _make_profile(db, other)
+    resume = asyncio.run(_create_resume(
+        payload=ResumeCreateRequest(title="CV", data={}), db=db, current_user=owner,
+    ))
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(_refresh_resume_from_profile(resume_id=resume["id"], db=db, current_user=other))
+    assert exc_info.value.status_code == 404
+
+
 # ---------------------------------- delete --------------------------------- #
 
 def test_delete_resume_also_removes_versions(db):

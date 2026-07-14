@@ -460,6 +460,36 @@ async def apply_resume_to_profile(
     return ResumeApplyToProfileResponse(updated_fields=updated_fields, cv_document_id=cv_document_id)
 
 
+@router.post("/{resume_id}/refresh-from-profile", response_model=ResumeResponse)
+@limiter.limit("30/hour")
+async def refresh_resume_from_profile(
+    resume_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+):
+    """The freshness-nudge action — the reverse of apply-to-profile: pulls
+    the candidate's current profile data into this EXISTING resume
+    (id/title/template/share_slug untouched), for when the profile changed
+    after the resume was created/last edited. Unlike "A partir do meu
+    perfil" at create time, this replaces the resume's data wholesale
+    (it's an explicit, confirmed refresh — the candidate is choosing to
+    pull in whatever the profile currently has, not merge selectively)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.candidate_profile_id == profile.id).first()
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    data = _profile_to_resume_data(current_user, profile)
+    resume.data = json.dumps(data, ensure_ascii=False)
+    if data.get("professionalSummary"):
+        resume.summary = data["professionalSummary"]
+    db.commit()
+    db.refresh(resume)
+    return _resume_payload(resume)
+
+
 @router.delete("/{resume_id}", response_model=MessageResponse)
 async def delete_resume(
     resume_id: str,
