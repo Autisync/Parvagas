@@ -8,6 +8,7 @@ import PageHeader from "@/app/components/PageHeader";
 import DashboardCard from "@/app/components/DashboardCard";
 import EmptyState from "@/app/components/EmptyState";
 import ProfileCompletionCard from "@/app/components/ProfileCompletionCard";
+import FirstStepsChecklist, { type FirstStepItem } from "@/app/components/FirstStepsChecklist";
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import { MilestoneCelebration } from "@/app/components/motion";
@@ -30,11 +31,13 @@ type DashboardStats = {
   jobAlerts?: number;
   profileCompletion?: number;
   cvDocuments?: number;
+  builtResumes?: number;
 };
 
 type Profile = {
   fullName?: string;
   completionScore?: number;
+  hasCompletedOnboarding?: boolean;
 };
 
 const readTotal = (value: any): number => {
@@ -70,7 +73,7 @@ export default function CandidatoDashboard() {
       try {
         setFetching(true);
         setPageError(false);
-        const [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes] = await Promise.allSettled([
+        const [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes, resumesRes] = await Promise.allSettled([
           authFetch("/candidates/profile", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/jobs/recommended?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/jobs?limit=1&page=1", token, { suppressGlobalErrors: true }),
@@ -78,9 +81,10 @@ export default function CandidatoDashboard() {
           authFetch("/candidates/applications?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/alerts?limit=1&page=1", token, { suppressGlobalErrors: true }),
           authFetch("/candidates/cv/documents", token, { suppressGlobalErrors: true }),
+          authFetch("/resumes/", token, { suppressGlobalErrors: true }),
         ]);
 
-        const failedCount = [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes].filter((r) => r.status === "rejected").length;
+        const failedCount = [profileRes, recommendedRes, availableRes, savedRes, applicationsRes, alertsRes, docsRes, resumesRes].filter((r) => r.status === "rejected").length;
         if (failedCount > 0) {
           setPageError(true);
         }
@@ -103,6 +107,7 @@ export default function CandidatoDashboard() {
                 ? (docsRes.value as any).documents.length
                 : 0
               : 0,
+          builtResumes: resumesRes.status === "fulfilled" && Array.isArray(resumesRes.value) ? resumesRes.value.length : 0,
         });
       } catch (error) {
         console.error("Failed to fetch dashboard stats", error);
@@ -140,6 +145,17 @@ export default function CandidatoDashboard() {
       {/* Profile Completion */}
       {pageError && <InlineErrorState className="mb-2" onAction={() => window.location.reload()} />}
       <ProfileCompletionCard completion={stats.profileCompletion || 0} />
+
+      {/* Guided first steps — deep-links to the exact actions the tutorial
+          described, not just a description of them. Disappears once done. */}
+      <FirstStepsChecklist
+        items={[
+          { key: "profile", label: "Completar o perfil", href: "/Portal/Candidato/Onboarding", done: Boolean(profile.hasCompletedOnboarding) },
+          { key: "cv", label: "Criar o seu CV", href: "/Portal/Candidato/Construtor-CV", done: (stats.builtResumes || 0) > 0 },
+          { key: "alerts", label: "Definir um alerta de vagas", href: "/Portal/Candidato/Alertas", done: (stats.jobAlerts || 0) > 0 },
+          { key: "apply", label: "Candidatar-se à primeira vaga", href: "/Portal/Candidato/Vagas-Disponiveis", done: (stats.applications || 0) > 0 },
+        ]}
+      />
 
       {/* Main Actions Grid */}
       <div className="grid gap-6 pv-stagger md:grid-cols-2 lg:grid-cols-3">
