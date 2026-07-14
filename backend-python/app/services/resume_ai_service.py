@@ -165,21 +165,139 @@ class ResumeAIService:
         return result or None
 
     @staticmethod
+    def _score_band(value: float) -> str:
+        if value >= 85:
+            return "excelente"
+        if value >= 65:
+            return "boa"
+        if value >= 40:
+            return "média"
+        return "baixa"
+
+    @staticmethod
+    def _resume_signals(resume: Resume, profile: CandidateProfile | None) -> dict[str, Any]:
+        """Raw, always-computable facts about the resume — independent of
+        which scoring path produced the numbers. Explanations are built from
+        these, never from the AI's free-form (unstructured, LLM-dependent-
+        shape) metadata text, so an ignorant user gets a consistent, concrete
+        answer to "why this score" no matter whether cloud AI, Ollama, or the
+        heuristic fallback actually scored the resume."""
+        try:
+            data = json.loads(resume.data or "{}")
+        except Exception:
+            data = {}
+        skills = data.get("skills") if isinstance(data.get("skills"), list) else []
+        experience = data.get("work_experience") if isinstance(data.get("work_experience"), list) else []
+        return {
+            "skill_count": len(skills),
+            "experience_count": len(experience),
+            "has_summary": bool(str(resume.summary or "").strip()),
+            "has_title": bool(str(resume.title or "").strip()),
+            "has_template": bool(resume.template_id),
+            "years_of_experience": profile.years_of_experience if profile else None,
+        }
+
+    @staticmethod
+    def _build_dimension_explanations(resume: Resume, profile: CandidateProfile | None, scores: dict[str, Any]) -> list[dict[str, Any]]:
+        """Plain-language "why this score + what to do about it" for every
+        dimension — written for someone with zero context on what an ATS
+        score even is. Always present regardless of scoring source (see
+        _resume_signals)."""
+        s = ResumeAIService._resume_signals(resume, profile)
+
+        def entry(key: str, label: str, explanation: str, suggestion: str | None, suppress_suggestion: bool | None = None) -> dict[str, Any]:
+            value = scores.get(key)
+            band = ResumeAIService._score_band(value) if value is not None else None
+            # Default: suppress once the numeric band is already strong.
+            # formatting_score passes an explicit override instead — the
+            # heuristic formula caps that dimension at 60 ("média") even with
+            # title+summary+template ALL present, so band alone would still
+            # tell someone who has already done everything right to go add a
+            # title/summary/template they already have.
+            suppress = suppress_suggestion if suppress_suggestion is not None else band in ("excelente", "boa")
+            return {
+                "dimension": key,
+                "label": label,
+                "score": value,
+                "band": band,
+                "explanation": explanation,
+                # No suggestion once nothing is actually missing — nothing
+                # ignorant-proof about telling someone to fix what isn't broken.
+                "suggestion": None if suppress else suggestion,
+            }
+
+        skills_explanation = (
+            f"Encontrámos {s['skill_count']} competência(s) listada(s) no seu CV. Mais competências relevantes "
+            "ajudam os recrutadores (e os sistemas automáticos) a perceber rapidamente no que é bom."
+            if s["skill_count"] else
+            "Não encontrámos nenhuma competência listada no seu CV."
+        )
+        experience_explanation = (
+            f"O seu CV tem {s['experience_count']} experiência(s) profissional(is) registada(s)."
+            if s["experience_count"] else
+            "Ainda não adicionou nenhuma experiência profissional ao seu CV."
+        )
+        formatting_bits = []
+        if not s["has_title"]:
+            formatting_bits.append("falta um título")
+        if not s["has_summary"]:
+            formatting_bits.append("falta um resumo profissional")
+        if not s["has_template"]:
+            formatting_bits.append("não escolheu um modelo visual")
+        formatting_explanation = (
+            "O seu CV está bem estruturado: tem título, resumo e um modelo visual aplicado."
+            if not formatting_bits else
+            "O seu CV está incompleto: " + ", ".join(formatting_bits) + "."
+        )
+        ats_explanation = (
+            "Sistemas de recrutamento automático (ATS) leem o seu CV antes de um humano o ver. "
+            + (
+                "O seu CV tem resumo, competências e experiência preenchidos, o que ajuda a passar nesse filtro."
+                if s["has_summary"] and s["skill_count"] and s["experience_count"] else
+                "Faltam secções importantes (resumo, competências ou experiência), o que reduz as hipóteses de passar nesse filtro."
+            )
+        )
+
+        return [
+            entry(
+                "skills_score", "Competências", skills_explanation,
+                "Adicione competências relevantes para as vagas a que se quer candidatar (ex: ferramentas, línguas, certificações).",
+            ),
+            entry(
+                "experience_score", "Experiência", experience_explanation,
+                "Descreva as suas experiências profissionais com resultados concretos (ex: \"aumentei as vendas em 20%\").",
+            ),
+            entry(
+                "formatting_score", "Formatação", formatting_explanation,
+                "Dê um título ao CV, escreva um resumo profissional curto e escolha um modelo visual.",
+                suppress_suggestion=not formatting_bits,
+            ),
+            entry(
+                "ats_score", "Compatibilidade com sistemas de recrutamento (ATS)", ats_explanation,
+                "Preencha o resumo profissional, competências e experiência com palavras-chave da vaga que procura.",
+            ),
+        ]
+
+    @staticmethod
     def score_resume(resume: Resume, profile: CandidateProfile | None, use_free_tier: bool = False) -> dict[str, Any]:
+        def finalize(scores: dict[str, Any], metadata: dict[str, Any], source: str) -> dict[str, Any]:
+            result = {**scores, "metadata": metadata, "source": source}
+            result["explanations"] = ResumeAIService._build_dimension_explanations(resume, profile, scores)
+            return result
+
         # Cloud AI — paid subscribers (RESUME_AI_ENABLED + API key)
         if ResumeAIService._ai_enabled() and not use_free_tier:
             ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
             ai_result = ResumeAIService._call_ai(ai_prompt)
             if ai_result:
-                return {
+                scores = {
                     "overall_score": float(ai_result.get("overall_score", 0.0)),
                     "skills_score": float(ai_result.get("skills_score", 0.0)),
                     "experience_score": float(ai_result.get("experience_score", 0.0)),
                     "formatting_score": float(ai_result.get("formatting_score", 0.0)),
                     "ats_score": float(ai_result.get("ats_score", 0.0)),
-                    "metadata": ai_result.get("metadata", {}),
-                    "source": "ai_cloud",
                 }
+                return finalize(scores, ai_result.get("metadata", {}), "ai_cloud")
 
         # Ollama — free tier (self-hosted LLM, limited but functional)
         if ResumeAIService._ollama_enabled():
@@ -187,19 +305,20 @@ class ResumeAIService:
                 ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
                 ai_result = ResumeAIService._call_ollama(ai_prompt)
                 if ai_result:
-                    return {
+                    scores = {
                         "overall_score": float(ai_result.get("overall_score", 0.0)),
                         "skills_score": float(ai_result.get("skills_score", 0.0)),
                         "experience_score": float(ai_result.get("experience_score", 0.0)),
                         "formatting_score": float(ai_result.get("formatting_score", 0.0)),
                         "ats_score": float(ai_result.get("ats_score", 0.0)),
-                        "metadata": ai_result.get("metadata", {}),
-                        "source": "ai_ollama",
                     }
+                    return finalize(scores, ai_result.get("metadata", {}), "ai_ollama")
             except Exception:
                 pass  # fall through to heuristic
 
-        return ResumeAIService._heuristic_score(resume, profile)
+        heuristic = ResumeAIService._heuristic_score(resume, profile)
+        heuristic["explanations"] = ResumeAIService._build_dimension_explanations(resume, profile, heuristic)
+        return heuristic
 
     @staticmethod
     def rewrite_resume(resume: Resume, profile: CandidateProfile | None, tone: str, instructions: str | None, use_free_tier: bool = False) -> dict[str, Any]:

@@ -247,6 +247,9 @@ class ResumeScoreResponse(BaseModel):
     formatting_score: Optional[float] = None
     ats_score: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
+    # Plain-language "why this score + what to do" per dimension — always
+    # present regardless of scoring source (see ResumeAIService._build_dimension_explanations).
+    explanations: Optional[List[Dict[str, Any]]] = None
 
 
 class ResumeRewriteResponse(BaseModel):

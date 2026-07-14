@@ -82,6 +82,56 @@ def test_score_falls_through_to_heuristic_when_llm_fails(monkeypatch):
     assert 0 <= result["overall_score"] <= 100
 
 
+def test_score_always_includes_explanations_regardless_of_source(monkeypatch):
+    """Explanations must be present no matter which path scored the resume —
+    an ignorant user asking "why this score" can't be left with nothing just
+    because the AI happened to be reachable (or not) that day."""
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        return _SCORE_RESPONSE
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    ai_result = ResumeAIService.score_resume(_resume(), None, use_free_tier=False)
+    assert ai_result["source"] == "ai_cloud"
+    explanations = ai_result["explanations"]
+    assert {e["dimension"] for e in explanations} == {
+        "skills_score", "experience_score", "formatting_score", "ats_score",
+    }
+    for e in explanations:
+        assert e["explanation"]  # never blank — always a concrete reason
+
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", False)
+    heuristic_result = ResumeAIService.score_resume(_resume(), None, use_free_tier=False)
+    assert heuristic_result["source"] == "heuristic"
+    assert len(heuristic_result["explanations"]) == 4
+
+
+def test_score_explanation_suggestion_omitted_once_dimension_is_strong(monkeypatch):
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", False)
+
+    # A well-populated resume (title + summary + template all present) has
+    # nothing missing on formatting — no suggestion, regardless of the
+    # heuristic formula's numeric band (it caps formatting at 60/"média"
+    # even with everything filled in, so band alone isn't the right signal
+    # here — see suppress_suggestion in _build_dimension_explanations).
+    resume = _resume()
+    result = ResumeAIService.score_resume(resume, None, use_free_tier=False)
+    formatting = next(e for e in result["explanations"] if e["dimension"] == "formatting_score")
+    assert formatting["suggestion"] is None
+
+    # An empty resume should score low everywhere and get concrete suggestions.
+    empty_resume = _resume(title="", summary="", data="{}", template_id=None)
+    empty_result = ResumeAIService.score_resume(empty_resume, None, use_free_tier=False)
+    skills = next(e for e in empty_result["explanations"] if e["dimension"] == "skills_score")
+    assert skills["band"] == "baixa"
+    assert skills["suggestion"]
+
+
 def test_rewrite_returns_unmodified_content_when_ai_unavailable(monkeypatch):
     monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
     monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", False)

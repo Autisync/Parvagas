@@ -63,6 +63,15 @@ type VersionMeta = {
 
 type VersionSnapshot = VersionMeta & { data: ResumeData };
 
+type ScoreExplanation = {
+  dimension: string;
+  label: string;
+  score: number | null;
+  band: "excelente" | "boa" | "média" | "baixa" | null;
+  explanation: string;
+  suggestion: string | null;
+};
+
 type ScoreResult = {
   overall_score: number | null;
   skills_score: number | null;
@@ -70,6 +79,7 @@ type ScoreResult = {
   formatting_score: number | null;
   ats_score: number | null;
   metadata: Record<string, unknown> | null;
+  explanations?: ScoreExplanation[] | null;
 };
 
 type AdaptResult = {
@@ -137,6 +147,40 @@ function percentileHint(score: ScoreResult): string {
   if (!scored.length) return "Avaliação concluída.";
   const [hint, value] = scored.reduce((min, cur) => (cur[1] < min[1] ? cur : min));
   return value >= 85 ? "Excelente — o seu CV está bem otimizado." : `Próximo passo: ${hint}`;
+}
+
+const SCORE_BAND_STYLES: Record<string, { badge: string; ring: string; label: string }> = {
+  excelente: { badge: "bg-emerald-100 text-emerald-700", ring: "border-emerald-200", label: "Excelente" },
+  boa: { badge: "bg-emerald-50 text-emerald-700", ring: "border-emerald-100", label: "Boa" },
+  média: { badge: "bg-amber-100 text-amber-700", ring: "border-amber-200", label: "Média" },
+  baixa: { badge: "bg-red-100 text-red-700", ring: "border-red-200", label: "Baixa" },
+};
+
+/** One score dimension, explained for someone who has never heard of an ATS
+ * score before: what it means, why it landed here, and — only when there's
+ * actually something to fix — a concrete next step. */
+function ScoreExplanationCard({ item }: { item: ScoreExplanation }) {
+  const styles = item.band ? SCORE_BAND_STYLES[item.band] : null;
+  return (
+    <div className={`rounded-lg border bg-white p-3 ${styles?.ring || "border-slate-200"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-800">{item.label}</p>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-bold text-slate-900">{item.score == null ? "—" : Math.round(item.score)}</span>
+          {styles && (
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles.badge}`}>{styles.label}</span>
+          )}
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{item.explanation}</p>
+      {item.suggestion && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-800">
+          <SparklesIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <span>{item.suggestion}</span>
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function ConstrutorCvEditorPage() {
@@ -268,7 +312,7 @@ export default function ConstrutorCvEditorPage() {
     if (!token || aiBusy) return;
     setAiBusy("rewrite");
     try {
-      const result = await authFetch<{ title: string; summary: string; notes?: string }>("/resumes/rewrite", token, {
+      const result = await authFetch<{ title: string; summary: string; notes?: string; source?: string }>("/resumes/rewrite", token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume_id: resumeId, tone: "professional" }),
@@ -279,7 +323,12 @@ export default function ConstrutorCvEditorPage() {
       if (result.title) setTitle(result.title);
       if (result.summary) setData((prev) => ({ ...prev, professionalSummary: result.summary }));
       track("ai_action_used", { action: "rewrite" });
-      notify(result.notes || "Texto melhorado.", result.summary ? "success" : "info");
+      // source: "heuristic" means the AI path was unavailable and the resume
+      // was returned UNCHANGED — result.summary is still non-empty in that
+      // case (it's the pre-existing summary echoed back), so it can't be
+      // used as the success signal, or this reads as success when nothing
+      // happened.
+      notify(result.notes || "Texto melhorado.", result.source === "heuristic" ? "info" : "success");
     } catch (err: unknown) {
       notify(getErrorMessage(err, "Não foi possível melhorar o texto."), "error");
     } finally {
@@ -699,22 +748,38 @@ export default function ConstrutorCvEditorPage() {
         </div>
 
         {score && (
-          <div className="mt-4 grid gap-2 sm:grid-cols-5">
-            {([
-              ["Geral", score.overall_score],
-              ["Competências", score.skills_score],
-              ["Experiência", score.experience_score],
-              ["Formatação", score.formatting_score],
-              ["ATS", score.ats_score],
-            ] as const).map(([label, value]) => (
-              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-center">
-                <p className="text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</p>
-                <p className="text-[11px] text-slate-500">{label}</p>
+          <div className="mt-4">
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-slate-900 shadow-sm">
+                {score.overall_score == null ? "—" : Math.round(score.overall_score)}
               </div>
-            ))}
-            <p className="text-xs text-slate-500 sm:col-span-5">
-              {percentileHint(score)}
-            </p>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Pontuação geral do seu CV</p>
+                <p className="text-xs text-slate-500">{percentileHint(score)}</p>
+              </div>
+            </div>
+
+            {score.explanations && score.explanations.length > 0 ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {score.explanations.map((item) => (
+                  <ScoreExplanationCard key={item.dimension} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                {([
+                  ["Competências", score.skills_score],
+                  ["Experiência", score.experience_score],
+                  ["Formatação", score.formatting_score],
+                  ["ATS", score.ats_score],
+                ] as const).map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-center">
+                    <p className="text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</p>
+                    <p className="text-[11px] text-slate-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -766,6 +766,7 @@ async def score_resume(
         formatting_score=score_data.get("formatting_score"),
         ats_score=score_data.get("ats_score"),
         metadata=score_data.get("metadata"),
+        explanations=score_data.get("explanations"),
     )
 
 
