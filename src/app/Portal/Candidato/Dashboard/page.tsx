@@ -12,6 +12,7 @@ import FirstStepsChecklist, { type FirstStepItem } from "@/app/components/FirstS
 import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import { MilestoneCelebration } from "@/app/components/motion";
+import LottieBlock from "@/app/components/LottieBlock";
 import {
   SparklesIcon,
   BriefcaseIcon,
@@ -55,6 +56,7 @@ export default function CandidatoDashboard() {
   const [fetching, setFetching] = useState(true);
   const [pageError, setPageError] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [showProfileMilestone, setShowProfileMilestone] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -119,6 +121,25 @@ export default function CandidatoDashboard() {
     fetchStats();
   }, [token]);
 
+  // Fire the profile-completion milestone once — the very first time it
+  // reaches 100%, not on every render/visit while it stays at 100%.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ((stats.profileCompletion || 0) < 100) return;
+    const key = "pv_profile_100_celebrated";
+    if (window.localStorage.getItem(key) === "1") return;
+    window.localStorage.setItem(key, "1");
+    setShowProfileMilestone(true);
+  }, [stats.profileCompletion]);
+
+  // Safety net: auto-hide the milestone even if the animation asset fails to
+  // load (onComplete would then never fire).
+  useEffect(() => {
+    if (!showProfileMilestone) return;
+    const timer = setTimeout(() => setShowProfileMilestone(false), 5000);
+    return () => clearTimeout(timer);
+  }, [showProfileMilestone]);
+
   if (loading || fetching) {
     return (
       <div className="space-y-8">
@@ -136,6 +157,16 @@ export default function CandidatoDashboard() {
   return (
     <div className="space-y-8">
       <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
+      {showProfileMilestone && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-red-200 bg-white p-4 shadow-lg" role="status">
+          <LottieBlock
+            name="milestone-celebration"
+            size={120}
+            caption="Perfil 100% completo!"
+            onComplete={() => setShowProfileMilestone(false)}
+          />
+        </div>
+      )}
       <PageHeader
         title={dict.portal.candidate.welcome(profile.fullName ? profile.fullName.split(" ")[0] : undefined)}
         description={dict.portal.candidate.welcomeDescription}

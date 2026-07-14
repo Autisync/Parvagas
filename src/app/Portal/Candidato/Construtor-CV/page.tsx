@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
+import LottieBlock from "@/app/components/LottieBlock";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { track } from "@/lib/analytics";
 import {
@@ -427,7 +428,7 @@ export default function ConstrutorCvListPage() {
 
       {resumes.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-sm text-slate-600">Ainda não tem nenhum CV. Crie o primeiro acima.</p>
+          <LottieBlock name="empty-state" loop size={140} caption="Ainda não tem nenhum CV. Crie o primeiro acima." />
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

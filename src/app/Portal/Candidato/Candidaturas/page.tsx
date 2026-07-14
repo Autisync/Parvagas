@@ -8,6 +8,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import LottieBlock from "@/app/components/LottieBlock";
 
 const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/StickyPortalHeading"), {
   ssr: false,
@@ -227,7 +228,9 @@ export default function CandidaturasPage() {
         />
 
         {filteredApplications.length === 0 && !isLoading && (
-          <p className="text-gray-500 text-center py-12">Nenhuma candidatura encontrada para os filtros atuais.</p>
+          <div className="py-8">
+            <LottieBlock name="empty-state" loop size={140} caption="Nenhuma candidatura encontrada para os filtros atuais." />
+          </div>
         )}
         <div className="space-y-4">
           {filteredApplications.map(a => {

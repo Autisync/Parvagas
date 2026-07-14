@@ -9,6 +9,7 @@ import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import Link from "next/link";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import LottieBlock from "@/app/components/LottieBlock";
 
 const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/StickyPortalHeading"), {
   ssr: false,
@@ -50,6 +51,7 @@ export default function PortalVagasDisponiveisPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [showApplyCelebration, setShowApplyCelebration] = useState(false);
   const [profileSource, setProfileSource] = useState<"main_profile" | "generated_cv_profile">("main_profile");
   const [generatedProfiles, setGeneratedProfiles] = useState<GeneratedCvProfile[]>([]);
   const [generatedCvProfileId, setGeneratedCvProfileId] = useState("");
@@ -149,6 +151,14 @@ export default function PortalVagasDisponiveisPage() {
     setMessage("");
   }, [message, notify]);
 
+  // Safety net: auto-hide the apply celebration even if the animation asset
+  // fails to load (onComplete would then never fire).
+  useEffect(() => {
+    if (!showApplyCelebration) return;
+    const timer = setTimeout(() => setShowApplyCelebration(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showApplyCelebration]);
+
   const applyPreset = (presetKey: string) => {
     setActivePreset(presetKey);
     if (presetKey === "overview") {
@@ -208,6 +218,7 @@ export default function PortalVagasDisponiveisPage() {
         }),
       });
       setMessage("Candidatura submetida.");
+      setShowApplyCelebration(true);
     } catch (err: unknown) {
       setMessage((err as Error).message || "Erro ao candidatar.");
     } finally {
@@ -217,6 +228,16 @@ export default function PortalVagasDisponiveisPage() {
 
   return (
     <div className="p-6 sm:p-8">
+      {showApplyCelebration && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-emerald-200 bg-white p-4 shadow-lg" role="status">
+          <LottieBlock
+            name="success-check"
+            size={64}
+            caption="Candidatura submetida."
+            onComplete={() => setShowApplyCelebration(false)}
+          />
+        </div>
+      )}
       <StickyPortalHeading
         title="Vagas Disponiveis"
         subtitle="Explore oportunidades publicas e mude para visoes de decisao em um clique."

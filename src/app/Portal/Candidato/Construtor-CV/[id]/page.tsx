@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import BannerError from "@/app/components/errors/BannerError";
+import LottieBlock from "@/app/components/LottieBlock";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import TagInput from "@/app/components/profile/TagInput";
 import AddItemModal from "@/app/components/profile/AddItemModal";
@@ -201,6 +202,7 @@ export default function ConstrutorCvEditorPage() {
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versions, setVersions] = useState<VersionMeta[]>([]);
@@ -259,6 +261,14 @@ export default function ConstrutorCvEditorPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Safety net: auto-hide the publish celebration even if the animation
+  // asset fails to load (onComplete would then never fire).
+  useEffect(() => {
+    if (!showPublishCelebration) return;
+    const timer = setTimeout(() => setShowPublishCelebration(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showPublishCelebration]);
 
   // D3: fire section_completed exactly once per section, the moment it
   // transitions from empty/partial to done — not on every keystroke.
@@ -376,9 +386,11 @@ export default function ConstrutorCvEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ published: !isPublished }),
       });
+      const justPublished = Boolean(updated.is_published) && !isPublished;
       setIsPublished(Boolean(updated.is_published));
       setShareSlug(updated.share_slug || null);
       notify(updated.is_published ? "CV publicado — a ligação está ativa." : "CV despublicado — a ligação foi desativada.", "success");
+      if (justPublished) setShowPublishCelebration(true);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível alterar a partilha."));
     } finally {
@@ -622,6 +634,16 @@ export default function ConstrutorCvEditorPage() {
 
   return (
     <div>
+      {showPublishCelebration && (
+        <div className="fixed bottom-6 right-6 z-50 rounded-2xl border border-emerald-200 bg-white p-4 shadow-lg" role="status">
+          <LottieBlock
+            name="success-check"
+            size={64}
+            caption="CV publicado — a ligação está ativa."
+            onComplete={() => setShowPublishCelebration(false)}
+          />
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"

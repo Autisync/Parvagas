@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import LottieBlock from "@/app/components/LottieBlock";
 
 type SavedJobItem = {
   _id: string;
@@ -76,7 +77,7 @@ export default function VagasGuardadasPage() {
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center">
-          <p className="text-slate-600">Ainda não guardou nenhuma vaga.</p>
+          <LottieBlock name="empty-state" loop size={140} caption="Ainda não guardou nenhuma vaga." />
           <Link href="/Portal/Candidato/Vagas-Disponiveis" className="mt-3 inline-block rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">
             Explorar vagas disponíveis
           </Link>
