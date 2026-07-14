@@ -4,9 +4,13 @@ import OnboardingGuard from "./components/OnboardingGuard";
 import Footer from "@/app/components/Footer";
 import PortalTopBar from "@/app/Portal/components/PortalTopBar";
 
-const CandidateSidebar = dynamic(() => import("./components/CandidateSidebar"), {
-  // Only show loading skeleton on desktop (sidebar hidden on mobile anyway)
-  loading: () => <div className="hidden h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block" />,
+// Owns the fixed left dock AND the matching content offset (see the
+// component for why those must live together). SSR-loading fallback
+// mirrors the collapsed-by-default-on-builder-route width isn't knowable
+// server-side, so it just reserves the expanded width to avoid a bigger
+// jump than a live client would ever produce.
+const CandidatePortalShell = dynamic(() => import("./components/CandidateSidebar"), {
+  loading: () => <div className="lg:pl-[260px]" />,
 });
 
 export default function CandidatoLayout({ children }: { children: ReactNode }) {
@@ -14,12 +18,11 @@ export default function CandidatoLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-white">
       <PortalTopBar role="candidate" />
       <OnboardingGuard>
-        <main className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:pb-16">
-          <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
-            <CandidateSidebar />
+        <CandidatePortalShell>
+          <main className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:pb-16">
             <section>{children}</section>
-          </div>
-        </main>
+          </main>
+        </CandidatePortalShell>
       </OnboardingGuard>
       <Footer />
     </div>

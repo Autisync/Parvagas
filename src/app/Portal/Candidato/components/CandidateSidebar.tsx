@@ -13,14 +13,22 @@ import {
   BriefcaseIcon, CheckCircleIcon, BellIcon, CogIcon, RocketLaunchIcon,
   PencilSquareIcon, ChevronLeftIcon, ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "candidateSidebarCollapsed";
 const COLLAPSED_WIDTH = 76;
 const EXPANDED_WIDTH = 260;
 const BUILDER_ROUTE = "/Portal/Candidato/Construtor-CV";
 
-export default function CandidateSidebar() {
+/**
+ * Owns the sidebar's collapse state AND the content offset, so the two
+ * can never drift out of sync (the previous version reserved a fixed
+ * 260px grid track regardless of collapse state, leaving a dead gap).
+ * The <aside> docks to the true viewport edge via `fixed`; `children`
+ * gets a matching left padding that only reacts to `collapsed`, never
+ * to hover, so hover-to-reveal stays a non-reflowing overlay.
+ */
+export default function CandidatePortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, token } = useAuth("candidate");
   const { dict } = useClientLocale();
@@ -37,10 +45,24 @@ export default function CandidateSidebar() {
   const [hydrated, setHydrated] = useState(false);
   const [hovering, setHovering] = useState(false);
 
+  // The sticky top bar's real rendered height (it wraps to a taller row on
+  // some widths) — measured rather than hardcoded so the dock always sits
+  // flush beneath it instead of overlapping or leaving a gap.
+  const [topOffset, setTopOffset] = useState(0);
+  const asideRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     const saved = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
     if (saved === "1") setManualCollapsed(true);
     setHydrated(true);
+
+    const header = document.querySelector("header");
+    if (!header) return;
+    const update = () => setTopOffset(header.getBoundingClientRect().height);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    return () => observer.disconnect();
   }, []);
 
   const isBuilderRoute = pathname?.startsWith(BUILDER_ROUTE) ?? false;
@@ -99,25 +121,27 @@ export default function CandidateSidebar() {
 
   return (
     <>
-      {/* Desktop sidebar — hidden on mobile. Outer div's width participates
-          in the page grid and only ever reflects `collapsed` (manual toggle
-          or forced-minimize on the CV builder route) — never the hover
-          state, so hovering never reflows the page. The inner <aside> is
-          what visually widens on hover, as an absolutely-positioned overlay
-          on top of the content next to it. */}
-      <div
-        className="relative hidden shrink-0 transition-[width] duration-300 ease-in-out lg:block"
-        style={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
+      {/* Desktop sidebar — docked flush to the true viewport left edge (not
+          inside the centered max-w-7xl content column), full height below
+          the sticky top bar. `fixed` takes it out of flow entirely, so
+          hover-to-expand is a free overlay that never reflows `children` —
+          only `collapsed` (never `hovering`) drives the content offset
+          below, and the two can't drift apart since one component owns
+          both. Hidden below lg; PortalMobileNav covers narrower widths. */}
+      <aside
+        ref={asideRef}
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
+        className={[
+          "fixed left-0 z-20 hidden flex-col overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-4 transition-[width,box-shadow] duration-300 ease-in-out lg:flex",
+          showExpanded && collapsed ? "shadow-xl" : "shadow-sm",
+        ].join(" ")}
+        style={{
+          top: topOffset,
+          height: `calc(100vh - ${topOffset}px)`,
+          width: showExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
+        }}
       >
-        <aside
-          className={[
-            "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-[width,box-shadow] duration-300 ease-in-out lg:sticky lg:top-4",
-            showExpanded && collapsed ? "absolute left-0 top-0 z-40 shadow-xl" : "relative",
-          ].join(" ")}
-          style={{ width: showExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH }}
-        >
           <div className={`flex items-center justify-between gap-1 ${showExpanded || !isBuilderRoute ? "mb-2" : ""}`}>
             <div className={labelClass()}>
               {token && <NotificationBell token={token} role="candidate" align="left" />}
@@ -199,7 +223,15 @@ export default function CandidateSidebar() {
               <span className={labelClass()}>{dict.portal.candidate.logout}</span>
             </button>
           </div>
-        </aside>
+      </aside>
+
+      {/* Content offset — only tracks `collapsed`, so hovering the
+          collapsed rail never shifts the page underneath it. */}
+      <div
+        className={collapsed ? "lg:pl-[76px]" : "lg:pl-[260px]"}
+        style={{ transition: "padding-left 300ms ease-in-out" }}
+      >
+        {children}
       </div>
 
       {/* Mobile bottom nav + drawer */}
