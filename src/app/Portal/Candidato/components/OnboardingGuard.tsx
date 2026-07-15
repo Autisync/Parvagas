@@ -29,6 +29,23 @@ function GuardInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Guest accounts (Criar CV do Zero — /public/resume-sso/guest-start)
+      // are a real User/CandidateProfile row under the hood, so without
+      // this check they hit the same "role === candidate" gate as a fully
+      // signed-up account and get shoved through the tutorial + onboarding
+      // wizard before ever reaching the CV builder they actually asked
+      // for. The whole point of that entry point is "no signup screen" —
+      // it stays that way until the visitor claims the account (sets a
+      // real password via forgot-password, which flips is_guest_account
+      // to false server-side; see AuthService.reset_password). The
+      // builder page itself already prompts guests to claim their account
+      // once they're in (Construtor-CV/[id]/page.tsx), so nothing here
+      // needs to nudge them towards it.
+      if (user.isGuestAccount) {
+        setChecked(true);
+        return;
+      }
+
       const forceReplay = searchParams?.get("tutorial") === "1";
       let hasSeenTutorial = user.hasSeenTutorial;
       let hasCompletedOnboarding = user.hasCompletedOnboarding;
