@@ -137,3 +137,117 @@ def test_chat_json_falls_back_when_response_is_not_a_json_object(monkeypatch):
     fallback = {"score": 0}
     result = llm_service.chat_json("sys", "user", fallback=fallback)
     assert result == fallback
+
+
+class _FakeInflightRedis:
+    """In-memory stand-in for redis.Redis supporting only incr/expire/decr,
+    what ollama_concurrency_guard uses."""
+
+    def __init__(self):
+        self.store: dict[str, int] = {}
+
+    def incr(self, key):
+        self.store[key] = self.store.get(key, 0) + 1
+        return self.store[key]
+
+    def decr(self, key):
+        self.store[key] = self.store.get(key, 0) - 1
+        return self.store[key]
+
+    def expire(self, key, ttl):
+        pass
+
+
+def _patch_fake_redis(monkeypatch, fake):
+    monkeypatch.setattr(
+        "redis.Redis", type("R", (), {"from_url": staticmethod(lambda *a, **k: fake)})
+    )
+
+
+class _BrokenRedis:
+    @staticmethod
+    def from_url(*a, **k):
+        raise ConnectionError("redis unreachable")
+
+
+def test_ollama_guard_grants_slot_under_the_cap(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 4)
+    _patch_fake_redis(monkeypatch, _FakeInflightRedis())
+    with llm_service.ollama_concurrency_guard() as has_slot:
+        assert has_slot is True
+
+
+def test_ollama_guard_denies_slot_once_cap_is_reached(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 2)
+    fake_redis = _FakeInflightRedis()
+    _patch_fake_redis(monkeypatch, fake_redis)
+
+    with llm_service.ollama_concurrency_guard() as slot_1:
+        assert slot_1 is True
+        with llm_service.ollama_concurrency_guard() as slot_2:
+            assert slot_2 is True
+            with llm_service.ollama_concurrency_guard() as slot_3:
+                assert slot_3 is False  # 3rd concurrent call, cap is 2
+
+
+def test_ollama_guard_releases_slot_on_exit_for_next_caller(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 1)
+    fake_redis = _FakeInflightRedis()
+    _patch_fake_redis(monkeypatch, fake_redis)
+
+    with llm_service.ollama_concurrency_guard() as slot_1:
+        assert slot_1 is True
+    # First call released its slot on exit, so a second, later call succeeds.
+    with llm_service.ollama_concurrency_guard() as slot_2:
+        assert slot_2 is True
+
+
+def test_ollama_guard_fails_open_when_redis_is_unreachable(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 1)
+    _patch_fake_redis(monkeypatch, _BrokenRedis())
+    with llm_service.ollama_concurrency_guard() as has_slot:
+        assert has_slot is True
+
+
+def test_ollama_guard_disabled_when_max_concurrent_is_zero(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 0)
+    _patch_fake_redis(monkeypatch, _BrokenRedis())  # never touched
+    with llm_service.ollama_concurrency_guard() as has_slot:
+        assert has_slot is True
+
+
+def test_chat_json_returns_fallback_when_ollama_is_at_capacity(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 1)
+    fake_redis = _FakeInflightRedis()
+    _patch_fake_redis(monkeypatch, fake_redis)
+    calls = []
+
+    def fake_chat_json_request(*a, **k):
+        calls.append(1)
+        return {"score": 99}
+
+    monkeypatch.setattr(llm_service, "chat_json_request", fake_chat_json_request)
+
+    with llm_service.ollama_concurrency_guard():  # occupies the only slot
+        result = llm_service.chat_json("sys", "user", fallback={"score": 0})
+
+    assert result == {"score": 0}
+    assert calls == []  # never even attempted the HTTP call
+
+
+def test_chat_json_skips_guard_for_non_ollama_provider(monkeypatch):
+    monkeypatch.setattr(llm_service.settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(llm_service.settings, "LLM_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_service.settings, "OLLAMA_MAX_CONCURRENT", 1)
+
+    def _boom(*a, **k):
+        raise AssertionError("guard should not be consulted for non-ollama providers")
+
+    monkeypatch.setattr(llm_service, "ollama_concurrency_guard", _boom)
+
+    response = _FakeResponse(json_data={
+        "choices": [{"message": {"content": '{"score": 5}'}}]
+    })
+    _patch_client(monkeypatch, response=response)
+    result = llm_service.chat_json("sys", "user", fallback={"score": 0})
+    assert result == {"score": 5}

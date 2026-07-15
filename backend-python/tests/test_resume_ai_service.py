@@ -207,6 +207,40 @@ def test_improve_experience_free_tier_routes_to_ollama(monkeypatch):
     assert calls == ["http://ollama:11434/v1/chat/completions"]
 
 
+def test_improve_experience_free_tier_falls_back_when_ollama_is_at_capacity(monkeypatch):
+    """When OLLAMA_MAX_CONCURRENT is already saturated, _call_ollama must
+    skip the HTTP call entirely (fail fast) rather than queue behind an
+    already-busy self-hosted model — same reasoning as llm_service's guard."""
+    calls = []
+
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        calls.append(url)
+        return {"description": "Should never be reached.", "notes": "ok"}
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_BASE_URL", "http://ollama:11434")
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_MODEL", "qwen-test")
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_MAX_CONCURRENT", 1)
+
+    from app.services import llm_service as llm_service_module
+    import contextlib
+
+    @contextlib.contextmanager
+    def _no_slot_guard():
+        yield False
+
+    monkeypatch.setattr(llm_service_module, "ollama_concurrency_guard", _no_slot_guard)
+    monkeypatch.setattr(ras_module, "ollama_concurrency_guard", _no_slot_guard)
+
+    result = ResumeAIService.improve_experience_description(
+        None, None, "Fazia tarefas de escritório.", "professional", use_free_tier=True,
+    )
+    assert result["source"] == "heuristic"
+    assert calls == []
+
+
 class _FakeRedisCache:
     """In-memory stand-in for redis.Redis, supporting only what
     _ai_cache_get/_ai_cache_set use (get/setex)."""

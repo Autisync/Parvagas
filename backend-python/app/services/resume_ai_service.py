@@ -13,7 +13,7 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models import CandidateProfile, Resume
-from app.services.llm_service import chat_json_request
+from app.services.llm_service import chat_json_request, ollama_concurrency_guard
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -159,13 +159,17 @@ class ResumeAIService:
             "temperature": 0.2,
             "response_format": {"type": "json_object"},
         }
-        result = chat_json_request(
-            url,
-            {"Content-Type": "application/json"},
-            body,
-            fallback={},
-            timeout=settings.OLLAMA_TIMEOUT_SECONDS,
-        )
+        with ollama_concurrency_guard() as has_slot:
+            if not has_slot:
+                logger.info("Ollama at capacity (OLLAMA_MAX_CONCURRENT), skipping call for this request")
+                return None
+            result = chat_json_request(
+                url,
+                {"Content-Type": "application/json"},
+                body,
+                fallback={},
+                timeout=settings.OLLAMA_TIMEOUT_SECONDS,
+            )
         return result or None
 
     @staticmethod

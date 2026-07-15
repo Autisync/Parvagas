@@ -183,6 +183,15 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     OLLAMA_FREE_TIER_ENABLED: bool = os.getenv("OLLAMA_FREE_TIER_ENABLED", "true").lower() == "true"
     OLLAMA_TIMEOUT_SECONDS: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "60"))
+    # Soft cap on requests in flight to the self-hosted Ollama container at
+    # once, shared across every Gunicorn worker via Redis. The container is
+    # capped at 2 CPUs running a 3B model (docker-compose.prod.yml) — beyond
+    # ~4 concurrent generations, requests don't fail, they all just get
+    # slower together and start missing their timeout. Capping means the
+    # (max_concurrent)th+1 request fails fast into the existing heuristic/
+    # empty-result fallback instead of queueing behind an already-saturated
+    # model. 0 disables the cap.
+    OLLAMA_MAX_CONCURRENT: int = int(os.getenv("OLLAMA_MAX_CONCURRENT", "4"))
 
     # Deploy automation (used by admin deploy panel)
     # Option A: Portainer stack-update webhook (recommended for production).

@@ -12,6 +12,7 @@ timeout, network error, non-JSON response, schema mismatch) it returns the
 caller-supplied `fallback` instead. This is the guardrail every Llama-backed
 feature in the execution plan depends on.
 """
+import contextlib
 import json
 
 import httpx
@@ -21,6 +22,53 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+_OLLAMA_INFLIGHT_KEY = "ollama:inflight_requests"
+_OLLAMA_INFLIGHT_SAFETY_TTL_SECONDS = 30  # >= OLLAMA_TIMEOUT_SECONDS headroom
+
+
+@contextlib.contextmanager
+def ollama_concurrency_guard():
+    """Soft cap on requests in flight to the self-hosted Ollama container,
+    shared across every Gunicorn worker via a Redis counter (a per-process
+    limiter wouldn't coordinate across WEB_CONCURRENCY workers hitting the
+    same container). Yields True if the caller has a slot and should
+    proceed, False if the cap is already full and the caller should fall
+    back immediately rather than queue behind an already-saturated model.
+
+    Fails open on any Redis problem (never blocks a call over caching
+    infra), and the counter carries a short TTL as a safety net so a worker
+    that crashes mid-call can't permanently leak a slot.
+    """
+    if settings.OLLAMA_MAX_CONCURRENT <= 0:
+        yield True
+        return
+
+    client = None
+    acquired = False
+    try:
+        import redis as _redis
+
+        client = _redis.Redis.from_url(settings.REDIS_URL, socket_timeout=2)
+        current = client.incr(_OLLAMA_INFLIGHT_KEY)
+        client.expire(_OLLAMA_INFLIGHT_KEY, _OLLAMA_INFLIGHT_SAFETY_TTL_SECONDS)
+        if current <= settings.OLLAMA_MAX_CONCURRENT:
+            acquired = True
+        else:
+            client.decr(_OLLAMA_INFLIGHT_KEY)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Ollama concurrency guard skipped: %s", exc)
+        yield True
+        return
+
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                client.decr(_OLLAMA_INFLIGHT_KEY)
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def llm_enabled() -> bool:
@@ -107,10 +155,24 @@ def chat_json(
         "response_format": {"type": "json_object"},
     }
 
-    return chat_json_request(
-        f"{base_url}/chat/completions",
-        headers,
-        body,
-        fallback=fallback,
-        timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
-    )
+    is_ollama = settings.LLM_PROVIDER.strip().lower() == "ollama"
+    if not is_ollama:
+        return chat_json_request(
+            f"{base_url}/chat/completions",
+            headers,
+            body,
+            fallback=fallback,
+            timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
+        )
+
+    with ollama_concurrency_guard() as has_slot:
+        if not has_slot:
+            logger.info("Ollama at capacity (OLLAMA_MAX_CONCURRENT), returning fallback without calling it")
+            return fallback
+        return chat_json_request(
+            f"{base_url}/chat/completions",
+            headers,
+            body,
+            fallback=fallback,
+            timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
+        )
