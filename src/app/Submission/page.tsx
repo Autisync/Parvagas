@@ -1,5 +1,6 @@
 import CVForm from "../components/Apply/CVForm";
 import CVBuilderGuestForm from "../components/Apply/CVBuilderGuestForm";
+import SubmissionPathChooser from "../components/Apply/SubmissionPathChooser";
 import { Metadata } from "next";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -24,8 +25,9 @@ export default function Form() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Header />
-      <CVForm />
+      <SubmissionPathChooser />
       <CVBuilderGuestForm />
+      <CVForm />
       <Footer />
     </div>
   );
