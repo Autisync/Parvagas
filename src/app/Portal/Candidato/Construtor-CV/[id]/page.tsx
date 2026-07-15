@@ -16,7 +16,12 @@ import ResumePreview from "../preview/ResumePreview";
 import RestorePass from "@/app/components/RestorePass";
 import { track } from "@/lib/analytics";
 import { SKILL_SUGGESTIONS, LANGUAGE_SUGGESTIONS, CERT_SUGGESTIONS } from "@/lib/suggestionCatalogs";
-import { ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon, SparklesIcon, UserIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon,
+  SparklesIcon, UserIcon, XMarkIcon, WrenchScrewdriverIcon, BriefcaseIcon, DocumentChartBarIcon,
+  ShieldCheckIcon, ChatBubbleBottomCenterTextIcon, AdjustmentsHorizontalIcon, LightBulbIcon,
+  ChartBarIcon,
+} from "@heroicons/react/24/outline";
 
 type ResumeData = {
   fullName?: string;
@@ -151,34 +156,102 @@ function percentileHint(score: ScoreResult): string {
   return value >= 85 ? "Excelente — o seu CV está bem otimizado." : `Próximo passo: ${hint}`;
 }
 
-const SCORE_BAND_STYLES: Record<string, { badge: string; ring: string; label: string }> = {
-  excelente: { badge: "bg-emerald-100 text-emerald-700", ring: "border-emerald-200", label: "Excelente" },
-  boa: { badge: "bg-emerald-50 text-emerald-700", ring: "border-emerald-100", label: "Boa" },
-  média: { badge: "bg-amber-100 text-amber-700", ring: "border-amber-200", label: "Média" },
-  baixa: { badge: "bg-red-100 text-red-700", ring: "border-red-200", label: "Baixa" },
+// Band → the full visual language for that state (text, track/progress color,
+// card accent, chip tint). One source of truth so a dimension's number, bar,
+// and badge always agree — nothing here is ever "amber no matter what".
+const SCORE_BAND_STYLES: Record<string, { label: string; text: string; bar: string; chipBg: string; chipText: string; accentBar: string }> = {
+  excelente: { label: "Excelente", text: "text-emerald-700", bar: "bg-emerald-500", chipBg: "bg-emerald-50", chipText: "text-emerald-700", accentBar: "bg-emerald-500" },
+  boa: { label: "Boa", text: "text-emerald-700", bar: "bg-emerald-500", chipBg: "bg-emerald-50", chipText: "text-emerald-700", accentBar: "bg-emerald-500" },
+  média: { label: "Média", text: "text-amber-700", bar: "bg-amber-500", chipBg: "bg-amber-50", chipText: "text-amber-700", accentBar: "bg-amber-500" },
+  baixa: { label: "A melhorar", text: "text-red-700", bar: "bg-red-500", chipBg: "bg-red-50", chipText: "text-red-700", accentBar: "bg-red-500" },
 };
+
+function scoreBandFromValue(value: number | null): keyof typeof SCORE_BAND_STYLES | null {
+  if (value == null) return null;
+  if (value >= 85) return "excelente";
+  if (value >= 65) return "boa";
+  if (value >= 40) return "média";
+  return "baixa";
+}
+
+// One icon per dimension — replaces the earlier design's single sparkle
+// icon repeated on every card, which read as generic AI-tool output rather
+// than deliberate, purpose-built sections.
+const DIMENSION_ICONS: Record<string, typeof WrenchScrewdriverIcon> = {
+  skills_score: WrenchScrewdriverIcon,
+  experience_score: BriefcaseIcon,
+  formatting_score: DocumentChartBarIcon,
+  ats_score: ShieldCheckIcon,
+};
+
+/** Small SVG ring gauge — used for the overall score so it reads as a real
+ * dashboard metric rather than a number stamped in a circle. */
+function ScoreRing({ value, size = 64, stroke = 6 }: { value: number | null; size?: number; stroke?: number }) {
+  const band = scoreBandFromValue(value);
+  const styles = band ? SCORE_BAND_STYLES[band] : null;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = value == null ? 0 : Math.max(0, Math.min(100, value)) / 100;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-slate-100" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - progress)}
+          className={`${styles?.text || "text-slate-300"} transition-[stroke-dashoffset] duration-700 ease-out`}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</span>
+      </div>
+    </div>
+  );
+}
 
 /** One score dimension, explained for someone who has never heard of an ATS
  * score before: what it means, why it landed here, and — only when there's
  * actually something to fix — a concrete next step. */
 function ScoreExplanationCard({ item }: { item: ScoreExplanation }) {
   const styles = item.band ? SCORE_BAND_STYLES[item.band] : null;
+  const Icon = DIMENSION_ICONS[item.dimension] || DocumentChartBarIcon;
+  const pct = item.score == null ? 0 : Math.max(0, Math.min(100, item.score));
   return (
-    <div className={`rounded-lg border bg-white p-3 ${styles?.ring || "border-slate-200"}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-800">{item.label}</p>
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-bold text-slate-900">{item.score == null ? "—" : Math.round(item.score)}</span>
-          {styles && (
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles.badge}`}>{styles.label}</span>
-          )}
+    <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+      <div className={`absolute inset-y-0 left-0 w-1 ${styles?.accentBar || "bg-slate-200"}`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${styles?.chipBg || "bg-slate-100"}`}>
+            <Icon className={`h-4 w-4 ${styles?.chipText || "text-slate-500"}`} />
+          </span>
+          <p className="text-sm font-semibold leading-tight text-slate-800">{item.label}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="text-xl font-bold text-slate-900">{item.score == null ? "—" : Math.round(item.score)}</span>
+          {styles && <p className={`text-[11px] font-semibold ${styles.text}`}>{styles.label}</p>}
         </div>
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{item.explanation}</p>
+
+      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full transition-all duration-700 ease-out ${styles?.bar || "bg-slate-300"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <p className="mt-3 text-xs leading-relaxed text-slate-600">{item.explanation}</p>
+
       {item.suggestion && (
-        <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-800">
-          <SparklesIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          <span>{item.suggestion}</span>
+        <p className="mt-2.5 flex items-start gap-1.5 border-t border-slate-100 pt-2.5 text-xs leading-relaxed text-slate-700">
+          <LightBulbIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <span><span className="font-semibold text-slate-800">Dica:</span> {item.suggestion}</span>
         </p>
       )}
     </div>
@@ -763,87 +836,101 @@ export default function ConstrutorCvEditorPage() {
       {/* AI tools (C2) — every action degrades gracefully: score falls back
           to the heuristic, rewrite/adapt report "no change" instead of
           failing when the LLM flags are off or the model is unreachable. */}
-      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-          <SparklesIcon className="h-4 w-4 text-red-600" /> Ferramentas IA
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runScore}
-            disabled={aiBusy !== null}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-          >
-            {aiBusy === "score" ? "A avaliar…" : "Avaliar CV"}
-          </button>
-          <button
-            type="button"
-            onClick={runRewrite}
-            disabled={aiBusy !== null}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
-          >
-            {aiBusy === "rewrite" ? "A melhorar…" : "Melhorar texto"}
-          </button>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={adaptJobId}
-              onChange={(e) => setAdaptJobId(e.target.value)}
-              disabled={savedJobs.length === 0}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 disabled:opacity-60"
-            >
-              <option value="">
-                {savedJobs.length === 0 ? "Sem vagas guardadas" : "Adaptar a vaga…"}
-              </option>
-              {savedJobs.map((job) => (
-                <option key={job.id} value={job.id}>{job.title}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={runAdapt}
-              disabled={aiBusy !== null || !adaptJobId}
-              className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
-            >
-              {aiBusy === "adapt" ? "A adaptar…" : "Adaptar"}
-            </button>
+      <div className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-red-50 to-white px-4 py-3">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600">
+            <SparklesIcon className="h-4 w-4 text-white" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Ferramentas IA</p>
+            <p className="text-xs text-slate-500">Avalie, melhore e adapte o seu CV a uma vaga específica</p>
           </div>
         </div>
 
-        {score && (
-          <div className="mt-4">
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-slate-900 shadow-sm">
-                {score.overall_score == null ? "—" : Math.round(score.overall_score)}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Pontuação geral do seu CV</p>
-                <p className="text-xs text-slate-500">{percentileHint(score)}</p>
-              </div>
+        <div className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runScore}
+              disabled={aiBusy !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+            >
+              <ChartBarIcon className="h-3.5 w-3.5" />
+              {aiBusy === "score" ? "A avaliar…" : "Avaliar CV"}
+            </button>
+            <button
+              type="button"
+              onClick={runRewrite}
+              disabled={aiBusy !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              <ChatBubbleBottomCenterTextIcon className="h-3.5 w-3.5 text-slate-400" />
+              {aiBusy === "rewrite" ? "A melhorar…" : "Melhorar texto"}
+            </button>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={adaptJobId}
+                onChange={(e) => setAdaptJobId(e.target.value)}
+                disabled={savedJobs.length === 0}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 disabled:opacity-60"
+              >
+                <option value="">
+                  {savedJobs.length === 0 ? "Sem vagas guardadas" : "Adaptar a vaga…"}
+                </option>
+                {savedJobs.map((job) => (
+                  <option key={job.id} value={job.id}>{job.title}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={runAdapt}
+                disabled={aiBusy !== null || !adaptJobId}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+              >
+                <AdjustmentsHorizontalIcon className="h-3.5 w-3.5" />
+                {aiBusy === "adapt" ? "A adaptar…" : "Adaptar"}
+              </button>
             </div>
-
-            {score.explanations && score.explanations.length > 0 ? (
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {score.explanations.map((item) => (
-                  <ScoreExplanationCard key={item.dimension} item={item} />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                {([
-                  ["Competências", score.skills_score],
-                  ["Experiência", score.experience_score],
-                  ["Formatação", score.formatting_score],
-                  ["ATS", score.ats_score],
-                ] as const).map(([label, value]) => (
-                  <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-center">
-                    <p className="text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</p>
-                    <p className="text-[11px] text-slate-500">{label}</p>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        )}
+
+          {score && (
+            <div className="mt-4">
+              <div className="flex items-center gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <ScoreRing value={score.overall_score} size={64} stroke={6} />
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Pontuação geral do seu CV</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{percentileHint(score)}</p>
+                </div>
+              </div>
+
+              {score.explanations && score.explanations.length > 0 ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {score.explanations.map((item) => (
+                    <ScoreExplanationCard key={item.dimension} item={item} />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                  {([
+                    ["skills_score", "Competências", score.skills_score],
+                    ["experience_score", "Experiência", score.experience_score],
+                    ["formatting_score", "Formatação", score.formatting_score],
+                    ["ats_score", "ATS", score.ats_score],
+                  ] as const).map(([dim, label, value]) => {
+                    const Icon = DIMENSION_ICONS[dim] || DocumentChartBarIcon;
+                    return (
+                      <div key={dim} className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-center">
+                        <Icon className="mx-auto h-4 w-4 text-slate-400" />
+                        <p className="mt-1 text-lg font-bold text-slate-900">{value == null ? "—" : Math.round(value)}</p>
+                        <p className="text-[11px] text-slate-500">{label}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[240px,1fr,1fr]">
