@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.logging import get_logger
-from app.core.observability import limiter
+from app.core.observability import limiter, rate_limit_key_by_user
 from app.db.session import get_db
 from app.models import (
     CandidateProfile,
@@ -805,7 +805,7 @@ class ResumeAdaptRequest(BaseModel):
 
 
 @router.post("/{resume_id}/adapt")
-@limiter.limit("30/hour")
+@limiter.limit("30/hour", key_func=rate_limit_key_by_user)
 async def adapt_resume_to_job(
     resume_id: str,
     payload: ResumeAdaptRequest = Body(...),
@@ -895,7 +895,7 @@ async def get_public_resume(
 
 
 @router.post("/score", response_model=ResumeScoreResponse)
-@limiter.limit("20/hour")
+@limiter.limit("20/hour", key_func=rate_limit_key_by_user)
 async def score_resume(
     payload: dict[str, str] = Body(...),
     db: Session = Depends(get_db),
@@ -933,7 +933,7 @@ async def score_resume(
 
 
 @router.post("/rewrite", response_model=ResumeRewriteResponse)
-@limiter.limit("15/hour")
+@limiter.limit("15/hour", key_func=rate_limit_key_by_user)
 async def rewrite_resume(
     payload: ResumeRewriteRequest = Body(...),
     db: Session = Depends(get_db),
@@ -978,7 +978,7 @@ async def rewrite_resume(
 
 
 @router.post("/experience/improve", response_model=ExperienceImproveResponse)
-@limiter.limit("20/hour")
+@limiter.limit("20/hour", key_func=rate_limit_key_by_user)
 async def improve_experience(
     payload: ExperienceImproveRequest = Body(...),
     db: Session = Depends(get_db),

@@ -1,6 +1,8 @@
 """Observability and rate-limiting wiring (Sentry + slowapi)."""
 from __future__ import annotations
 
+from starlette.requests import Request
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -22,6 +24,36 @@ limiter = Limiter(
     storage_uri=settings.REDIS_URL,
     headers_enabled=False,
 )
+
+
+def rate_limit_key_by_user(request: Request) -> str:
+    """Rate-limit key for endpoints where the cost is per-account (LLM
+    calls), not per-network — IP-based limiting (the Limiter default, right
+    for anti-brute-force on auth endpoints) means unrelated candidates
+    sharing one public IP under carrier-grade NAT (common on Angolan mobile
+    networks) throttle each other on unrelated AI-tool usage.
+
+    slowapi's key_func is only ever called with the raw Request (see
+    Limiter.__evaluate_limits in slowapi/extension.py — it inspects the
+    key_func's signature for a `request` parameter and calls it with at
+    most that one arg; it never has access to FastAPI-resolved dependencies
+    like `current_user`, since the rate-limit check runs inside the
+    decorator wrapping the endpoint, before request kwargs are meaningfully
+    inspectable as anything but the exact params slowapi looks for).
+
+    request.state.auth_claims is set by attach_auth_context, a real ASGI
+    `@app.middleware("http")` in main.py that runs before routing/dependency
+    resolution on every request — so it's always populated (or None) by the
+    time this key_func runs, with no need to re-decode the JWT here.
+    Falls back to IP for unauthenticated requests (@limiter.limit still
+    applies to e.g. guest endpoints, which have no user to key on).
+    """
+    claims = getattr(request.state, "auth_claims", None)
+    if claims:
+        user_id = claims.get("sub") or claims.get("user_id")
+        if user_id:
+            return f"user:{user_id}"
+    return get_remote_address(request)
 
 
 def init_sentry() -> bool:
