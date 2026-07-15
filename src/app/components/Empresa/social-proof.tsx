@@ -10,11 +10,6 @@ import { AnimatedCounter } from "@/app/components/motion";
 const PROOF_PHOTO =
   "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1200&q=80";
 
-// Marketing uplift applied to the real backend figure, and the safe fallback
-// shown if the stats endpoint is unavailable.
-const MARKETING_UPLIFT = 1.15;
-const CANDIDATES_FALLBACK = 5000;
-
 type PublicStats = {
   candidates: number | null;
   companies: number | null;
@@ -22,22 +17,28 @@ type PublicStats = {
   applications: number | null;
 };
 
+// Fallbacks only used if /public/stats is unreachable, so the section never
+// shows a zero/empty figure. Every number shown is otherwise the real,
+// unmodified backend count.
+const FALLBACKS: PublicStats = { candidates: 5000, companies: 50, jobs: 100, applications: null };
+
 export default function EmpresaSocialProof() {
   const { dict } = useClientLocale();
   const cp = dict.companyPage;
 
-  // Real active-candidate count from the backend, inflated 15% for marketing.
-  // Falls back to a baseline so the section never shows an empty/zero figure.
-  const [candidates, setCandidates] = useState<number>(CANDIDATES_FALLBACK);
+  const [stats, setStats] = useState<PublicStats>(FALLBACKS);
 
   useEffect(() => {
     let cancelled = false;
     apiFetch<PublicStats>("/public/stats", { suppressGlobalErrors: true })
       .then((data) => {
         if (cancelled) return;
-        if (typeof data.candidates === "number" && data.candidates > 0) {
-          setCandidates(Math.round(data.candidates * MARKETING_UPLIFT));
-        }
+        setStats({
+          candidates: data.candidates ?? FALLBACKS.candidates,
+          companies: data.companies ?? FALLBACKS.companies,
+          jobs: data.jobs ?? FALLBACKS.jobs,
+          applications: data.applications ?? FALLBACKS.applications,
+        });
       })
       .catch(() => {
         /* keep the fallback baseline */
@@ -47,13 +48,11 @@ export default function EmpresaSocialProof() {
     };
   }, []);
 
-  // value + suffix drive the count-up; label stays copy-driven from the dict.
-  // Only the middle stat is a real backend metric; the others are marketing
-  // claims that still animate for consistency.
-  const stats = [
-    { value: 90, suffix: "%", label: cp.proofStat1Label },
-    { value: candidates, suffix: "+", label: cp.proofStat2Label },
-    { value: 3, suffix: "×", label: cp.proofStat3Label },
+  // Every figure here is a real backend count — no marketing multiplier.
+  const displayStats = [
+    { value: stats.candidates ?? FALLBACKS.candidates!, suffix: "+", label: cp.proofStat1Label },
+    { value: stats.companies ?? FALLBACKS.companies!, suffix: "+", label: cp.proofStat2Label },
+    { value: stats.jobs ?? FALLBACKS.jobs!, suffix: "+", label: cp.proofStat3Label },
   ];
 
   return (
@@ -81,7 +80,7 @@ export default function EmpresaSocialProof() {
 
         {/* Stats row */}
         <div className="mx-auto mt-10 grid max-w-4xl grid-cols-1 gap-8 sm:grid-cols-3">
-          {stats.map((s) => (
+          {displayStats.map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-5xl font-extrabold text-white">
                 <AnimatedCounter value={s.value} suffix={s.suffix} />
@@ -90,24 +89,6 @@ export default function EmpresaSocialProof() {
             </div>
           ))}
         </div>
-
-        {/* Testimonial card */}
-        <figure className="mx-auto mt-16 max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-8 shadow-sm backdrop-blur-sm">
-          <blockquote>
-            <p className="text-base leading-8 text-gray-200">
-              &ldquo;{cp.proofTestimonialQuote}&rdquo;
-            </p>
-          </blockquote>
-          <figcaption className="mt-6 flex items-center gap-4">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">
-              {cp.proofTestimonialAuthor.slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">{cp.proofTestimonialAuthor}</p>
-              <p className="text-xs text-gray-400">{cp.proofTestimonialRole}</p>
-            </div>
-          </figcaption>
-        </figure>
       </div>
     </section>
   );

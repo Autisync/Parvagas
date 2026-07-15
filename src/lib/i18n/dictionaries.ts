@@ -235,17 +235,11 @@ export type Dictionary = {
     step3Title: string;
     step3Desc: string;
     stepsCta: string;
-    // Social proof
+    // Social proof (real, backend-sourced counters only)
     proofEyebrow: string;
-    proofStat1Value: string;
     proofStat1Label: string;
-    proofStat2Value: string;
     proofStat2Label: string;
-    proofStat3Value: string;
     proofStat3Label: string;
-    proofTestimonialQuote: string;
-    proofTestimonialAuthor: string;
-    proofTestimonialRole: string;
     // FAQ
     faqEyebrow: string;
     faqTitle: string;
@@ -572,17 +566,11 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       step3Title: "Faça shortlist e contrate",
       step3Desc: "Use filtros inteligentes e recomendações de IA para identificar os melhores candidatos e avance para a entrevista rapidamente.",
       stepsCta: "Criar Perfil de Empresa",
-      // Social proof
-      proofEyebrow: "Resultados comprovados",
-      proofStat1Value: "90%",
-      proofStat1Label: "das empresas encontram candidatos qualificados em menos de duas semanas",
-      proofStat2Value: "5.000+",
-      proofStat2Label: "candidatos activos na plataforma",
-      proofStat3Value: "3×",
-      proofStat3Label: "mais rápido do que recrutamento tradicional via redes sociais",
-      proofTestimonialQuote: "Antes passávamos semanas a filtrar mensagens no WhatsApp e no Facebook. Com a Parvagas publicámos a vaga numa manhã e, em dez dias, tínhamos 43 candidaturas já organizadas e verificadas. Contratámos um engenheiro sénior sem sair da plataforma.",
-      proofTestimonialAuthor: "Ana Paula Ferreira",
-      proofTestimonialRole: "Directora de Recursos Humanos · Kianda Talent, Luanda",
+      // Social proof (real, backend-sourced counters only)
+      proofEyebrow: "Números da plataforma",
+      proofStat1Label: "candidatos activos na plataforma",
+      proofStat2Label: "empresas já a recrutar na Parvagas",
+      proofStat3Label: "vagas activas neste momento",
       // FAQ
       faqEyebrow: "Perguntas frequentes",
       faqTitle: "Tudo o que precisa de saber",
@@ -907,17 +895,11 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       step3Title: "Shortlist and hire",
       step3Desc: "Use smart filters and AI recommendations to identify the best candidates and move to interview quickly.",
       stepsCta: "Create Company Profile",
-      // Social proof
-      proofEyebrow: "Proven results",
-      proofStat1Value: "90%",
-      proofStat1Label: "of companies find qualified candidates within two weeks",
-      proofStat2Value: "5,000+",
-      proofStat2Label: "active candidates on the platform",
-      proofStat3Value: "3×",
-      proofStat3Label: "faster than traditional social media recruitment",
-      proofTestimonialQuote: "We used to spend weeks filtering WhatsApp and Facebook messages. With Parvagas we posted the role in one morning and, within ten days, had 43 applications already organised and verified. We hired a senior engineer without ever leaving the platform.",
-      proofTestimonialAuthor: "Ana Paula Ferreira",
-      proofTestimonialRole: "HR Director · Kianda Talent, Luanda",
+      // Social proof (real, backend-sourced counters only)
+      proofEyebrow: "Platform numbers",
+      proofStat1Label: "active candidates on the platform",
+      proofStat2Label: "companies already hiring on Parvagas",
+      proofStat3Label: "active job openings right now",
       // FAQ
       faqEyebrow: "Frequently asked questions",
       faqTitle: "Everything you need to know",

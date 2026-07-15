@@ -1,13 +1,36 @@
 "use client";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 
 // Replace this URL with a photo that represents your team or workplace
 const HERO_PHOTO =
   "https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&q=80";
 
+const CANDIDATES_FALLBACK = 5000;
+
 export default function EmpresaHero() {
   const { dict } = useClientLocale();
+
+  // Real backend count, no marketing adjustment. Falls back to a baseline
+  // only if /public/stats is unreachable.
+  const [candidateCount, setCandidateCount] = useState(CANDIDATES_FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ candidates: number | null }>("/public/stats", { suppressGlobalErrors: true })
+      .then((data) => {
+        if (!cancelled && typeof data.candidates === "number" && data.candidates > 0) {
+          setCandidateCount(data.candidates);
+        }
+      })
+      .catch(() => {
+        /* keep the fallback baseline */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="overflow-hidden bg-white">
@@ -44,7 +67,7 @@ export default function EmpresaHero() {
             {/* Trust badges */}
             <div className="mt-10 flex flex-wrap items-center gap-6">
               {[
-                { value: "5 000+", label: "candidatos activos" },
+                { value: `${candidateCount.toLocaleString("pt-PT")}+`, label: "candidatos activos" },
                 { value: "48 h", label: "para verificação" },
                 { value: "100%", label: "gratuito para registar" },
               ].map((badge) => (
