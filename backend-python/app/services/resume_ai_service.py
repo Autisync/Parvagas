@@ -6,6 +6,7 @@ config (_request_parts), builds prompts, and normalizes/validates results.
 The public API (score_resume/rewrite_resume with use_free_tier routing) and
 the cloud → Ollama → heuristic fall-through are unchanged.
 """
+import hashlib
 import json
 from typing import Any
 
@@ -16,6 +17,48 @@ from app.services.llm_service import chat_json_request
 
 logger = get_logger(__name__)
 settings = get_settings()
+
+# Re-clicking "Avaliar CV"/"Melhorar texto"/"Melhorar com IA" without having
+# changed anything (or a page refresh replaying the same action) otherwise
+# pays a full LLM round-trip every time — round-trips this app now runs off
+# the event loop (run_in_threadpool) but that only stops them from blocking
+# *other* requests, not from costing money/latency on their own. 10 minutes:
+# long enough to absorb duplicate clicks/reloads, short enough that a
+# genuinely edited resume gets a fresh result quickly. No prior art for this
+# TTL in the codebase — picked from the middle of a reasonable range rather
+# than invented from nothing.
+_AI_RESULT_CACHE_TTL_SECONDS = 600
+
+
+def _ai_cache_key(*parts: Any) -> str:
+    raw = json.dumps(parts, sort_keys=True, default=str, ensure_ascii=False)
+    return "ai_result:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _ai_cache_get(key: str) -> dict[str, Any] | None:
+    """Fails open — a Redis hiccup must fall through to a live LLM call,
+    never block or error the request. Mirrors the pattern already used by
+    EmailService._check_outbound_rate_limit."""
+    try:
+        import redis as _redis
+
+        client = _redis.Redis.from_url(settings.REDIS_URL, socket_timeout=2)
+        raw = client.get(key)
+        if raw:
+            return json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AI result cache read skipped: %s", exc)
+    return None
+
+
+def _ai_cache_set(key: str, value: dict[str, Any]) -> None:
+    try:
+        import redis as _redis
+
+        client = _redis.Redis.from_url(settings.REDIS_URL, socket_timeout=2)
+        client.setex(key, _AI_RESULT_CACHE_TTL_SECONDS, json.dumps(value))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AI result cache write skipped: %s", exc)
 
 
 class ResumeAIService:
@@ -295,14 +338,25 @@ class ResumeAIService:
 
     @staticmethod
     def score_resume(resume: Resume, profile: CandidateProfile | None, use_free_tier: bool = False) -> dict[str, Any]:
-        def finalize(scores: dict[str, Any], metadata: dict[str, Any], source: str) -> dict[str, Any]:
+        ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
+        # Cache key is the exact prompt (everything that could affect the
+        # output is already folded into it) + tier — re-clicking "Avaliar
+        # CV" without having changed anything returns the prior result
+        # instead of paying another LLM round-trip.
+        cache_key = _ai_cache_key("score", ai_prompt, use_free_tier)
+        cached = _ai_cache_get(cache_key)
+        if cached:
+            return cached
+
+        def finalize(scores: dict[str, Any], metadata: dict[str, Any], source: str, cache: bool) -> dict[str, Any]:
             result = {**scores, "metadata": metadata, "source": source}
             result["explanations"] = ResumeAIService._build_dimension_explanations(resume, profile, scores)
+            if cache:
+                _ai_cache_set(cache_key, result)
             return result
 
         # Cloud AI — paid subscribers (RESUME_AI_ENABLED + API key)
         if ResumeAIService._ai_enabled() and not use_free_tier:
-            ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
             ai_result = ResumeAIService._call_ai(ai_prompt)
             if ai_result:
                 scores = {
@@ -312,12 +366,11 @@ class ResumeAIService:
                     "formatting_score": float(ai_result.get("formatting_score", 0.0)),
                     "ats_score": float(ai_result.get("ats_score", 0.0)),
                 }
-                return finalize(scores, ai_result.get("metadata", {}), "ai_cloud")
+                return finalize(scores, ai_result.get("metadata", {}), "ai_cloud", cache=True)
 
         # Ollama — free tier (self-hosted LLM, limited but functional)
         if ResumeAIService._ollama_enabled():
             try:
-                ai_prompt = ResumeAIService._build_ai_prompt_for_score(resume, profile)
                 ai_result = ResumeAIService._call_ollama(ai_prompt)
                 if ai_result:
                     scores = {
@@ -327,40 +380,50 @@ class ResumeAIService:
                         "formatting_score": float(ai_result.get("formatting_score", 0.0)),
                         "ats_score": float(ai_result.get("ats_score", 0.0)),
                     }
-                    return finalize(scores, ai_result.get("metadata", {}), "ai_ollama")
+                    return finalize(scores, ai_result.get("metadata", {}), "ai_ollama", cache=True)
             except Exception:
                 pass  # fall through to heuristic
 
+        # Heuristic path is free/instant — never cached (a cached miss would
+        # otherwise mask the AI recovering for up to the cache TTL).
         heuristic = ResumeAIService._heuristic_score(resume, profile)
         heuristic["explanations"] = ResumeAIService._build_dimension_explanations(resume, profile, heuristic)
         return heuristic
 
     @staticmethod
     def rewrite_resume(resume: Resume, profile: CandidateProfile | None, tone: str, instructions: str | None, use_free_tier: bool = False) -> dict[str, Any]:
+        prompt = ResumeAIService._build_ai_prompt_for_rewrite(resume, profile, tone, instructions)
+        cache_key = _ai_cache_key("rewrite", prompt, use_free_tier)
+        cached = _ai_cache_get(cache_key)
+        if cached:
+            return cached
+
         # Cloud AI — paid subscribers
         if ResumeAIService._ai_enabled() and not use_free_tier:
-            prompt = ResumeAIService._build_ai_prompt_for_rewrite(resume, profile, tone, instructions)
             ai_result = ResumeAIService._call_ai(prompt)
             if ai_result:
-                return {
+                result = {
                     "title": str(ai_result.get("title", resume.title)).strip() or resume.title,
                     "summary": str(ai_result.get("summary", resume.summary or "")).strip(),
                     "notes": str(ai_result.get("notes", "AI rewrite completed.")),
                     "source": "ai_cloud",
                 }
+                _ai_cache_set(cache_key, result)
+                return result
 
         # Ollama — free tier
         if ResumeAIService._ollama_enabled():
             try:
-                prompt = ResumeAIService._build_ai_prompt_for_rewrite(resume, profile, tone, instructions)
                 ai_result = ResumeAIService._call_ollama(prompt)
                 if ai_result:
-                    return {
+                    result = {
                         "title": str(ai_result.get("title", resume.title)).strip() or resume.title,
                         "summary": str(ai_result.get("summary", resume.summary or "")).strip(),
                         "notes": str(ai_result.get("notes", "Rewrite via Ollama (free tier).")),
                         "source": "ai_ollama",
                     }
+                    _ai_cache_set(cache_key, result)
+                    return result
             except Exception:
                 pass
 
@@ -378,28 +441,36 @@ class ResumeAIService:
         """Rewrite a single work-experience description — the per-item
         sibling of rewrite_resume, same cloud → Ollama → heuristic
         fall-through, scoped to one bullet instead of the whole resume."""
+        prompt = ResumeAIService._build_ai_prompt_for_experience(job_title, company, description, tone)
+        cache_key = _ai_cache_key("experience_improve", prompt, use_free_tier)
+        cached = _ai_cache_get(cache_key)
+        if cached:
+            return cached
+
         # Cloud AI — paid subscribers
         if ResumeAIService._ai_enabled() and not use_free_tier:
-            prompt = ResumeAIService._build_ai_prompt_for_experience(job_title, company, description, tone)
             ai_result = ResumeAIService._call_ai(prompt)
             if ai_result:
-                return {
+                result = {
                     "description": str(ai_result.get("description", description)).strip() or description,
                     "notes": str(ai_result.get("notes", "AI rewrite completed.")),
                     "source": "ai_cloud",
                 }
+                _ai_cache_set(cache_key, result)
+                return result
 
         # Ollama — free tier
         if ResumeAIService._ollama_enabled():
             try:
-                prompt = ResumeAIService._build_ai_prompt_for_experience(job_title, company, description, tone)
                 ai_result = ResumeAIService._call_ollama(prompt)
                 if ai_result:
-                    return {
+                    result = {
                         "description": str(ai_result.get("description", description)).strip() or description,
                         "notes": str(ai_result.get("notes", "Rewrite via Ollama (free tier).")),
                         "source": "ai_ollama",
                     }
+                    _ai_cache_set(cache_key, result)
+                    return result
             except Exception:
                 pass
 

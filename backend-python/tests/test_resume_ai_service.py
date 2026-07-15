@@ -207,6 +207,124 @@ def test_improve_experience_free_tier_routes_to_ollama(monkeypatch):
     assert calls == ["http://ollama:11434/v1/chat/completions"]
 
 
+class _FakeRedisCache:
+    """In-memory stand-in for redis.Redis, supporting only what
+    _ai_cache_get/_ai_cache_set use (get/setex)."""
+
+    def __init__(self):
+        self.store: dict[str, str] = {}
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def setex(self, key, ttl, value):
+        self.store[key] = value
+
+
+def _patch_fake_redis(monkeypatch, fake):
+    monkeypatch.setattr(
+        "redis.Redis", type("R", (), {"from_url": staticmethod(lambda *a, **k: fake)})
+    )
+
+
+def test_score_resume_cache_hit_skips_second_llm_call(monkeypatch):
+    fake_redis = _FakeRedisCache()
+    _patch_fake_redis(monkeypatch, fake_redis)
+    calls = []
+
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        calls.append(1)
+        return _SCORE_RESPONSE
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    resume = _resume()
+    first = ResumeAIService.score_resume(resume, None, use_free_tier=False)
+    second = ResumeAIService.score_resume(resume, None, use_free_tier=False)
+
+    assert first["source"] == "ai_cloud"
+    assert second["source"] == "ai_cloud"
+    assert second["overall_score"] == first["overall_score"]
+    assert len(calls) == 1  # the second call was served entirely from cache
+
+
+def test_score_resume_cache_key_differs_for_different_resume_content(monkeypatch):
+    fake_redis = _FakeRedisCache()
+    _patch_fake_redis(monkeypatch, fake_redis)
+    calls = []
+
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        calls.append(1)
+        return _SCORE_RESPONSE
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    ResumeAIService.score_resume(_resume(title="CV A"), None, use_free_tier=False)
+    ResumeAIService.score_resume(_resume(title="CV B"), None, use_free_tier=False)
+
+    assert len(calls) == 2  # genuinely different content must not share a cache entry
+
+
+def test_heuristic_score_is_never_cached(monkeypatch):
+    """A heuristic result must never poison the cache — if it did, the AI
+    recovering mid-TTL would keep serving a stale 'unavailable' result."""
+    fake_redis = _FakeRedisCache()
+    _patch_fake_redis(monkeypatch, fake_redis)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", False)
+
+    result = ResumeAIService.score_resume(_resume(), None, use_free_tier=False)
+    assert result["source"] == "heuristic"
+    assert fake_redis.store == {}
+
+
+def test_cache_failure_falls_through_to_a_live_llm_call(monkeypatch):
+    class _BrokenRedis:
+        def get(self, key):
+            raise ConnectionError("no redis")
+
+        def setex(self, *a, **k):
+            raise ConnectionError("no redis")
+
+    _patch_fake_redis(monkeypatch, _BrokenRedis())
+    monkeypatch.setattr(ras_module, "chat_json_request", lambda *a, **k: _SCORE_RESPONSE)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    result = ResumeAIService.score_resume(_resume(), None, use_free_tier=False)
+    assert result["source"] == "ai_cloud"  # Redis being down never breaks the request
+
+
+def test_improve_experience_cache_hit_skips_second_llm_call(monkeypatch):
+    fake_redis = _FakeRedisCache()
+    _patch_fake_redis(monkeypatch, fake_redis)
+    calls = []
+
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        calls.append(1)
+        return {"description": "Versão melhorada.", "notes": "ok"}
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    args = ("Gestor de Armazém", "Acme", "Tratava do armazém.", "professional")
+    first = ResumeAIService.improve_experience_description(*args)
+    second = ResumeAIService.improve_experience_description(*args)
+
+    assert first["source"] == "ai_cloud"
+    assert second["description"] == first["description"]
+    assert len(calls) == 1
+
+
 def test_azure_provider_builds_deployment_url(monkeypatch):
     calls = []
 
