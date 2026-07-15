@@ -7,7 +7,7 @@ import { useCompanyJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
 import Footer from "@/app/components/Footer";
 import Link from "next/link";
-import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
+import StatSummary from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useToasts } from "../components/useToasts";
@@ -182,26 +182,19 @@ export default function MinhasVagasPage() {
               )}
             />
 
-            <DecisionDashboard
+            <StatSummary
               className="mb-6"
-              title="Dashboard de decisao"
-              subtitle="Acompanhe publicacao, aprovacao e qualidade do funil de vagas."
-              badge={`Taxa de aprovacao: ${dashboard.approvalRate}%`}
+              headline={`Taxa de aprovação: ${dashboard.approvalRate}%`}
               metrics={[
                 { label: "Total de vagas", value: dashboard.total },
                 { label: "Ativas", value: dashboard.active },
                 { label: "Pendentes", value: dashboard.pending },
                 { label: "Rascunhos", value: dashboard.draft },
               ]}
-              reportLines={[
+              notes={[
                 `Aprovadas: ${dashboard.approved}`,
                 `Rejeitadas: ${dashboard.rejected}`,
                 `Arquivadas: ${dashboard.archived}`,
-              ]}
-              actionLines={[
-                dashboard.pending > 0 ? `Acompanhe ${dashboard.pending} vagas pendentes com a equipa administrativa.` : "Sem vagas pendentes neste momento.",
-                dashboard.draft > 0 ? `Finalize ${dashboard.draft} rascunhos para aumentar cobertura de talento.` : "Todos os rascunhos ja foram convertidos ou removidos.",
-                dashboard.rejected > 0 ? "Revise titulos/requisitos de vagas rejeitadas para re-submissao." : "Sem rejeicoes recentes, mantenha o padrao atual.",
               ]}
             />
 

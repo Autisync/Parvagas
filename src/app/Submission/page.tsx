@@ -6,9 +6,9 @@ import Footer from "../components/Footer";
 
 export const metadata: Metadata = {
   openGraph: {
-    title: "ParVaga | CV",
+    title: "Parvagas | Criar CV",
     description:
-      "Temos uma base de dados para ajudar transformar o seu futuro profissional hoje!",
+      "Crie o seu currículo e candidate-se a vagas em Angola em poucos minutos.",
     url: "https://parvagas.pt/Submission",
     siteName: "Parvagas",
     // Explicit ref to the branded generated OG image (nested routes with their

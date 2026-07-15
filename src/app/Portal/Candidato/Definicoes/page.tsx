@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
-import { RocketLaunchIcon, AcademicCapIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { RocketLaunchIcon, AcademicCapIcon, AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 
 type Prefs = {
   emailJobAlerts?: boolean;
@@ -90,7 +90,7 @@ export default function DefinicoesPage() {
 
       {/* Tutorial replay card */}
       <div className="mb-4 flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
           <AcademicCapIcon className="h-6 w-6" />
         </div>
         <div className="flex-1 min-w-0">
@@ -128,8 +128,8 @@ export default function DefinicoesPage() {
 
       {/* Auto-apply preferences now live in CV e Documentos */}
       <div className="mb-8 flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-          <SparklesIcon className="h-6 w-6" />
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <AdjustmentsHorizontalIcon className="h-6 w-6" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-900">Candidatura automática por área</p>

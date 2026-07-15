@@ -14,7 +14,7 @@ const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/Sticky
   ssr: false,
 });
 
-const DecisionDashboard = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
+const StatSummary = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
   ssr: false,
   loading: () => <div className="mb-6 h-40 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
 });
@@ -175,27 +175,20 @@ export default function CandidaturasPage() {
 
       {error ? <div className="mb-4"><InlineErrorState /></div> : null}
 
-      <DecisionDashboard
+      <StatSummary
         className="mb-6"
-        title="Dashboard de decisao"
-        subtitle="Acompanhe progresso das suas candidaturas e priorize proximos passos."
-        badge={`Taxa de sucesso: ${dashboard.successRate}%`}
-          metrics={[
-            { label: "Total", value: dashboard.total },
-            { label: "Ativas", value: dashboard.active },
-            { label: "Entrevistas", value: dashboard.interviews },
-            { label: "Contratacoes", value: dashboard.hired },
-          ]}
-          reportLines={[
-            `Rejeitadas: ${dashboard.rejected}`,
-            `Retiradas: ${dashboard.withdrawn}`,
-          ]}
-          actionLines={[
-            dashboard.active > 0 ? `Mantenha acompanhamento de ${dashboard.active} processos ativos.` : "Sem processos ativos neste momento.",
-            dashboard.interviews > 0 ? `Prepare-se para ${dashboard.interviews} entrevistas em curso.` : "Ainda sem entrevistas agendadas.",
-            dashboard.total < 3 ? "Aumente o volume de candidaturas para melhorar a probabilidade de sucesso." : "Volume de candidaturas adequado para comparacao de oportunidades.",
-          ]}
-        />
+        headline={`Taxa de sucesso: ${dashboard.successRate}%`}
+        metrics={[
+          { label: "Total", value: dashboard.total },
+          { label: "Ativas", value: dashboard.active },
+          { label: "Entrevistas", value: dashboard.interviews },
+          { label: "Contratações", value: dashboard.hired },
+        ]}
+        notes={[
+          `Rejeitadas: ${dashboard.rejected}`,
+          `Retiradas: ${dashboard.withdrawn}`,
+        ]}
+      />
 
         <InsightsToolbar
           query={query}

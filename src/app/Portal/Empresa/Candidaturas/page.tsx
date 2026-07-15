@@ -7,7 +7,7 @@ import { useApplications } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
-import DecisionDashboard from "@/app/Portal/components/DecisionDashboard";
+import StatSummary from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useToasts } from "../components/useToasts";
@@ -238,25 +238,18 @@ export default function EmpresaCandidaturasPage() {
               topClassName="top-4"
             />
 
-            <DecisionDashboard
+            <StatSummary
               className="mb-6"
-              title="Dashboard de decisao"
-              subtitle="Indicadores para priorizar pipeline, entrevistas e contratacoes."
-              badge={`Conversao: ${dashboard.conversionRate}%`}
+              headline={`Conversão: ${dashboard.conversionRate}%`}
               metrics={[
                 { label: "Total", value: dashboard.total },
                 { label: "Novas/Submetidas", value: dashboard.submitted },
-                { label: "Em revisao", value: dashboard.inReview },
+                { label: "Em revisão", value: dashboard.inReview },
                 { label: "Entrevistas", value: dashboard.interview },
               ]}
-              reportLines={[
-                `Contratacoes: ${dashboard.hired} (${dashboard.conversionRate}%)`,
-                `Rejeicoes: ${dashboard.rejected} (${dashboard.rejectionRate}%)`,
-              ]}
-              actionLines={[
-                dashboard.submitted > 0 ? `Revise ${dashboard.submitted} candidaturas novas hoje.` : "Sem candidaturas novas pendentes de triagem.",
-                dashboard.interview > 0 ? `Agende proximos passos para ${dashboard.interview} perfis em entrevista.` : "Ainda sem entrevistas ativas.",
-                dashboard.conversionRate < 15 ? "Considere ajustar requisitos da vaga para aumentar conversao." : "Conversao saudavel do pipeline atual.",
+              notes={[
+                `Contratações: ${dashboard.hired} (${dashboard.conversionRate}%)`,
+                `Rejeições: ${dashboard.rejected} (${dashboard.rejectionRate}%)`,
               ]}
             />
 

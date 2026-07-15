@@ -13,7 +13,7 @@ const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/Sticky
   ssr: false,
 });
 
-const DecisionDashboard = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
+const StatSummary = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
   ssr: false,
   loading: () => <div className="mb-6 h-40 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
 });
@@ -222,24 +222,17 @@ export default function VagasRecomendadasPage() {
         </Link>
       </div>
 
-      <DecisionDashboard
+      <StatSummary
         className="mb-6"
-        title="Dashboard de decisao"
-        subtitle="Resumo das recomendacoes para escolher candidaturas com melhor aderencia."
-        badge={`Recomendacoes: ${dashboard.total}`}
-          metrics={[
-            { label: "Total recomendado", value: dashboard.total },
-            { label: "Remoto/Hibrido", value: dashboard.remoteOrHybrid },
-            { label: "Com salario", value: dashboard.withSalary },
-            { label: "Com skills claras", value: dashboard.withSkills },
-          ]}
-          reportLines={[`Categoria dominante: ${dashboard.topCategoryLabel} (${dashboard.topCategoryCount})`]}
-          actionLines={[
-            dashboard.total > 0 ? "Comece pelas vagas recomendadas para maior aderencia ao seu perfil." : "Complete o perfil para receber recomendacoes automaticamente.",
-            dashboard.withSalary > 0 ? "Compare propostas com salario explicito para decidir com mais confianca." : "Avalie beneficios e crescimento quando o salario nao estiver visivel.",
-            dashboard.remoteOrHybrid > 0 ? `Tem ${dashboard.remoteOrHybrid} opcoes de trabalho flexivel.` : "Sem opcoes flexiveis nas recomendacoes atuais.",
-          ]}
-        />
+        headline={`Recomendações: ${dashboard.total}`}
+        metrics={[
+          { label: "Total recomendado", value: dashboard.total },
+          { label: "Remoto/Híbrido", value: dashboard.remoteOrHybrid },
+          { label: "Com salário", value: dashboard.withSalary },
+          { label: "Com skills claras", value: dashboard.withSkills },
+        ]}
+        notes={[`Categoria dominante: ${dashboard.topCategoryLabel} (${dashboard.topCategoryCount})`]}
+      />
 
         <InsightsToolbar
           query={query}

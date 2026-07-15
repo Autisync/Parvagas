@@ -15,7 +15,7 @@ const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/Sticky
   ssr: false,
 });
 
-const DecisionDashboard = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
+const StatSummary = dynamic(() => import("@/app/Portal/components/DecisionDashboard"), {
   ssr: false,
   loading: () => <div className="mb-6 h-40 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
 });
@@ -247,24 +247,17 @@ export default function PortalVagasDisponiveisPage() {
 
       {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
-      <DecisionDashboard
+      <StatSummary
         className="mt-6 mb-6"
-        title="Dashboard de decisao"
-        subtitle="Use estes indicadores para priorizar vagas com maior potencial para si."
-        badge={`Em catalogo: ${dashboard.total}`}
+        headline={`Em catálogo: ${dashboard.total}`}
         metrics={[
-          { label: "Nesta pagina", value: dashboard.pageJobs },
-          { label: "Remoto/Hibrido", value: dashboard.remoteOrHybrid },
-          { label: "Com salario", value: dashboard.withSalary },
-            { label: "Com skills claras", value: dashboard.withSkills },
-          ]}
-          reportLines={[`Categoria dominante: ${dashboard.topCategoryLabel} (${dashboard.topCategoryCount})`]}
-          actionLines={[
-            dashboard.withSalary > 0 ? "Priorize vagas com faixa salarial explicita para decisao mais rapida." : "Nenhuma vaga com salario nesta pagina; compare outros sinais de qualidade.",
-            dashboard.remoteOrHybrid > 0 ? `Existem ${dashboard.remoteOrHybrid} opcoes remoto/hibrido para maior flexibilidade.` : "Sem opcoes remoto/hibrido nesta pagina.",
-            dashboard.withSkills < Math.ceil(Math.max(dashboard.pageJobs, 1) / 2) ? "Leia bem a descricao para validar requisitos tecnicos antes de candidatar." : "A maioria das vagas tem requisitos claros de skills.",
-          ]}
-        />
+          { label: "Nesta página", value: dashboard.pageJobs },
+          { label: "Remoto/Híbrido", value: dashboard.remoteOrHybrid },
+          { label: "Com salário", value: dashboard.withSalary },
+          { label: "Com skills claras", value: dashboard.withSkills },
+        ]}
+        notes={[`Categoria dominante: ${dashboard.topCategoryLabel} (${dashboard.topCategoryCount})`]}
+      />
 
         <InsightsToolbar
           query={query}
