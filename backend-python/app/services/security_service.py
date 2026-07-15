@@ -222,11 +222,20 @@ def _alert_recently_sent(db: Session, *, event_type: str, key: str) -> bool:
 
 
 def _send_alert(db: Session, *, alert_for: str, alert_key: str, subject: str, title: str, lines: list[str]) -> None:
-    """Email the security alert and record that it went out (for the cooldown)."""
+    """Queue the security alert email and record that it went out (for the
+    cooldown). Dispatched via Celery, not sent inline — this runs inside the
+    /auth/login request path (login() calls record_failed_login() on every
+    failed attempt), and send_security_alert_email is a real SMTP round-trip
+    (up to EMAIL_SEND_TIMEOUT_SECONDS). Sending it synchronously would (a)
+    make the failed request's latency a side-channel telling an attacker
+    exactly when they've tripped the burst threshold, and (b) hang the
+    gunicorn worker handling that request if mailcow is slow/unreachable —
+    every other email in this codebase already goes through Celery
+    (workers/tasks.py); this was the one inline exception."""
     try:
-        from app.services.email_service import EmailService
+        from app.workers.tasks import send_templated_email
 
-        sent = EmailService.send_security_alert_email(subject=subject, title=title, lines=lines)
+        send_templated_email.delay("send_security_alert_email", {"subject": subject, "title": title, "lines": lines})
         record_security_event(
             db,
             event_type="alert_sent",
@@ -234,7 +243,7 @@ def _send_alert(db: Session, *, alert_for: str, alert_key: str, subject: str, ti
             details={
                 "alertFor": alert_for,
                 "key": alert_key,
-                "delivered": bool(sent),
+                "queued": True,
                 "to": settings.SECURITY_ALERT_EMAIL,
                 "cc": settings.SECURITY_ALERT_CC,
             },

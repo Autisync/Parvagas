@@ -288,8 +288,8 @@ class ExperienceImproveRequest(BaseModel):
     """Improve wording for a single work-experience entry, in-place in the
     builder's edit modal — stateless (no resume_id): the candidate hasn't
     necessarily saved this entry yet, so there's nothing to look up."""
-    job_title: Optional[str] = None
-    company: Optional[str] = None
+    job_title: Optional[str] = Field(default=None, max_length=200)
+    company: Optional[str] = Field(default=None, max_length=200)
     description: str = Field(min_length=1, max_length=4000)
     tone: Optional[str] = Field(default="professional")
 

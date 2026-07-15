@@ -18,6 +18,7 @@ from app.db.base import Base
 from app.models import SecurityEvent
 from app.services import security_service
 from app.services.email_service import EmailService
+from app.workers.tasks import send_templated_email
 
 
 @pytest.fixture()
@@ -32,14 +33,21 @@ def db():
 
 @pytest.fixture()
 def sent_alerts(monkeypatch):
-    """Capture security alert emails instead of touching SMTP."""
+    """Capture security alert emails instead of touching SMTP.
+
+    _send_alert queues the send via send_templated_email.delay(...) rather
+    than calling EmailService directly (see security_service.py — must not
+    block the /auth/login request path on a real SMTP round-trip), so the
+    seam to monkeypatch is the Celery task's .delay, same pattern as the
+    guest-CV-claim-email tests in test_resumes_api.py.
+    """
     calls: list[dict] = []
 
-    def _fake_alert(subject: str, title: str, lines: list[str]) -> bool:
-        calls.append({"subject": subject, "title": title, "lines": lines})
-        return True
+    def _fake_delay(method: str, payload: dict):
+        assert method == "send_security_alert_email"
+        calls.append(dict(payload))
 
-    monkeypatch.setattr(EmailService, "send_security_alert_email", staticmethod(_fake_alert))
+    monkeypatch.setattr(send_templated_email, "delay", _fake_delay)
     return calls
 
 
@@ -99,10 +107,13 @@ def test_burst_detection_by_ip_across_many_accounts(db, sent_alerts, monkeypatch
 
 
 def test_record_failed_login_swallows_alert_failures(db, monkeypatch):
+    """The alert is queued (Celery), not sent inline — so the realistic
+    failure mode here is the broker/enqueue step itself blowing up (Redis
+    down), not SMTP. Either way, login must never see the exception."""
     monkeypatch.setattr(security_service.settings, "SECURITY_FAILED_LOGIN_BURST_THRESHOLD", 1)
     monkeypatch.setattr(
-        EmailService, "send_security_alert_email",
-        staticmethod(lambda **kw: (_ for _ in ()).throw(RuntimeError("smtp down"))),
+        send_templated_email, "delay",
+        lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("broker down")),
     )
     # Must not raise even though the alert path explodes.
     security_service.record_failed_login(

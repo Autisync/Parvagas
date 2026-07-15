@@ -24,8 +24,10 @@ import json
 import secrets
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -439,7 +441,13 @@ async def apply_resume_to_profile(
         if pdf_bytes is None:
             pdf_bytes = to_pdf(data)
 
-        safe_name = (resume.title or "cv").strip().replace(" ", "_").lower() or "cv"
+        # Path(...).name strips any directory components a candidate could
+        # put in resume.title (e.g. "../../../etc/cron.d/x") — same pattern
+        # already used for uploaded filenames in cv.py. Only matters when
+        # StorageService falls back to local disk (S3/MinIO is the current
+        # default), but that fallback is a real, automatic code path on any
+        # storage misconfiguration, not a hypothetical.
+        safe_name = Path((resume.title or "cv").strip().replace(" ", "_").lower()).name or "cv"
         file_name = f"{uuid.uuid4()}_{safe_name}.pdf"
         file_path = StorageService.save_file(pdf_bytes, file_name)
         cv_upload = CVUpload(
@@ -823,7 +831,10 @@ async def adapt_resume_to_job(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
     original = _load_json_field(resume.data) or {}
-    tailored = inject_job_keywords(original, serialize_job(job))
+    # inject_job_keywords can call out to the LLM (chat_json, a synchronous
+    # httpx client — see llm_service.py) — run off the event loop so one
+    # slow/hung provider call doesn't freeze this worker's other requests.
+    tailored = await run_in_threadpool(inject_job_keywords, original, serialize_job(job))
 
     original_skills = {str(s).lower() for s in (original.get("skills") or [])}
     added_skills = [s for s in (tailored.get("skills") or []) if str(s).lower() not in original_skills]
@@ -904,7 +915,10 @@ async def score_resume(
     # Free-tier candidates get Ollama; paid get cloud AI.
     use_free_tier = cv_uses_free_ai_tier(db, profile.id)
 
-    score_data = ResumeAIService.score_resume(resume, profile, use_free_tier=use_free_tier)
+    # ResumeAIService.* calls out to the LLM synchronously (chat_json_request
+    # is a blocking httpx client) — run off the event loop so one slow/hung
+    # provider call doesn't freeze this Gunicorn worker's other requests.
+    score_data = await run_in_threadpool(ResumeAIService.score_resume, resume, profile, use_free_tier=use_free_tier)
     _save_resume_score(db, profile, resume, score_data)
 
     return ResumeScoreResponse(
@@ -935,7 +949,9 @@ async def rewrite_resume(
     # Free-tier candidates get Ollama (limited); paid get cloud AI (full rewrite).
     use_free_tier = cv_uses_free_ai_tier(db, profile.id)
 
-    rewrite_result = ResumeAIService.rewrite_resume(resume, profile, payload.tone or "professional", payload.instructions, use_free_tier=use_free_tier)
+    rewrite_result = await run_in_threadpool(
+        ResumeAIService.rewrite_resume, resume, profile, payload.tone or "professional", payload.instructions, use_free_tier=use_free_tier,
+    )
     notes = rewrite_result.get("notes", "Resume rewrite completed.")
 
     _create_resume_version(db, resume, current_user.id, notes)
@@ -977,7 +993,8 @@ async def improve_experience(
     profile = _ensure_candidate_profile(db, current_user)
 
     use_free_tier = cv_uses_free_ai_tier(db, profile.id)
-    result = ResumeAIService.improve_experience_description(
+    result = await run_in_threadpool(
+        ResumeAIService.improve_experience_description,
         payload.job_title, payload.company, payload.description, payload.tone or "professional", use_free_tier=use_free_tier,
     )
 

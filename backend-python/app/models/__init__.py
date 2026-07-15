@@ -206,7 +206,7 @@ class Resume(Base, TimestampMixin):
     __tablename__ = "resumes"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
+    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     summary = Column(Text, nullable=True)
     template_id = Column(String(36), ForeignKey("resume_templates.id"), nullable=True)
@@ -225,7 +225,7 @@ class ResumeVersion(Base, TimestampMixin):
     __tablename__ = "resume_versions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    resume_id = Column(String(36), ForeignKey("resumes.id"), nullable=False)
+    resume_id = Column(String(36), ForeignKey("resumes.id"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False, default=1)
     title = Column(String(255), nullable=False)
     summary = Column(Text, nullable=True)
