@@ -98,26 +98,41 @@ class AuthService:
                 pass
         
         user = query.first()
-        
+
         if not user:
             raise AuthenticationError("Invalid email or password")
-        
+
+        # Verify the password BEFORE revealing suspended/locked state.
+        # Previously "Account suspended"/"Account temporarily locked" were
+        # raised purely from account state, before password was even
+        # checked — so anyone probing emails (no valid credential at all)
+        # could fingerprint which addresses are registered, and their
+        # account state, just from which error text came back. Checking
+        # the password first means only someone who has already proven
+        # they hold the correct credential gets told *why* they specifically
+        # can't log in; a guesser without the password always sees the same
+        # generic message, account-state-distinguishing text or not.
+        password_ok = verify_password(password, user.password_hash)
+
         if user.suspended:
+            if not password_ok:
+                raise AuthenticationError("Invalid email or password")
             raise AuthenticationError("Account suspended")
-        
+
         # Check account lock
         if user.locked_until and datetime.utcnow() < user.locked_until:
+            if not password_ok:
+                raise AuthenticationError("Invalid email or password")
             raise AuthenticationError("Account temporarily locked. Try again later.")
-        
-        # Verify password
-        if not verify_password(password, user.password_hash):
+
+        if not password_ok:
             # Increment failed attempts
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             if user.failed_login_attempts >= 8:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=15)
             db.commit()
             raise AuthenticationError("Invalid email or password")
-        
+
         # Check email verification
         if not user.email_verified:
             raise EmailNotVerifiedError()

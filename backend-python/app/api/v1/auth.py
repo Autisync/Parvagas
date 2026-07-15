@@ -206,7 +206,13 @@ async def login(
             )
         except Exception as sec_exc:  # pragma: no cover - defensive
             logger.warning(f"Failed-login security recording failed: {sec_exc}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        # Never echo the raw exception to the client — this branch catches
+        # genuinely unexpected errors (DB failure, a bug), not curated
+        # AuthenticationError messages (those are handled above and already
+        # safe). str(e) is already logged server-side above and recorded in
+        # security_events (admin-only) via record_failed_login — the client
+        # only gets a generic message.
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
 
 @router.post("/verify-email", response_model=MessageResponse)
