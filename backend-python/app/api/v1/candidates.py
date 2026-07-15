@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
@@ -644,7 +645,10 @@ async def export_candidate_cv(
     if targetJobId:
         target_job = db.query(Job).filter(Job.id == targetJobId).first()
         if target_job:
-            profile_dict = inject_job_keywords(profile_dict, serialize_job(target_job))
+            # inject_job_keywords can call out to the LLM via a synchronous
+            # httpx client — run off the event loop so one slow/hung
+            # provider call doesn't freeze this worker's other requests.
+            profile_dict = await run_in_threadpool(inject_job_keywords, profile_dict, serialize_job(target_job))
 
     safe_name = (current_user.full_name or "cv").replace(" ", "_").lower()
 
@@ -1237,7 +1241,10 @@ async def generate_interview_prep(
     }, ensure_ascii=False)
 
     try:
-        result = llm_service.chat_json(_INTERVIEW_PREP_SYSTEM_PROMPT, user_prompt, fallback={"stories": []})
+        # chat_json is a synchronous httpx call — run off the event loop.
+        result = await run_in_threadpool(
+            llm_service.chat_json, _INTERVIEW_PREP_SYSTEM_PROMPT, user_prompt, fallback={"stories": []},
+        )
     except Exception:  # noqa: BLE001 — never fail the request over an LLM hiccup
         result = {"stories": []}
 
@@ -1280,7 +1287,9 @@ async def generate_cover_letter(
     }, ensure_ascii=False)
 
     try:
-        result = llm_service.chat_json(_COVER_LETTER_SYSTEM_PROMPT, user_prompt, fallback={"coverLetter": ""})
+        result = await run_in_threadpool(
+            llm_service.chat_json, _COVER_LETTER_SYSTEM_PROMPT, user_prompt, fallback={"coverLetter": ""},
+        )
     except Exception:  # noqa: BLE001
         result = {"coverLetter": ""}
 
@@ -1334,7 +1343,8 @@ async def get_company_snapshot(
         return {"snapshot": "", "facts": facts, "unavailable": True, "reason": "Sem informação suficiente sobre esta empresa."}
 
     try:
-        result = llm_service.chat_json(
+        result = await run_in_threadpool(
+            llm_service.chat_json,
             _COMPANY_SNAPSHOT_SYSTEM_PROMPT,
             json.dumps({"known_facts": facts}, ensure_ascii=False),
             fallback={"snapshot": ""},
