@@ -45,9 +45,16 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
   const [hydrated, setHydrated] = useState(false);
   const [hovering, setHovering] = useState(false);
 
-  // The sticky top bar's real rendered height (it wraps to a taller row on
-  // some widths) — measured rather than hardcoded so the dock always sits
-  // flush beneath it instead of overlapping or leaving a gap.
+  // How far down the sticky top bar's bottom edge currently sits — NOT the
+  // same as its own height. AppNotifierProvider can render a connectivity/
+  // session error banner (AppErrorBanner) as a normal-flow sibling BEFORE
+  // <header>, which pushes the header down without changing the header's
+  // own size — a plain ResizeObserver(header) never sees that, so the dock
+  // used to sit too high, letting the *real* topbar (z-30) cover its top
+  // ~50px and swallow clicks meant for the collapse toggle. `.bottom`
+  // (not `.height`) captures the true offset in every case: banner absent,
+  // banner present pre-scroll, and mid-transition as the header sticks and
+  // the (non-sticky) banner scrolls out of view above it.
   const [topOffset, setTopOffset] = useState(0);
   const asideRef = useRef<HTMLElement>(null);
 
@@ -58,11 +65,31 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
 
     const header = document.querySelector("header");
     if (!header) return;
-    const update = () => setTopOffset(header.getBoundingClientRect().height);
+    const update = () => setTopOffset(header.getBoundingClientRect().bottom);
     update();
-    const observer = new ResizeObserver(update);
-    observer.observe(header);
-    return () => observer.disconnect();
+
+    // Header's own size changing (e.g. wraps to a taller row).
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(header);
+    // The banner mounts as a direct child of <body> (a sibling of the page
+    // transition wrapper two levels above <header>, not of <header> itself)
+    // — it shifts the header down without resizing the header itself, and
+    // document.body doesn't resize with content here (a descendant handles
+    // scrolling), so a ResizeObserver on it never fires. A MutationObserver
+    // on body's direct children catches the banner being inserted/removed.
+    const mutationObserver = new MutationObserver(update);
+    mutationObserver.observe(document.body, { childList: true });
+    // The banner-vs-stuck-header transition unfolds over the first ~50px
+    // of scroll — re-measure live rather than only on mount.
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
 
   const isBuilderRoute = pathname?.startsWith(BUILDER_ROUTE) ?? false;
@@ -78,6 +105,13 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
   const showExpanded = !collapsed || hovering;
 
   const toggleManualCollapsed = () => {
+    // The toggle button lives inside the aside, so the mouse is still
+    // physically resting over it when clicked — without this, `hovering`
+    // would stay true (no mouseleave/re-enter has happened), the aside
+    // would keep rendering at EXPANDED_WIDTH, and only the content offset
+    // (which tracks `collapsed`, not `hovering`) would shift, making it
+    // look like the toggle moves the page instead of the sidebar.
+    setHovering(false);
     setManualCollapsed((prev) => {
       const next = !prev;
       window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, next ? "1" : "0");

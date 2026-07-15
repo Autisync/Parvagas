@@ -22,9 +22,9 @@ export default function CandidatoLayout({ children }: { children: ReactNode }) {
           <main className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:pb-16">
             <section>{children}</section>
           </main>
+          <Footer />
         </CandidatePortalShell>
       </OnboardingGuard>
-      <Footer />
     </div>
   );
 }
