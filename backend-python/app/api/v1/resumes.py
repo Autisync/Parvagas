@@ -51,6 +51,8 @@ from app.schemas import (
     CoverLetterCreateRequest,
     CoverLetterResponse,
     CoverLetterUpdateRequest,
+    ExperienceImproveRequest,
+    ExperienceImproveResponse,
     JobMatchResponse,
     MessageResponse,
     ResumeApplyToProfileResponse,
@@ -956,6 +958,33 @@ async def rewrite_resume(
         updated_at=resume.updated_at,
         notes=notes,
         source=rewrite_result.get("source"),
+    )
+
+
+@router.post("/experience/improve", response_model=ExperienceImproveResponse)
+@limiter.limit("20/hour")
+async def improve_experience(
+    payload: ExperienceImproveRequest = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+):
+    """Improve wording for one work-experience entry, before it's even
+    saved — the candidate is still editing it in the builder's modal.
+    Stateless: no resume/version persistence, only a rewritten description
+    handed back for the candidate to review and apply (or not)."""
+    _ensure_candidate_user(current_user)
+    profile = _ensure_candidate_profile(db, current_user)
+
+    use_free_tier = cv_uses_free_ai_tier(db, profile.id)
+    result = ResumeAIService.improve_experience_description(
+        payload.job_title, payload.company, payload.description, payload.tone or "professional", use_free_tier=use_free_tier,
+    )
+
+    return ExperienceImproveResponse(
+        description=result.get("description", payload.description),
+        notes=result.get("notes"),
+        source=result.get("source"),
     )
 
 

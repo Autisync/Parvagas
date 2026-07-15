@@ -703,6 +703,71 @@ def test_adapt_unknown_job_404s(db):
     assert exc_info.value.status_code == 404
 
 
+# --------------------- per-experience "improve wording" -------------------- #
+
+def test_improve_experience_returns_description_without_touching_any_resume(db, monkeypatch):
+    """Stateless: no resume_id in the request, and it must not create or
+    modify any Resume/ResumeVersion row — the candidate is still editing
+    the entry in the builder modal, nothing has been saved yet."""
+    from app.services import resume_ai_service as ras
+
+    monkeypatch.setattr(ras.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras.settings, "RESUME_AI_MODEL", "gpt-test")
+    monkeypatch.setattr(ras, "chat_json_request", lambda *a, **k: {
+        "description": "Geri operações diárias de um armazém com 12 colaboradores.",
+        "notes": "ok",
+    })
+    # No paid CandidateCVSubscription row exists in this fixture, so
+    # cv_uses_free_ai_tier would otherwise default to "free" (Ollama) — pin
+    # it to cloud so this test actually exercises the ai_cloud branch.
+    monkeypatch.setattr(resumes_module, "cv_uses_free_ai_tier", lambda db, profile_id: False)
+
+    user = _make_candidate(db)
+    _make_profile(db, user)
+
+    result = asyncio.run(resumes_module.improve_experience(
+        payload=resumes_module.ExperienceImproveRequest(
+            job_title="Gestor de Armazém", company="Acme", description="Tratava do armazém.",
+        ),
+        db=db, current_user=user,
+    ))
+    assert result.description == "Geri operações diárias de um armazém com 12 colaboradores."
+    assert result.source == "ai_cloud"
+    assert db.query(Resume).count() == 0
+    assert db.query(ResumeVersion).count() == 0
+
+
+def test_improve_experience_falls_back_to_original_text_when_ai_unavailable(db, monkeypatch):
+    from app.services import resume_ai_service as ras
+
+    monkeypatch.setattr(ras.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras.settings, "OLLAMA_FREE_TIER_ENABLED", False)
+
+    user = _make_candidate(db)
+    _make_profile(db, user)
+
+    result = asyncio.run(resumes_module.improve_experience(
+        payload=resumes_module.ExperienceImproveRequest(description="Tratava do armazém."),
+        db=db, current_user=user,
+    ))
+    assert result.source == "heuristic"
+    assert result.description == "Tratava do armazém."
+
+
+def test_improve_experience_requires_candidate_profile(db):
+    user = User(email="company@example.com", full_name="Empresa X", password_hash="x", role=UserRole.company, email_verified=True)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    with pytest.raises(HTTPException):
+        asyncio.run(resumes_module.improve_experience(
+            payload=resumes_module.ExperienceImproveRequest(description="Tratava do armazém."),
+            db=db, current_user=user,
+        ))
+
+
 # --------------------------- cover letters (Phase C3) ----------------------- #
 
 def test_create_and_list_cover_letters(db):

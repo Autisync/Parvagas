@@ -72,6 +72,21 @@ class ResumeAIService:
         )
 
     @staticmethod
+    def _build_ai_prompt_for_experience(job_title: str | None, company: str | None, description: str, tone: str) -> str:
+        role = job_title or "this role"
+        employer = f" at {company}" if company else ""
+        guidance = (
+            f"Rewrite the following work-experience description for the role of {role}{employer} to be more "
+            f"impactful and results-oriented, in a {tone} tone. Many candidates undersell their own work — use "
+            "strong action verbs, tighten vague phrasing, and surface impact that is already implied by the text "
+            "(e.g. scope, scale, ownership) more clearly. "
+            "Return only valid JSON with keys: description, notes. "
+            "Do not invent facts, numbers, or achievements that are not already present or clearly implied in the "
+            "original text — only rephrase and strengthen what is already there."
+        )
+        return f"{guidance}\n\nORIGINAL DESCRIPTION: {description}\n"
+
+    @staticmethod
     def _ollama_enabled() -> bool:
         return (
             settings.OLLAMA_FREE_TIER_ENABLED
@@ -352,6 +367,44 @@ class ResumeAIService:
         return {
             "title": resume.title,
             "summary": (resume.summary or "").strip(),
+            "notes": "AI rewrite disabled or unavailable; no rewrite was applied.",
+            "source": "heuristic",
+        }
+
+    @staticmethod
+    def improve_experience_description(
+        job_title: str | None, company: str | None, description: str, tone: str = "professional", use_free_tier: bool = False
+    ) -> dict[str, Any]:
+        """Rewrite a single work-experience description — the per-item
+        sibling of rewrite_resume, same cloud → Ollama → heuristic
+        fall-through, scoped to one bullet instead of the whole resume."""
+        # Cloud AI — paid subscribers
+        if ResumeAIService._ai_enabled() and not use_free_tier:
+            prompt = ResumeAIService._build_ai_prompt_for_experience(job_title, company, description, tone)
+            ai_result = ResumeAIService._call_ai(prompt)
+            if ai_result:
+                return {
+                    "description": str(ai_result.get("description", description)).strip() or description,
+                    "notes": str(ai_result.get("notes", "AI rewrite completed.")),
+                    "source": "ai_cloud",
+                }
+
+        # Ollama — free tier
+        if ResumeAIService._ollama_enabled():
+            try:
+                prompt = ResumeAIService._build_ai_prompt_for_experience(job_title, company, description, tone)
+                ai_result = ResumeAIService._call_ollama(prompt)
+                if ai_result:
+                    return {
+                        "description": str(ai_result.get("description", description)).strip() or description,
+                        "notes": str(ai_result.get("notes", "Rewrite via Ollama (free tier).")),
+                        "source": "ai_ollama",
+                    }
+            except Exception:
+                pass
+
+        return {
+            "description": description,
             "notes": "AI rewrite disabled or unavailable; no rewrite was applied.",
             "source": "heuristic",
         }

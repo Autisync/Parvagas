@@ -303,6 +303,7 @@ export default function ConstrutorCvEditorPage() {
   const [draftExperience, setDraftExperience] = useState<ExperienceItem>(DEFAULT_EXPERIENCE);
   const [editingExpIndex, setEditingExpIndex] = useState<number | null>(null);
   const [expFormError, setExpFormError] = useState("");
+  const [improvingExperience, setImprovingExperience] = useState(false);
 
   const [eduModalOpen, setEduModalOpen] = useState(false);
   const [draftEducation, setDraftEducation] = useState<EducationItem>(DEFAULT_EDUCATION);
@@ -642,6 +643,37 @@ export default function ConstrutorCvEditorPage() {
     setData((prev) => ({ ...prev, workExperience: next }));
     setExpModalOpen(false);
   };
+  const improveExperienceDescription = async () => {
+    if (!token || improvingExperience) return;
+    if (!draftExperience.description.trim()) {
+      notify("Escreva uma descrição breve primeiro — a IA melhora o que já escreveu, não inventa experiência.", "info");
+      return;
+    }
+    setImprovingExperience(true);
+    try {
+      const result = await authFetch<{ description: string; notes?: string; source?: string }>("/resumes/experience/improve", token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_title: draftExperience.jobTitle || null,
+          company: draftExperience.company || null,
+          description: draftExperience.description,
+          tone: "professional",
+        }),
+      });
+      if (result.description) setDraftExperience((prev) => ({ ...prev, description: result.description }));
+      track("ai_action_used", { action: "improve_experience" });
+      notify(
+        result.source === "heuristic" ? "IA indisponível de momento — a descrição não foi alterada." : "Descrição melhorada — reveja antes de guardar.",
+        result.source === "heuristic" ? "info" : "success",
+      );
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Não foi possível melhorar esta descrição."), "error");
+    } finally {
+      setImprovingExperience(false);
+    }
+  };
+
   const deleteExperience = (index: number) => {
     setData((prev) => ({ ...prev, workExperience: experienceList.filter((_, i) => i !== index) }));
   };
@@ -1274,7 +1306,20 @@ export default function ConstrutorCvEditorPage() {
             Trabalho atual
           </label>
         </div>
-        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição — comece com um verbo: 'Geri uma equipa de 5...'" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-slate-500">Descrição</p>
+          <button
+            type="button"
+            onClick={improveExperienceDescription}
+            disabled={improvingExperience}
+            title="Peça à IA para reforçar a redação desta experiência — útil se sente que está a desvalorizar o que fez"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+          >
+            <SparklesIcon className="h-3.5 w-3.5 text-red-600" />
+            {improvingExperience ? "A melhorar…" : "Melhorar com IA"}
+          </button>
+        </div>
+        <textarea className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição — comece com um verbo: 'Geri uma equipa de 5...'" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
         {expFormError ? <p className="mt-2 text-xs text-rose-700">{expFormError}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setExpModalOpen(false)}>Cancelar</button>

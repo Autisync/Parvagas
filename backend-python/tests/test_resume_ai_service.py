@@ -157,6 +157,56 @@ def test_rewrite_uses_cloud_result(monkeypatch):
     assert result["title"] == "Título Melhorado"
 
 
+def test_improve_experience_returns_unmodified_description_when_ai_unavailable(monkeypatch):
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", False)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", False)
+
+    result = ResumeAIService.improve_experience_description(
+        "Assistente Administrativo", "Acme", "Fazia tarefas de escritório.", "professional",
+    )
+    assert result["source"] == "heuristic"
+    assert result["description"] == "Fazia tarefas de escritório."
+
+
+def test_improve_experience_uses_cloud_result(monkeypatch):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        assert "Assistente Administrativo" in body["messages"][1]["content"]
+        return {"description": "Geri o expediente administrativo diário, garantindo...", "notes": "ok"}
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+
+    result = ResumeAIService.improve_experience_description(
+        "Assistente Administrativo", "Acme", "Fazia tarefas de escritório.", "professional",
+    )
+    assert result["source"] == "ai_cloud"
+    assert result["description"] == "Geri o expediente administrativo diário, garantindo..."
+
+
+def test_improve_experience_free_tier_routes_to_ollama(monkeypatch):
+    calls = []
+
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+        calls.append(url)
+        return {"description": "Versão melhorada via Ollama.", "notes": "ok"}
+
+    monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_API_KEY", "sk-test")
+    monkeypatch.setattr(ras_module.settings, "RESUME_AI_MODEL", "gpt-test")
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_FREE_TIER_ENABLED", True)
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_BASE_URL", "http://ollama:11434")
+    monkeypatch.setattr(ras_module.settings, "OLLAMA_MODEL", "qwen-test")
+
+    result = ResumeAIService.improve_experience_description(
+        None, None, "Fazia tarefas de escritório.", "professional", use_free_tier=True,
+    )
+    assert result["source"] == "ai_ollama"
+    assert calls == ["http://ollama:11434/v1/chat/completions"]
+
+
 def test_azure_provider_builds_deployment_url(monkeypatch):
     calls = []
 
