@@ -17,7 +17,7 @@ import RestorePass from "@/app/components/RestorePass";
 import { track } from "@/lib/analytics";
 import { SKILL_SUGGESTIONS, LANGUAGE_SUGGESTIONS, CERT_SUGGESTIONS } from "@/lib/suggestionCatalogs";
 import {
-  ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, EyeIcon, ShareIcon,
+  ArrowLeftIcon, ArrowDownTrayIcon, CheckIcon, ClockIcon, LinkIcon, PlusIcon, ShareIcon,
   SparklesIcon, UserIcon, XMarkIcon, WrenchScrewdriverIcon, BriefcaseIcon, DocumentChartBarIcon,
   ShieldCheckIcon, ChatBubbleBottomCenterTextIcon, AdjustmentsHorizontalIcon, LightBulbIcon,
   ChartBarIcon,
@@ -270,7 +270,6 @@ export default function ConstrutorCvEditorPage() {
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<SectionKey>("dados");
   const [exporting, setExporting] = useState<"pdf" | "docx" | "json" | null>(null);
-  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
@@ -1194,10 +1193,13 @@ export default function ConstrutorCvEditorPage() {
           )}
         </div>
 
-        {/* Preview pane — desktop only, sticky so it stays visible while
-            editing. Mobile gets a floating button + full-screen sheet
-            instead of a squeezed side-by-side pane, per the UX spec. */}
-        <div className="hidden lg:block lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-slate-100 lg:p-4">
+        {/* Preview pane — always in the document flow so the grid's own
+            responsive behavior handles it: side-by-side on desktop (3-col
+            grid), stacked below the editor on mobile (grid collapses to a
+            single column below lg). Previously this was hidden below lg and
+            only reachable via a floating button — which sat at the same
+            z-index as, and got swallowed by, the mobile bottom nav bar. */}
+        <div className="rounded-2xl border border-slate-200 bg-slate-100 p-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           {templates.length > 0 && (
             <TemplatePicker templates={templates} selectedId={templateId} onSelect={selectTemplate} />
           )}
@@ -1205,38 +1207,6 @@ export default function ConstrutorCvEditorPage() {
           <ResumePreview data={data} templateSlug={templateSlug} />
         </div>
       </div>
-
-      {/* Mobile floating preview trigger */}
-      <button
-        type="button"
-        onClick={() => setMobilePreviewOpen(true)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg lg:hidden"
-      >
-        <EyeIcon className="h-4 w-4" /> Pré-visualizar
-      </button>
-
-      {mobilePreviewOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-100 lg:hidden">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-            <span className="text-sm font-semibold text-slate-900">Pré-visualização</span>
-            <button
-              type="button"
-              onClick={() => setMobilePreviewOpen(false)}
-              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500"
-              aria-label="Fechar pré-visualização"
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="p-4">
-            {templates.length > 0 && (
-              <TemplatePicker templates={templates} selectedId={templateId} onSelect={selectTemplate} />
-            )}
-            <p className="mb-2 text-center text-xs text-slate-500">Pré-visualização aproximada — o PDF exportado pode variar ligeiramente.</p>
-            <ResumePreview data={data} templateSlug={templateSlug} />
-          </div>
-        </div>
-      )}
 
       <AddItemModal
         open={versionsOpen}
