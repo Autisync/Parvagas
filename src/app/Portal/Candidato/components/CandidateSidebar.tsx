@@ -68,8 +68,23 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
     const update = () => setTopOffset(header.getBoundingClientRect().bottom);
     update();
 
+    // Scroll fires far faster than paint on some devices (mobile momentum
+    // scroll can be dozens/sec) — getBoundingClientRect() forces a
+    // synchronous layout read, so coalesce to at most one per animation
+    // frame instead of running it uncapped on every scroll event. This
+    // listener is present on every page of the authenticated portal, so any
+    // per-event cost here is maximally multiplied across traffic.
+    let rafId: number | null = null;
+    const scheduleUpdate = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        update();
+      });
+    };
+
     // Header's own size changing (e.g. wraps to a taller row).
-    const resizeObserver = new ResizeObserver(update);
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
     resizeObserver.observe(header);
     // The banner mounts as a direct child of <body> (a sibling of the page
     // transition wrapper two levels above <header>, not of <header> itself)
@@ -77,18 +92,19 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
     // document.body doesn't resize with content here (a descendant handles
     // scrolling), so a ResizeObserver on it never fires. A MutationObserver
     // on body's direct children catches the banner being inserted/removed.
-    const mutationObserver = new MutationObserver(update);
+    const mutationObserver = new MutationObserver(scheduleUpdate);
     mutationObserver.observe(document.body, { childList: true });
     // The banner-vs-stuck-header transition unfolds over the first ~50px
     // of scroll — re-measure live rather than only on mount.
-    window.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
-      window.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
     };
   }, []);
 

@@ -8,6 +8,14 @@ import type { PreviewData } from "@/app/Portal/Candidato/Construtor-CV/preview/A
 export const alt = "CV — Parvagas";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+// A single share draws several independent crawler fetches (Facebook,
+// WhatsApp, LinkedIn, X, Slack, Discord, iMessage) — without this, each one
+// re-pays the full satori render (text layout + font shaping + PNG encode)
+// even within the backend fetch's own 60s cache window. Cache the rendered
+// PNG itself per slug for an hour; a candidate editing their published CV
+// sees a stale preview image for at most that long, which is an acceptable
+// trade for not re-rendering on every crawler hit.
+export const revalidate = 3600;
 
 type PublicResume = { data: PreviewData };
 
