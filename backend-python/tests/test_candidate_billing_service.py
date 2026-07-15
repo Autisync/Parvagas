@@ -181,6 +181,41 @@ def test_resume_quota_allows_below_cap(db, monkeypatch):
     assert_resume_quota(db, profile_id)  # 1 of 3 (pro) — must not raise
 
 
+def test_resume_quota_locks_the_candidate_profile_row(db, monkeypatch):
+    """TOCTOU guard: two concurrent requests for the same candidate must not
+    both read the same pre-insert COUNT and both pass. A real race needs two
+    genuinely concurrent Postgres transactions, which this SQLite-backed
+    suite can't produce (SQLite ignores FOR UPDATE outright — its own
+    whole-database write lock serializes writers a different way). What IS
+    verifiable here, and is the actual mechanism the fix relies on: that
+    assert_resume_quota requests a row lock on the candidate's own profile
+    before doing the count check."""
+    from sqlalchemy.orm import Query
+
+    monkeypatch.setattr(candidate_billing_service.settings, "CANDIDATE_PREMIUM_ENABLED", True)
+    user_id = str(uuid.uuid4())
+    profile = CandidateProfile(user_id=user_id)
+    db.add(profile)
+    db.commit()
+
+    locked_entities = []
+    original = Query.with_for_update
+
+    def spy(self, *a, **k):
+        desc = self.column_descriptions
+        if desc:
+            locked_entities.append(desc[0].get("name") or desc[0].get("entity"))
+        return original(self, *a, **k)
+
+    monkeypatch.setattr(Query, "with_for_update", spy)
+
+    assert_resume_quota(db, profile.id)  # 0 of 1 (free) — must not raise
+
+    assert any(
+        entity is CandidateProfile or entity == "CandidateProfile" for entity in locked_entities
+    ), f"assert_resume_quota never locked CandidateProfile (locked: {locked_entities})"
+
+
 def test_resume_quota_blocks_pro_tier_at_cap(db, monkeypatch):
     monkeypatch.setattr(candidate_billing_service.settings, "CANDIDATE_PREMIUM_ENABLED", True)
     profile_id = str(uuid.uuid4())

@@ -30,7 +30,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import CandidateCVSubscription, Resume
+from app.models import CandidateCVSubscription, CandidateProfile, Resume
 
 settings = get_settings()
 
@@ -111,9 +111,25 @@ def candidate_has_premium_access(db: Session, candidate_profile_id: str) -> bool
 def assert_resume_quota(db: Session, candidate_profile_id: str) -> None:
     """Enforce the tier's max_resumes cap before a new Resume row is
     created (create/duplicate/restore-as-copy all funnel through here).
-    No-op while CANDIDATE_PREMIUM_ENABLED is off — see module docstring."""
+    No-op while CANDIDATE_PREMIUM_ENABLED is off — see module docstring.
+
+    The count-then-insert here isn't atomic on its own: two concurrent
+    requests for the same candidate could both read the same pre-insert
+    COUNT and both pass, landing one resume over the cap (TOCTOU). Locking
+    the candidate's own profile row for the rest of this transaction
+    serializes concurrent calls for that ONE candidate — unrelated
+    candidates are untouched, so this doesn't cost real throughput — and
+    the lock is released automatically when the caller's db.commit()/
+    rollback() ends the transaction (the resume INSERT+COMMIT that follows
+    this call, in every one of its three call sites, happens on the same
+    `db` session). Postgres honors this; SQLite (used in tests) silently
+    ignores FOR UPDATE, which is fine — SQLite's own whole-database write
+    lock already serializes writers, so no test behavior changes.
+    """
     if not settings.CANDIDATE_PREMIUM_ENABLED:
         return
+
+    db.query(CandidateProfile).filter(CandidateProfile.id == candidate_profile_id).with_for_update().first()
 
     max_resumes = CV_BUILDER_PLAN_LIMITS[get_cv_plan_tier(db, candidate_profile_id)]["max_resumes"]
     if max_resumes < 0:
