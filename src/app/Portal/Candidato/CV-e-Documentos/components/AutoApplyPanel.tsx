@@ -37,7 +37,7 @@ export default function AutoApplyPanel({
             Escolha as áreas do seu interesse. Avisamo-lo quando surgir uma vaga compatível — a candidatura só é
             submetida depois de a aprovar abaixo.
           </p>
-          <p className="mt-2 inline-block rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
+          <p className="mt-2 inline-block rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
             Funcionalidade paga (em breve). Por agora, reveja e aprove sugestões sem custo.
           </p>
         </div>

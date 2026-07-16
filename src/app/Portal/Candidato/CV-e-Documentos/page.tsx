@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, authFetchRaw } from "@/lib/api";
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, DocumentTextIcon } from "@heroicons/react/24/outline";
 import PageHeader from "@/app/components/PageHeader";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import { useAppNotifier } from "@/app/components/AppNotifier";
@@ -476,18 +476,25 @@ export default function CvDocumentosPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-600">CV principal</p>
-          <p className="mt-2 truncate text-sm font-semibold text-slate-900">{latestCv?.fileName || "Sem CV carregado"}</p>
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+            <DocumentTextIcon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-500">CV principal</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{latestCv?.fileName || "Sem CV carregado"}</p>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-600">Documentos</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{documents.length}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs font-medium text-slate-600">CV perfis gerados</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{profiles.length}</p>
+        <div className="flex items-center gap-6 sm:border-l sm:border-slate-200 sm:pl-6">
+          <div>
+            <p className="text-xs font-medium text-slate-500">Documentos</p>
+            <p className="text-lg font-semibold text-slate-900">{documents.length}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">CV perfis gerados</p>
+            <p className="text-lg font-semibold text-slate-900">{profiles.length}</p>
+          </div>
         </div>
       </div>
 
