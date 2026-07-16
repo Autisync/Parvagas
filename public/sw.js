@@ -1,16 +1,7 @@
 // Parvagas service worker — conservative, low-bandwidth friendly.
 // Strategy: network-first for navigations (always fresh when online, offline
 // fallback when not); cache-first for hashed static assets. Never caches API.
-//
-// v2: navigations now force `cache: "no-store"` on the fetch. Plain
-// fetch(request) still resolves from the browser's own HTTP cache when
-// allowed to, so a page loaded just before a deploy could keep getting
-// served stale HTML on every later normal refresh — HTML referencing JS
-// chunk filenames the new deployment no longer has, which 404s and leaves
-// the page blank (only a hard refresh, which bypasses HTTP cache outright,
-// recovered). Bumping the cache name also forces every existing client to
-// pick up this fix and drop its old cache on next activate.
-const CACHE = "parvagas-v2";
+const CACHE = "parvagas-v1";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
@@ -44,12 +35,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigations → network-first with offline fallback. cache: "no-store"
-  // is the actual fix here — without it, fetch() can still resolve from
-  // the browser's HTTP cache and silently hand back pre-deploy HTML.
+  // Navigations → network-first with offline fallback.
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request, { cache: "no-store" }).catch(() => caches.match(OFFLINE_URL))
-    );
+    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
   }
 });

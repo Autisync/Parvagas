@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { authFetch } from "@/lib/api";
 import type { CVPlan, CVPlansResponse, CVSubResponse } from "./types";
 
@@ -67,13 +66,11 @@ export default function PlanBanner({ token }: { token: string | null }) {
 
   return (
     <>
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600">
-          <LockClosedIcon className="h-4 w-4" aria-hidden="true" />
-        </span>
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <span className="mt-0.5 text-amber-600 text-lg">⭐</span>
         <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-900">Desbloqueie o Construtor de CV completo</p>
-          <p className="mt-0.5 text-xs text-slate-600">
+          <p className="text-sm font-semibold text-amber-900">Desbloqueie o Construtor de CV completo</p>
+          <p className="mt-0.5 text-xs text-amber-700">
             Plano Pro (15 000 AOA/mês) — 3 CVs, pontuação IA, export DOCX/PDF, cartas de apresentação.
             Plano Premium (30 000 AOA/mês) — tudo ilimitado + candidatura automática.
           </p>
@@ -81,7 +78,7 @@ export default function PlanBanner({ token }: { token: string | null }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+          className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
         >
           Ver planos
         </button>
