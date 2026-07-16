@@ -29,16 +29,17 @@ function GuardInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Legacy guest accounts (from the removed no-signup "Criar CV do
-      // Zero" flow, POST /public/resume-sso/guest-start) are a real
-      // User/CandidateProfile row under the hood. New guests can no
-      // longer be created — the builder is account-holders-only now —
-      // but existing ones can still land here via a claim link, and
-      // shoving them through the tutorial + onboarding wizard before
-      // the builder defeats what they came for. The skip ends when they
-      // claim the account (setting a real password flips
-      // is_guest_account to false server-side; see
-      // AuthService.reset_password).
+      // Guest accounts are a real User/CandidateProfile row under the
+      // hood, minted with no signup screen by the spontaneous CV-upload
+      // flow (POST /public/cv-submissions in jobs.py — "Já tenho um CV"
+      // on /Submission; the guest CV-*builder* flow was removed, but this
+      // sibling upload flow is still live and still creates new guest
+      // accounts today). Shoving a guest through the tutorial + full
+      // onboarding wizard the moment they land anywhere in the portal
+      // defeats the point of a no-signup entry — they never explicitly
+      // asked to onboard. The skip ends when they claim the account
+      // (setting a real password flips is_guest_account to false
+      // server-side; see AuthService.reset_password).
       if (user.isGuestAccount) {
         setChecked(true);
         return;
