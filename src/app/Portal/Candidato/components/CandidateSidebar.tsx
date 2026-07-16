@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { logoutCurrentSession, authFetch } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
-import NotificationBell from "@/app/Portal/components/NotificationBell";
 import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/PortalMobileNav";
 import {
   HomeIcon, UserIcon, DocumentIcon, HeartIcon, SparklesIcon,
@@ -192,11 +191,8 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
           width: showExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
         }}
       >
-          <div className={`flex items-center justify-between gap-1 ${showExpanded || !isBuilderRoute ? "mb-2" : ""}`}>
-            <div className={labelClass()}>
-              {token && <NotificationBell token={token} role="candidate" align="left" />}
-            </div>
-            {!isBuilderRoute && (
+          {!isBuilderRoute && (
+            <div className="mb-2 flex items-center justify-end">
               <button
                 type="button"
                 onClick={toggleManualCollapsed}
@@ -208,8 +204,8 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
                   className={`h-4 w-4 transition-transform duration-300 ease-in-out ${manualCollapsed ? "rotate-180" : ""}`}
                 />
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 px-2 py-2">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-sm font-bold text-red-700 ring-1 ring-red-100">
@@ -293,7 +289,6 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
         onDrawerOpen={() => setDrawerOpen(true)}
         onDrawerClose={() => setDrawerOpen(false)}
         extra={<LocaleCompactControl />}
-        headerAction={token ? <NotificationBell token={token} role="candidate" align="left" /> : undefined}
       />
     </>
   );
