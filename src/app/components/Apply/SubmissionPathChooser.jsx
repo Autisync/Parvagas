@@ -30,7 +30,7 @@ export default function SubmissionPathChooser() {
             </span>
             <h2 className="mt-4 text-lg font-bold text-slate-950">Ainda não tenho CV</h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
-              Construa um currículo do zero, directamente na plataforma. Só precisa do nome e email.
+              Crie uma conta gratuita e construa um currículo do zero, directamente na plataforma.
             </p>
             <span className="mt-4 text-sm font-semibold text-red-600 group-hover:text-red-700">
               Criar CV do Zero →

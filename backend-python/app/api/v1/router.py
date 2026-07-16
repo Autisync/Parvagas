@@ -1,6 +1,6 @@
 """API v1 routes."""
 from fastapi import APIRouter
-from app.api.v1 import admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, newsletter, notifications, payments, resume_sso, resumes
+from app.api.v1 import admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, newsletter, notifications, payments, resumes
 
 router = APIRouter(prefix="/api/v1")
 
@@ -31,9 +31,6 @@ router.include_router(companies.router)
 
 # CV routes
 router.include_router(cv.router)
-
-# CV builder SSO bridge (Parvagas as OIDC provider for Reactive Resume)
-router.include_router(resume_sso.router)
 
 # Events routes
 router.include_router(events.router)
