@@ -656,7 +656,7 @@ def dispatch_scraped_jobs_digest() -> dict:
     """Daily nudge to admins when scraped jobs are piling up unreviewed.
     Sends nothing when the pending queue is empty — no noise for no work."""
     from app.models import ScrapedJob
-    from app.services.notification_service import admin_emails
+    from app.services.notification_service import admin_emails, notify_admins
 
     db = SessionLocal()
     try:
@@ -670,6 +670,12 @@ def dispatch_scraped_jobs_digest() -> dict:
         for email in recipients:
             if EmailService.send_scraped_jobs_digest_email(email, pending_count):
                 sent += 1
+        notify_admins(
+            db, type="scraped_jobs_pending",
+            title="Scraped jobs por rever",
+            body=f"{pending_count} vaga(s) importada(s) aguardam curadoria.",
+            link="/Portal/Admin/scraped",
+        )
         return {"pendingCount": pending_count, "sent": sent, "recipients": len(recipients)}
     except Exception as e:
         logger.error(f"dispatch_scraped_jobs_digest failed: {str(e)}")

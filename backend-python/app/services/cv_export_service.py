@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.core.logging import get_logger
 from app.services import llm_service
 
@@ -48,7 +49,7 @@ def inject_job_keywords(profile: dict[str, Any], job: dict[str, Any] | None) -> 
         education, certifications, and every other section pass through
         byte-for-byte from the original profile.
     """
-    if not job or not settings.CV_EXPORT_LLM_INJECTION_ENABLED:
+    if not job or not get_flag("CV_EXPORT_LLM_INJECTION_ENABLED", settings.CV_EXPORT_LLM_INJECTION_ENABLED):
         return profile
 
     original_summary = _s(profile.get("professionalSummary") or profile.get("summary"))

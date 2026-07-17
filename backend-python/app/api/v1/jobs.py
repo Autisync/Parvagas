@@ -78,6 +78,7 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
         "requiredSkills": _json_list(job.required_skills),
         "status": job.status,
         "visibility": job.visibility,
+        "featured": bool(getattr(job, "featured", False)),
         "views": job.views or 0,
         "expiresAt": job.expires_at.isoformat() if job.expires_at else None,
         "createdAt": job.created_at.isoformat() if job.created_at else None,
@@ -224,11 +225,17 @@ async def report_job(job_id: str, payload: dict[str, Any] | None = None, db: Ses
     # Alert admins of the report.
     try:
         from app.workers.tasks import send_templated_email
-        from app.services.notification_service import admin_emails
+        from app.services.notification_service import admin_emails, notify_admins
         for admin_email in admin_emails(db):
             send_templated_email.delay("send_admin_job_reported_email", {
                 "email": admin_email, "job_title": job.title or "(sem título)", "reason": reason,
             })
+        notify_admins(
+            db, type="job_reported",
+            title="Vaga denunciada",
+            body=f"\"{job.title or '(sem título)'}\" foi denunciada: {reason}",
+            link="/Portal/Admin/jobs",
+        )
     except Exception as e:
         logger.warning(f"Could not enqueue admin job-reported alert: {e}")
 

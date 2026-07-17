@@ -37,6 +37,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.models import CandidateCVSubscription, CandidateCvPlan, CandidateProfile, Resume
 
 settings = get_settings()
@@ -147,7 +148,7 @@ def candidate_has_premium_access(db: Session, candidate_profile_id: str) -> bool
     premium — "free" is a real row for CV-builder-tier gating, not an
     entitlement to these separate premium tools).
     """
-    if not settings.CANDIDATE_PREMIUM_ENABLED:
+    if not get_flag("CANDIDATE_PREMIUM_ENABLED", settings.CANDIDATE_PREMIUM_ENABLED, db):
         return True
     return get_cv_plan_tier(db, candidate_profile_id) != "free"
 
@@ -170,7 +171,7 @@ def assert_resume_quota(db: Session, candidate_profile_id: str) -> None:
     ignores FOR UPDATE, which is fine — SQLite's own whole-database write
     lock already serializes writers, so no test behavior changes.
     """
-    if not settings.CANDIDATE_PREMIUM_ENABLED:
+    if not get_flag("CANDIDATE_PREMIUM_ENABLED", settings.CANDIDATE_PREMIUM_ENABLED, db):
         return
 
     db.query(CandidateProfile).filter(CandidateProfile.id == candidate_profile_id).with_for_update().first()
@@ -195,7 +196,7 @@ def assert_resume_quota(db: Session, candidate_profile_id: str) -> None:
 def assert_cover_letters_allowed(db: Session, candidate_profile_id: str) -> None:
     """Cover letters are a pro/premium feature — no-op while
     CANDIDATE_PREMIUM_ENABLED is off."""
-    if not settings.CANDIDATE_PREMIUM_ENABLED:
+    if not get_flag("CANDIDATE_PREMIUM_ENABLED", settings.CANDIDATE_PREMIUM_ENABLED, db):
         return
 
     if not get_cv_plan_limits(db, get_cv_plan_tier(db, candidate_profile_id))["cover_letters"]:
@@ -208,7 +209,7 @@ def assert_cover_letters_allowed(db: Session, candidate_profile_id: str) -> None
 def assert_auto_apply_allowed(db: Session, candidate_profile_id: str) -> None:
     """Auto-apply is a premium-only feature — no-op while
     CANDIDATE_PREMIUM_ENABLED is off."""
-    if not settings.CANDIDATE_PREMIUM_ENABLED:
+    if not get_flag("CANDIDATE_PREMIUM_ENABLED", settings.CANDIDATE_PREMIUM_ENABLED, db):
         return
 
     if not get_cv_plan_limits(db, get_cv_plan_tier(db, candidate_profile_id))["auto_apply"]:

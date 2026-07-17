@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
 import {
-  fetchUsers, fetchAdminMe, runVerificationBackfill, statusBadgeClass, toDateLabel,
+  fetchUsers, fetchAdminMe, runVerificationBackfill, resendUserVerification, statusBadgeClass, toDateLabel,
   fetchUserSubscription, updateUserSubscription, confirmCompanyPayment, confirmCandidateCvPayment,
   type UserRecord, type AdminLevel, type Pagination, type UserSubscriptionSummary,
 } from "../adminClient";
@@ -44,7 +44,21 @@ export default function AdminUsersPage() {
   const [quickSuspend, setQuickSuspend] = useState<{ user: UserRecord; suspended: boolean } | null>(null);
   const [quickReason, setQuickReason] = useState("");
   const [backfillBusy, setBackfillBusy] = useState(false);
+  const [resendBusyId, setResendBusyId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
+
+  const resendVerification = async (userRecord: UserRecord) => {
+    if (!token) return;
+    setResendBusyId(userRecord._id);
+    try {
+      await resendUserVerification(token, userRecord._id);
+      notify(`Email de verificação reenviado para ${userRecord.email || "este utilizador"}.`, "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao reenviar verificação."), "error");
+    } finally {
+      setResendBusyId(null);
+    }
+  };
 
   const backfillVerification = async () => {
     if (!token) return;
@@ -351,6 +365,19 @@ export default function AdminUsersPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(state)}`}>{state}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${userRecord.emailVerified ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                    {userRecord.emailVerified ? "Verificado" : "Não verificado"}
+                  </span>
+                  {!userRecord.emailVerified ? (
+                    <button
+                      type="button"
+                      disabled={resendBusyId === userRecord._id}
+                      onClick={() => resendVerification(userRecord)}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"
+                    >
+                      {resendBusyId === userRecord._id ? "A enviar..." : "Reenviar verificação"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -400,6 +427,9 @@ export default function AdminUsersPage() {
           <div className="grid gap-4 text-sm text-slate-700">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(selectedUser.suspended ? "suspended" : "active")}`}>{selectedUser.suspended ? "suspended" : "active"}</span>
+              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${selectedUser.emailVerified ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                {selectedUser.emailVerified ? "Email verificado" : "Email não verificado"}
+              </span>
               {selectedUser.role ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">{selectedUser.role}</span> : null}
               {selectedUser.role === "admin" && selectedUser.adminLevel ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">{selectedUser.adminLevel}</span> : null}
             </div>
@@ -407,6 +437,20 @@ export default function AdminUsersPage() {
               <p><span className="font-semibold">Nome:</span> {selectedUser.fullName || "--"}</p>
               <p><span className="font-semibold">Email:</span> {selectedUser.email || "--"}</p>
               <p><span className="font-semibold">Registo:</span> {toDateLabel(selectedUser.createdAt)}</p>
+              <p>
+                <span className="font-semibold">Verificação:</span>{" "}
+                {selectedUser.emailVerified ? `verificado em ${toDateLabel(selectedUser.emailVerifiedAt || undefined)}` : "por verificar"}
+              </p>
+              {!selectedUser.emailVerified ? (
+                <button
+                  type="button"
+                  disabled={resendBusyId === selectedUser._id}
+                  onClick={() => resendVerification(selectedUser)}
+                  className={`${adminSecondaryButtonClass} mt-1 w-fit`}
+                >
+                  {resendBusyId === selectedUser._id ? "A enviar..." : "Reenviar verificação"}
+                </button>
+              ) : null}
             </div>
 
             {managesSubscription && (

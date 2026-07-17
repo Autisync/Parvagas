@@ -11,7 +11,8 @@ import {
   HomeIcon, ChartBarIcon, BriefcaseIcon, BuildingOffice2Icon,
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
-  RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon,
+  RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -29,6 +30,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/users",        label: "Utilizadores",   hint: "Acesso e estado",        levels: ["super-admin", "moderator"], icon: <UsersIcon className="h-5 w-5" />,                 pinned: true },
   { href: "/Portal/Admin/subscriptions", label: "Subscrições",   hint: "Planos e pagamentos",    levels: ["super-admin"],             icon: <CreditCardIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/blog",         label: "Conteúdo",       hint: "Dicas de Carreira / Blog", levels: ["super-admin", "moderator"], icon: <NewspaperIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/resume-templates", label: "Templates CV", hint: "Modelos de currículo", levels: ["super-admin"],              icon: <DocumentTextIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/ads",          label: "Campanhas",      hint: "Ads e placements",       levels: ["super-admin"],             icon: <MegaphoneIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/admin-levels", label: "Super-admin",    hint: "Admins e moderadores",   levels: ["super-admin"],             icon: <ShieldCheckIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/audit",        label: "Auditoria",      hint: "Ações privilegiadas",    levels: ["super-admin"],             icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
@@ -36,6 +38,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/exports",      label: "Exportações CSV",hint: "Dados operacionais",     levels: ["super-admin"],             icon: <CloudArrowDownIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/deploy",       label: "Deploy",         hint: "Lançar para produção",   levels: ["super-admin"],             icon: <RocketLaunchIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/launch-readiness", label: "Launch Readiness", hint: "Checklist de produção", levels: ["super-admin"],       icon: <CheckBadgeIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/settings",     label: "Definições",     hint: "Interruptores de negócio", levels: ["super-admin"],          icon: <Cog6ToothIcon className="h-5 w-5" /> },
 ];
 
 export default function AdminSidebar({
@@ -61,8 +64,11 @@ export default function AdminSidebar({
 
   return (
     <>
-      {/* Desktop sidebar — hidden on mobile */}
-      <aside id="admin-sidebar" className="hidden lg:block h-fit app-card p-4 lg:sticky lg:top-4">
+      {/* Desktop sidebar — hidden on mobile. max-h + overflow-y-auto so the
+          nav list scrolls within itself once it's taller than the viewport
+          (this list has grown past a dozen items), instead of relying on
+          the whole page to scroll past a sticky element. */}
+      <aside id="admin-sidebar" className="hidden h-fit max-h-[calc(100vh-2rem)] overflow-y-auto lg:block app-card p-4 lg:sticky lg:top-4">
         <div className="rounded-2xl bg-slate-950 p-4 text-white">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-300">{dict.portal.admin.roleLabel}</p>
           <p className="mt-2 text-lg font-bold">{roleLabel}</p>

@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Notification, User
+from app.models import Company, CompanyMember, Notification, SupportMessage, User
+from app.services.notification_service import admin_emails, create_notification, notify_admins
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -131,16 +135,77 @@ async def resolve_notification(
 @router.post("/company-admin-message")
 async def company_admin_message(
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Candidate/company → admin contact message (queued for follow-up)."""
+    """Sent from the notification bell's "message" form — in practice this
+    is a non-owner company team member messaging their own company's OWNER
+    (see NotificationBell.tsx's "Mensagem interna ao owner" label), not
+    platform admins, despite the route name. Resolves that owner via
+    CompanyMember; falls back to every platform admin if no owner can be
+    resolved (e.g. any future caller outside that one flow). Previously
+    this endpoint faked a response and persisted nothing, so the message
+    reached no one either way."""
+    reason = str(payload.get("reason", "")).strip()[:255] or "Mensagem"
+    body_text = str(payload.get("message", "")).strip()
+    if not body_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A mensagem não pode ficar vazia")
+
+    role = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    sender_name = current_user.full_name or current_user.email or "Utilizador"
+
+    recipient: User | None = None
+    if role == "company":
+        membership = db.query(CompanyMember).filter(CompanyMember.user_id == current_user.id).first()
+        company = db.query(Company).filter(Company.id == membership.company_id).first() if membership else None
+        if company and company.owner_user_id and company.owner_user_id != current_user.id:
+            recipient = db.query(User).filter(User.id == company.owner_user_id).first()
+
+    entry = SupportMessage(
+        sender_user_id=current_user.id, sender_role=role,
+        recipient_user_id=recipient.id if recipient else None,
+        reason=reason, message=body_text, status="open",
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    try:
+        if recipient:
+            create_notification(
+                db, recipient.id, type="team_message",
+                title=f"Mensagem de {sender_name}",
+                body=f"[{reason}] {body_text}",
+                link="/Portal/Empresa/Utilizadores",
+            )
+            if recipient.email:
+                from app.workers.tasks import send_templated_email
+                send_templated_email.delay("send_admin_contact_message_email", {
+                    "email": recipient.email, "sender_name": sender_name, "sender_role": role,
+                    "reason": reason, "message": body_text,
+                })
+        else:
+            notify_admins(
+                db, type="support_message",
+                title=f"Mensagem de {sender_name}",
+                body=f"[{reason}] {body_text}",
+            )
+            for admin_email in admin_emails(db):
+                from app.workers.tasks import send_templated_email
+                send_templated_email.delay("send_admin_contact_message_email", {
+                    "email": admin_email, "sender_name": sender_name, "sender_role": role,
+                    "reason": reason, "message": body_text,
+                })
+    except Exception as e:
+        logger.warning(f"Could not alert recipient of support message: {e}")
+
     return {
         "queued": True,
         "message": {
-            "_id": f"msg-{int(datetime.utcnow().timestamp())}",
-            "reason": payload.get("reason", ""),
-            "body": payload.get("message", ""),
-            "createdAt": datetime.utcnow().isoformat(),
+            "_id": entry.id,
+            "reason": entry.reason,
+            "body": entry.message,
+            "createdAt": entry.created_at.isoformat() if entry.created_at else None,
             "userId": current_user.id,
         },
     }

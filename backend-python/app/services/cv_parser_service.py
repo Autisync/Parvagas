@@ -5,6 +5,7 @@ import re
 from typing import Dict, List
 import httpx
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.core.logging import get_logger
 from app.schemas import ParsedCVProfile
 
@@ -407,7 +408,7 @@ class CVParserService:
     def _ai_enabled() -> bool:
         """Return whether AI extraction is configured and enabled."""
         return bool(
-            settings.CV_PARSER_AI_ENABLED
+            get_flag("CV_PARSER_AI_ENABLED", settings.CV_PARSER_AI_ENABLED)
             and settings.CV_PARSER_AI_API_KEY.strip()
             and settings.CV_PARSER_AI_MODEL.strip()
         )

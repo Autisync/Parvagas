@@ -8,14 +8,17 @@ import {
   fetchAdminActions,
   fetchAdminMe,
   fetchAuditLogs,
+  fetchSupportMessages,
   downloadAuditLogsCsv,
+  resolveSupportMessage,
   toDateLabel,
   type AdminActionRecord,
   type AdminLevel,
   type AuditLogRecord,
   type Pagination,
+  type SupportMessageRecord,
 } from "../adminClient";
-import { AdminEmptyState, AdminFilterBar, AdminPageHeader, AdminRestricted, adminFieldClass } from "../components/AdminUI";
+import { AdminEmptyState, AdminFilterBar, AdminPageHeader, AdminRestricted, adminFieldClass, adminSecondaryButtonClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages, collectSelectedItemsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -26,7 +29,7 @@ const JsonBlock = dynamic(() => import("@/app/Portal/Admin/components/JsonBlock"
   ssr: false,
 });
 
-type Tab = "audit" | "admin-actions";
+type Tab = "audit" | "admin-actions" | "support-messages";
 
 export default function AdminAuditPage() {
   const { token } = useAuth("admin");
@@ -42,6 +45,9 @@ export default function AdminAuditPage() {
   const [limit, setLimit] = useState(20);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [adminActions, setAdminActions] = useState<AdminActionRecord[]>([]);
+  const [supportMessages, setSupportMessages] = useState<SupportMessageRecord[]>([]);
+  const [supportStatusFilter, setSupportStatusFilter] = useState("open");
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [pagination, setPagination] = useState<Pagination | undefined>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -59,15 +65,19 @@ export default function AdminAuditPage() {
         const res = await fetchAuditLogs(token, { page, limit, keyword, action, resourceType, actorUserId, from, to });
         setAuditLogs(res.auditLogs || []);
         setPagination(res.pagination);
-      } else {
+      } else if (tab === "admin-actions") {
         const res = await fetchAdminActions(token, { page, limit, keyword, action, targetType: resourceType });
         setAdminActions(res.adminActions || []);
+        setPagination(res.pagination);
+      } else {
+        const res = await fetchSupportMessages(token, { page, limit, status: supportStatusFilter === "all" ? undefined : supportStatusFilter });
+        setSupportMessages(res.supportMessages || []);
         setPagination(res.pagination);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar auditoria."));
     }
-  }, [token, tab, page, limit, keyword, action, resourceType, actorUserId, from, to]);
+  }, [token, tab, page, limit, keyword, action, resourceType, actorUserId, from, to, supportStatusFilter]);
 
   useEffect(() => {
     load();
@@ -79,7 +89,27 @@ export default function AdminAuditPage() {
     setNotice("");
   }, [notice, notify]);
 
-  const currentItems = useMemo(() => (tab === "audit" ? auditLogs : adminActions), [tab, auditLogs, adminActions]);
+  // Support messages aren't part of the generic bulk-select/export machinery
+  // below (different shape, no need for JSON/CSV export) — this tab renders
+  // its own simple list further down instead.
+  const currentItems = useMemo(
+    () => (tab === "audit" ? auditLogs : tab === "admin-actions" ? adminActions : []),
+    [tab, auditLogs, adminActions]
+  );
+
+  const resolveMessage = async (id: string) => {
+    if (!token) return;
+    setResolvingId(id);
+    try {
+      await resolveSupportMessage(token, id);
+      notify("Mensagem marcada como resolvida.", "success");
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao resolver a mensagem."), "error");
+    } finally {
+      setResolvingId(null);
+    }
+  };
   const {
     selectedIds,
     allVisibleSelected,
@@ -205,16 +235,33 @@ export default function AdminAuditPage() {
         >
           Admin actions
         </button>
+        <button
+          onClick={() => { setTab("support-messages"); setPage(1); clearSelectionState(); }}
+          aria-pressed={tab === "support-messages"}
+          className={`rounded-xl border px-4 py-2 text-sm font-semibold shadow-sm transition ${tab === "support-messages" ? "border-red-200 bg-red-50 text-red-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+        >
+          Mensagens
+        </button>
       </div>
 
-      <AdminFilterBar>
-        <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar logs" className={adminFieldClass} />
-        <input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Filtrar por ação" className={adminFieldClass} />
-        <input value={resourceType} onChange={(e) => { setResourceType(e.target.value); setPage(1); clearSelectionState(); }} placeholder={tab === "audit" ? "Resource type" : "Target type"} className={adminFieldClass} />
-        <input value={actorUserId} onChange={(e) => { setActorUserId(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Utilizador (ID)" className={adminFieldClass} />
-        <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
-        <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
-      </AdminFilterBar>
+      {tab === "support-messages" ? (
+        <AdminFilterBar>
+          <select value={supportStatusFilter} onChange={(e) => { setSupportStatusFilter(e.target.value); setPage(1); }} className={adminFieldClass}>
+            <option value="open">Por resolver</option>
+            <option value="resolved">Resolvidas</option>
+            <option value="all">Todas</option>
+          </select>
+        </AdminFilterBar>
+      ) : (
+        <AdminFilterBar>
+          <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Pesquisar logs" className={adminFieldClass} />
+          <input value={action} onChange={(e) => { setAction(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Filtrar por ação" className={adminFieldClass} />
+          <input value={resourceType} onChange={(e) => { setResourceType(e.target.value); setPage(1); clearSelectionState(); }} placeholder={tab === "audit" ? "Resource type" : "Target type"} className={adminFieldClass} />
+          <input value={actorUserId} onChange={(e) => { setActorUserId(e.target.value); setPage(1); clearSelectionState(); }} placeholder="Utilizador (ID)" className={adminFieldClass} />
+          <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
+          <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass} />
+        </AdminFilterBar>
+      )}
 
       {currentItems.length > 0 ? (
         <section className="mt-5 app-card p-4">
@@ -298,6 +345,30 @@ export default function AdminAuditPage() {
                 <summary className="cursor-pointer list-none font-semibold text-slate-600">Ver payload JSON</summary>
                 <JsonBlock data={entry.payload || {}} />
               </details>
+            </div>
+          </div>
+        ))}
+
+        {tab === "support-messages" && supportMessages.length === 0 && <AdminEmptyState title="Sem mensagens nesta vista" description="Ajuste o filtro de estado." />}
+        {tab === "support-messages" && supportMessages.map((msg) => (
+          <div key={msg._id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-slate-900">{msg.senderName || msg.senderEmail || "Utilizador"} <span className="text-xs font-normal text-slate-400">({msg.senderRole})</span></p>
+                <p className="text-xs text-slate-500">Motivo: {msg.reason} {msg.recipientName ? `· Para: ${msg.recipientName}` : ""}</p>
+                <p className="mt-2 text-sm text-slate-700">{msg.message}</p>
+                <p className="mt-1 text-xs text-slate-400">{toDateLabel(msg.createdAt || undefined)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${msg.status === "resolved" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                  {msg.status}
+                </span>
+                {msg.status !== "resolved" && (
+                  <button type="button" onClick={() => resolveMessage(msg._id)} disabled={resolvingId === msg._id} className={adminSecondaryButtonClass}>
+                    {resolvingId === msg._id ? "A resolver..." : "Resolver"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}

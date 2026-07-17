@@ -13,11 +13,17 @@ import {
   fetchAdminMe,
   fetchAdminPlans,
   fetchAdminTransactions,
+  fetchAnalytics,
+  fetchExpiringSubscriptions,
   hasPermission,
+  rejectAdminTransaction,
+  toDateLabel,
   updateAdminCandidateCvPlan,
   updateAdminPlan,
   type AdminMe,
+  type AnalyticsResponse,
   type CandidateCvPlanRecord,
+  type ExpiringSubscription,
   type PlanRecord,
   type TransactionRecord,
 } from "../adminClient";
@@ -43,6 +49,8 @@ export default function AdminSubscriptionsPage() {
   const [plans, setPlans] = useState<PlanRecord[]>([]);
   const [cvPlans, setCvPlans] = useState<CandidateCvPlanRecord[]>([]);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [expiring, setExpiring] = useState<ExpiringSubscription[]>([]);
   const [txStatusFilter, setTxStatusFilter] = useState("pending");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,16 +64,20 @@ export default function AdminSubscriptionsPage() {
     if (!token) return;
     setError("");
     try {
-      const [currentAdmin, plansRes, cvPlansRes, txRes] = await Promise.all([
+      const [currentAdmin, plansRes, cvPlansRes, txRes, analyticsRes, expiringRes] = await Promise.all([
         fetchAdminMe(token),
         fetchAdminPlans(token),
         fetchAdminCandidateCvPlans(token),
         fetchAdminTransactions(token, { status: txStatusFilter === "all" ? undefined : txStatusFilter, limit: 50 }),
+        fetchAnalytics(token),
+        fetchExpiringSubscriptions(token, 7),
       ]);
       setMe(currentAdmin);
       setPlans(plansRes.plans || []);
       setCvPlans(cvPlansRes.candidateCvPlans || []);
       setTransactions(txRes.transactions || []);
+      setAnalytics(analyticsRes);
+      setExpiring(expiringRes.expiring || []);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar subscrições."));
     }
@@ -152,6 +164,21 @@ export default function AdminSubscriptionsPage() {
     }
   };
 
+  const rejectPayment = async (tx: TransactionRecord) => {
+    if (!token || !canManage) return;
+    if (!window.confirm(`Rejeitar a transação ${tx.reference}?`)) return;
+    setBusy(true);
+    try {
+      await rejectAdminTransaction(token, tx._id, "cancelled");
+      notify("Transação cancelada.", "success");
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao rejeitar a transação."), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirmPayment = async (tx: TransactionRecord) => {
     if (!token || !canManage || !tx.reference) return;
     setBusy(true);
@@ -191,7 +218,50 @@ export default function AdminSubscriptionsPage() {
 
       {error ? <div className="mt-4"><InlineErrorState /></div> : null}
 
-      <section className="mt-6">
+      <section className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-emerald-700">Receita (últimos 30 dias)</p>
+          <p className="mt-2 text-3xl font-bold text-emerald-900">
+            {(analytics?.business?.revenueInRange ?? 0).toLocaleString("pt-PT")} AOA
+          </p>
+          {analytics?.trends?.revenuePct != null ? (
+            <p className="mt-1 text-xs font-semibold text-emerald-700">
+              {analytics.trends.revenuePct >= 0 ? "+" : ""}{analytics.trends.revenuePct}% vs. período anterior
+            </p>
+          ) : null}
+        </div>
+        <div className="app-card p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Transações pagas na série (14 dias)</p>
+          <p className="mt-2 text-3xl font-bold text-slate-900">{(analytics?.series?.revenue || []).length}</p>
+          <p className="mt-1 text-xs text-slate-500">dias com pelo menos um pagamento confirmado</p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-amber-700">A expirar em 7 dias</p>
+          <p className="mt-2 text-3xl font-bold text-amber-900">{expiring.length}</p>
+          <p className="mt-1 text-xs text-amber-700">subscrições ativas por renovar</p>
+        </div>
+      </section>
+
+      {expiring.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-lg font-bold text-slate-900">A expirar em 7 dias</h2>
+          <div className="mt-4 space-y-2">
+            {expiring.map((entry, i) => (
+              <div key={`${entry.scope}-${entry.userId}-${i}`} className="app-card flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <p className="font-semibold text-slate-900">{entry.name || "—"} <span className="text-xs font-normal text-slate-400">({entry.scope})</span></p>
+                  <p className="text-xs text-slate-500">Plano: {entry.planName || "—"}</p>
+                </div>
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  expira em {toDateLabel(entry.currentPeriodEnd || undefined)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold text-slate-900">Planos de Empresa</h2>
           {canManage && (
@@ -320,6 +390,16 @@ export default function AdminSubscriptionsPage() {
                   {canManage && tx.status === "pending" && tx.partyType !== "unknown" && (
                     <button type="button" onClick={() => confirmPayment(tx)} disabled={busy} className={adminSecondaryButtonClass}>
                       Confirmar pagamento
+                    </button>
+                  )}
+                  {canManage && tx.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => rejectPayment(tx)}
+                      disabled={busy}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Rejeitar
                     </button>
                   )}
                 </div>

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models import Company, Job, User, UserRole
+from app.models import Company, Job, Notification, User, UserRole
 from app.api.v1.applications import _notify_company_new_applicant
 
 
@@ -97,3 +97,27 @@ def test_reuses_existing_employer_access_token_instead_of_rotating(db, monkeypat
 
     db.refresh(job)
     assert job.employer_access_token == "stable-token"
+
+
+def test_creates_bell_notification_for_company_owner(db, monkeypatch):
+    """The owner gets an in-app notification alongside the email — this was
+    previously email-only, so the bell stayed empty for companies."""
+    owner = User(id=str(uuid.uuid4()), email="owner3@x.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name="Acme", status="active")
+    db.add(company)
+    db.flush()
+    job = Job(company_id=company.id, title="Vaga Bell", status="approved", visibility="public")
+    db.add(job)
+    db.commit()
+
+    monkeypatch.setattr("app.api.v1.applications.send_templated_email.delay", lambda method, payload: None)
+
+    _notify_company_new_applicant(db, company.id, job.id, "Candidate Name")
+
+    rows = db.query(Notification).filter(Notification.user_id == owner.id).all()
+    assert len(rows) == 1
+    assert rows[0].type == "new_applicant"
+    assert "Candidate Name" in rows[0].body
+    assert "Vaga Bell" in rows[0].body

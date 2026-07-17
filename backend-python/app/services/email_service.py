@@ -680,6 +680,20 @@ class EmailService:
             preheader=f"{job_title} foi denunciada.",
         )
 
+    @staticmethod
+    def send_admin_contact_message_email(email: str, sender_name: str, sender_role: str, reason: str, message: str) -> bool:
+        body = f"""
+        <p style="margin:0 0 14px;"><strong>{escape(sender_name)}</strong> ({escape(sender_role)}) enviou uma mensagem através do painel.</p>
+        <p style="margin:0 0 14px;">Motivo: {escape(reason)}</p>
+        <p style="margin:0 0 14px; white-space:pre-wrap;">{escape(message)}</p>
+        """
+        return EmailService._compose_and_send(
+            email, f"{settings.BRAND_NAME} — Nova mensagem: {reason}",
+            "Nova mensagem de utilizador", body,
+            "Ver utilizadores", f"{EmailService._base_url()}/Admin",
+            preheader=f"{sender_name} enviou uma mensagem.",
+        )
+
     # ============================ SECURITY ============================== #
 
     @staticmethod

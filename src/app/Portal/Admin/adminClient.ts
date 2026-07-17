@@ -41,6 +41,7 @@ export const AdminPermissions = {
   EXPORT_COMPANIES: "admin.exports.companies",
   SCRAPER_SOURCES_MANAGE: "admin.scraperSources.manage",
   SUBSCRIPTIONS_MANAGE: "admin.subscriptions.manage",
+  FEATURE_FLAGS_MANAGE: "admin.featureFlags.manage",
 } as const;
 
 export function hasPermission(me: AdminMe | null | undefined, permission: string) {
@@ -130,6 +131,8 @@ export type UserRecord = {
   role?: string;
   adminLevel?: AdminLevel;
   suspended?: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   createdAt?: string;
 };
 
@@ -138,8 +141,21 @@ export type JobRecord = {
   title?: string;
   status?: string;
   visibility?: string;
+  featured?: boolean;
   location?: string;
   category?: string;
+  workMode?: string;
+  contractType?: string;
+  jobType?: string;
+  salaryRange?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  experienceLevel?: string;
+  description?: string | null;
+  responsibilities?: string[];
+  requirements?: string[];
+  requiredSkills?: string[];
+  preferredSkills?: string[];
   createdAt?: string;
   companyId?: { _id?: string; name?: string } | string;
 };
@@ -379,8 +395,23 @@ export async function runVerificationBackfill(token: string, dryRun: boolean) {
   });
 }
 
+export async function resendUserVerification(token: string, userId: string) {
+  return authFetch<{ sent: boolean; userId: string }>(`/admin/users/${userId}/resend-verification`, token, {
+    method: "POST",
+    suppressGlobalErrors: true,
+  });
+}
+
 export async function fetchJobs(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"jobs", JobRecord>>(`/admin/jobs${listQuery(params)}`, token);
+}
+
+export async function setJobFeatured(token: string, jobId: string, featured: boolean) {
+  return authFetch<{ job: JobRecord }>(`/admin/jobs/${jobId}/featured`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ featured }),
+    suppressGlobalErrors: true,
+  });
 }
 
 export async function fetchApplications(token: string, params: Record<string, string | number | undefined> = {}) {
@@ -425,6 +456,68 @@ export async function fetchAdminActions(token: string, params: Record<string, st
   return authFetch<Paginated<"adminActions", AdminActionRecord>>(`/admin/admin-actions${listQuery(params)}`, token);
 }
 
+export type SupportMessageRecord = {
+  _id: string;
+  senderName?: string | null;
+  senderEmail?: string | null;
+  senderRole?: string | null;
+  recipientName?: string | null;
+  reason?: string | null;
+  message: string;
+  status: "open" | "resolved";
+  createdAt?: string | null;
+};
+
+export async function fetchSupportMessages(token: string, params: Record<string, string | number | undefined> = {}) {
+  return authFetch<Paginated<"supportMessages", SupportMessageRecord>>(`/admin/support-messages${listQuery(params)}`, token);
+}
+
+export async function resolveSupportMessage(token: string, id: string) {
+  return authFetch<SupportMessageRecord>(`/admin/support-messages/${id}/resolve`, token, {
+    method: "PATCH",
+    suppressGlobalErrors: true,
+  });
+}
+
+export type ResumeTemplateRecord = {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  previewUrl?: string | null;
+  isActive: boolean;
+};
+
+export async function fetchAdminResumeTemplates(token: string) {
+  return authFetch<{ resumeTemplates: ResumeTemplateRecord[]; availableSlugs: string[] }>(
+    `/admin/resume-templates`,
+    token,
+  );
+}
+
+export async function createAdminResumeTemplate(
+  token: string,
+  payload: { slug: string; name: string; description?: string; previewUrl?: string; isActive?: boolean },
+) {
+  return authFetch<ResumeTemplateRecord>(`/admin/resume-templates`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function updateAdminResumeTemplate(
+  token: string,
+  id: string,
+  payload: { name?: string; description?: string; previewUrl?: string; isActive?: boolean },
+) {
+  return authFetch<ResumeTemplateRecord>(`/admin/resume-templates/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
 export async function fetchLaunchReadiness(token: string, checkServices = false) {
   return authFetch<LaunchReadinessResponse>(`/admin/launch-readiness${listQuery({ checkServices: checkServices ? "true" : undefined })}`, token);
 }
@@ -458,6 +551,25 @@ export async function updateScraperSource(token: string, id: string, payload: Pa
 export async function deleteScraperSource(token: string, id: string) {
   return authFetch<{ deleted: boolean; id: string }>(`/admin/scraper-sources/${id}`, token, {
     method: "DELETE",
+  });
+}
+
+export type FeatureFlagRecord = {
+  key: string;
+  value: boolean;
+  description?: string | null;
+  updatedAt?: string | null;
+};
+
+export async function fetchFeatureFlags(token: string) {
+  return authFetch<{ featureFlags: FeatureFlagRecord[] }>("/admin/feature-flags", token);
+}
+
+export async function updateFeatureFlag(token: string, key: string, value: boolean) {
+  return authFetch<FeatureFlagRecord>(`/admin/feature-flags/${key}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ value }),
+    suppressGlobalErrors: true,
   });
 }
 
@@ -755,6 +867,20 @@ export type UserSubscriptionSummary = {
   availablePlans: PlanRecord[] | CvPlanOffer[];
 };
 
+export type ExpiringSubscription = {
+  scope: "company" | "candidate";
+  userId: string | null;
+  name: string | null;
+  planName: string | null;
+  currentPeriodEnd: string | null;
+};
+
+export async function fetchExpiringSubscriptions(token: string, daysAhead = 7) {
+  return authFetch<{ expiring: ExpiringSubscription[]; daysAhead: number }>(
+    `/admin/subscriptions/expiring${listQuery({ daysAhead })}`, token,
+  );
+}
+
 export async function fetchAdminPlans(token: string) {
   return authFetch<{ plans: PlanRecord[] }>("/admin/plans", token);
 }
@@ -796,6 +922,14 @@ export async function updateAdminCandidateCvPlan(token: string, id: string, payl
 
 export async function fetchAdminTransactions(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"transactions", TransactionRecord>>(`/admin/transactions${listQuery(params)}`, token);
+}
+
+export async function rejectAdminTransaction(token: string, id: string, status: "failed" | "cancelled") {
+  return authFetch<TransactionRecord>(`/admin/transactions/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+    suppressGlobalErrors: true,
+  });
 }
 
 export async function fetchUserSubscription(token: string, userId: string) {

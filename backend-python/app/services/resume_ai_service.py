@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.core.logging import get_logger
 from app.models import CandidateProfile, Resume
 from app.services.llm_service import chat_json_request, ollama_concurrency_guard
@@ -67,7 +68,7 @@ class ResumeAIService:
     @staticmethod
     def _ai_enabled() -> bool:
         return bool(
-            settings.RESUME_AI_ENABLED
+            get_flag("RESUME_AI_ENABLED", settings.RESUME_AI_ENABLED)
             and settings.RESUME_AI_API_KEY.strip()
             and settings.RESUME_AI_MODEL.strip()
         )
@@ -132,7 +133,7 @@ class ResumeAIService:
     @staticmethod
     def _ollama_enabled() -> bool:
         return (
-            settings.OLLAMA_FREE_TIER_ENABLED
+            get_flag("OLLAMA_FREE_TIER_ENABLED", settings.OLLAMA_FREE_TIER_ENABLED)
             and bool(settings.OLLAMA_BASE_URL.strip())
             and bool(settings.OLLAMA_MODEL.strip())
         )

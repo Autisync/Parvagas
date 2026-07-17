@@ -971,18 +971,34 @@ async def get_notification_preferences(
 ):
     profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
     prefs = dict(_DEFAULT_PREFS)
-    if profile and getattr(profile, "certifications", None):
-        # Reuse no extra column; preferences stored client-side for now. Return defaults.
-        pass
+    if profile and profile.notification_preferences:
+        try:
+            stored = json.loads(profile.notification_preferences)
+            prefs.update({k: bool(v) for k, v in stored.items() if k in _DEFAULT_PREFS})
+        except Exception:
+            pass
     return {"preferences": prefs}
 
 
 @router.patch("/notifications/preferences")
 async def update_notification_preferences(
     payload: dict[str, Any],
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merged = {**_DEFAULT_PREFS, **{k: bool(v) for k, v in (payload or {}).items() if k in _DEFAULT_PREFS}}
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de candidato não encontrado")
+
+    current = dict(_DEFAULT_PREFS)
+    if profile.notification_preferences:
+        try:
+            current.update({k: bool(v) for k, v in json.loads(profile.notification_preferences).items() if k in _DEFAULT_PREFS})
+        except Exception:
+            pass
+    merged = {**current, **{k: bool(v) for k, v in (payload or {}).items() if k in _DEFAULT_PREFS}}
+    profile.notification_preferences = json.dumps(merged)
+    db.commit()
     return {"preferences": merged}
 
 

@@ -23,6 +23,7 @@ import hashlib
 import httpx
 
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -80,7 +81,7 @@ def password_is_pwned(password: str) -> bool | None:
     k-anonymity: SHA-1 the password, send only the first 5 hex chars, then
     look for our suffix in the returned "SUFFIX:COUNT" lines. No key needed.
     """
-    if not settings.HIBP_PASSWORD_CHECK_ENABLED:
+    if not get_flag("HIBP_PASSWORD_CHECK_ENABLED", settings.HIBP_PASSWORD_CHECK_ENABLED):
         return None
     try:
         sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()

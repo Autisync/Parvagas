@@ -28,12 +28,14 @@ from app.models import (
 from app.api.v1.admin import (
     admin_create_plan,
     admin_delete_plan,
+    admin_expiring_subscriptions,
     admin_get_user_subscription,
     admin_list_candidate_cv_plans,
     admin_list_plans,
     admin_list_transactions,
     admin_update_candidate_cv_plan,
     admin_update_plan,
+    admin_update_transaction_status,
     admin_update_user_subscription,
 )
 
@@ -299,3 +301,128 @@ def test_override_rejects_invalid_status(db):
     user, _ = _make_candidate_user(db)
     with pytest.raises(HTTPException):
         asyncio.run(admin_update_user_subscription(user.id, {"tier": "free", "status": "bogus"}, db=db, current_user=admin))
+
+
+# ── Expiring subscriptions ──────────────────────────────────────────────────
+
+def test_expiring_subscriptions_includes_company_within_window(db):
+    admin = _make_admin(db)
+    _, company = _make_company_user(db)
+    plan = Plan(code="starter", name="Starter", price=25000, active=True)
+    db.add(plan)
+    db.flush()
+    db.add(Subscription(company_id=company.id, plan_id=plan.id, status="active", current_period_end=datetime.utcnow() + timedelta(days=3)))
+    db.commit()
+
+    result = asyncio.run(admin_expiring_subscriptions(daysAhead=7, db=db, current_user=admin))
+
+    assert len(result["expiring"]) == 1
+    assert result["expiring"][0]["scope"] == "company"
+    assert result["expiring"][0]["name"] == "Acme"
+    assert result["expiring"][0]["planName"] == "Starter"
+
+
+def test_expiring_subscriptions_includes_candidate_within_window(db):
+    admin = _make_admin(db)
+    _, profile = _make_candidate_user(db)
+    db.add(CandidateCVSubscription(candidate_profile_id=profile.id, plan_tier="pro", status="active", current_period_end=datetime.utcnow() + timedelta(days=5)))
+    db.commit()
+
+    result = asyncio.run(admin_expiring_subscriptions(daysAhead=7, db=db, current_user=admin))
+
+    assert len(result["expiring"]) == 1
+    assert result["expiring"][0]["scope"] == "candidate"
+    assert result["expiring"][0]["planName"] == "pro"
+
+
+def test_expiring_subscriptions_excludes_outside_window(db):
+    admin = _make_admin(db)
+    _, company = _make_company_user(db)
+    plan = Plan(code="starter", name="Starter", price=25000, active=True)
+    db.add(plan)
+    db.flush()
+    # Too far out.
+    db.add(Subscription(company_id=company.id, plan_id=plan.id, status="active", current_period_end=datetime.utcnow() + timedelta(days=30)))
+    # Already expired.
+    db.add(Subscription(company_id=company.id, plan_id=plan.id, status="active", current_period_end=datetime.utcnow() - timedelta(days=1)))
+    db.commit()
+
+    result = asyncio.run(admin_expiring_subscriptions(daysAhead=7, db=db, current_user=admin))
+
+    assert result["expiring"] == []
+
+
+def test_expiring_subscriptions_excludes_non_active_status(db):
+    admin = _make_admin(db)
+    _, company = _make_company_user(db)
+    plan = Plan(code="starter", name="Starter", price=25000, active=True)
+    db.add(plan)
+    db.flush()
+    db.add(Subscription(company_id=company.id, plan_id=plan.id, status="cancelled", current_period_end=datetime.utcnow() + timedelta(days=3)))
+    db.commit()
+
+    result = asyncio.run(admin_expiring_subscriptions(daysAhead=7, db=db, current_user=admin))
+
+    assert result["expiring"] == []
+
+
+def test_expiring_subscriptions_sorted_soonest_first(db):
+    admin = _make_admin(db)
+    _, company = _make_company_user(db)
+    plan = Plan(code="starter", name="Starter", price=25000, active=True)
+    db.add(plan)
+    db.flush()
+    db.add(Subscription(company_id=company.id, plan_id=plan.id, status="active", current_period_end=datetime.utcnow() + timedelta(days=6)))
+    _, profile = _make_candidate_user(db)
+    db.add(CandidateCVSubscription(candidate_profile_id=profile.id, plan_tier="pro", status="active", current_period_end=datetime.utcnow() + timedelta(days=2)))
+    db.commit()
+
+    result = asyncio.run(admin_expiring_subscriptions(daysAhead=7, db=db, current_user=admin))
+
+    assert [e["scope"] for e in result["expiring"]] == ["candidate", "company"]
+
+
+# ── Reject/cancel a pending transaction ────────────────────────────────────
+
+def test_reject_pending_transaction(db):
+    admin = _make_admin(db)
+    tx = Transaction(amount=25000, reference="PV-X", status="pending", kind="subscription")
+    db.add(tx)
+    db.commit()
+
+    result = asyncio.run(admin_update_transaction_status(tx.id, {"status": "cancelled"}, db=db, current_user=admin))
+
+    assert result["status"] == "cancelled"
+    db.refresh(tx)
+    assert tx.status == "cancelled"
+
+
+def test_reject_transaction_rejects_invalid_status(db):
+    admin = _make_admin(db)
+    tx = Transaction(amount=25000, reference="PV-Y", status="pending", kind="subscription")
+    db.add(tx)
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_update_transaction_status(tx.id, {"status": "paid"}, db=db, current_user=admin))
+    assert exc.value.status_code == 400
+
+
+def test_reject_transaction_blocks_already_paid(db):
+    admin = _make_admin(db)
+    tx = Transaction(amount=25000, reference="PV-Z", status="paid", kind="subscription")
+    db.add(tx)
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_update_transaction_status(tx.id, {"status": "failed"}, db=db, current_user=admin))
+    assert exc.value.status_code == 400
+    db.refresh(tx)
+    assert tx.status == "paid"
+
+
+def test_reject_transaction_404_for_missing(db):
+    admin = _make_admin(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_update_transaction_status("does-not-exist", {"status": "cancelled"}, db=db, current_user=admin))
+    assert exc.value.status_code == 404

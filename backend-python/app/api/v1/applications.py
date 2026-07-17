@@ -74,6 +74,13 @@ def _notify_company_new_applicant(db: Session, company_id: str, job_id: str, can
                     "candidate_name": candidate_name or "Candidato",
                     "job_title": job.title if job else "",
                 })
+            if owner:
+                create_notification(
+                    db, owner.id, type="new_applicant",
+                    title="Nova candidatura recebida",
+                    body=f"{candidate_name or 'Um candidato'} candidatou-se a {job.title if job else 'uma vaga'}.",
+                    link=f"/Portal/Empresa/Candidaturas?jobId={job_id}",
+                )
 
         if job and job.external_contact_email:
             if not job.employer_access_token:
@@ -225,6 +232,13 @@ async def submit_candidate_application(
 
     send_application_received_email.delay(current_user.email, current_user.full_name, jobId)
     _notify_company_new_applicant(db, application.company_id, jobId, current_user.full_name)
+    job_for_notice = db.query(Job).filter(Job.id == jobId).first()
+    create_notification(
+        db, current_user.id, type="application_submitted",
+        title="Candidatura enviada",
+        body=f"A sua candidatura a {job_for_notice.title if job_for_notice else 'esta vaga'} foi recebida.",
+        link="/Portal/Candidato/Candidaturas",
+    )
 
     return {
         "message": "Application submitted successfully.",

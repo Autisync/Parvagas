@@ -8,6 +8,7 @@ import {
   fetchAdminMe,
   fetchJobs,
   hasPermission,
+  setJobFeatured,
   statusBadgeClass,
   toDateLabel,
   type AdminMe,
@@ -69,6 +70,7 @@ export default function AdminJobsPage() {
   const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
   const [modalReason, setModalReason] = useState("");
   const [bulkReason, setBulkReason] = useState("");
+  const [featuredBusy, setFeaturedBusy] = useState(false);
   const { notify } = useAppNotifier();
 
   const {
@@ -189,6 +191,21 @@ export default function AdminJobsPage() {
     }
   };
 
+  const toggleFeatured = async (job: JobRecord) => {
+    if (!token) return;
+    setFeaturedBusy(true);
+    try {
+      const { job: updated } = await setJobFeatured(token, job._id, !job.featured);
+      setJobs((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      setSelectedJob((current) => (current && current._id === updated._id ? updated : current));
+      notify(updated.featured ? "Vaga destacada." : "Vaga deixou de estar destacada.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao atualizar destaque da vaga."), "error");
+    } finally {
+      setFeaturedBusy(false);
+    }
+  };
+
   const selectAllAcrossPages = async () => {
     if (!token) return;
     setBusy("all-jobs");
@@ -290,6 +307,7 @@ export default function AdminJobsPage() {
                       <p className="truncate text-base font-semibold text-slate-950">{job.title || "Vaga"}</p>
                       <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(status)}`}>{status}</span>
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">{job.visibility || "private"}</span>
+                      {job.featured ? <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Destacada</span> : null}
                     </div>
                     <p className="mt-1 text-sm text-slate-600">{summaryLine(job)}</p>
                     <p className="mt-2 text-xs text-slate-500">Criada em {toDateLabel(job.createdAt)}</p>
@@ -333,6 +351,16 @@ export default function AdminJobsPage() {
               {canApproveJobs && canApplyJobDecision(selectedJob.status, "approved") ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "approved", undefined, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Aprovar</button> : null}
               {canRejectJobs && canApplyJobDecision(selectedJob.status, "platform_rejected") ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "platform_rejected", undefined, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Rejeitar</button> : null}
               {canReviewJobs ? <button disabled={busy === selectedJob._id} onClick={() => applyDecision([selectedJob._id], "archived", "archived", modalReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Arquivar</button> : null}
+              {canReviewJobs ? (
+                <button
+                  type="button"
+                  disabled={featuredBusy}
+                  onClick={() => toggleFeatured(selectedJob)}
+                  className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 disabled:opacity-50"
+                >
+                  {selectedJob.featured ? "Remover destaque" : "Destacar vaga"}
+                </button>
+              ) : null}
             </div>
             {selectedJob.status === "pending_company_approval" ? <p className="text-xs font-semibold text-amber-700">Esta vaga ainda depende da aprovação interna da empresa antes da moderação da plataforma.</p> : null}
           </div>
@@ -347,7 +375,56 @@ export default function AdminJobsPage() {
             <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
               <p><span className="font-semibold">Resumo:</span> {summaryLine(selectedJob)}</p>
               <p><span className="font-semibold">Criada:</span> {toDateLabel(selectedJob.createdAt)}</p>
+              {selectedJob.contractType ? <p><span className="font-semibold">Tipo de contrato:</span> {selectedJob.contractType}</p> : null}
+              {selectedJob.jobType ? <p><span className="font-semibold">Regime:</span> {selectedJob.jobType}</p> : null}
+              {selectedJob.workMode ? <p><span className="font-semibold">Modalidade:</span> {selectedJob.workMode}</p> : null}
+              {selectedJob.experienceLevel ? <p><span className="font-semibold">Experiência:</span> {selectedJob.experienceLevel}</p> : null}
+              {(selectedJob.salaryRange || selectedJob.salaryMin || selectedJob.salaryMax) ? (
+                <p>
+                  <span className="font-semibold">Salário:</span>{" "}
+                  {selectedJob.salaryRange || `${selectedJob.salaryMin ?? "?"} – ${selectedJob.salaryMax ?? "?"}`}
+                </p>
+              ) : null}
             </div>
+
+            {selectedJob.description ? (
+              <div>
+                <p className="font-semibold text-slate-900">Descrição</p>
+                <p className="mt-1 whitespace-pre-line text-slate-700">{selectedJob.description}</p>
+              </div>
+            ) : null}
+
+            {(selectedJob.responsibilities?.length ?? 0) > 0 ? (
+              <div>
+                <p className="font-semibold text-slate-900">Responsabilidades</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-700">
+                  {selectedJob.responsibilities?.map((item, idx) => <li key={idx}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
+
+            {(selectedJob.requirements?.length ?? 0) > 0 ? (
+              <div>
+                <p className="font-semibold text-slate-900">Requisitos</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-700">
+                  {selectedJob.requirements?.map((item, idx) => <li key={idx}>{item}</li>)}
+                </ul>
+              </div>
+            ) : null}
+
+            {(selectedJob.requiredSkills?.length ?? 0) > 0 || (selectedJob.preferredSkills?.length ?? 0) > 0 ? (
+              <div>
+                <p className="font-semibold text-slate-900">Competências</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {selectedJob.requiredSkills?.map((skill, idx) => (
+                    <span key={`req-${idx}`} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{skill}</span>
+                  ))}
+                  {selectedJob.preferredSkills?.map((skill, idx) => (
+                    <span key={`pref-${idx}`} className="rounded-full border border-dashed border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">{skill}</span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </AdminModal>

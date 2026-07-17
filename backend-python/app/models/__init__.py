@@ -118,7 +118,13 @@ class CandidateProfile(Base, TimestampMixin):
     # Onboarding
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_seen_tutorial = Column(Boolean, nullable=False, default=False)
-    
+
+    # Notification channel opt-in/out (GET/PATCH /candidates/notifications/
+    # preferences) — JSON object, e.g. {"emailJobAlerts": true, ...}. Missing
+    # keys fall back to _DEFAULT_PREFS in candidates.py, so this column only
+    # ever needs to store what the candidate actually changed.
+    notification_preferences = Column(Text, nullable=True)
+
     # Relations
     user = relationship("User", back_populates="candidate_profile")
     cv_uploads = relationship("CVUpload", back_populates="candidate_profile")
@@ -498,6 +504,7 @@ class Job(Base, TimestampMixin):
     status = Column(String(50), nullable=False, default="pending_platform_review", index=True)
     visibility = Column(String(50), nullable=False, default="public")
     moderation_reason = Column(Text, nullable=True)
+    featured = Column(Boolean, nullable=False, default=False)
 
     expires_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
@@ -574,6 +581,25 @@ class CompanyInvite(Base, TimestampMixin):
     expires_at = Column(DateTime, nullable=False)
 
 
+class CompanyDeletionRequest(Base, TimestampMixin):
+    """A moderator's request to delete/reject a company, pending super-admin
+    approval. Replaces the old in-memory `_deletion_requests` list in
+    companies.py, which was wiped on every restart and not shared across
+    worker processes — this table is the durable version of the same
+    workflow the admin Companies page already drives."""
+    __tablename__ = "company_deletion_requests"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    requested_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    requested_by_admin_level = Column(String(20), nullable=True)
+    reason = Column(Text, nullable=False)
+    status = Column(String(30), nullable=False, default="pending_admin_approval")  # pending_admin_approval | approved | rejected
+    reviewed_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_note = Column(Text, nullable=True)
+
+
 class ApplicationNote(Base, TimestampMixin):
     """Recruiter note / rating on an application (ATS)."""
     __tablename__ = "application_notes"
@@ -609,6 +635,31 @@ class Notification(Base, TimestampMixin):
     body = Column(Text, nullable=True)
     link = Column(String(500), nullable=True)
     read_at = Column(DateTime, nullable=True)
+
+
+class SupportMessage(Base, TimestampMixin):
+    """A message sent via the notification bell's "message" form. Despite
+    the frontend calling this "company-admin-message", it's actually a
+    non-owner company team member messaging their own company's OWNER
+    (see NotificationBell.tsx's "Mensagem interna ao owner" label and the
+    nonOwnerCompanyUser gate) — not a message to platform admins. Previously
+    this endpoint faked a response and persisted nothing, so it reached no
+    one either way.
+
+    `recipient_user_id` is resolved server-side (the company owner, when the
+    sender is a non-owner team member) and set on this row alongside the
+    Notification it triggers. Falls back to every platform admin (recipient_
+    user_id left null) if no company owner can be resolved, so the form
+    still does something sane for any other caller."""
+    __tablename__ = "support_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    sender_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    sender_role = Column(String(20), nullable=True)
+    recipient_user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    reason = Column(String(255), nullable=True)
+    message = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="open")  # open | resolved
 
 
 class NewsletterSubscriber(Base, TimestampMixin):
@@ -707,6 +758,20 @@ class ScraperSettings(Base, TimestampMixin):
     user_agent = Column(String(255), nullable=True)  # blank = use the built-in default
     max_ingest_per_run = Column(Integer, nullable=False, default=200)
     run_budget_seconds = Column(Integer, nullable=False, default=300)
+
+
+class FeatureFlag(Base, TimestampMixin):
+    """Admin-editable override for a settings.X_ENABLED env flag — lets
+    business-decision toggles (candidate premium, which AI providers are
+    live, OTP login, ...) flip at runtime instead of requiring a redeploy.
+    A missing row for a given `key` means "not overridden yet"; callers
+    fall back to the env-based settings default (see
+    app/services/feature_flags.py:get_flag)."""
+    __tablename__ = "feature_flags"
+
+    key = Column(String(80), primary_key=True)
+    value = Column(Boolean, nullable=False, default=False)
+    description = Column(Text, nullable=True)
 
 
 class Plan(Base, TimestampMixin):

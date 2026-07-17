@@ -51,6 +51,27 @@ def create_notification(db, user_id: str, *, type: str, title: str, body: str = 
             pass
 
 
+def admin_user_ids(db) -> list[str]:
+    """Every admin User row's id — for in-app bell notifications, which
+    (unlike admin_emails) can only ever reach real portal accounts, so the
+    ADMIN_ALERT_EMAILS env override (external addresses) doesn't apply here."""
+    try:
+        from app.models import User, UserRole
+
+        rows = db.query(User).filter(User.role == UserRole.admin).all()
+        return [u.id for u in rows]
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("admin_user_ids lookup failed: %s", exc)
+        return []
+
+
+def notify_admins(db, *, type: str, title: str, body: str = "", link: str = "") -> None:
+    """create_notification for every admin at once — the in-app companion
+    to admin_emails-based email alerts."""
+    for admin_id in admin_user_ids(db):
+        create_notification(db, admin_id, type=type, title=title, body=body, link=link)
+
+
 def admin_emails(db) -> list[str]:
     """Recipient list for admin alerts.
 

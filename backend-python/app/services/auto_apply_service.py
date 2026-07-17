@@ -16,6 +16,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.services.feature_flags import get_flag
 from app.models import CandidateProfile, CVUpload, Job, JobApplication, JobMatchProposal
 from app.services import llm_service
 
@@ -150,7 +151,7 @@ def _llm_refine_score(
     any failure — disabled flag, LLM unavailable, or a malformed/out-of-range
     response — so this can never make matching *less* reliable than before.
     """
-    if not settings.AUTO_APPLY_LLM_SCORING_ENABLED:
+    if not get_flag("AUTO_APPLY_LLM_SCORING_ENABLED", settings.AUTO_APPLY_LLM_SCORING_ENABLED):
         return heuristic_score, heuristic_reasons
 
     fallback = {"score": heuristic_score, "reasons": heuristic_reasons}

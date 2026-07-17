@@ -23,10 +23,12 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, Job, JobApplication, Plan, ScrapedJob, ScraperSettings,
-    ScraperSource, SecurityEvent, Subscription, Transaction, User, UserRole,
+    CareerPost, Company, FeatureFlag, Job, JobApplication, Plan, ResumeTemplate, ScrapedJob,
+    ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
+    User, UserRole,
 )
 from app.workers.tasks import send_templated_email
+from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality
 from app.services.storage_service import StorageService
 from app.core.logging import get_logger
@@ -68,6 +70,7 @@ ALL_ADMIN_PERMISSIONS = [
     "admin.exports.companies",
     "admin.scraperSources.manage",
     "admin.subscriptions.manage",
+    "admin.featureFlags.manage",
 ]
 
 
@@ -96,6 +99,8 @@ def _to_user_record(user: User) -> dict[str, Any]:
         "role": user.role.value if hasattr(user.role, "value") else str(user.role),
         "adminLevel": getattr(user, "admin_level", "moderator"),
         "suspended": bool(user.suspended),
+        "emailVerified": bool(user.email_verified),
+        "emailVerifiedAt": user.email_verified_at.isoformat() if user.email_verified_at else None,
         "createdAt": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -384,6 +389,58 @@ def _pct_change(db: Session, model, now: datetime, window_days: int = 30) -> flo
         return 0.0
 
 
+# Real revenue aggregates from Transaction — the analytics dashboard used to
+# hardcode revenuePct/series.revenue/business.revenueInRange to 0 even
+# though paid transactions already exist. Scoped to status == "paid" (a
+# pending/failed transaction isn't revenue yet).
+
+def _daily_sum_series(db: Session, model, value_column, since: datetime, status_filter=None) -> list[dict[str, Any]]:
+    try:
+        query = db.query(func.date(model.created_at), func.coalesce(func.sum(value_column), 0)).filter(model.created_at >= since)
+        if status_filter is not None:
+            query = query.filter(status_filter)
+        rows = query.group_by(func.date(model.created_at)).order_by(func.date(model.created_at)).all()
+        return [{"label": str(d), "value": float(v)} for d, v in rows]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: daily sum series failed: %s", exc)
+        db.rollback()
+        return []
+
+
+def _sum_in_range(db: Session, model, value_column, from_dt: datetime | None, to_dt: datetime | None, status_filter=None) -> float:
+    """Exact [from_dt, to_dt) bounds — callers passing user-supplied,
+    date-only query params are responsible for expanding to_dt to the end
+    of that calendar day themselves (same convention as _is_in_range)."""
+    try:
+        query = db.query(func.coalesce(func.sum(value_column), 0))
+        if status_filter is not None:
+            query = query.filter(status_filter)
+        if from_dt:
+            query = query.filter(model.created_at >= from_dt)
+        if to_dt:
+            query = query.filter(model.created_at <= to_dt)
+        return float(query.scalar() or 0)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: sum_in_range failed: %s", exc)
+        db.rollback()
+        return 0.0
+
+
+def _sum_pct_change(db: Session, model, value_column, now: datetime, status_filter=None, window_days: int = 30) -> float:
+    try:
+        cur_start = now - timedelta(days=window_days)
+        prev_start = now - timedelta(days=2 * window_days)
+        current = _sum_in_range(db, model, value_column, cur_start, now, status_filter)
+        previous = _sum_in_range(db, model, value_column, prev_start, cur_start, status_filter)
+        if previous == 0:
+            return 100.0 if current else 0.0
+        return round((current - previous) / previous * 100, 1)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("admin_analytics: sum_pct_change failed: %s", exc)
+        db.rollback()
+        return 0.0
+
+
 @router.get("/analytics")
 async def admin_analytics(
     from_date: str | None = Query(default=None, alias="from"),
@@ -450,13 +507,13 @@ async def admin_analytics(
             "companiesPct": _pct_change(db, Company, now),
             "jobsPct": _pct_change(db, Job, now),
             "applicationsPct": _pct_change(db, JobApplication, now),
-            "revenuePct": 0,
+            "revenuePct": _sum_pct_change(db, Transaction, Transaction.amount, now, status_filter=Transaction.status == "paid"),
         },
         "series": {
             "jobsPosted": _daily_series(db, Job, since14),
             "userSignups": _daily_series(db, User, since14),
             "applications": _daily_series(db, JobApplication, since14),
-            "revenue": [],
+            "revenue": _daily_sum_series(db, Transaction, Transaction.amount, since14, status_filter=Transaction.status == "paid"),
         },
         "distributions": {
             "applicationStatus": _distribution(db, JobApplication.status),
@@ -466,7 +523,11 @@ async def admin_analytics(
             "userLocationDensity": _distribution(db, CandidateProfile.location)[:8],
         },
         "business": {
-            "revenueInRange": 0,
+            "revenueInRange": _sum_in_range(
+                db, Transaction, Transaction.amount,
+                _parse_date(from_date), (_parse_date(to_date) + timedelta(days=1) - timedelta(microseconds=1)) if _parse_date(to_date) else None,
+                status_filter=Transaction.status == "paid",
+            ),
             "adCountInRange": _safe_count(db, AdCampaign, "business.adCountInRange"),
         },
         "insights": {
@@ -554,6 +615,44 @@ async def admin_verification_backfill(
     }
 
 
+@router.post("/users/{user_id}/resend-verification")
+async def admin_resend_verification(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Single-account version of /users/verification-backfill — for when an
+    admin wants to re-send just one user's verification email (e.g. they
+    contacted support) rather than sweeping every unverified account."""
+    admin = _ensure_admin(current_user)
+    from app.api.v1.auth import _verification_resend_wait_seconds
+    from app.services.auth_service import AuthService
+    from app.workers.tasks import send_verification_email
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+    if target.email_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta conta já está verificada")
+    if not target.email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilizador sem email registado")
+
+    wait_seconds = _verification_resend_wait_seconds(db, target)
+    if wait_seconds > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Aguarde {wait_seconds}s antes de reenviar a verificação a esta conta.",
+        )
+
+    raw_token = AuthService.create_verification_token(db, target)
+    send_verification_email.delay(str(target.id), raw_token)
+    _record_admin_event(
+        actor=admin, action="user.resend_verification", resource_type="user",
+        resource_id=target.id, details={"email": target.email},
+    )
+    return {"sent": True, "userId": target.id}
+
+
 @router.patch("/users/{user_id}/suspend")
 async def admin_suspend_user(
     user_id: str,
@@ -581,7 +680,9 @@ async def admin_suspend_user(
         details={"suspended": target.suspended, "reason": payload.get("reason", "")},
     )
 
-    # Notify the user when their access state actually changes.
+    # Notify the user when their access state actually changes. Only
+    # reactivation gets an in-app bell entry — a suspended user can't log
+    # in to see one, so email is the only channel that reaches them there.
     if target.suspended != was_suspended and target.email:
         try:
             if target.suspended:
@@ -593,6 +694,11 @@ async def admin_suspend_user(
                 send_templated_email.delay("send_account_reactivated_email", {
                     "email": target.email, "full_name": target.full_name or "",
                 })
+                create_notification(
+                    db, target.id, type="account_reactivated",
+                    title="Conta reativada",
+                    body="A sua conta foi reativada e já pode aceder normalmente.",
+                )
         except Exception as e:
             logger.warning(f"Could not enqueue account status email: {e}")
 
@@ -737,17 +843,30 @@ async def admin_moderate_job(
     try:
         company = db.query(Company).filter(Company.id == job.company_id).first() if job.company_id else None
         owner = db.query(User).filter(User.id == company.owner_user_id).first() if company and company.owner_user_id else None
-        if owner and owner.email:
-            if next_status in ("approved", "published", "active"):
+        if owner and next_status in ("approved", "published", "active"):
+            if owner.email:
                 send_templated_email.delay("send_job_approved_email", {
                     "email": owner.email, "recruiter_name": owner.full_name or "",
                     "job_title": job.title, "job_id": job_id,
                 })
-            elif next_status in ("rejected", "declined"):
+            create_notification(
+                db, owner.id, type="job_approved",
+                title="Vaga aprovada",
+                body=f"A sua vaga \"{job.title}\" foi aprovada e está publicada.",
+                link=f"/Portal/Empresa/Minhas-Vagas",
+            )
+        elif owner and next_status in ("rejected", "declined"):
+            if owner.email:
                 send_templated_email.delay("send_job_rejected_email", {
                     "email": owner.email, "recruiter_name": owner.full_name or "",
                     "job_title": job.title, "reason": payload.get("reason", "") or "",
                 })
+            create_notification(
+                db, owner.id, type="job_rejected",
+                title="Vaga rejeitada",
+                body=f"A sua vaga \"{job.title}\" foi rejeitada." + (f" Motivo: {payload.get('reason')}" if payload.get("reason") else ""),
+                link=f"/Portal/Empresa/Minhas-Vagas",
+            )
     except Exception as e:
         logger.warning(f"Could not enqueue job moderation email: {e}")
 
@@ -760,6 +879,31 @@ async def admin_moderate_job(
         except Exception as e:
             logger.warning(f"Could not enqueue instant job alerts: {e}")
 
+    return {"job": serialize_job(job, detail=True)}
+
+
+@router.patch("/jobs/{job_id}/featured")
+async def admin_set_job_featured(
+    job_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Toggles display priority only — deliberately separate from
+    `moderate` so flipping this can't accidentally re-set status/visibility."""
+    admin = _ensure_admin(current_user)
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    job.featured = bool(payload.get("featured"))
+    db.commit()
+    db.refresh(job)
+
+    _record_admin_event(
+        actor=admin, action="job.featured", resource_type="job",
+        resource_id=job_id, details={"featured": job.featured},
+    )
     return {"job": serialize_job(job, detail=True)}
 
 
@@ -1425,6 +1569,211 @@ async def admin_update_scraper_settings(
     return _to_scraper_settings_record(settings)
 
 
+# ── Feature Flags — runtime overrides for settings.X_ENABLED business- ────
+# decision switches (candidate premium, which AI providers are live, OTP
+# login) so they can flip without a redeploy. See app/services/feature_flags.py.
+
+def _to_feature_flag_record(flag: FeatureFlag) -> dict[str, Any]:
+    return {
+        "key": flag.key,
+        "value": bool(flag.value),
+        "description": flag.description,
+        "updatedAt": flag.updated_at.isoformat() if flag.updated_at else None,
+    }
+
+
+@router.get("/feature-flags")
+async def admin_list_feature_flags(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    from app.services.feature_flags import list_flags
+    return {"featureFlags": [_to_feature_flag_record(f) for f in list_flags(db)]}
+
+
+@router.patch("/feature-flags/{key}")
+async def admin_update_feature_flag(
+    key: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    if getattr(admin, "admin_level", "moderator") != "super-admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
+    if "value" not in payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="value é obrigatório")
+
+    from app.services.feature_flags import set_flag
+    flag = set_flag(db, key, bool(payload.get("value")), payload.get("description"))
+    _record_admin_event(
+        actor=admin, action="featureFlag.update", resource_type="feature_flag",
+        resource_id=key, details={"value": flag.value},
+    )
+    return _to_feature_flag_record(flag)
+
+
+# ── Support messages — the notification bell's "message" form persists ────
+# here (see app/api/v1/notifications.py's company_admin_message). Most
+# messages route to a company owner, not admins, but the fallback path (no
+# owner resolvable) and general operational visibility both need a list
+# view — previously there was none at all, despite the table existing.
+
+def _to_support_message_record(db: Session, entry: SupportMessage) -> dict[str, Any]:
+    sender = db.query(User).filter(User.id == entry.sender_user_id).first()
+    recipient = db.query(User).filter(User.id == entry.recipient_user_id).first() if entry.recipient_user_id else None
+    return {
+        "_id": entry.id,
+        "senderName": sender.full_name if sender else None,
+        "senderEmail": sender.email if sender else None,
+        "senderRole": entry.sender_role,
+        "recipientName": recipient.full_name if recipient else None,
+        "reason": entry.reason,
+        "message": entry.message,
+        "status": entry.status,
+        "createdAt": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+@router.get("/support-messages")
+async def admin_list_support_messages(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=200),
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    query = db.query(SupportMessage)
+    if status_filter and status_filter.strip():
+        query = query.filter(SupportMessage.status == status_filter.strip())
+    total = query.count()
+    rows = query.order_by(SupportMessage.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "supportMessages": [_to_support_message_record(db, r) for r in rows],
+        "pagination": _pagination(page, limit, total),
+    }
+
+
+@router.patch("/support-messages/{message_id}/resolve")
+async def admin_resolve_support_message(
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    entry = db.query(SupportMessage).filter(SupportMessage.id == message_id).first()
+    if not entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mensagem não encontrada")
+    entry.status = "resolved"
+    db.commit()
+    db.refresh(entry)
+    _record_admin_event(
+        actor=admin, action="supportMessage.resolve", resource_type="support_message", resource_id=entry.id,
+    )
+    return _to_support_message_record(db, entry)
+
+
+# ── Resume Templates — CV Builder templates were migration-seeded only, ───
+# with no admin CRUD; changing which templates exist/are offered, or
+# editing their name/description/preview, required a code deploy. The
+# actual HTML/CSS rendering logic stays a code-level registry keyed by
+# `slug` (app/services/resume_render_service.TEMPLATES) — admin can manage
+# which of those registered slugs are exposed and how they're described,
+# not invent a wholly new visual template without a matching renderer.
+
+def _to_resume_template_record(t: ResumeTemplate) -> dict[str, Any]:
+    return {
+        "_id": t.id,
+        "name": t.name,
+        "slug": t.slug,
+        "description": t.description,
+        "previewUrl": t.preview_url,
+        "isActive": bool(t.is_active),
+    }
+
+
+@router.get("/resume-templates")
+async def admin_list_resume_templates(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    rows = db.query(ResumeTemplate).order_by(ResumeTemplate.name.asc()).all()
+    from app.services.resume_render_service import TEMPLATES
+    return {
+        "resumeTemplates": [_to_resume_template_record(t) for t in rows],
+        "availableSlugs": sorted(TEMPLATES.keys()),
+    }
+
+
+@router.post("/resume-templates")
+async def admin_create_resume_template(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    from app.services.resume_render_service import TEMPLATES
+
+    slug = str(payload.get("slug", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    if not slug or not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slug e name são obrigatórios")
+    if slug not in TEMPLATES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"'{slug}' não tem um renderizador registado. Slugs disponíveis: {', '.join(sorted(TEMPLATES.keys()))}.",
+        )
+    if db.query(ResumeTemplate).filter(ResumeTemplate.slug == slug).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um template com este slug")
+
+    created = ResumeTemplate(
+        slug=slug, name=name,
+        description=str(payload.get("description", "")).strip() or None,
+        preview_url=str(payload.get("previewUrl", "")).strip() or None,
+        is_active=bool(payload.get("isActive", True)),
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    _record_admin_event(
+        actor=admin, action="resumeTemplate.create", resource_type="resume_template",
+        resource_id=created.id, details={"slug": created.slug},
+    )
+    return _to_resume_template_record(created)
+
+
+@router.patch("/resume-templates/{template_id}")
+async def admin_update_resume_template(
+    template_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edits metadata only — `slug` is the stable key into the code-level
+    renderer registry and isn't changeable from here."""
+    admin = _ensure_admin(current_user)
+    row = db.query(ResumeTemplate).filter(ResumeTemplate.id == template_id).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template não encontrado")
+
+    if "name" in payload:
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name não pode ficar vazio")
+        row.name = name
+    if "description" in payload:
+        row.description = str(payload.get("description", "")).strip() or None
+    if "previewUrl" in payload:
+        row.preview_url = str(payload.get("previewUrl", "")).strip() or None
+    if "isActive" in payload:
+        row.is_active = bool(payload.get("isActive"))
+
+    db.commit()
+    db.refresh(row)
+    _record_admin_event(
+        actor=admin, action="resumeTemplate.update", resource_type="resume_template",
+        resource_id=row.id, details={"changes": list(payload.keys())},
+    )
+    return _to_resume_template_record(row)
+
+
 # ── Subscriptions & Plans — the general "offers" catalogue (company + ─────
 # candidate CV Builder) plus per-user subscription management. Company
 # plans (`Plan`) already had a DB table with zero admin CRUD; candidate CV
@@ -1676,6 +2025,38 @@ async def admin_list_transactions(
     return {"transactions": records, "pagination": _pagination(page, limit, total)}
 
 
+@router.patch("/transactions/{transaction_id}")
+async def admin_update_transaction_status(
+    transaction_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reject/cancel a pending transaction — the confirm-payment endpoints
+    (payments.py) let an admin approve one, but there was no way to mark a
+    bogus or abandoned reference as done-with, so pending rows piled up
+    forever with no resolution."""
+    admin = _ensure_admin(current_user)
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transação não encontrada")
+
+    next_status = str(payload.get("status", "")).strip().lower()
+    if next_status not in {"failed", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status deve ser 'failed' ou 'cancelled'")
+    if tx.status == "paid":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uma transação já paga não pode ser rejeitada")
+
+    tx.status = next_status
+    db.commit()
+    db.refresh(tx)
+    _record_admin_event(
+        actor=admin, action="transaction.reject", resource_type="transaction",
+        resource_id=tx.id, details={"status": next_status, "reference": tx.reference},
+    )
+    return _to_transaction_record(tx, "company" if tx.company_id else "unknown", None)
+
+
 def _to_user_subscription_summary(db: Session, target: User) -> dict[str, Any]:
     """Role-aware subscription snapshot for the admin Users panel."""
     if target.role == UserRole.company:
@@ -1743,6 +2124,70 @@ async def admin_get_user_subscription(
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
     return _to_user_subscription_summary(db, target)
+
+
+@router.get("/subscriptions/expiring")
+async def admin_expiring_subscriptions(
+    daysAhead: int = Query(default=7, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Active company + candidate subscriptions whose current_period_end
+    falls within the next `daysAhead` days — the admin board's only view
+    into who's about to lapse (the daily reminder email exists, but there
+    was no way to just look at the list)."""
+    _ensure_admin(current_user)
+    now = datetime.utcnow()
+    horizon = now + timedelta(days=daysAhead)
+
+    company_rows = (
+        db.query(Subscription)
+        .filter(Subscription.status == "active", Subscription.current_period_end.isnot(None),
+                Subscription.current_period_end >= now, Subscription.current_period_end <= horizon)
+        .order_by(Subscription.current_period_end.asc())
+        .all()
+    )
+    company_ids = {r.company_id for r in company_rows}
+    plan_ids = {r.plan_id for r in company_rows}
+    companies = {c.id: c for c in db.query(Company).filter(Company.id.in_(company_ids)).all()} if company_ids else {}
+    plans = {p.id: p for p in db.query(Plan).filter(Plan.id.in_(plan_ids)).all()} if plan_ids else {}
+
+    candidate_rows = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.status == "active", CandidateCVSubscription.current_period_end.isnot(None),
+                CandidateCVSubscription.current_period_end >= now, CandidateCVSubscription.current_period_end <= horizon)
+        .order_by(CandidateCVSubscription.current_period_end.asc())
+        .all()
+    )
+    profile_ids = {r.candidate_profile_id for r in candidate_rows}
+    profiles = {p.id: p for p in db.query(CandidateProfile).filter(CandidateProfile.id.in_(profile_ids)).all()} if profile_ids else {}
+    cand_user_ids = {p.user_id for p in profiles.values()}
+    cand_users = {u.id: u for u in db.query(User).filter(User.id.in_(cand_user_ids)).all()} if cand_user_ids else {}
+
+    entries = []
+    for r in company_rows:
+        company = companies.get(r.company_id)
+        plan = plans.get(r.plan_id)
+        entries.append({
+            "scope": "company",
+            "userId": company.owner_user_id if company else None,
+            "name": company.name if company else None,
+            "planName": plan.name if plan else None,
+            "currentPeriodEnd": r.current_period_end.isoformat() if r.current_period_end else None,
+        })
+    for r in candidate_rows:
+        profile = profiles.get(r.candidate_profile_id)
+        user = cand_users.get(profile.user_id) if profile else None
+        entries.append({
+            "scope": "candidate",
+            "userId": user.id if user else None,
+            "name": user.full_name if user else None,
+            "planName": r.plan_tier,
+            "currentPeriodEnd": r.current_period_end.isoformat() if r.current_period_end else None,
+        })
+
+    entries.sort(key=lambda e: e["currentPeriodEnd"] or "")
+    return {"expiring": entries, "daysAhead": daysAhead}
 
 
 @router.put("/users/{user_id}/subscription")
@@ -2595,7 +3040,22 @@ async def admin_export_csv(
                 ]
             )
     elif kind_norm == "jobs":
-        writer.writerow(["id", "title", "status", "createdAt"])
+        writer.writerow(["id", "title", "status", "visibility", "companyId", "createdAt"])
+        jobs = db.query(Job).order_by(Job.created_at.desc()).all()
+        for job in jobs:
+            created_at = job.created_at.isoformat() if job.created_at else ""
+            if not _is_in_range(created_at, from_date, to_date):
+                continue
+            writer.writerow(
+                [
+                    job.id,
+                    job.title,
+                    job.status,
+                    job.visibility,
+                    job.company_id,
+                    created_at,
+                ]
+            )
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported export kind")
 
@@ -2641,16 +3101,19 @@ async def cv_builder_readiness(
         })
 
     # ── Backend config ────────────────────────────────────────────────────
+    from app.services.feature_flags import get_flag
+    resume_ai_effective = get_flag("RESUME_AI_ENABLED", settings.RESUME_AI_ENABLED, db)
+    cv_parser_ai_effective = get_flag("CV_PARSER_AI_ENABLED", settings.CV_PARSER_AI_ENABLED, db)
     _check(
         "Resume AI enabled",
-        settings.RESUME_AI_ENABLED,
-        f"RESUME_AI_ENABLED={settings.RESUME_AI_ENABLED}, model={settings.RESUME_AI_MODEL}",
+        resume_ai_effective,
+        f"RESUME_AI_ENABLED={resume_ai_effective} (feature flag), model={settings.RESUME_AI_MODEL}",
         warn=True,  # warn only — AI is optional at launch
     )
     _check(
         "CV Parser AI enabled",
-        settings.CV_PARSER_AI_ENABLED,
-        f"CV_PARSER_AI_ENABLED={settings.CV_PARSER_AI_ENABLED}, model={settings.CV_PARSER_AI_MODEL}",
+        cv_parser_ai_effective,
+        f"CV_PARSER_AI_ENABLED={cv_parser_ai_effective} (feature flag), model={settings.CV_PARSER_AI_MODEL}",
         warn=True,
     )
     _check(

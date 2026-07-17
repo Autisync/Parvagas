@@ -104,4 +104,12 @@ celery.conf.beat_schedule = {
         'task': 'app.workers.tasks.run_hibp_breach_scan',
         'schedule': crontab(hour=3, minute=0),  # 03:00 UTC daily
     },
+    # Purge expired email-verification/password-reset tokens. Was routed to
+    # the cleanup queue but never actually scheduled, so expired tokens
+    # accumulated in the DB forever — 04:00 UTC keeps it clear of the other
+    # cleanup-queue task (HIBP, 03:00).
+    'cleanup-expired-tokens-daily': {
+        'task': 'app.workers.tasks.cleanup_expired_tokens',
+        'schedule': crontab(hour=4, minute=0),  # 04:00 UTC daily
+    },
 }

@@ -131,10 +131,10 @@ export function AdminModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-4">
           <h3 className="text-lg font-bold text-slate-950">{title}</h3>
           <button
             type="button"
@@ -147,8 +147,12 @@ export function AdminModal({
             </svg>
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">{children}</div>
-        {footer ? <div className="border-t border-slate-200 px-5 py-4">{footer}</div> : null}
+        {/* min-h-0 is required for a flex child to shrink below its content's
+            intrinsic height — without it this region ignores max-h-[92vh]
+            on the parent and pushes the footer off-screen instead of
+            scrolling internally. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">{children}</div>
+        {footer ? <div className="shrink-0 border-t border-slate-200 px-5 py-4">{footer}</div> : null}
       </div>
     </div>
   );

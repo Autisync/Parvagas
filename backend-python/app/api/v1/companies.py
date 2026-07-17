@@ -3,13 +3,13 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 import json
 import re
-import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.models import (
     User, Company, UserRole, Job, JobApplication, CompanyMember, CompanyInvite,
+    CompanyDeletionRequest,
 )
 from app.services.storage_service import StorageService
 from pathlib import Path as _Path
@@ -20,7 +20,7 @@ from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
 from app.core.config import get_settings
 from app.workers.tasks import send_templated_email
-from app.services.notification_service import admin_emails
+from app.services.notification_service import admin_emails, create_notification, notify_admins
 from app.api.deps import get_current_user
 
 # Heuristic spam/scam signals for job postings (regional fraud patterns).
@@ -45,7 +45,31 @@ logger = get_logger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/companies", tags=["companies"])
 
-_deletion_requests: list[dict[str, Any]] = []
+def _to_deletion_request_record(db: Session, entry: CompanyDeletionRequest) -> dict[str, Any]:
+    company = db.query(Company).filter(Company.id == entry.company_id).first()
+    requester = db.query(User).filter(User.id == entry.requested_by_user_id).first()
+    return {
+        "_id": entry.id,
+        "companyId": entry.company_id,
+        "reason": entry.reason,
+        "requestedByAdminLevel": entry.requested_by_admin_level,
+        "createdAt": entry.created_at.isoformat() if entry.created_at else None,
+        "status": entry.status,
+        "company": {
+            "_id": company.id,
+            "name": company.name,
+            "status": company.status,
+            "verificationStatus": "verified" if company.status == "active" else company.status,
+            "contactEmail": company.email,
+            "createdAt": company.created_at.isoformat() if company.created_at else None,
+        } if company else None,
+        "requestedBy": {
+            "fullName": requester.full_name if requester else None,
+            "email": requester.email if requester else None,
+        },
+        "reviewedAt": entry.reviewed_at.isoformat() if entry.reviewed_at else None,
+        "reviewNote": entry.review_note,
+    }
 
 _ROLE_PT = {"recruiter": "Recrutador", "viewer": "Visualizador", "owner": "Administrador"}
 
@@ -213,17 +237,32 @@ async def update_company_verification(
     if next_status and next_status != previous_status:
         try:
             owner = db.query(User).filter(User.id == company.owner_user_id).first() if company.owner_user_id else None
-            if owner and owner.email:
-                if company.status == "active":
+            if owner and company.status == "active":
+                if owner.email:
                     send_templated_email.delay("send_company_verified_email", {
                         "email": owner.email, "company_name": company.name,
                     })
-                elif company.status in ("rejected", "suspended"):
+                create_notification(
+                    db, owner.id, type="company_verified",
+                    title="Empresa verificada",
+                    body=f"{company.name} foi verificada. Já pode publicar vagas.",
+                    link="/Portal/Empresa/Dashboard",
+                )
+            elif owner and company.status in ("rejected", "suspended"):
+                if owner.email:
                     method = "send_company_suspended_email" if company.status == "suspended" else "send_company_rejected_email"
                     send_templated_email.delay(method, {
                         "email": owner.email, "company_name": company.name,
                         "reason": str(payload.get("reason", "") or ""),
                     })
+                create_notification(
+                    db, owner.id,
+                    type="company_suspended" if company.status == "suspended" else "company_rejected",
+                    title="Empresa suspensa" if company.status == "suspended" else "Verificação rejeitada",
+                    body=(f"A conta de {company.name} foi suspensa." if company.status == "suspended"
+                          else f"A verificação de {company.name} foi rejeitada.")
+                          + (f" Motivo: {payload.get('reason')}" if payload.get("reason") else ""),
+                )
         except Exception as e:
             logger.warning(f"Could not enqueue company verification email: {e}")
 
@@ -239,7 +278,7 @@ async def update_company_verification(
 
 
 @router.get("/deletion-requests")
-async def list_deletion_requests(current_user: User = Depends(get_current_user)):
+async def list_deletion_requests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List pending deletion requests for super-admin review."""
     _ensure_admin(current_user)
 
@@ -247,8 +286,13 @@ async def list_deletion_requests(current_user: User = Depends(get_current_user))
     if admin_level != "super-admin":
         return {"requests": []}
 
-    pending = [entry for entry in _deletion_requests if entry.get("status") == "pending_admin_approval"]
-    return {"requests": pending}
+    pending = (
+        db.query(CompanyDeletionRequest)
+        .filter(CompanyDeletionRequest.status == "pending_admin_approval")
+        .order_by(CompanyDeletionRequest.created_at.desc())
+        .all()
+    )
+    return {"requests": [_to_deletion_request_record(db, entry) for entry in pending]}
 
 
 @router.post("/{company_id}/deletion-request")
@@ -275,28 +319,17 @@ async def create_deletion_request(
         db.refresh(company)
         return {"mode": "direct", "companyId": company.id}
 
-    request_entry = {
-        "_id": str(uuid.uuid4()),
-        "companyId": company.id,
-        "reason": reason,
-        "requestedByAdminLevel": admin_level,
-        "createdAt": datetime.utcnow().isoformat(),
-        "status": "pending_admin_approval",
-        "company": {
-            "_id": company.id,
-            "name": company.name,
-            "status": company.status,
-            "verificationStatus": "verified" if company.status == "active" else company.status,
-            "contactEmail": company.email,
-            "createdAt": company.created_at.isoformat() if company.created_at else None,
-        },
-        "requestedBy": {
-            "fullName": admin.full_name,
-            "email": admin.email,
-        },
-    }
-    _deletion_requests.append(request_entry)
-    return {"mode": "pending", "request": request_entry}
+    entry = CompanyDeletionRequest(
+        company_id=company.id,
+        requested_by_user_id=admin.id,
+        requested_by_admin_level=admin_level,
+        reason=reason,
+        status="pending_admin_approval",
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return {"mode": "pending", "request": _to_deletion_request_record(db, entry)}
 
 
 @router.patch("/deletion-requests/{request_id}/review")
@@ -312,27 +345,29 @@ async def review_deletion_request(
     if admin_level != "super-admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
 
-    request_entry = next((entry for entry in _deletion_requests if entry.get("_id") == request_id), None)
-    if not request_entry:
+    entry = db.query(CompanyDeletionRequest).filter(CompanyDeletionRequest.id == request_id).first()
+    if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deletion request not found")
 
     decision = str(payload.get("decision", "")).strip().lower()
     if decision not in {"approve", "reject"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid decision")
 
-    request_entry["status"] = "approved" if decision == "approve" else "rejected"
-    request_entry["reviewedAt"] = datetime.utcnow().isoformat()
-    request_entry["reviewedBy"] = {"fullName": admin.full_name, "email": admin.email}
-    request_entry["reviewNote"] = str(payload.get("reviewNote", "")).strip()
+    entry.status = "approved" if decision == "approve" else "rejected"
+    entry.reviewed_by_user_id = admin.id
+    entry.reviewed_at = datetime.utcnow()
+    entry.review_note = str(payload.get("reviewNote", "")).strip() or None
 
     if decision == "approve":
-        company_id = str(request_entry.get("companyId", ""))
-        company = db.query(Company).filter(Company.id == company_id).first()
+        company = db.query(Company).filter(Company.id == entry.company_id).first()
         if company:
             company.status = "rejected"
-            db.commit()
 
-    return {"request": request_entry}
+    db.commit()
+    db.refresh(entry)
+    record = _to_deletion_request_record(db, entry)
+    record["reviewedBy"] = {"fullName": admin.full_name, "email": admin.email}
+    return {"request": record}
 
 
 @router.post("/{company_id}/verification/preview-email")
@@ -455,6 +490,12 @@ async def create_company_job(
                 "email": admin_email, "job_title": job.title or "(sem título)",
                 "company_name": company.name,
             })
+        notify_admins(
+            db, type="job_pending_review",
+            title="Vaga pendente de revisão",
+            body=f"{company.name} submeteu \"{job.title or '(sem título)'}\" para moderação.",
+            link="/Portal/Admin/jobs",
+        )
     except Exception as e:
         logger.warning(f"Could not enqueue admin job-pending alert: {e}")
 

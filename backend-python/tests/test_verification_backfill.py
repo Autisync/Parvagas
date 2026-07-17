@@ -7,9 +7,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from fastapi import HTTPException
+
 from app.db.base import Base
 from app.models import User, UserRole, EmailVerificationToken
-from app.api.v1.admin import admin_verification_backfill
+from app.api.v1.admin import admin_resend_verification, admin_verification_backfill
 from app.api.v1.auth import VERIFICATION_RESEND_COOLDOWN_SECONDS
 
 
@@ -129,3 +131,76 @@ def test_no_unverified_users_is_a_no_op(db, monkeypatch):
     assert result["totalUnverified"] == 0
     assert result["sent"] == 0
     assert calls == []
+
+
+# ── Single-account resend (POST /admin/users/{id}/resend-verification) ────
+
+def test_resend_verification_sends_to_one_unverified_user(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.workers.tasks.send_verification_email",
+        type("T", (), {"delay": staticmethod(lambda *a, **k: calls.append(a))})(),
+    )
+    admin = _make_admin(db)
+    target = _make_user(db, email_verified=False)
+    db.commit()
+
+    result = asyncio.run(admin_resend_verification(target.id, db=db, current_user=admin))
+
+    assert result == {"sent": True, "userId": target.id}
+    assert len(calls) == 1
+    assert calls[0][0] == target.id
+
+
+def test_resend_verification_rejects_already_verified_user(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.workers.tasks.send_verification_email",
+        type("T", (), {"delay": staticmethod(lambda *a, **k: calls.append(a))})(),
+    )
+    admin = _make_admin(db)
+    target = _make_user(db, email_verified=True)
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_resend_verification(target.id, db=db, current_user=admin))
+    assert exc.value.status_code == 400
+    assert calls == []
+
+
+def test_resend_verification_respects_cooldown(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.workers.tasks.send_verification_email",
+        type("T", (), {"delay": staticmethod(lambda *a, **k: calls.append(a))})(),
+    )
+    admin = _make_admin(db)
+    target = _make_user(db, email_verified=False)
+    _make_token(db, target, created_at=datetime.utcnow() - timedelta(seconds=5))
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_resend_verification(target.id, db=db, current_user=admin))
+    assert exc.value.status_code == 429
+    assert calls == []
+
+
+def test_resend_verification_404_for_missing_user(db):
+    admin = _make_admin(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_resend_verification("does-not-exist", db=db, current_user=admin))
+    assert exc.value.status_code == 404
+
+
+# ── Admin user list exposes verification status ────────────────────────────
+
+def test_to_user_record_exposes_verification_status():
+    from app.api.v1.admin import _to_user_record
+
+    verified = User(id="1", email="a@x.com", full_name="A", password_hash="x", role=UserRole.candidate, email_verified=True, email_verified_at=datetime(2026, 1, 1))
+    unverified = User(id="2", email="b@x.com", full_name="B", password_hash="x", role=UserRole.candidate, email_verified=False)
+
+    assert _to_user_record(verified)["emailVerified"] is True
+    assert _to_user_record(verified)["emailVerifiedAt"] == "2026-01-01T00:00:00"
+    assert _to_user_record(unverified)["emailVerified"] is False
+    assert _to_user_record(unverified)["emailVerifiedAt"] is None

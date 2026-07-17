@@ -67,6 +67,12 @@ def test_sends_digest_to_every_admin_when_jobs_are_pending(db, monkeypatch):
 
     admin1 = _make_admin(db, email="admin1@parvagas.pt")
     admin2 = _make_admin(db, email="admin2@parvagas.pt")
+    # Captured before the task runs: dispatch_scraped_jobs_digest now also
+    # writes admin bell notifications (notify_admins), which commits on the
+    # session this test shares with the task (see fixture docstring) — that
+    # expires admin1/admin2, and the task's own db.close() afterward makes
+    # a post-call attribute access on them raise DetachedInstanceError.
+    admin1_email, admin2_email = admin1.email, admin2.email
     _make_scraped(db, status="pending")
     _make_scraped(db, status="pending")
     _make_scraped(db, status="approved")  # not counted
@@ -77,7 +83,7 @@ def test_sends_digest_to_every_admin_when_jobs_are_pending(db, monkeypatch):
     assert result["pendingCount"] == 2
     assert result["sent"] == 2
     recipients = {c[0] for c in calls}
-    assert recipients == {admin1.email, admin2.email}
+    assert recipients == {admin1_email, admin2_email}
     assert all(c[1] == 2 for c in calls)
 
 
