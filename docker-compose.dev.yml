@@ -49,7 +49,7 @@ x-backend-env: &backend-env
   SUPER_ADMIN_EMAIL: admin@parvagas.pt
   FRONTEND_URL: https://dev.parvagas.pt
   BACKEND_URL: https://dev-api.parvagas.pt
-  CORS_ORIGIN: "https://dev.parvagas.pt"
+  CORS_ORIGIN: "https://dev.parvagas.pt,http://localhost:3000"
   # Same OAuth client as production — must match the frontend's
   # NEXT_PUBLIC_GOOGLE_CLIENT_ID (Google validates the ID token's `aud`
   # against this). Not a secret: Google client IDs ship in client-side JS
