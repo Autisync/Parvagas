@@ -23,8 +23,8 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobApplication, NewsletterSubscriber,
-    Plan, ResumeTemplate, ScrapedJob,
+    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobAlert, JobApplication,
+    NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
     User, UserRole,
 )
@@ -1011,6 +1011,65 @@ async def admin_companies(
     return {
         "companies": [_to_company_record(row) for row in rows],
         "pagination": _pagination(page, limit, total),
+    }
+
+
+@router.get("/analytics/demand")
+async def admin_demand_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read-only demand-signal rollup — most-saved jobs and JobAlert
+    volume/top categories/keywords, all from existing tables. No candidate
+    identity is exposed, only aggregate counts."""
+    _ensure_admin(current_user)
+
+    top_saved_rows = (
+        db.query(SavedJob.job_id, func.count(SavedJob.id).label("saves"))
+        .group_by(SavedJob.job_id)
+        .order_by(func.count(SavedJob.id).desc())
+        .limit(10)
+        .all()
+    )
+    job_ids = [row[0] for row in top_saved_rows]
+    jobs_by_id = {j.id: j for j in db.query(Job).filter(Job.id.in_(job_ids)).all()} if job_ids else {}
+    top_saved_jobs = [
+        {
+            "jobId": job_id,
+            "title": jobs_by_id[job_id].title if job_id in jobs_by_id else None,
+            "saves": int(saves),
+        }
+        for job_id, saves in top_saved_rows
+    ]
+
+    total_alerts = db.query(func.count(JobAlert.id)).scalar() or 0
+    active_alerts = db.query(func.count(JobAlert.id)).filter(JobAlert.active.is_(True)).scalar() or 0
+
+    top_categories = (
+        db.query(JobAlert.category, func.count(JobAlert.id))
+        .filter(JobAlert.category.isnot(None))
+        .group_by(JobAlert.category)
+        .order_by(func.count(JobAlert.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_keywords = (
+        db.query(JobAlert.keyword, func.count(JobAlert.id))
+        .filter(JobAlert.keyword.isnot(None))
+        .group_by(JobAlert.keyword)
+        .order_by(func.count(JobAlert.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "topSavedJobs": top_saved_jobs,
+        "jobAlerts": {
+            "total": total_alerts,
+            "active": active_alerts,
+        },
+        "topAlertCategories": [{"label": label, "value": int(count)} for label, count in top_categories],
+        "topAlertKeywords": [{"label": label, "value": int(count)} for label, count in top_keywords],
     }
 
 

@@ -46,6 +46,10 @@ const AdminAnalyticsCharts = dynamic(() => import("../components/AdminAnalyticsC
   loading: () => <div className="h-64 app-card p-4" />,
 });
 
+const DemandSignalsPanel = dynamic(() => import("../components/DemandSignalsPanel"), {
+  ssr: false,
+});
+
 const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
   ssr: false,
 });
@@ -610,6 +614,8 @@ export default function AdminAnalyticsPage() {
         </article>
       </section>
       </AnalyticsErrorBoundary>
+
+      {token ? <DemandSignalsPanel token={token} /> : null}
 
       {!isSuperAdmin && (
         <AdminAlert tone="warning">
