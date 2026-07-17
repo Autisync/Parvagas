@@ -30,7 +30,7 @@ export default function AdminExportsPage() {
     fetchAdminMe(token).then(setMe).catch(() => setMe(null));
   }, [token]);
 
-  const exportFile = async (kind: "users" | "jobs" | "companies") => {
+  const exportFile = async (kind: "users" | "jobs" | "companies" | "applications" | "transactions" | "newsletter") => {
     if (!token || !canExport) return;
     setBusy(kind);
     setError("");
@@ -83,6 +83,15 @@ export default function AdminExportsPage() {
           </button>
           <button onClick={() => exportFile("companies")} disabled={busy !== null} className={adminButtonClass}>
             {busy === "companies" ? "A exportar..." : "Exportar empresas"}
+          </button>
+          <button onClick={() => exportFile("applications")} disabled={busy !== null} className={adminButtonClass}>
+            {busy === "applications" ? "A exportar..." : "Exportar candidaturas"}
+          </button>
+          <button onClick={() => exportFile("transactions")} disabled={busy !== null} className={adminButtonClass}>
+            {busy === "transactions" ? "A exportar..." : "Exportar transações"}
+          </button>
+          <button onClick={() => exportFile("newsletter")} disabled={busy !== null} className={adminButtonClass}>
+            {busy === "newsletter" ? "A exportar..." : "Exportar newsletter"}
           </button>
         </div>
       </section>

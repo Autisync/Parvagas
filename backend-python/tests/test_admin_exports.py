@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models import Company, Job, User, UserRole
+from app.models import Company, Job, JobApplication, NewsletterSubscriber, Transaction, User, UserRole
 from app.api.v1.admin import admin_export_csv
 
 
@@ -56,3 +56,62 @@ def test_jobs_export_empty_when_no_jobs(db):
     body = response.body.decode("utf-8")
     lines = [line for line in body.strip().split("\r\n") if line]
     assert lines == ["id,title,status,visibility,companyId,createdAt"]
+
+
+def test_applications_export_includes_every_application(db):
+    admin = _make_admin(db)
+    owner = User(id=str(uuid.uuid4()), email="owner2@x.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name="Acme", status="active")
+    db.add(company)
+    db.flush()
+    db.add(JobApplication(
+        job_id=str(uuid.uuid4()), company_id=company.id,
+        applicant_full_name="Ana Sousa", applicant_email="ana@x.com", status="submitted",
+    ))
+    db.commit()
+
+    response = asyncio.run(admin_export_csv("applications", from_date=None, to_date=None, db=db, current_user=admin))
+    body = response.body.decode("utf-8")
+
+    assert "Ana Sousa" in body
+    assert "id,jobId,companyId,applicantFullName,applicantEmail,status,createdAt" in body
+
+
+def test_transactions_export_includes_every_transaction(db):
+    admin = _make_admin(db)
+    owner = User(id=str(uuid.uuid4()), email="owner3@x.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name="Acme", status="active")
+    db.add(company)
+    db.flush()
+    db.add(Transaction(company_id=company.id, amount=5000, provider="multicaixa", status="paid", kind="subscription"))
+    db.commit()
+
+    response = asyncio.run(admin_export_csv("transactions", from_date=None, to_date=None, db=db, current_user=admin))
+    body = response.body.decode("utf-8")
+
+    assert "multicaixa" in body
+    assert "paid" in body
+    assert "id,companyId,amount,currency,provider,reference,status,kind,createdAt" in body
+
+
+def test_newsletter_export_includes_every_subscriber(db):
+    admin = _make_admin(db)
+    db.add(NewsletterSubscriber(email="subscriber@x.com", source="footer"))
+    db.commit()
+
+    response = asyncio.run(admin_export_csv("newsletter", from_date=None, to_date=None, db=db, current_user=admin))
+    body = response.body.decode("utf-8")
+
+    assert "subscriber@x.com" in body
+    assert "id,email,source,unsubscribedAt,createdAt" in body
+
+
+def test_unsupported_export_kind_400(db):
+    admin = _make_admin(db)
+    with pytest.raises(Exception) as exc:
+        asyncio.run(admin_export_csv("bogus", from_date=None, to_date=None, db=db, current_user=admin))
+    assert getattr(exc.value, "status_code", None) == 400

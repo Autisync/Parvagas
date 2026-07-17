@@ -23,7 +23,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, FeatureFlag, Job, JobApplication, Plan, ResumeTemplate, ScrapedJob,
+    CareerPost, Company, FeatureFlag, Job, JobApplication, NewsletterSubscriber, Plan, ResumeTemplate, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
     User, UserRole,
 )
@@ -3122,6 +3122,60 @@ async def admin_export_csv(
                     job.status,
                     job.visibility,
                     job.company_id,
+                    created_at,
+                ]
+            )
+    elif kind_norm == "applications":
+        writer.writerow(["id", "jobId", "companyId", "applicantFullName", "applicantEmail", "status", "createdAt"])
+        applications = db.query(JobApplication).order_by(JobApplication.created_at.desc()).all()
+        for application in applications:
+            created_at = application.created_at.isoformat() if application.created_at else ""
+            if not _is_in_range(created_at, from_date, to_date):
+                continue
+            writer.writerow(
+                [
+                    application.id,
+                    application.job_id,
+                    application.company_id,
+                    application.applicant_full_name,
+                    application.applicant_email,
+                    application.status,
+                    created_at,
+                ]
+            )
+    elif kind_norm == "transactions":
+        writer.writerow(["id", "companyId", "amount", "currency", "provider", "reference", "status", "kind", "createdAt"])
+        transactions = db.query(Transaction).order_by(Transaction.created_at.desc()).all()
+        for transaction in transactions:
+            created_at = transaction.created_at.isoformat() if transaction.created_at else ""
+            if not _is_in_range(created_at, from_date, to_date):
+                continue
+            writer.writerow(
+                [
+                    transaction.id,
+                    transaction.company_id,
+                    transaction.amount,
+                    transaction.currency,
+                    transaction.provider,
+                    transaction.reference,
+                    transaction.status,
+                    transaction.kind,
+                    created_at,
+                ]
+            )
+    elif kind_norm == "newsletter":
+        writer.writerow(["id", "email", "source", "unsubscribedAt", "createdAt"])
+        subscribers = db.query(NewsletterSubscriber).order_by(NewsletterSubscriber.created_at.desc()).all()
+        for subscriber in subscribers:
+            created_at = subscriber.created_at.isoformat() if subscriber.created_at else ""
+            if not _is_in_range(created_at, from_date, to_date):
+                continue
+            writer.writerow(
+                [
+                    subscriber.id,
+                    subscriber.email,
+                    subscriber.source,
+                    subscriber.unsubscribed_at.isoformat() if subscriber.unsubscribed_at else "",
                     created_at,
                 ]
             )
