@@ -269,6 +269,8 @@ class AuthService:
         # C5: setting a real password is exactly what "claiming" a guest
         # shadow account means — this is the one place that transition
         # happens for every guest-account flow (CV builder, CV-drop).
+        if user.is_guest_account:
+            user.guest_converted_at = datetime.utcnow()
         user.is_guest_account = False
 
         db.commit()

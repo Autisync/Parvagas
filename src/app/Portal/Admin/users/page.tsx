@@ -21,6 +21,7 @@ export default function AdminUsersPage() {
   const [list, setList] = useState<UserRecord[]>([]);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
+  const [guestFilter, setGuestFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(15);
   const [pagination, setPagination] = useState<Pagination | undefined>();
@@ -98,7 +99,10 @@ export default function AdminUsersPage() {
     if (!token) return;
     setError("");
     try {
-      const [usersRes, me] = await Promise.all([fetchUsers(token, { page, limit, keyword: search, role }), fetchAdminMe(token)]);
+      const [usersRes, me] = await Promise.all([
+        fetchUsers(token, { page, limit, keyword: search, role, isGuestAccount: guestFilter === "all" ? undefined : guestFilter }),
+        fetchAdminMe(token),
+      ]);
       setList(usersRes.users || []);
       setPagination(usersRes.pagination);
       setLevel(me.adminLevel);
@@ -106,7 +110,7 @@ export default function AdminUsersPage() {
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar utilizadores."));
     }
-  }, [token, page, limit, search, role]);
+  }, [token, page, limit, search, role, guestFilter]);
 
   useEffect(() => {
     load();
@@ -325,6 +329,11 @@ export default function AdminUsersPage() {
             <option value="company">Empresas</option>
             <option value="admin">Admins</option>
           </select>
+          <select value={guestFilter} onChange={(e) => { setGuestFilter(e.target.value); setPage(1); clearSelectionState(); }} className={adminFieldClass}>
+            <option value="all">Contas convidado e normais</option>
+            <option value="true">Apenas contas convidado</option>
+            <option value="false">Apenas contas registadas</option>
+          </select>
       </AdminFilterBar>
 
       {list.length > 0 && level === "super-admin" ? (
@@ -381,6 +390,7 @@ export default function AdminUsersPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {userRecord.isGuestAccount ? <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Convidado</span> : null}
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(state)}`}>{state}</span>
                   <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${userRecord.emailVerified ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
                     {userRecord.emailVerified ? "Verificado" : "Não verificado"}

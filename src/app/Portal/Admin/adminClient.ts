@@ -68,6 +68,9 @@ export type Overview = {
   scraped: number | null;
   ads: number | null;
   ok?: boolean;
+  activeGuestAccounts?: number;
+  convertedGuestAccounts?: number;
+  guestConversionRate?: number | null;
 };
 
 export type AnalyticsResponse = {
@@ -133,6 +136,7 @@ export type UserRecord = {
   suspended?: boolean;
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
+  isGuestAccount?: boolean;
   createdAt?: string;
 };
 

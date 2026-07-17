@@ -101,6 +101,7 @@ def _to_user_record(user: User) -> dict[str, Any]:
         "suspended": bool(user.suspended),
         "emailVerified": bool(user.email_verified),
         "emailVerifiedAt": user.email_verified_at.isoformat() if user.email_verified_at else None,
+        "isGuestAccount": bool(getattr(user, "is_guest_account", False)),
         "createdAt": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -339,7 +340,17 @@ async def admin_overview(
         },
         "overview",
     )
-    return {**values, "ok": ok}
+
+    guest_active = db.query(User).filter(User.is_guest_account.is_(True)).count()
+    guest_converted = db.query(User).filter(User.guest_converted_at.isnot(None)).count()
+    guest_total_ever = guest_active + guest_converted
+    guest_stats = {
+        "activeGuestAccounts": guest_active,
+        "convertedGuestAccounts": guest_converted,
+        "guestConversionRate": round((guest_converted / guest_total_ever) * 100, 1) if guest_total_ever else None,
+    }
+
+    return {**values, "ok": ok, **guest_stats}
 
 
 def _distribution(db: Session, column) -> list[dict[str, Any]]:
@@ -550,6 +561,7 @@ async def admin_users(
     keyword: str | None = None,
     role: str | None = None,
     adminLevel: str | None = None,
+    isGuestAccount: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -565,6 +577,9 @@ async def admin_users(
 
     if adminLevel and adminLevel != "all":
         query = query.filter(User.admin_level == adminLevel)
+
+    if isGuestAccount and isGuestAccount != "all":
+        query = query.filter(User.is_guest_account.is_(isGuestAccount == "true"))
 
     total = query.count()
     rows = query.order_by(User.created_at.desc()).offset((page - 1) * limit).limit(limit).all()

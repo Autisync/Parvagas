@@ -29,6 +29,9 @@ type Overview = {
   scraped: number | null;
   ads: number | null;
   ok?: boolean;
+  activeGuestAccounts?: number;
+  convertedGuestAccounts?: number;
+  guestConversionRate?: number | null;
 };
 
 type Analytics = {
@@ -134,6 +137,12 @@ export default function AdminOverviewPage() {
           { label: "Vagas pendentes", value: ops?.pendingJobs, href: "/Portal/Admin/jobs", icon: ClipboardDocumentCheckIcon },
           { label: "Empresas por verificar", value: ops?.pendingCompanies, href: "/Portal/Admin/companies", icon: BuildingOffice2Icon },
           { label: "Utilizadores suspensos", value: ops?.suspendedUsers, href: "/Portal/Admin/users", icon: UsersIcon },
+          {
+            label: "Conversão de contas convidado",
+            value: overview?.guestConversionRate == null ? null : `${overview.guestConversionRate}%`,
+            href: "/Portal/Admin/users",
+            icon: UsersIcon,
+          },
         ].map((item) => (
           <Link key={item.label} href={item.href} className="app-card app-card-interactive flex items-center gap-3 p-4">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-50)] text-[var(--brand-600)]">

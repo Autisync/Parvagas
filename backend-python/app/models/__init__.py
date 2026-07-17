@@ -59,6 +59,11 @@ class User(Base, TimestampMixin):
     # candidate actually sets a password via AuthService.reset_password.
     is_guest_account = Column(Boolean, nullable=False, default=False)
     guest_claim_email_sent_at = Column(DateTime, nullable=True)
+    # Set once, the moment a guest account converts (is_guest_account flips
+    # True -> False) — never cleared, so it's a durable marker letting the
+    # admin dashboard compute a real guest->registered conversion rate
+    # instead of only ever seeing the current (post-conversion) state.
+    guest_converted_at = Column(DateTime, nullable=True)
 
     # Have I Been Pwned daily breach scan — when this email was last checked
     # against the HIBP v3 breach API (app.services.hibp_service). Oldest /
