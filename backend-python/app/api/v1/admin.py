@@ -2702,6 +2702,27 @@ async def admin_launch_readiness(
     else:
         add("frontend", "config", "warn", "FRONTEND_URL em localhost (ambiente não-produção)")
 
+    # HIBP breach-scan coverage — the scheduled task no-ops silently when
+    # HIBP_API_KEY is unset, so this is the only place that surfaces that.
+    try:
+        total_users = db.query(User).count()
+        checked_users = db.query(User).filter(User.hibp_checked_at.isnot(None)).count()
+        last_checked = db.query(func.max(User.hibp_checked_at)).scalar()
+        coverage_pct = round((checked_users / total_users) * 100, 1) if total_users else 0.0
+        if not settings.HIBP_API_KEY:
+            add("hibp", "security", "warn", "HIBP_API_KEY não definido — verificação de fugas de dados inativa")
+        elif checked_users == 0:
+            add("hibp", "security", "warn", "HIBP configurado mas ainda sem nenhuma verificação executada")
+        else:
+            last_label = last_checked.isoformat() if last_checked else "nunca"
+            add("hibp", "security", "pass", f"HIBP ativo — {coverage_pct}% das contas verificadas (última: {last_label})")
+    except Exception:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        add("hibp", "security", "warn", "Não foi possível verificar o estado do HIBP")
+
     summary = {
         "total": len(checks),
         "pass": sum(1 for c in checks if c["status"] == "pass"),
