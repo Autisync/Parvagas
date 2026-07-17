@@ -36,6 +36,41 @@ def _resolve_applicant_field(submitted: str | None, fallback: str | None) -> str
     return trimmed or fallback
 
 
+def _auto_create_pipeline_item(db, application: "JobApplication") -> None:
+    """Drops every new application straight into the company's ATS board
+    (lowest-position stage) so the pipeline reflects reality without the
+    company having to manually add each one. Best-effort: a company with no
+    real account (aggregated/scraped job listings) or any ATS setup issue
+    must never block application submission itself."""
+    if not application.company_id:
+        return
+    try:
+        from app.models import ATSPipelineItem
+        from app.api.v1.ats import _ensure_default_stages
+
+        company = db.query(Company).filter(Company.id == application.company_id).first()
+        if not company:
+            return
+
+        stages = _ensure_default_stages(db, company)
+        first_stage = min(stages, key=lambda s: s.position)
+
+        candidate_profile_id = None
+        if application.candidate_user_id:
+            profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == application.candidate_user_id).first()
+            candidate_profile_id = profile.id if profile else None
+
+        db.add(ATSPipelineItem(
+            company_id=company.id,
+            application_id=application.id,
+            candidate_profile_id=candidate_profile_id,
+            stage_id=first_stage.id,
+        ))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Could not auto-create ATS pipeline item for application {application.id}: {e}")
+
+
 from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.services.email_service import EmailService
@@ -229,6 +264,7 @@ async def submit_candidate_application(
     db.add(application)
     db.commit()
     db.refresh(application)
+    _auto_create_pipeline_item(db, application)
 
     send_application_received_email.delay(current_user.email, current_user.full_name, jobId)
     _notify_company_new_applicant(db, application.company_id, jobId, current_user.full_name)
@@ -296,6 +332,7 @@ async def submit_quick_apply(
     db.add(application)
     db.commit()
     db.refresh(application)
+    _auto_create_pipeline_item(db, application)
 
     base = (get_settings().FRONTEND_URL or "https://parvagas.pt").rstrip("/")
     tracking_url = f"{base}/Candidaturas/Acompanhar?token={application.tracking_token}"

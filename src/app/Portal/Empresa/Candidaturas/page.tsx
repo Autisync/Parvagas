@@ -10,6 +10,7 @@ import StatSummary from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
 import { useToasts } from "../components/useToasts";
+import AtsKanbanBoard from "./AtsKanbanBoard";
 
 type Application = {
   _id: string;
@@ -52,6 +53,7 @@ export default function EmpresaCandidaturasPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activePreset, setActivePreset] = useState("overview");
+  const [view, setView] = useState<"list" | "kanban">("list");
   const [updating, setUpdating] = useState<string | null>(null);
   const [cvLoadingFor, setCvLoadingFor] = useState<string | null>(null);
   const [selectedCv, setSelectedCv] = useState<CandidateCvPayload | null>(null);
@@ -274,6 +276,27 @@ export default function EmpresaCandidaturasPage() {
             ]}
           />
 
+          <div className="mb-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${view === "list" ? "border-red-300 bg-red-50 text-red-700" : "border-gray-200 text-gray-600"}`}
+            >
+              Vista Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("kanban")}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold ${view === "kanban" ? "border-red-300 bg-red-50 text-red-700" : "border-gray-200 text-gray-600"}`}
+            >
+              Vista Kanban
+            </button>
+          </div>
+
+          {view === "kanban" ? (
+            <AtsKanbanBoard token={token!} applications={applications} />
+          ) : (
+          <>
           {filteredApplications.length === 0 && !isLoading && <p className="text-gray-500 text-center py-12">Nenhuma candidatura encontrada para os filtros atuais.</p>}
           <div className="space-y-4">
             {filteredApplications.map(a => {
@@ -389,6 +412,8 @@ export default function EmpresaCandidaturasPage() {
                 Seguinte
               </button>
             </div>
+          )}
+          </>
           )}
 
           {selectedCv ? (

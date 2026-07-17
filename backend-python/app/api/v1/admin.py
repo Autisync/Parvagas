@@ -22,7 +22,7 @@ from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
-    AdCampaign, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
+    AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, Company, FeatureFlag, Job, JobApplication, Plan, ResumeTemplate, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
     User, UserRole,
@@ -995,6 +995,28 @@ async def admin_companies(
     return {
         "companies": [_to_company_record(row) for row in rows],
         "pagination": _pagination(page, limit, total),
+    }
+
+
+@router.get("/companies/ats-stage-summary")
+async def admin_ats_stage_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Read-only rollup of pipeline item counts per stage NAME, aggregated
+    across every company (each company owns its own ATSStage rows, so this
+    groups by name rather than a single shared stage id)."""
+    _ensure_admin(current_user)
+    rows = (
+        db.query(ATSStage.name, func.count(ATSPipelineItem.id))
+        .outerjoin(ATSPipelineItem, ATSPipelineItem.stage_id == ATSStage.id)
+        .group_by(ATSStage.name)
+        .all()
+    )
+    counts: dict[str, int] = {}
+    for name, count in rows:
+        counts[name] = counts.get(name, 0) + int(count or 0)
+    return {
+        "stages": [{"name": name, "count": count} for name, count in sorted(counts.items(), key=lambda kv: -kv[1])],
+        "totalPipelineItems": db.query(func.count(ATSPipelineItem.id)).scalar() or 0,
+        "companiesWithPipeline": db.query(func.count(func.distinct(ATSPipelineItem.company_id))).scalar() or 0,
     }
 
 

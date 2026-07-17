@@ -350,13 +350,13 @@ class JobMatchResponse(BaseModel):
 class ATSStageCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
-    sort_order: Optional[int] = 0
+    position: Optional[int] = 0
 
 
 class ATSStageUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    sort_order: Optional[int] = None
+    position: Optional[int] = None
 
 
 class ATSStageResponse(BaseModel):
@@ -364,7 +364,7 @@ class ATSStageResponse(BaseModel):
     company_id: str
     name: str
     description: Optional[str] = None
-    sort_order: int
+    position: int
     created_at: datetime
     updated_at: datetime
 
@@ -373,9 +373,11 @@ class ATSStageResponse(BaseModel):
 
 
 class ATSPipelineItemCreateRequest(BaseModel):
-    candidate_profile_id: str
-    job_match_id: Optional[str] = None
-    stage_id: str
+    # A pipeline item is created FROM an application, not by hand-picking a
+    # candidate profile — candidate_profile_id is derived server-side from
+    # the application.
+    application_id: str
+    stage_id: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -386,8 +388,8 @@ class ATSPipelineItemMoveRequest(BaseModel):
 class ATSPipelineItemResponse(BaseModel):
     id: str
     company_id: str
-    candidate_profile_id: str
-    job_match_id: Optional[str] = None
+    application_id: Optional[str] = None
+    candidate_profile_id: Optional[str] = None
     stage_id: str
     notes: Optional[str] = None
     created_at: datetime

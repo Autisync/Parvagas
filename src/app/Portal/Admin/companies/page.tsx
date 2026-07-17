@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchAdminMe, fetchCompanies, statusBadgeClass, toDateLabel, type CompanyRecord, type Pagination, type AdminLevel } from "../adminClient";
+import { fetchAdminMe, fetchAtsStageSummary, fetchCompanies, statusBadgeClass, toDateLabel, type AtsStageSummary, type CompanyRecord, type Pagination, type AdminLevel } from "../adminClient";
 import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, AdminSpinner, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
@@ -82,6 +82,7 @@ export default function AdminCompaniesPage() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [confirming, setConfirming] = useState<PendingConfirmation | null>(null);
+  const [atsSummary, setAtsSummary] = useState<AtsStageSummary | null>(null);
   const { notify } = useAppNotifier();
 
   const {
@@ -112,6 +113,12 @@ export default function AdminCompaniesPage() {
         setDeletionRequests(deletionRes.requests || []);
       } else {
         setDeletionRequests([]);
+      }
+
+      try {
+        setAtsSummary(await fetchAtsStageSummary(token));
+      } catch {
+        setAtsSummary(null);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Erro ao carregar empresas."));
@@ -337,6 +344,26 @@ export default function AdminCompaniesPage() {
           <option value="all">Todas</option>
         </select>
       </AdminFilterBar>
+
+      {atsSummary && atsSummary.totalPipelineItems > 0 ? (
+        <section className="mt-5 app-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Pipeline ATS (leitura)</p>
+              <p className="text-xs text-slate-500">
+                {atsSummary.totalPipelineItems} candidatura(s) em pipeline, em {atsSummary.companiesWithPipeline} empresa(s).
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {atsSummary.stages.map((stage) => (
+              <span key={stage.name} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                {stage.name}: {stage.count}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {level === "super-admin" ? (
         <section className="mt-5 app-card p-4">

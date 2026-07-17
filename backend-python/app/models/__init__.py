@@ -318,13 +318,16 @@ class ATSPipelineItem(Base, TimestampMixin):
     __tablename__ = "ats_pipeline_items"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
     stage_id = Column(String(36), ForeignKey("ats_stages.id"), nullable=False)
     application_id = Column(String(36), ForeignKey("applications.id"), nullable=True)
     candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=True)
+    notes = Column(Text, nullable=True)
     status = Column(String(50), nullable=False, default="active")
 
     stage = relationship("ATSStage", back_populates="pipeline_items")
     candidate_profile = relationship("CandidateProfile")
+    application = relationship("JobApplication")
 
 
 class RefreshToken(Base, TimestampMixin):

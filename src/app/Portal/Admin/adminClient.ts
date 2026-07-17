@@ -422,6 +422,16 @@ export async function fetchCompanies(token: string, params: Record<string, strin
   return authFetch<Paginated<"companies", CompanyRecord>>(`/admin/companies${listQuery(params)}`, token);
 }
 
+export type AtsStageSummary = {
+  stages: Array<{ name: string; count: number }>;
+  totalPipelineItems: number;
+  companiesWithPipeline: number;
+};
+
+export async function fetchAtsStageSummary(token: string) {
+  return authFetch<AtsStageSummary>(`/admin/companies/ats-stage-summary`, token, { suppressGlobalErrors: true });
+}
+
 export async function fetchScraped(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"scrapedJobs", ScrapedRecord> & { laneCounts?: Record<string, number> }>(
     `/admin/scraped-jobs${listQuery(params)}`, token,
