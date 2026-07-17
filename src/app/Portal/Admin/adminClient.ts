@@ -436,6 +436,22 @@ export async function fetchAtsStageSummary(token: string) {
   return authFetch<AtsStageSummary>(`/admin/companies/ats-stage-summary`, token, { suppressGlobalErrors: true });
 }
 
+export type TaskRunStatus = "never_run" | "running" | "success" | "failed";
+
+export type TaskRunSummary = {
+  taskName: string;
+  lastRun: {
+    startedAt: string | null;
+    finishedAt: string | null;
+    status: TaskRunStatus;
+    detail: string | null;
+  };
+};
+
+export async function fetchTaskRuns(token: string) {
+  return authFetch<{ tasks: TaskRunSummary[] }>(`/admin/task-runs`, token, { suppressGlobalErrors: true });
+}
+
 export type CompanyTeamSummary = {
   owner: { id: string; fullName?: string; email?: string } | null;
   members: Array<{ id: string; userId: string; fullName?: string; email?: string; role: string; joinedAt?: string | null }>;

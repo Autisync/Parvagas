@@ -12,7 +12,7 @@ import {
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
-  DocumentTextIcon,
+  DocumentTextIcon, ClockIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -38,6 +38,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/exports",      label: "Exportações CSV",hint: "Dados operacionais",     levels: ["super-admin"],             icon: <CloudArrowDownIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/deploy",       label: "Deploy",         hint: "Lançar para produção",   levels: ["super-admin"],             icon: <RocketLaunchIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/launch-readiness", label: "Launch Readiness", hint: "Checklist de produção", levels: ["super-admin"],       icon: <CheckBadgeIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/task-runs",    label: "Tarefas Agendadas", hint: "Estado das tarefas periódicas", levels: ["super-admin"], icon: <ClockIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/settings",     label: "Definições",     hint: "Interruptores de negócio", levels: ["super-admin"],          icon: <Cog6ToothIcon className="h-5 w-5" /> },
 ];
 

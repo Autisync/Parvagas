@@ -9,6 +9,7 @@ from app.db.session import SessionLocal
 from app.models import User, UserRole, EmailVerificationToken, PasswordResetToken, CVUpload
 from app.services.email_service import EmailService
 from app.services.cv_parser_service import CVParserService
+from app.services.task_heartbeat import track_task_run
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -488,6 +489,7 @@ def _record_scraper_source_run(db, source_id: str | None, status: str, detail: s
     soft_time_limit=8 * 60,
     time_limit=10 * 60,
 )
+@track_task_run('scrape_external_jobs')
 def scrape_external_jobs() -> dict:
     """Fetch jobs from admin-configured external sources into the ScrapedJob queue (pending review)."""
     from app.models import ScrapedJob
@@ -586,6 +588,7 @@ def scrape_external_jobs() -> dict:
 
 
 @celery.task(name='app.workers.tasks.expire_stale_aggregated_jobs')
+@track_task_run('expire_stale_aggregated_jobs')
 def expire_stale_aggregated_jobs() -> dict:
     """Archive aggregated jobs whose shelf life has passed."""
     from app.models import ScrapedJob, Job
@@ -618,6 +621,7 @@ def expire_stale_aggregated_jobs() -> dict:
 
 
 @celery.task(name='app.workers.tasks.publish_scheduled_scraped_jobs')
+@track_task_run('publish_scheduled_scraped_jobs')
 def publish_scheduled_scraped_jobs() -> dict:
     """Publish ScrapedJob rows an admin approved-and-scheduled, once their
     scheduled_publish_at time arrives."""
@@ -652,6 +656,7 @@ def publish_scheduled_scraped_jobs() -> dict:
 
 
 @celery.task(name='app.workers.tasks.dispatch_scraped_jobs_digest')
+@track_task_run('dispatch_scraped_jobs_digest')
 def dispatch_scraped_jobs_digest() -> dict:
     """Daily nudge to admins when scraped jobs are piling up unreviewed.
     Sends nothing when the pending queue is empty — no noise for no work."""
@@ -685,6 +690,7 @@ def dispatch_scraped_jobs_digest() -> dict:
 
 
 @celery.task(name='app.workers.tasks.cleanup_expired_tokens')
+@track_task_run('cleanup_expired_tokens')
 def cleanup_expired_tokens() -> dict:
     """Cleanup expired verification and password reset tokens."""
     try:
@@ -719,6 +725,7 @@ _PUBLIC_JOB_STATUSES = ("approved", "published", "active")
 
 
 @celery.task(name='app.workers.tasks.dispatch_job_alert_digests')
+@track_task_run('dispatch_job_alert_digests')
 def dispatch_job_alert_digests() -> dict:
     """Daily: email candidates new jobs matching their saved alerts."""
     from datetime import timedelta
@@ -825,6 +832,7 @@ def dispatch_instant_alerts_for_job(job_id: str) -> dict:
 
 
 @celery.task(name='app.workers.tasks.dispatch_subscription_expiry_reminders')
+@track_task_run('dispatch_subscription_expiry_reminders')
 def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
     """Daily: remind companies whose plan expires within `days_ahead` days."""
     from datetime import timedelta
@@ -867,6 +875,7 @@ def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
 
 
 @celery.task(name='app.workers.tasks.generate_auto_apply_proposals')
+@track_task_run('generate_auto_apply_proposals')
 def generate_auto_apply_proposals() -> dict:
     """Periodic sweep: for every opted-in, eligible candidate, score newly
     published jobs in their chosen categories and create review proposals
@@ -913,6 +922,7 @@ def generate_auto_apply_proposals() -> dict:
 
 
 @celery.task(name="app.workers.tasks.run_hibp_breach_scan", soft_time_limit=3300, time_limit=3600)
+@track_task_run('run_hibp_breach_scan')
 def run_hibp_breach_scan() -> dict:
     """Daily Have I Been Pwned account-breach scan.
 

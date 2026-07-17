@@ -721,6 +721,20 @@ class ScrapedJob(Base, TimestampMixin):
     quality_flags = Column(Text, nullable=True)  # JSON array of reasons
 
 
+class TaskRun(Base, TimestampMixin):
+    """Heartbeat ledger for scheduled (celery-beat) tasks — generalizes the
+    ScraperSource.last_run_* pattern to every periodic task, not just the
+    scraper. Written by app.services.task_heartbeat.track_task_run()."""
+    __tablename__ = "task_runs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_name = Column(String(120), nullable=False, index=True)
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="running")  # running | success | failed
+    detail = Column(Text, nullable=True)
+
+
 class ScraperSource(Base, TimestampMixin):
     """Admin-managed external job-board source for the scraper worker.
 

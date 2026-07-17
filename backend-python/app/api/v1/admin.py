@@ -25,7 +25,7 @@ from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobAlert, JobApplication,
     NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
-    ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
+    ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
 from app.workers.tasks import send_templated_email
@@ -1012,6 +1012,50 @@ async def admin_companies(
         "companies": [_to_company_record(row) for row in rows],
         "pagination": _pagination(page, limit, total),
     }
+
+
+_SCHEDULED_TASK_NAMES = [
+    "scrape_external_jobs",
+    "expire_stale_aggregated_jobs",
+    "publish_scheduled_scraped_jobs",
+    "dispatch_scraped_jobs_digest",
+    "cleanup_expired_tokens",
+    "dispatch_job_alert_digests",
+    "dispatch_subscription_expiry_reminders",
+    "generate_auto_apply_proposals",
+    "run_hibp_breach_scan",
+]
+
+
+@router.get("/task-runs")
+async def admin_task_runs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Last-run status for every celery-beat scheduled task — generalizes
+    ScraperSource.last_run_* (scoped to the scraper only) via the shared
+    TaskRun ledger written by app.services.task_heartbeat.track_task_run."""
+    _ensure_admin(current_user)
+
+    rows = []
+    for task_name in _SCHEDULED_TASK_NAMES:
+        latest = (
+            db.query(TaskRun)
+            .filter(TaskRun.task_name == task_name)
+            .order_by(TaskRun.started_at.desc())
+            .first()
+        )
+        rows.append({
+            "taskName": task_name,
+            "lastRun": {
+                "startedAt": latest.started_at.isoformat() if latest and latest.started_at else None,
+                "finishedAt": latest.finished_at.isoformat() if latest and latest.finished_at else None,
+                "status": latest.status if latest else "never_run",
+                "detail": latest.detail if latest else None,
+            } if latest else {"startedAt": None, "finishedAt": None, "status": "never_run", "detail": None},
+        })
+
+    return {"tasks": rows}
 
 
 @router.get("/analytics/demand")
