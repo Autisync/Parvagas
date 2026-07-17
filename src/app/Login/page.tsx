@@ -18,6 +18,7 @@ import { EyeIcon, EyeSlashIcon, ShieldCheckIcon } from "@heroicons/react/24/outl
 
 type LoginResponse = {
   access_token?: string;
+  refresh_token?: string;
   token?: string;
   token_type?: string;
   user: {
@@ -301,7 +302,7 @@ function LoginContent() {
       if (!token) {
         throw new Error("Resposta de autenticação inválida: token em falta.");
       }
-      setToken(token);
+      setToken(token, data.refresh_token);
       const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
         id: userId,
@@ -386,7 +387,7 @@ function LoginContent() {
       if (!token) {
         throw new Error("Resposta de autenticação inválida: token em falta.");
       }
-      setToken(token);
+      setToken(token, data.refresh_token);
       const userId = String(data.user.id || data.user._id || "").trim();
       setUser({
         id: userId,

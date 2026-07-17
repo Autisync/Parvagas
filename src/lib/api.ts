@@ -7,6 +7,7 @@ const DEV_API_FALLBACK_PORTS = [8000, 3001, 6001] as const;
 
 const DEFAULT_TIMEOUT_MS = 20000;
 const SESSION_TOKEN_KEY = "parvagas_token";
+const SESSION_REFRESH_TOKEN_KEY = "parvagas_refresh_token";
 const SESSION_USER_KEY = "parvagas_user";
 const SESSION_ACTIVITY_KEY = "parvagas_last_activity_at";
 const SESSION_LOGOUT_KEY = "parvagas_logout_at";
@@ -21,6 +22,7 @@ function notifySessionChange(event: "logout" | "activity") {
 function clearSessionData() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_REFRESH_TOKEN_KEY);
   localStorage.removeItem(SESSION_USER_KEY);
   localStorage.removeItem(SESSION_ACTIVITY_KEY);
 }
@@ -99,6 +101,9 @@ export function isSessionValid(): boolean {
 
 export type ApiFetchOptions = RequestInit & {
   suppressGlobalErrors?: boolean;
+  /** Internal: set on the recursive retry after a silent refresh so a second
+   * 401 falls through to the normal expiry handling instead of looping. */
+  _isRetry?: boolean;
 };
 
 export class ApiError extends Error {
@@ -278,6 +283,65 @@ function shouldHandleAuthExpiry(path: string, requestToken: string) {
   return Boolean(currentToken && currentToken === requestToken);
 }
 
+// De-dupes concurrent refresh attempts — several requests can 401 at once
+// (a page firing off parallel calls) and they should all wait on the same
+// refresh instead of each rotating the refresh token and invalidating the
+// others' attempt.
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+
+  const rawRefreshToken = getRefreshToken();
+  if (!rawRefreshToken) return null;
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await apiFetchRaw("/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: rawRefreshToken }),
+        suppressGlobalErrors: true,
+      });
+      if (!res.ok) return null;
+
+      const body = (await parseResponseBody(res)) as { access_token?: string; refresh_token?: string };
+      if (!body.access_token) return null;
+
+      setToken(body.access_token, body.refresh_token);
+      return body.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+/** On a 401 for a request that carried the currently-stored access token,
+ * try one silent refresh-and-retry before giving up on the session. Returns
+ * undefined when no refresh was attempted or it failed, so the caller falls
+ * through to the normal expiry handling using the original response. */
+async function tryRefreshAndRetry<T>(
+  path: string,
+  options: ApiFetchOptions | undefined,
+  headers: Headers,
+  requestToken: string,
+): Promise<T | undefined> {
+  if (isAuthPath(path) || !requestToken) return undefined;
+  if (getToken() !== requestToken) return undefined; // stale token, unrelated to the active session
+  if (!getRefreshToken()) return undefined;
+
+  const newAccessToken = await refreshAccessToken();
+  if (!newAccessToken) return undefined;
+
+  const retryHeaders = new Headers(headers);
+  retryHeaders.set("Authorization", `Bearer ${newAccessToken}`);
+  return apiFetch<T>(path, { ...options, headers: retryHeaders, _isRetry: true });
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options?: ApiFetchOptions
@@ -293,6 +357,11 @@ export async function apiFetch<T = unknown>(
     headers,
   });
   const requestToken = extractBearerToken(headers);
+
+  if (res.status === 401 && !options?._isRetry) {
+    const retried = await tryRefreshAndRetry<T>(path, options, headers, requestToken);
+    if (retried !== undefined) return retried;
+  }
 
   if (!res.ok) {
     const body = await parseResponseBody(res);
@@ -494,8 +563,19 @@ export function getToken(): string | null {
   return localStorage.getItem(SESSION_TOKEN_KEY);
 }
 
-export function setToken(token: string) {
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(token: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SESSION_REFRESH_TOKEN_KEY, token);
+}
+
+export function setToken(token: string, refreshToken?: string) {
   localStorage.setItem(SESSION_TOKEN_KEY, token);
+  if (refreshToken) setRefreshToken(refreshToken);
   touchClientSession();
 }
 
@@ -540,6 +620,10 @@ export function logoutCurrentSession(
   token?: string | null,
   options?: { redirect?: boolean; redirectTo?: string },
 ): void {
+  // Capture before clearing — clearToken() wipes the refresh token from
+  // storage, so it must be read first to still revoke it server-side.
+  const refreshToken = getRefreshToken();
+
   // 1) Clear local session immediately (also signals other tabs + listeners).
   clearToken();
 
@@ -549,6 +633,8 @@ export function logoutCurrentSession(
       void authFetchRaw("/auth/logout", token, {
         method: "POST",
         suppressGlobalErrors: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
       }).catch(() => {
         /* logout already succeeded locally; ignore network failures */
       });

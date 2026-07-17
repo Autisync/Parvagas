@@ -479,6 +479,13 @@ export async function resolveSupportMessage(token: string, id: string) {
   });
 }
 
+export async function forceLogoutUser(token: string, userId: string) {
+  return authFetch<{ user: UserRecord }>(`/admin/users/${userId}/force-logout`, token, {
+    method: "POST",
+    suppressGlobalErrors: true,
+  });
+}
+
 export type ResumeTemplateRecord = {
   _id: string;
   name: string;

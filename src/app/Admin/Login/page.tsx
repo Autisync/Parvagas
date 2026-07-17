@@ -15,6 +15,7 @@ import RecaptchaNotice from "@/app/components/RecaptchaNotice";
 
 type LoginResponse = {
   access_token?: string;
+  refresh_token?: string;
   token?: string;
   token_type?: string;
   user: {
@@ -166,7 +167,7 @@ function AdminLoginContent() {
     if (!token) {
       throw new Error("Resposta de autenticação inválida: token em falta.");
     }
-    setToken(token);
+    setToken(token, data.refresh_token);
     const userId = String(data.user.id || data.user._id || "").trim();
     setUser({
       id: userId,

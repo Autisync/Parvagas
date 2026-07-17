@@ -168,10 +168,12 @@ async def login(
         )
         
         token = AuthService.create_access_token(user)
+        refresh_token = AuthService.issue_refresh_token(db, user)
         _audit(db, action="auth.login", user=user, ip=_ip, extra={"method": "password"})
 
         return {
             "access_token": token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": UserResponse.model_validate(AuthService.build_user_response(db, user))
         }
@@ -383,7 +385,13 @@ async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
+    refresh_token = AuthService.issue_refresh_token(db, user)
+    return {
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
+    }
 
 
 @router.post("/first-login-reset", response_model=AuthTokenResponse)
@@ -398,7 +406,13 @@ async def first_login_reset(payload: dict, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_friendly_auth_detail(str(getattr(e, "detail", e))))
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
+    refresh_token = AuthService.issue_refresh_token(db, user)
+    return {
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
+    }
 
 
 @router.get("/me", response_model=UserResponse)
@@ -408,9 +422,37 @@ async def get_me(current_user: User = Depends(get_current_user), db: Session = D
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(current_user: User = Depends(get_current_user)):
-    """Stateless logout — the client discards the token."""
+async def logout(payload: dict | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Revokes the caller's refresh token if one was sent. The access token
+    itself stays valid until it expires — logout doesn't force-invalidate
+    every session (that's the admin-only force-logout action)."""
+    raw_refresh = (payload or {}).get("refreshToken") or (payload or {}).get("refresh_token")
+    if raw_refresh:
+        AuthService.revoke_refresh_token(db, raw_refresh)
     return {"message": "Logged out successfully."}
+
+
+@router.post("/refresh", response_model=AuthTokenResponse)
+@limiter.limit("30/minute")
+async def refresh_token_endpoint(request: Request, payload: dict, db: Session = Depends(get_db)):
+    """Exchange a refresh token for a new access token, rotating the
+    refresh token itself (old one is revoked on use)."""
+    raw_refresh = str(payload.get("refreshToken") or payload.get("refresh_token") or "").strip()
+    if not raw_refresh:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="refreshToken is required")
+
+    rotated = AuthService.rotate_refresh_token(db, raw_refresh)
+    if not rotated:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+
+    user, new_refresh_token = rotated
+    access_token = AuthService.create_access_token(user)
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
+    }
 
 
 # ── Phone / OTP login (mobile-first market) ─────────────────────────────────
@@ -491,7 +533,13 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
         user=user, ip=_ip, extra={"method": "otp", "new_user": is_new_user},
     )
     token = AuthService.create_access_token(user)
-    return {"access_token": token, "token_type": "bearer", "user": UserResponse.model_validate(AuthService.build_user_response(db, user))}
+    refresh_token = AuthService.issue_refresh_token(db, user)
+    return {
+        "access_token": token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
+    }
 
 
 _GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
@@ -561,8 +609,10 @@ async def google_login(request: Request, payload: dict, db: Session = Depends(ge
             pass
 
     token = AuthService.create_access_token(user)
+    refresh_token = AuthService.issue_refresh_token(db, user)
     return {
         "access_token": token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": UserResponse.model_validate(AuthService.build_user_response(db, user)),
         "isNewUser": is_new_user,

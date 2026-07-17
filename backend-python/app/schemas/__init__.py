@@ -55,6 +55,7 @@ class UserResponse(BaseModel):
 class AuthTokenResponse(BaseModel):
     """Auth token response."""
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     user: UserResponse
     isNewUser: bool | None = None

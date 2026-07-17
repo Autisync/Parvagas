@@ -705,6 +705,38 @@ async def admin_suspend_user(
     return {"user": _to_user_record(target)}
 
 
+@router.post("/users/{user_id}/force-logout")
+async def admin_force_logout_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Instantly invalidates every access token already issued to this user
+    (via `tokens_revoked_at`, checked in get_current_user) and revokes all
+    of their refresh tokens, so a silent-refresh can't quietly resume the
+    session either. `suspended` already blocks new activity — this is for
+    cutting off a session that's still valid right now (compromised
+    account, offboarded team member, etc.)."""
+    actor = _ensure_admin(current_user)
+    if getattr(actor, "admin_level", "moderator") != "super-admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    target.tokens_revoked_at = datetime.utcnow()
+    db.commit()
+
+    from app.services.auth_service import AuthService
+    AuthService.revoke_all_refresh_tokens(db, target)
+
+    _record_admin_event(
+        actor=actor, action="user.forceLogout", resource_type="user", resource_id=target.id, details={},
+    )
+    return {"user": _to_user_record(target)}
+
+
 @router.patch("/users/{user_id}/admin-level")
 async def admin_change_level(
     user_id: str,

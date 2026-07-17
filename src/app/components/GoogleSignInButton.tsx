@@ -97,6 +97,7 @@ export default function GoogleSignInButton({
         }
         const data = body as {
           access_token?: string;
+          refresh_token?: string;
           token?: string;
           isNewUser?: boolean;
           user: Record<string, unknown> & { role: string };
@@ -104,7 +105,7 @@ export default function GoogleSignInButton({
         const token = String(data.access_token || data.token || "").trim();
         if (!token) throw new Error("Resposta de autenticação inválida.");
         if (data.isNewUser) track("register_success", { method: "google" });
-        setToken(token);
+        setToken(token, data.refresh_token);
         const u = data.user;
         setUser({
           id: String(u.id || u._id || ""),

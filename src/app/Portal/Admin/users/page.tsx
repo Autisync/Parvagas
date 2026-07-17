@@ -6,6 +6,7 @@ import { authFetch, getErrorMessage } from "@/lib/api";
 import {
   fetchUsers, fetchAdminMe, runVerificationBackfill, resendUserVerification, statusBadgeClass, toDateLabel,
   fetchUserSubscription, updateUserSubscription, confirmCompanyPayment, confirmCandidateCvPayment,
+  forceLogoutUser,
   type UserRecord, type AdminLevel, type Pagination, type UserSubscriptionSummary,
 } from "../adminClient";
 import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminButtonClass, adminFieldClass, adminSecondaryButtonClass } from "../components/AdminUI";
@@ -43,6 +44,7 @@ export default function AdminUsersPage() {
   // so we can prompt for a reason via the modal instead of window.prompt.
   const [quickSuspend, setQuickSuspend] = useState<{ user: UserRecord; suspended: boolean } | null>(null);
   const [quickReason, setQuickReason] = useState("");
+  const [forceLogoutBusy, setForceLogoutBusy] = useState(false);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [resendBusyId, setResendBusyId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
@@ -236,6 +238,21 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleForceLogout = async (userRecord: UserRecord) => {
+    if (!token || level !== "super-admin") return;
+    setForceLogoutBusy(true);
+    try {
+      const { user: updated } = await forceLogoutUser(token, userRecord._id);
+      setList((current) => current.map((entry) => (entry._id === updated._id ? updated : entry)));
+      setSelectedUser((current) => (current && current._id === updated._id ? updated : current));
+      notify("Todas as sessões deste utilizador foram terminadas.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao terminar as sessões deste utilizador."), "error");
+    } finally {
+      setForceLogoutBusy(false);
+    }
+  };
+
   const openQuickSuspend = (userRecord: UserRecord, suspended: boolean) => {
     setQuickSuspend({ user: userRecord, suspended });
     setQuickReason("");
@@ -418,6 +435,15 @@ export default function AdminUsersPage() {
             <div className="flex flex-wrap gap-2">
               <button disabled={busy === selectedUser._id || Boolean(selectedUser.suspended) || selectedUser._id === currentUserId} onClick={() => applySuspension([selectedUser._id], true, modalReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Suspender</button>
               <button disabled={busy === selectedUser._id || !Boolean(selectedUser.suspended)} onClick={() => applySuspension([selectedUser._id], false, modalReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50">Reativar</button>
+              <button
+                type="button"
+                disabled={forceLogoutBusy}
+                onClick={() => handleForceLogout(selectedUser)}
+                title="Invalida imediatamente qualquer sessão já iniciada por este utilizador, mesmo que o token ainda não tenha expirado."
+                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 disabled:opacity-50"
+              >
+                Terminar sessões
+              </button>
             </div>
             {selectedUser._id === currentUserId ? <p className="text-xs font-semibold text-amber-700">A sua própria conta não pode ser suspensa a partir deste painel.</p> : null}
           </div>

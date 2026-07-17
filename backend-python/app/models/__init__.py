@@ -48,6 +48,10 @@ class User(Base, TimestampMixin):
     # Tokens
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime, nullable=True)
+    # Access tokens issued with an `iat` before this are rejected by
+    # get_current_user — lets an admin force-logout a still-valid session
+    # without shortening everyone else's token TTL.
+    tokens_revoked_at = Column(DateTime, nullable=True)
 
     # Guest shadow accounts (C5, EXECUTION_PLAN_NATIVE_CV_BUILDER.md) — set
     # true by the guest CV-drop / CV-builder-guest-start flows (a random,
@@ -328,10 +332,12 @@ class RefreshToken(Base, TimestampMixin):
     __tablename__ = "refresh_tokens"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     token_hash = Column(String(255), nullable=False, unique=True)
     expires_at = Column(DateTime, nullable=False)
     revoked = Column(Boolean, nullable=False, default=False)
+
+    user = relationship("User")
 
     user = relationship("User")
 

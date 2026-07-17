@@ -1,4 +1,6 @@
 """Shared API dependencies."""
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
@@ -25,5 +27,15 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
     if user.suspended:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
+
+    if user.tokens_revoked_at is not None:
+        issued_at = claims.get("iat")
+        revoked_at = user.tokens_revoked_at
+        if revoked_at.tzinfo is None:
+            revoked_at = revoked_at.replace(tzinfo=timezone.utc)
+        # No `iat` means a pre-force-logout token shape — treat as revoked
+        # rather than silently trusting it.
+        if issued_at is None or datetime.fromtimestamp(int(issued_at), tz=timezone.utc) < revoked_at:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session revoked, please log in again")
 
     return user

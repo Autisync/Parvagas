@@ -1,9 +1,11 @@
 """Authentication service."""
 import re
+import secrets
 
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from app.models import CandidateProfile, Company, CompanyMember, User, UserRole, EmailVerificationToken, PasswordResetToken
+from app.models import CandidateProfile, Company, CompanyMember, RefreshToken, User, UserRole, EmailVerificationToken, PasswordResetToken
+from app.core.config import get_settings
 from app.core.security import (
     hash_password, verify_password, create_access_token,
     create_verification_token, hash_token
@@ -12,6 +14,8 @@ from app.core.errors import (
     AuthenticationError, ConflictError, ValidationError,
     EmailNotVerifiedError, NotFoundError
 )
+
+settings = get_settings()
 
 
 class AuthService:
@@ -324,3 +328,48 @@ class AuthService:
             payload["admin_level"] = admin_level.value if hasattr(admin_level, "value") else str(admin_level)
 
         return create_access_token(payload)
+
+    @staticmethod
+    def issue_refresh_token(db: Session, user: User) -> str:
+        """Create and persist a new refresh token, returning the raw value
+        (only the hash is stored — same pattern as OTP codes/reset tokens)."""
+        raw = secrets.token_urlsafe(48)
+        db.add(RefreshToken(
+            user_id=user.id,
+            token_hash=hash_token(raw),
+            expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        ))
+        db.commit()
+        return raw
+
+    @staticmethod
+    def rotate_refresh_token(db: Session, raw_token: str) -> tuple[User, str] | None:
+        """Validate a refresh token and issue a replacement, revoking the
+        old one (rotation-on-use). Returns None if the token is invalid,
+        revoked, or expired."""
+        record = db.query(RefreshToken).filter(RefreshToken.token_hash == hash_token(raw_token)).first()
+        if not record or record.revoked or record.expires_at < datetime.utcnow():
+            return None
+
+        user = db.query(User).filter(User.id == record.user_id).first()
+        if not user or user.suspended:
+            return None
+
+        record.revoked = True
+        new_raw = AuthService.issue_refresh_token(db, user)
+        db.commit()
+        return user, new_raw
+
+    @staticmethod
+    def revoke_refresh_token(db: Session, raw_token: str) -> None:
+        record = db.query(RefreshToken).filter(RefreshToken.token_hash == hash_token(raw_token)).first()
+        if record:
+            record.revoked = True
+            db.commit()
+
+    @staticmethod
+    def revoke_all_refresh_tokens(db: Session, user: User) -> None:
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == user.id, RefreshToken.revoked.is_(False)
+        ).update({"revoked": True})
+        db.commit()
