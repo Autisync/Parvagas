@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
@@ -19,11 +18,6 @@ import { useClientLocale } from "@/lib/i18n/client";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import WarningAlert from "@/app/components/errors/WarningAlert";
 import { AnimatedCounter, MilestoneCelebration } from "@/app/components/motion";
-
-const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
-  ssr: false,
-  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
-});
 
 type CompanyStats = {
   totalJobs?: number;
@@ -157,11 +151,8 @@ export default function EmpresaDashboard() {
     return (
       <div className="min-h-screen bg-white">
         <main className="max-w-7xl mx-auto px-6 pt-8 pb-24 lg:pb-16">
-          <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
-            <CompanySidebar />
-            <div className="flex items-center justify-center py-24">
-              <div className="app-spinner h-8 w-8" />
-            </div>
+          <div className="flex items-center justify-center py-24">
+            <div className="app-spinner h-8 w-8" />
           </div>
         </main>
       </div>
@@ -171,169 +162,165 @@ export default function EmpresaDashboard() {
   return (
     <div className="min-h-screen bg-white">
       <main className="max-w-7xl mx-auto px-6 pt-8 pb-24 lg:pb-16">
-        <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
-          <CompanySidebar />
+        <div className="space-y-8">
+          <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
+          <PageHeader
+            title={dict.portal.company.welcome(companyName || undefined)}
+            description={dict.portal.company.welcomeDescription}
+            badge={dict.portal.company.dashboard}
+            action={
+              <a
+                href="/Portal/Empresa/Nova-Vaga"
+                className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+              >
+                <PlusCircleIcon className="h-4 w-4" />
+                {dict.portal.company.newJob}
+              </a>
+            }
+          />
 
-          <div className="space-y-8">
-            <MilestoneCelebration show={celebrate} onDone={() => setCelebrate(false)} />
-            <PageHeader
-              title={dict.portal.company.welcome(companyName || undefined)}
-              description={dict.portal.company.welcomeDescription}
-              badge={dict.portal.company.dashboard}
-              action={
-                <a
-                  href="/Portal/Empresa/Nova-Vaga"
-                  className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-                >
-                  <PlusCircleIcon className="h-4 w-4" />
-                  {dict.portal.company.newJob}
-                </a>
-              }
+          {profile.status === "pending_verification" && (
+            <WarningAlert message="A sua empresa está em validação. Publicação de vagas indisponível até aprovação." />
+          )}
+          {profile.status === "rejected" && (
+            <InlineErrorState
+              title="Conta rejeitada"
+              message="A conta da empresa está rejeitada ou inativa. Contacte o suporte para regularização."
             />
+          )}
 
-            {profile.status === "pending_verification" && (
-              <WarningAlert message="A sua empresa está em validação. Publicação de vagas indisponível até aprovação." />
-            )}
-            {profile.status === "rejected" && (
-              <InlineErrorState
-                title="Conta rejeitada"
-                message="A conta da empresa está rejeitada ou inativa. Contacte o suporte para regularização."
+          {pageError && <InlineErrorState onAction={() => window.location.reload()} />}
+
+          {/* Profile Completion */}
+          <CompanyCompletionCard completion={profile.completionScore ?? 0} />
+
+          {/* Pipeline Metrics */}
+          <div className="grid gap-4 pv-stagger sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: "Vagas Publicadas",
+                value: stats.totalJobs ?? 0,
+                sub: `${stats.activeJobs ?? 0} aprovadas`,
+                color: "text-red-600",
+                bg: "bg-red-50",
+              },
+              {
+                label: "Candidaturas",
+                value: stats.totalApplications ?? 0,
+                sub: `${stats.newApplications ?? 0} novas`,
+                color: "text-amber-600",
+                bg: "bg-amber-50",
+              },
+              {
+                label: "Em Entrevista",
+                value: stats.interviews ?? 0,
+                sub: `${stats.shortlisted ?? 0} pré-selec.`,
+                color: "text-blue-600",
+                bg: "bg-blue-50",
+              },
+              {
+                label: "Contratados",
+                value: stats.hired ?? 0,
+                sub: "este período",
+                color: "text-green-600",
+                bg: "bg-green-50",
+              },
+            ].map((metric) => (
+              <div key={metric.label} className="app-card p-5">
+                <p className="text-sm font-medium text-[var(--text-muted)]">{metric.label}</p>
+                <p className={`mt-2 text-3xl font-bold tracking-tight ${metric.color}`}>
+                  <AnimatedCounter value={metric.value} />
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-subtle)]">{metric.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Reach & performance */}
+          <div className="grid gap-4 lg:grid-cols-[1fr,1.4fr]">
+            <div className="app-card p-5">
+              <p className="text-sm font-medium text-[var(--text-muted)]">Alcance &amp; desempenho</p>
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.views} /></p>
+                  <p className="text-xs text-[var(--text-subtle)]">Visualizações de vagas</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.applyRatePct} decimals={1} suffix="%" /></p>
+                  <p className="text-xs text-[var(--text-subtle)]">Taxa de candidatura</p>
+                </div>
+              </div>
+            </div>
+            <div className="app-card p-5">
+              <p className="text-sm font-medium text-[var(--text-muted)]">Vagas com mais visualizações</p>
+              <ul className="mt-3 space-y-2">
+                {reach.topJobs.length === 0 ? (
+                  <li className="text-xs text-[var(--text-subtle)]">Sem dados de visualizações ainda.</li>
+                ) : reach.topJobs.map((j) => (
+                  <li key={j._id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate text-[var(--text-muted)]">{j.title}</span>
+                    <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} 👁</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div>
+            <p className="mb-4 text-sm font-semibold text-[var(--text-muted)]">Ações rápidas</p>
+            <div className="grid gap-5 pv-stagger md:grid-cols-2 lg:grid-cols-3">
+              <DashboardCard
+                href="/Portal/Empresa/Minhas-Vagas"
+                icon={<BriefcaseIcon className="h-6 w-6" />}
+                title="Minhas Vagas"
+                description={`${stats.totalJobs ?? 0} vaga${(stats.totalJobs ?? 0) !== 1 ? "s" : ""} publicada${(stats.totalJobs ?? 0) !== 1 ? "s" : ""}`}
+                badge={stats.pendingJobs}
+                badgeColor="amber"
               />
-            )}
 
-            {pageError && <InlineErrorState onAction={() => window.location.reload()} />}
+              <DashboardCard
+                href="/Portal/Empresa/Candidaturas"
+                icon={<ClipboardDocumentListIcon className="h-6 w-6" />}
+                title="Candidaturas"
+                description={`${stats.totalApplications ?? 0} candidatura${(stats.totalApplications ?? 0) !== 1 ? "s" : ""} recebida${(stats.totalApplications ?? 0) !== 1 ? "s" : ""}`}
+                badge={stats.newApplications}
+                badgeColor="red"
+              />
 
-            {/* Profile Completion */}
-            <CompanyCompletionCard completion={profile.completionScore ?? 0} />
+              <DashboardCard
+                href="/Portal/Empresa/Candidaturas"
+                icon={<UserGroupIcon className="h-6 w-6" />}
+                title="Pré-Selecionados"
+                description={`${stats.shortlisted ?? 0} candidato${(stats.shortlisted ?? 0) !== 1 ? "s" : ""} em análise`}
+                badge={stats.shortlisted}
+                badgeColor="blue"
+              />
 
-            {/* Pipeline Metrics */}
-            <div className="grid gap-4 pv-stagger sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  label: "Vagas Publicadas",
-                  value: stats.totalJobs ?? 0,
-                  sub: `${stats.activeJobs ?? 0} aprovadas`,
-                  color: "text-red-600",
-                  bg: "bg-red-50",
-                },
-                {
-                  label: "Candidaturas",
-                  value: stats.totalApplications ?? 0,
-                  sub: `${stats.newApplications ?? 0} novas`,
-                  color: "text-amber-600",
-                  bg: "bg-amber-50",
-                },
-                {
-                  label: "Em Entrevista",
-                  value: stats.interviews ?? 0,
-                  sub: `${stats.shortlisted ?? 0} pré-selec.`,
-                  color: "text-blue-600",
-                  bg: "bg-blue-50",
-                },
-                {
-                  label: "Contratados",
-                  value: stats.hired ?? 0,
-                  sub: "este período",
-                  color: "text-green-600",
-                  bg: "bg-green-50",
-                },
-              ].map((metric) => (
-                <div key={metric.label} className="app-card p-5">
-                  <p className="text-sm font-medium text-[var(--text-muted)]">{metric.label}</p>
-                  <p className={`mt-2 text-3xl font-bold tracking-tight ${metric.color}`}>
-                    <AnimatedCounter value={metric.value} />
-                  </p>
-                  <p className="mt-0.5 text-xs text-[var(--text-subtle)]">{metric.sub}</p>
-                </div>
-              ))}
-            </div>
+              <DashboardCard
+                href="/Portal/Empresa/Candidaturas"
+                icon={<CalendarDaysIcon className="h-6 w-6" />}
+                title="Entrevistas"
+                description={`${stats.interviews ?? 0} em curso`}
+                badge={stats.interviews}
+                badgeColor="purple"
+              />
 
-            {/* Reach & performance */}
-            <div className="grid gap-4 lg:grid-cols-[1fr,1.4fr]">
-              <div className="app-card p-5">
-                <p className="text-sm font-medium text-[var(--text-muted)]">Alcance &amp; desempenho</p>
-                <div className="mt-3 grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.views} /></p>
-                    <p className="text-xs text-[var(--text-subtle)]">Visualizações de vagas</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-[var(--text-strong)]"><AnimatedCounter value={reach.applyRatePct} decimals={1} suffix="%" /></p>
-                    <p className="text-xs text-[var(--text-subtle)]">Taxa de candidatura</p>
-                  </div>
-                </div>
-              </div>
-              <div className="app-card p-5">
-                <p className="text-sm font-medium text-[var(--text-muted)]">Vagas com mais visualizações</p>
-                <ul className="mt-3 space-y-2">
-                  {reach.topJobs.length === 0 ? (
-                    <li className="text-xs text-[var(--text-subtle)]">Sem dados de visualizações ainda.</li>
-                  ) : reach.topJobs.map((j) => (
-                    <li key={j._id} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="truncate text-[var(--text-muted)]">{j.title}</span>
-                      <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} 👁</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+              <DashboardCard
+                href="/Portal/Empresa/Candidaturas"
+                icon={<CheckBadgeIcon className="h-6 w-6" />}
+                title="Contratações"
+                description={`${stats.hired ?? 0} contratado${(stats.hired ?? 0) !== 1 ? "s" : ""}`}
+                badge={stats.hired}
+                badgeColor="green"
+              />
 
-            {/* Quick Actions */}
-            <div>
-              <p className="mb-4 text-sm font-semibold text-[var(--text-muted)]">Ações rápidas</p>
-              <div className="grid gap-5 pv-stagger md:grid-cols-2 lg:grid-cols-3">
-                <DashboardCard
-                  href="/Portal/Empresa/Minhas-Vagas"
-                  icon={<BriefcaseIcon className="h-6 w-6" />}
-                  title="Minhas Vagas"
-                  description={`${stats.totalJobs ?? 0} vaga${(stats.totalJobs ?? 0) !== 1 ? "s" : ""} publicada${(stats.totalJobs ?? 0) !== 1 ? "s" : ""}`}
-                  badge={stats.pendingJobs}
-                  badgeColor="amber"
-                />
-
-                <DashboardCard
-                  href="/Portal/Empresa/Candidaturas"
-                  icon={<ClipboardDocumentListIcon className="h-6 w-6" />}
-                  title="Candidaturas"
-                  description={`${stats.totalApplications ?? 0} candidatura${(stats.totalApplications ?? 0) !== 1 ? "s" : ""} recebida${(stats.totalApplications ?? 0) !== 1 ? "s" : ""}`}
-                  badge={stats.newApplications}
-                  badgeColor="red"
-                />
-
-                <DashboardCard
-                  href="/Portal/Empresa/Candidaturas"
-                  icon={<UserGroupIcon className="h-6 w-6" />}
-                  title="Pré-Selecionados"
-                  description={`${stats.shortlisted ?? 0} candidato${(stats.shortlisted ?? 0) !== 1 ? "s" : ""} em análise`}
-                  badge={stats.shortlisted}
-                  badgeColor="blue"
-                />
-
-                <DashboardCard
-                  href="/Portal/Empresa/Candidaturas"
-                  icon={<CalendarDaysIcon className="h-6 w-6" />}
-                  title="Entrevistas"
-                  description={`${stats.interviews ?? 0} em curso`}
-                  badge={stats.interviews}
-                  badgeColor="purple"
-                />
-
-                <DashboardCard
-                  href="/Portal/Empresa/Candidaturas"
-                  icon={<CheckBadgeIcon className="h-6 w-6" />}
-                  title="Contratações"
-                  description={`${stats.hired ?? 0} contratado${(stats.hired ?? 0) !== 1 ? "s" : ""}`}
-                  badge={stats.hired}
-                  badgeColor="green"
-                />
-
-                <DashboardCard
-                  href="/Portal/Empresa/Perfil"
-                  icon={<BuildingOfficeIcon className="h-6 w-6" />}
-                  title={dict.portal.company.profile}
-                  description="Actualize dados e logotipo da empresa"
-                />
-              </div>
+              <DashboardCard
+                href="/Portal/Empresa/Perfil"
+                icon={<BuildingOfficeIcon className="h-6 w-6" />}
+                title={dict.portal.company.profile}
+                description="Actualize dados e logotipo da empresa"
+              />
             </div>
           </div>
         </div>

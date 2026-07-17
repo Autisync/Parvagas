@@ -8,15 +8,18 @@ import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
 import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/PortalMobileNav";
 import {
+  useCollapsibleSidebarShell,
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_EXPANDED_WIDTH,
+} from "@/app/Portal/components/useCollapsibleSidebarShell";
+import {
   HomeIcon, UserIcon, DocumentIcon, HeartIcon, SparklesIcon,
   BriefcaseIcon, CheckCircleIcon, BellIcon, CogIcon, RocketLaunchIcon,
   PencilSquareIcon, ChevronLeftIcon, ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "candidateSidebarCollapsed";
-const COLLAPSED_WIDTH = 76;
-const EXPANDED_WIDTH = 260;
 const BUILDER_ROUTE = "/Portal/Candidato/Construtor-CV";
 
 /**
@@ -37,102 +40,13 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
   const [profileCompletion, setProfileCompletion] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Manual minimize (persisted) and the CV builder's own forced-minimize —
-  // independent signals, combined below. Hover only ever affects the visual
-  // overlay, never these two.
-  const [manualCollapsed, setManualCollapsed] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const [hovering, setHovering] = useState(false);
-
-  // How far down the sticky top bar's bottom edge currently sits — NOT the
-  // same as its own height. AppNotifierProvider can render a connectivity/
-  // session error banner (AppErrorBanner) as a normal-flow sibling BEFORE
-  // <header>, which pushes the header down without changing the header's
-  // own size — a plain ResizeObserver(header) never sees that, so the dock
-  // used to sit too high, letting the *real* topbar (z-30) cover its top
-  // ~50px and swallow clicks meant for the collapse toggle. `.bottom`
-  // (not `.height`) captures the true offset in every case: banner absent,
-  // banner present pre-scroll, and mid-transition as the header sticks and
-  // the (non-sticky) banner scrolls out of view above it.
-  const [topOffset, setTopOffset] = useState(0);
-  const asideRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
-    if (saved === "1") setManualCollapsed(true);
-    setHydrated(true);
-
-    const header = document.querySelector("header");
-    if (!header) return;
-    const update = () => setTopOffset(header.getBoundingClientRect().bottom);
-    update();
-
-    // Scroll fires far faster than paint on some devices (mobile momentum
-    // scroll can be dozens/sec) — getBoundingClientRect() forces a
-    // synchronous layout read, so coalesce to at most one per animation
-    // frame instead of running it uncapped on every scroll event. This
-    // listener is present on every page of the authenticated portal, so any
-    // per-event cost here is maximally multiplied across traffic.
-    let rafId: number | null = null;
-    const scheduleUpdate = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        update();
-      });
-    };
-
-    // Header's own size changing (e.g. wraps to a taller row).
-    const resizeObserver = new ResizeObserver(scheduleUpdate);
-    resizeObserver.observe(header);
-    // The banner mounts as a direct child of <body> (a sibling of the page
-    // transition wrapper two levels above <header>, not of <header> itself)
-    // — it shifts the header down without resizing the header itself, and
-    // document.body doesn't resize with content here (a descendant handles
-    // scrolling), so a ResizeObserver on it never fires. A MutationObserver
-    // on body's direct children catches the banner being inserted/removed.
-    const mutationObserver = new MutationObserver(scheduleUpdate);
-    mutationObserver.observe(document.body, { childList: true });
-    // The banner-vs-stuck-header transition unfolds over the first ~50px
-    // of scroll — re-measure live rather than only on mount.
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-
-    return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, []);
-
   const isBuilderRoute = pathname?.startsWith(BUILDER_ROUTE) ?? false;
-  // isBuilderRoute is known synchronously from the URL — applying it before
-  // hydration avoids a flash of the expanded sidebar on first paint.
-  // manualCollapsed comes from localStorage, so it can only apply once
-  // mounted (the pre-hydration server render can't know it).
-  const collapsed = isBuilderRoute || (hydrated && manualCollapsed);
-  // Hover always reveals a collapsed rail in full — on the CV builder route
-  // just as much as anywhere else. Only the collapse SOURCE differs
-  // (forced by route vs. the user's own manual toggle); once collapsed,
-  // hover-to-reveal behaves identically everywhere.
-  const showExpanded = !collapsed || hovering;
-
-  const toggleManualCollapsed = () => {
-    // The toggle button lives inside the aside, so the mouse is still
-    // physically resting over it when clicked — without this, `hovering`
-    // would stay true (no mouseleave/re-enter has happened), the aside
-    // would keep rendering at EXPANDED_WIDTH, and only the content offset
-    // (which tracks `collapsed`, not `hovering`) would shift, making it
-    // look like the toggle moves the page instead of the sidebar.
-    setHovering(false);
-    setManualCollapsed((prev) => {
-      const next = !prev;
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, next ? "1" : "0");
-      return next;
-    });
-  };
+  // isBuilderRoute is known synchronously from the URL, so it can force the
+  // collapse before hydration without a flash of the expanded sidebar.
+  const {
+    asideRef, manualCollapsed, collapsed, showExpanded, setHovering,
+    topOffset, toggleManualCollapsed, labelClass,
+  } = useCollapsibleSidebarShell(SIDEBAR_COLLAPSED_STORAGE_KEY, isBuilderRoute);
 
   useEffect(() => {
     if (!token) return;
@@ -161,13 +75,6 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
     return pathname === href || pathname.startsWith(href);
   }
 
-  const labelClass = (extra = "") =>
-    [
-      "overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-300 ease-out",
-      showExpanded ? "max-w-[180px] opacity-100 delay-100" : "max-w-0 opacity-0 delay-0",
-      extra,
-    ].join(" ");
-
   return (
     <>
       {/* Desktop sidebar — docked flush to the true viewport left edge (not
@@ -188,7 +95,7 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
         style={{
           top: topOffset,
           height: `calc(100vh - ${topOffset}px)`,
-          width: showExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH,
+          width: showExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH,
         }}
       >
           {!isBuilderRoute && (

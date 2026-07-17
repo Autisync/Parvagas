@@ -424,7 +424,10 @@ _ADAPTERS = {
     "rss": RSSAdapter,
     "greenhouse": GreenhouseAdapter,
     "lever": LeverAdapter,
-    "careerjet": CareerjetAdapter,
+    # "careerjet" intentionally omitted — disabled pending confirmation that
+    # republishing Careerjet's live-search results onto our own board
+    # complies with their partner terms (see CareerjetAdapter docstring).
+    # Re-add once that's confirmed; the adapter class below still works.
 }
 
 
@@ -440,7 +443,14 @@ def get_adapters() -> list[SourceAdapter]:
         return []
     adapters: list[SourceAdapter] = []
     for spec in specs if isinstance(specs, list) else []:
-        cls = _ADAPTERS.get(str(spec.get("type", "")).lower())
+        source_type = str(spec.get("type", "")).lower()
+        if source_type == "careerjet":
+            logger.warning(
+                "SCRAPER_SOURCES requests 'careerjet' but that adapter is disabled "
+                "pending partner-terms confirmation; skipping %s", spec.get("name")
+            )
+            continue
+        cls = _ADAPTERS.get(source_type)
         if cls and spec.get("url") and spec.get("name"):
             adapters.append(cls(name=spec["name"], url=spec["url"], category=spec.get("category")))
     return adapters

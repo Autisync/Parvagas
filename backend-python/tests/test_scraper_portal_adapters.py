@@ -173,11 +173,16 @@ def test_get_adapters_builds_new_portal_types(monkeypatch):
     specs = [
         {"type": "greenhouse", "name": "Acme GH", "url": "acme"},
         {"type": "lever", "name": "Acme Lever", "url": "acme"},
-        {"type": "careerjet", "name": "Careerjet Angola", "url": "my-affid"},
     ]
     monkeypatch.setenv("SCRAPER_SOURCES", json.dumps(specs))
     adapters = get_adapters()
-    assert [type(a).__name__ for a in adapters] == ["GreenhouseAdapter", "LeverAdapter", "CareerjetAdapter"]
+    assert [type(a).__name__ for a in adapters] == ["GreenhouseAdapter", "LeverAdapter"]
+
+
+def test_get_adapters_skips_careerjet_while_disabled(monkeypatch):
+    specs = [{"type": "careerjet", "name": "Careerjet Angola", "url": "my-affid"}]
+    monkeypatch.setenv("SCRAPER_SOURCES", json.dumps(specs))
+    assert get_adapters() == []
 
 
 def test_get_adapters_ignores_unknown_type(monkeypatch):

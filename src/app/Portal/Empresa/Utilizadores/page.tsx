@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Footer from "@/app/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,11 +7,6 @@ import { authFetch } from "@/lib/api";
 import { useToasts } from "../components/useToasts";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import BannerError from "@/app/components/errors/BannerError";
-
-const CompanySidebar = dynamic(() => import("../components/CompanySidebar"), {
-  ssr: false,
-  loading: () => <div className="h-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" />,
-});
 
 type TeamMember = {
   _id: string;
@@ -246,167 +240,163 @@ export default function EmpresaUtilizadoresPage() {
   return (
     <div className="min-h-screen bg-white">
       <main className="mx-auto max-w-7xl px-6 pb-24 lg:pb-16 pt-8">
-        <div className="grid gap-6 lg:grid-cols-[260px,1fr] lg:items-start">
-          <CompanySidebar />
+        <section>
+          <div className="mb-6">
+            <p className="text-sm font-semibold uppercase tracking-widest text-red-600">Gestão da equipa</p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Utilizadores da empresa</h1>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600">Convide membros, ajuste roles e remova acessos da conta empresarial principal.</p>
+          </div>
 
-          <section>
+          {pageError && (
             <div className="mb-6">
-              <p className="text-sm font-semibold uppercase tracking-widest text-red-600">Gestão da equipa</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">Utilizadores da empresa</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-600">Convide membros, ajuste roles e remova acessos da conta empresarial principal.</p>
+              <BannerError
+                title="Não foi possível carregar os utilizadores"
+                message={pageError}
+                actionLabel="Reconectar"
+                onAction={() => window.location.reload()}
+              />
             </div>
+          )}
 
-            {pageError && (
-              <div className="mb-6">
-                <BannerError
-                  title="Não foi possível carregar os utilizadores"
-                  message={pageError}
-                  actionLabel="Reconectar"
-                  onAction={() => window.location.reload()}
-                />
-              </div>
-            )}
+          {!isOwner ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <h2 className="text-lg font-bold text-amber-900">Acesso reservado ao owner</h2>
+              <p className="mt-2 text-sm text-amber-800">Só a conta principal da empresa pode gerir utilizadores, convites e remoções de acesso.</p>
+            </div>
+          ) : (
+            <>
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <h2 className="text-lg font-bold text-slate-900">Membros da equipa</h2>
+                <p className="mt-1 text-sm text-slate-600">Defina quem pode editar vagas e quem fica apenas com acesso de consulta.</p>
 
-            {!isOwner ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <h2 className="text-lg font-bold text-amber-900">Acesso reservado ao owner</h2>
-                <p className="mt-2 text-sm text-amber-800">Só a conta principal da empresa pode gerir utilizadores, convites e remoções de acesso.</p>
-              </div>
-            ) : (
-              <>
-                <section className="rounded-2xl border border-slate-200 bg-white p-5">
-                  <h2 className="text-lg font-bold text-slate-900">Membros da equipa</h2>
-                  <p className="mt-1 text-sm text-slate-600">Defina quem pode editar vagas e quem fica apenas com acesso de consulta.</p>
-
-                  <div className="mt-4 space-y-2">
-                    {teamMembers.length === 0 ? (
-                      <p className="text-sm text-slate-500">Sem membros associados ainda.</p>
-                    ) : (
-                      teamMembers.map((member) => (
-                        <div key={member._id} className="rounded-xl border border-slate-100 px-3 py-3">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{member.fullName || "Utilizador"} <span className="text-xs font-medium text-slate-500">({member.companyTeamRole || "recruiter"})</span></p>
-                              <p className="text-xs text-slate-500">{member.email || "--"}</p>
-                            </div>
-                            {member._id !== ownerUserId && (
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={member.companyTeamRole || "recruiter"}
-                                  onChange={(e) => requestMemberRoleChange(member, e.target.value as "recruiter" | "viewer")}
-                                  disabled={updatingMemberId === member._id || removingMemberId === member._id}
-                                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900"
-                                >
-                                  <option value="recruiter">Recruiter</option>
-                                  <option value="viewer">Viewer</option>
-                                </select>
-                                <button
-                                  type="button"
-                                  onClick={() => requestRemoveMember(member)}
-                                  disabled={removingMemberId === member._id || updatingMemberId === member._id}
-                                  className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                                >
-                                  Remover
-                                </button>
-                              </div>
-                            )}
+                <div className="mt-4 space-y-2">
+                  {teamMembers.length === 0 ? (
+                    <p className="text-sm text-slate-500">Sem membros associados ainda.</p>
+                  ) : (
+                    teamMembers.map((member) => (
+                      <div key={member._id} className="rounded-xl border border-slate-100 px-3 py-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{member.fullName || "Utilizador"} <span className="text-xs font-medium text-slate-500">({member.companyTeamRole || "recruiter"})</span></p>
+                            <p className="text-xs text-slate-500">{member.email || "--"}</p>
                           </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-                  <h2 className="text-lg font-bold text-slate-900">Convidar utilizador</h2>
-                  <p className="mt-1 text-sm text-slate-600">Crie convites com prazo de validade e envio direto por email.</p>
-
-                  <form onSubmit={handleInviteMember} className="mt-4 grid gap-3 md:grid-cols-4">
-                    <input
-                      value={invite.email}
-                      onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
-                      onBlur={() => setInviteSubmitted(true)}
-                      placeholder="email@empresa.com"
-                      type="email"
-                      aria-invalid={Boolean(inviteSubmitted && !invite.email.trim())}
-                      aria-describedby="invite-email-error"
-                      className="app-input md:col-span-2"
-                    />
-                    <div className="md:col-span-2">
-                      <FormFieldError id="invite-email-error" message={inviteSubmitted && !invite.email.trim() ? "Preencha o email para convidar o membro." : ""} />
-                    </div>
-                    <select
-                      value={invite.teamRole}
-                      onChange={(e) => setInvite((prev) => ({ ...prev, teamRole: e.target.value as "owner" | "recruiter" | "viewer" }))}
-                      className="app-input"
-                    >
-                      <option value="recruiter">Recruiter</option>
-                      <option value="viewer">Viewer</option>
-                    </select>
-                    <select
-                      value={invite.expiresInDays}
-                      onChange={(e) => setInvite((prev) => ({ ...prev, expiresInDays: Number(e.target.value) }))}
-                      className="app-input"
-                    >
-                      <option value={3}>Expira em 3 dias</option>
-                      <option value={7}>Expira em 7 dias</option>
-                      <option value={14}>Expira em 14 dias</option>
-                    </select>
-                    <div className="md:col-span-4">
-                      <button
-                        type="submit"
-                        disabled={inviting}
-                        className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {inviting ? "A criar convite..." : "Criar convite"}
-                      </button>
-                    </div>
-                  </form>
-                </section>
-
-                <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-                  <h2 className="text-lg font-bold text-slate-900">Convites pendentes e histórico</h2>
-                  <p className="mt-1 text-sm text-slate-600">Copie links, reenvie convites e revogue acessos ainda não aceites.</p>
-
-                  <div className="mt-4 space-y-2">
-                    {teamInvites.length === 0 ? (
-                      <p className="text-sm text-slate-500">Sem convites registados.</p>
-                    ) : (
-                      teamInvites.map((item) => (
-                        <div key={item._id} className="rounded-xl border border-slate-100 px-3 py-3">
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{item.email} <span className="text-xs text-slate-500">({item.teamRole || "recruiter"})</span></p>
-                              <p className="text-xs text-slate-500">Status: {item.status || "pending"} · expira {item.expiresAt ? new Date(item.expiresAt).toLocaleDateString("pt-AO") : "--"}</p>
-                              {item.token && <p className="text-xs text-slate-500 break-all">Link: {inviteLinkForToken(item.token)}</p>}
+                          {member._id !== ownerUserId && (
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={member.companyTeamRole || "recruiter"}
+                                onChange={(e) => requestMemberRoleChange(member, e.target.value as "recruiter" | "viewer")}
+                                disabled={updatingMemberId === member._id || removingMemberId === member._id}
+                                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900"
+                              >
+                                <option value="recruiter">Recruiter</option>
+                                <option value="viewer">Viewer</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => requestRemoveMember(member)}
+                                disabled={removingMemberId === member._id || updatingMemberId === member._id}
+                                className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                              >
+                                Remover
+                              </button>
                             </div>
-                            {item.status === "pending" && (
-                              <div className="flex flex-wrap gap-2">
-                                {item.token && (
-                                  <button type="button" onClick={() => copyInviteLink(item.token!)} className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Copiar link</button>
-                                )}
-                                {item.token && (
-                                  <a
-                                    href={`mailto:${item.email || ""}?subject=Convite%20Parvagas&body=Use%20este%20link%20para%20aceitar%20o%20convite:%20${encodeURIComponent(inviteLinkForToken(item.token))}`}
-                                    className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
-                                  >
-                                    Enviar email
-                                  </a>
-                                )}
-                                <button type="button" onClick={() => resendInvite(item._id)} disabled={resendingInviteId === item._id} className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">Reenviar</button>
-                                <button type="button" onClick={() => revokeInvite(item._id)} disabled={revokingInviteId === item._id} className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Revogar</button>
-                              </div>
-                            )}
-                          </div>
+                          )}
                         </div>
-                      ))
-                    )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+                <h2 className="text-lg font-bold text-slate-900">Convidar utilizador</h2>
+                <p className="mt-1 text-sm text-slate-600">Crie convites com prazo de validade e envio direto por email.</p>
+
+                <form onSubmit={handleInviteMember} className="mt-4 grid gap-3 md:grid-cols-4">
+                  <input
+                    value={invite.email}
+                    onChange={(e) => setInvite((prev) => ({ ...prev, email: e.target.value }))}
+                    onBlur={() => setInviteSubmitted(true)}
+                    placeholder="email@empresa.com"
+                    type="email"
+                    aria-invalid={Boolean(inviteSubmitted && !invite.email.trim())}
+                    aria-describedby="invite-email-error"
+                    className="app-input md:col-span-2"
+                  />
+                  <div className="md:col-span-2">
+                    <FormFieldError id="invite-email-error" message={inviteSubmitted && !invite.email.trim() ? "Preencha o email para convidar o membro." : ""} />
                   </div>
-                </section>
-              </>
-            )}
-          </section>
-        </div>
+                  <select
+                    value={invite.teamRole}
+                    onChange={(e) => setInvite((prev) => ({ ...prev, teamRole: e.target.value as "owner" | "recruiter" | "viewer" }))}
+                    className="app-input"
+                  >
+                    <option value="recruiter">Recruiter</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <select
+                    value={invite.expiresInDays}
+                    onChange={(e) => setInvite((prev) => ({ ...prev, expiresInDays: Number(e.target.value) }))}
+                    className="app-input"
+                  >
+                    <option value={3}>Expira em 3 dias</option>
+                    <option value={7}>Expira em 7 dias</option>
+                    <option value={14}>Expira em 14 dias</option>
+                  </select>
+                  <div className="md:col-span-4">
+                    <button
+                      type="submit"
+                      disabled={inviting}
+                      className="app-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {inviting ? "A criar convite..." : "Criar convite"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+                <h2 className="text-lg font-bold text-slate-900">Convites pendentes e histórico</h2>
+                <p className="mt-1 text-sm text-slate-600">Copie links, reenvie convites e revogue acessos ainda não aceites.</p>
+
+                <div className="mt-4 space-y-2">
+                  {teamInvites.length === 0 ? (
+                    <p className="text-sm text-slate-500">Sem convites registados.</p>
+                  ) : (
+                    teamInvites.map((item) => (
+                      <div key={item._id} className="rounded-xl border border-slate-100 px-3 py-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{item.email} <span className="text-xs text-slate-500">({item.teamRole || "recruiter"})</span></p>
+                            <p className="text-xs text-slate-500">Status: {item.status || "pending"} · expira {item.expiresAt ? new Date(item.expiresAt).toLocaleDateString("pt-AO") : "--"}</p>
+                            {item.token && <p className="text-xs text-slate-500 break-all">Link: {inviteLinkForToken(item.token)}</p>}
+                          </div>
+                          {item.status === "pending" && (
+                            <div className="flex flex-wrap gap-2">
+                              {item.token && (
+                                <button type="button" onClick={() => copyInviteLink(item.token!)} className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100">Copiar link</button>
+                              )}
+                              {item.token && (
+                                <a
+                                  href={`mailto:${item.email || ""}?subject=Convite%20Parvagas&body=Use%20este%20link%20para%20aceitar%20o%20convite:%20${encodeURIComponent(inviteLinkForToken(item.token))}`}
+                                  className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                                >
+                                  Enviar email
+                                </a>
+                              )}
+                              <button type="button" onClick={() => resendInvite(item._id)} disabled={resendingInviteId === item._id} className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">Reenviar</button>
+                              <button type="button" onClick={() => revokeInvite(item._id)} disabled={revokingInviteId === item._id} className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Revogar</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+        </section>
 
         {memberActionModal && (
           <div
