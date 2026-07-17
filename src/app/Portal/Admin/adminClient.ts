@@ -436,6 +436,17 @@ export async function fetchAtsStageSummary(token: string) {
   return authFetch<AtsStageSummary>(`/admin/companies/ats-stage-summary`, token, { suppressGlobalErrors: true });
 }
 
+export type CompanyTeamSummary = {
+  owner: { id: string; fullName?: string; email?: string } | null;
+  members: Array<{ id: string; userId: string; fullName?: string; email?: string; role: string; joinedAt?: string | null }>;
+  pendingInvites: Array<{ id: string; email: string; role: string; expiresAt?: string | null; createdAt?: string | null }>;
+  memberCount: number;
+};
+
+export async function fetchCompanyTeam(token: string, companyId: string) {
+  return authFetch<CompanyTeamSummary>(`/admin/companies/${companyId}/team`, token, { suppressGlobalErrors: true });
+}
+
 export async function fetchScraped(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"scrapedJobs", ScrapedRecord> & { laneCounts?: Record<string, number> }>(
     `/admin/scraped-jobs${listQuery(params)}`, token,

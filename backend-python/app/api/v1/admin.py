@@ -23,7 +23,8 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, FeatureFlag, Job, JobApplication, NewsletterSubscriber, Plan, ResumeTemplate, ScrapedJob,
+    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobApplication, NewsletterSubscriber,
+    Plan, ResumeTemplate, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, Transaction,
     User, UserRole,
 )
@@ -1010,6 +1011,63 @@ async def admin_companies(
     return {
         "companies": [_to_company_record(row) for row in rows],
         "pagination": _pagination(page, limit, total),
+    }
+
+
+@router.get("/companies/{company_id}/team")
+async def admin_company_team(
+    company_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read-only rollup for the company detail modal — member roles and
+    pending invites already exist via CompanyMember/CompanyInvite, this is
+    just the first admin-facing view of that data."""
+    _ensure_admin(current_user)
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+    members = (
+        db.query(CompanyMember, User)
+        .join(User, User.id == CompanyMember.user_id)
+        .filter(CompanyMember.company_id == company_id)
+        .order_by(CompanyMember.created_at.asc())
+        .all()
+    )
+    invites = (
+        db.query(CompanyInvite)
+        .filter(CompanyInvite.company_id == company_id, CompanyInvite.status == "pending")
+        .order_by(CompanyInvite.created_at.desc())
+        .all()
+    )
+
+    owner = db.query(User).filter(User.id == company.owner_user_id).first() if company.owner_user_id else None
+
+    return {
+        "owner": {"id": owner.id, "fullName": owner.full_name, "email": owner.email} if owner else None,
+        "members": [
+            {
+                "id": member.id,
+                "userId": user.id,
+                "fullName": user.full_name,
+                "email": user.email,
+                "role": member.role,
+                "joinedAt": member.created_at.isoformat() if member.created_at else None,
+            }
+            for member, user in members
+        ],
+        "pendingInvites": [
+            {
+                "id": invite.id,
+                "email": invite.email,
+                "role": invite.role,
+                "expiresAt": invite.expires_at.isoformat() if invite.expires_at else None,
+                "createdAt": invite.created_at.isoformat() if invite.created_at else None,
+            }
+            for invite in invites
+        ],
+        "memberCount": len(members) + (1 if owner else 0),
     }
 
 

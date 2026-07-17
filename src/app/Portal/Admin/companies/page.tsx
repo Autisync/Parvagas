@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchAdminMe, fetchAtsStageSummary, fetchCompanies, statusBadgeClass, toDateLabel, type AtsStageSummary, type CompanyRecord, type Pagination, type AdminLevel } from "../adminClient";
+import { fetchAdminMe, fetchAtsStageSummary, fetchCompanies, fetchCompanyTeam, statusBadgeClass, toDateLabel, type AtsStageSummary, type CompanyRecord, type CompanyTeamSummary, type Pagination, type AdminLevel } from "../adminClient";
 import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, AdminSpinner, adminFieldClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
@@ -83,6 +83,8 @@ export default function AdminCompaniesPage() {
   const [emailSending, setEmailSending] = useState(false);
   const [confirming, setConfirming] = useState<PendingConfirmation | null>(null);
   const [atsSummary, setAtsSummary] = useState<AtsStageSummary | null>(null);
+  const [team, setTeam] = useState<CompanyTeamSummary | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
   const { notify } = useAppNotifier();
 
   const {
@@ -134,6 +136,20 @@ export default function AdminCompaniesPage() {
     notify(notice, "success");
     setNotice("");
   }, [notice, notify]);
+
+  useEffect(() => {
+    if (!token || !selectedCompany) {
+      setTeam(null);
+      return;
+    }
+    let cancelled = false;
+    setTeamLoading(true);
+    fetchCompanyTeam(token, selectedCompany._id)
+      .then((res) => { if (!cancelled) setTeam(res); })
+      .catch(() => { if (!cancelled) setTeam(null); })
+      .finally(() => { if (!cancelled) setTeamLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, selectedCompany]);
 
   const clearSelectionState = () => {
     clearSelection();
@@ -561,6 +577,46 @@ export default function AdminCompaniesPage() {
               <p><span className="font-semibold">Contacto:</span> {selectedCompany.contactEmail || "--"}</p>
               <p><span className="font-semibold">Pessoa de contacto:</span> {selectedCompany.contactPerson || "--"}</p>
               <p><span className="font-semibold">Registo:</span> {toDateLabel(selectedCompany.createdAt)}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-slate-900">Equipa</p>
+              {teamLoading ? (
+                <p className="mt-2 text-xs text-slate-500">A carregar...</p>
+              ) : team ? (
+                <div className="mt-2 space-y-3">
+                  <p className="text-xs text-slate-500">{team.memberCount} membro(s) no total.</p>
+                  <div className="space-y-1.5">
+                    {team.owner ? (
+                      <div className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
+                        <span>{team.owner.fullName || team.owner.email}</span>
+                        <span className="font-semibold text-slate-500">owner</span>
+                      </div>
+                    ) : null}
+                    {team.members.map((member) => (
+                      <div key={member.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs">
+                        <span>{member.fullName || member.email}</span>
+                        <span className="font-semibold text-slate-500">{member.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {team.pendingInvites.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">Convites pendentes</p>
+                      <div className="mt-1 space-y-1.5">
+                        {team.pendingInvites.map((invite) => (
+                          <div key={invite.id} className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                            <span>{invite.email}</span>
+                            <span className="font-semibold">{invite.role}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">Sem dados de equipa disponíveis.</p>
+              )}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
