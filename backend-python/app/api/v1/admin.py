@@ -22,8 +22,9 @@ from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
-    AdCampaign, AuditLog, CandidateProfile, CareerPost, Company, Job, JobApplication,
-    ScrapedJob, SecurityEvent, User, UserRole,
+    AdCampaign, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
+    CareerPost, Company, Job, JobApplication, Plan, ScrapedJob, ScraperSettings,
+    ScraperSource, SecurityEvent, Subscription, Transaction, User, UserRole,
 )
 from app.workers.tasks import send_templated_email
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality
@@ -34,9 +35,6 @@ logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-_AUDIT_LOGS: list[dict[str, Any]] = []
-_ADMIN_ACTIONS: list[dict[str, Any]] = []
 
 
 ALL_ADMIN_PERMISSIONS = [
@@ -68,6 +66,8 @@ ALL_ADMIN_PERMISSIONS = [
     "admin.exports.users",
     "admin.exports.jobs",
     "admin.exports.companies",
+    "admin.scraperSources.manage",
+    "admin.subscriptions.manage",
 ]
 
 
@@ -116,10 +116,6 @@ def _to_company_record(company: Company) -> dict[str, Any]:
     }
 
 
-def _json_default(value: Any) -> str:
-    return value.isoformat() if hasattr(value, "isoformat") else str(value)
-
-
 def _parse_date(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -157,33 +153,12 @@ def _record_admin_event(
     resource_id: str,
     details: dict[str, Any] | None = None,
 ) -> None:
-    now = datetime.utcnow().isoformat()
+    """Durable audit trail — writes straight to the AuditLog table (best-
+    effort; never break the triggering action). Both /audit-logs and
+    /admin-actions read from this same table, so there's exactly one
+    persisted record of every privileged action, not an in-memory copy that
+    gets wiped on restart."""
     detail_payload = details or {}
-    audit_entry = {
-        "_id": str(uuid.uuid4()),
-        "actorUserId": actor.id,
-        "action": action,
-        "resourceType": resource_type,
-        "resourceId": resource_id,
-        "details": detail_payload,
-        "createdAt": now,
-    }
-    admin_action_entry = {
-        "_id": str(uuid.uuid4()),
-        "adminUserId": actor.id,
-        "action": action,
-        "targetType": resource_type,
-        "targetId": resource_id,
-        "payload": detail_payload,
-        "createdAt": now,
-    }
-
-    _AUDIT_LOGS.insert(0, audit_entry)
-    _ADMIN_ACTIONS.insert(0, admin_action_entry)
-    del _AUDIT_LOGS[1000:]
-    del _ADMIN_ACTIONS[1000:]
-
-    # Durable persistence (best-effort; never break the triggering action).
     try:
         session = SessionLocal()
         try:
@@ -1216,7 +1191,7 @@ async def admin_run_scraper(
     """Trigger an immediate fetch from configured external sources (async)."""
     admin = _ensure_admin(current_user)
     from app.services.scraper_service import get_adapters
-    sources = [a.name for a in get_adapters()]
+    sources = [a.name for a in get_adapters(db)]
     queued = False
     try:
         from app.workers.tasks import scrape_external_jobs
@@ -1227,7 +1202,635 @@ async def admin_run_scraper(
     _record_admin_event(actor=admin, action="scraped.run", resource_type="scraped_job",
                         resource_id=None, details={"sources": sources})
     return {"queued": queued, "sources": sources,
-            "message": "Nenhuma fonte configurada (SCRAPER_SOURCES)." if not sources else "Scraper iniciado."}
+            "message": "Nenhuma fonte configurada. Adicione uma em Scraper Config." if not sources else "Scraper iniciado."}
+
+
+# ── Scraper Config — admin-managed sources + global tuning ─────────────────
+# Replaces the old SCRAPER_SOURCES/SCRAPER_* env vars: an admin adds/edits/
+# disables sources and tunes timeouts here, no redeploy needed. "careerjet"
+# is rejected at create/update time — see scraper_service.py module docstring
+# for why it's ToS-blocked.
+
+def _to_scraper_source_record(row: ScraperSource) -> dict[str, Any]:
+    return {
+        "_id": row.id,
+        "name": row.name,
+        "type": row.type,
+        "url": row.url,
+        "category": row.category,
+        "enabled": bool(row.enabled),
+        "maxResults": row.max_results,
+        "lastRunAt": row.last_run_at.isoformat() if row.last_run_at else None,
+        "lastRunStatus": row.last_run_status,
+        "lastRunDetail": row.last_run_detail,
+        "lastRunJobCount": row.last_run_job_count,
+        "createdAt": row.created_at.isoformat() if row.created_at else None,
+        "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _to_scraper_settings_record(s: ScraperSettings) -> dict[str, Any]:
+    return {
+        "enabled": bool(s.enabled),
+        "defaultTimeoutSeconds": s.default_timeout_seconds,
+        "defaultMaxPerSource": s.default_max_per_source,
+        "userAgent": s.user_agent,
+        "maxIngestPerRun": s.max_ingest_per_run,
+        "runBudgetSeconds": s.run_budget_seconds,
+        "updatedAt": s.updated_at.isoformat() if s.updated_at else None,
+    }
+
+
+def _validate_scraper_source_type(source_type: str) -> str:
+    from app.services.scraper_service import VALID_SCRAPER_SOURCE_TYPES
+
+    normalized = (source_type or "").strip().lower()
+    if normalized == "careerjet":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Careerjet está desativado: republicar os resultados da pesquisa ao vivo "
+                "da Careerjet no nosso portal ainda não foi confirmado como conforme os "
+                "termos de parceiro da Careerjet."
+            ),
+        )
+    if normalized not in VALID_SCRAPER_SOURCE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tipo inválido. Use um de: {', '.join(sorted(VALID_SCRAPER_SOURCE_TYPES))}.",
+        )
+    return normalized
+
+
+def _validate_max_results(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="maxResults deve ser positivo")
+    return parsed
+
+
+@router.get("/scraper-sources")
+async def admin_list_scraper_sources(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    rows = db.query(ScraperSource).order_by(ScraperSource.created_at.desc()).all()
+    return {"scraperSources": [_to_scraper_source_record(r) for r in rows]}
+
+
+@router.post("/scraper-sources")
+async def admin_create_scraper_source(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    name = str(payload.get("name", "")).strip()
+    url = str(payload.get("url", "")).strip()
+    source_type = _validate_scraper_source_type(str(payload.get("type", "")))
+    if not name or not url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name e url são obrigatórios")
+
+    created = ScraperSource(
+        name=name,
+        type=source_type,
+        url=url,
+        category=str(payload.get("category", "")).strip() or None,
+        enabled=bool(payload.get("enabled", True)),
+        max_results=_validate_max_results(payload.get("maxResults")),
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    _record_admin_event(
+        actor=admin, action="scraperSource.create", resource_type="scraper_source",
+        resource_id=created.id, details={"name": created.name, "type": created.type},
+    )
+    return _to_scraper_source_record(created)
+
+
+@router.put("/scraper-sources/{source_id}")
+async def admin_update_scraper_source(
+    source_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    row = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte não encontrada")
+
+    if "name" in payload:
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name não pode ficar vazio")
+        row.name = name
+    if "type" in payload:
+        row.type = _validate_scraper_source_type(str(payload.get("type", "")))
+    if "url" in payload:
+        url = str(payload.get("url", "")).strip()
+        if not url:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url não pode ficar vazia")
+        row.url = url
+    if "category" in payload:
+        row.category = str(payload.get("category", "")).strip() or None
+    if "enabled" in payload:
+        row.enabled = bool(payload.get("enabled"))
+    if "maxResults" in payload:
+        row.max_results = _validate_max_results(payload.get("maxResults"))
+
+    db.commit()
+    db.refresh(row)
+    _record_admin_event(
+        actor=admin, action="scraperSource.update", resource_type="scraper_source",
+        resource_id=row.id, details={"changes": list(payload.keys())},
+    )
+    return _to_scraper_source_record(row)
+
+
+@router.delete("/scraper-sources/{source_id}")
+async def admin_delete_scraper_source(
+    source_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    row = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
+    if row:
+        name = row.name
+        db.delete(row)
+        db.commit()
+        _record_admin_event(
+            actor=admin, action="scraperSource.delete", resource_type="scraper_source",
+            resource_id=source_id, details={"name": name},
+        )
+    return {"deleted": True, "id": source_id}
+
+
+@router.get("/scraper-settings")
+async def admin_get_scraper_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    from app.services.scraper_service import get_scraper_settings
+    return _to_scraper_settings_record(get_scraper_settings(db))
+
+
+@router.put("/scraper-settings")
+async def admin_update_scraper_settings(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    from app.services.scraper_service import get_scraper_settings
+    settings = get_scraper_settings(db)
+
+    if "enabled" in payload:
+        settings.enabled = bool(payload.get("enabled"))
+    if "defaultTimeoutSeconds" in payload:
+        value = int(payload.get("defaultTimeoutSeconds") or 0)
+        if value <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="defaultTimeoutSeconds deve ser positivo")
+        settings.default_timeout_seconds = value
+    if "defaultMaxPerSource" in payload:
+        value = int(payload.get("defaultMaxPerSource") or 0)
+        if value <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="defaultMaxPerSource deve ser positivo")
+        settings.default_max_per_source = value
+    if "userAgent" in payload:
+        settings.user_agent = str(payload.get("userAgent", "")).strip() or None
+    if "maxIngestPerRun" in payload:
+        value = int(payload.get("maxIngestPerRun") or 0)
+        if value <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="maxIngestPerRun deve ser positivo")
+        settings.max_ingest_per_run = value
+    if "runBudgetSeconds" in payload:
+        value = int(payload.get("runBudgetSeconds") or 0)
+        if value <= 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="runBudgetSeconds deve ser positivo")
+        settings.run_budget_seconds = value
+
+    db.commit()
+    db.refresh(settings)
+    _record_admin_event(
+        actor=admin, action="scraperSettings.update", resource_type="scraper_settings",
+        resource_id="default", details={"changes": list(payload.keys())},
+    )
+    return _to_scraper_settings_record(settings)
+
+
+# ── Subscriptions & Plans — the general "offers" catalogue (company + ─────
+# candidate CV Builder) plus per-user subscription management. Company
+# plans (`Plan`) already had a DB table with zero admin CRUD; candidate CV
+# plans (`CandidateCvPlan`) replace the old hardcoded CV_BUILDER_PLANS
+# constant (see candidate_billing_service.py). Payment confirmation reuses
+# the existing admin-gated endpoints in payments.py (POST /payments/{ref}/
+# confirm, POST /cv-builder/confirm/{ref}) rather than duplicating them here.
+
+def _to_plan_record(p: Plan) -> dict[str, Any]:
+    return {
+        "_id": p.id, "code": p.code, "name": p.name, "price": p.price,
+        "currency": p.currency, "interval": p.interval,
+        "features": json.loads(p.features) if p.features else [],
+        "active": bool(p.active),
+    }
+
+
+def _to_candidate_cv_plan_record(p: CandidateCvPlan) -> dict[str, Any]:
+    return {
+        "_id": p.id, "tier": p.tier, "name": p.name, "price": p.price,
+        "currency": p.currency, "interval": p.interval,
+        "features": json.loads(p.features) if p.features else [],
+        "maxResumes": p.max_resumes, "aiScore": bool(p.ai_score), "aiRewrite": bool(p.ai_rewrite),
+        "coverLetters": bool(p.cover_letters), "autoApply": bool(p.auto_apply),
+        "active": bool(p.active),
+    }
+
+
+def _to_transaction_record(tx: Transaction, party_type: str, party_name: str | None) -> dict[str, Any]:
+    return {
+        "_id": tx.id, "companyId": tx.company_id, "planId": tx.plan_id,
+        "amount": tx.amount, "currency": tx.currency, "provider": tx.provider,
+        "reference": tx.reference, "status": tx.status, "kind": tx.kind,
+        "partyType": party_type, "partyName": party_name,
+        "createdAt": tx.created_at.isoformat() if tx.created_at else None,
+    }
+
+
+def _validate_plan_interval(value: Any) -> str:
+    interval = str(value or "").strip().lower()
+    if interval not in {"month", "one_time"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="interval deve ser 'month' ou 'one_time'")
+    return interval
+
+
+@router.get("/plans")
+async def admin_list_plans(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    from app.api.v1.payments import _ensure_seed_plans
+    rows = sorted(_ensure_seed_plans(db), key=lambda p: p.price)
+    return {"plans": [_to_plan_record(p) for p in rows]}
+
+
+@router.post("/plans")
+async def admin_create_plan(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    code = str(payload.get("code", "")).strip()
+    name = str(payload.get("name", "")).strip()
+    if not code or not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="code e name são obrigatórios")
+    if db.query(Plan).filter(Plan.code == code).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um plano com este código")
+
+    created = Plan(
+        code=code, name=name, price=float(payload.get("price", 0) or 0),
+        currency=str(payload.get("currency", "AOA")).strip() or "AOA",
+        interval=_validate_plan_interval(payload.get("interval", "month")),
+        features=json.dumps(payload.get("features") or [], ensure_ascii=True),
+        active=bool(payload.get("active", True)),
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    _record_admin_event(actor=admin, action="plan.create", resource_type="plan", resource_id=created.id, details={"code": created.code})
+    return _to_plan_record(created)
+
+
+@router.put("/plans/{plan_id}")
+async def admin_update_plan(
+    plan_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    row = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+
+    if "name" in payload:
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name não pode ficar vazio")
+        row.name = name
+    if "price" in payload:
+        row.price = float(payload.get("price") or 0)
+    if "currency" in payload:
+        row.currency = str(payload.get("currency", "AOA")).strip() or "AOA"
+    if "interval" in payload:
+        row.interval = _validate_plan_interval(payload.get("interval"))
+    if "features" in payload:
+        row.features = json.dumps(payload.get("features") or [], ensure_ascii=True)
+    if "active" in payload:
+        row.active = bool(payload.get("active"))
+
+    db.commit()
+    db.refresh(row)
+    _record_admin_event(actor=admin, action="plan.update", resource_type="plan", resource_id=row.id, details={"changes": list(payload.keys())})
+    return _to_plan_record(row)
+
+
+@router.delete("/plans/{plan_id}")
+async def admin_delete_plan(
+    plan_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    row = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not row:
+        return {"deleted": True, "id": plan_id}
+    in_use = db.query(Subscription).filter(Subscription.plan_id == plan_id).count()
+    if in_use:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Este plano tem {in_use} subscrição(ões) associada(s); desative-o em vez de eliminar.",
+        )
+    code = row.code
+    db.delete(row)
+    db.commit()
+    _record_admin_event(actor=admin, action="plan.delete", resource_type="plan", resource_id=plan_id, details={"code": code})
+    return {"deleted": True, "id": plan_id}
+
+
+@router.get("/candidate-cv-plans")
+async def admin_list_candidate_cv_plans(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    rows = db.query(CandidateCvPlan).order_by(CandidateCvPlan.price.asc()).all()
+    return {"candidateCvPlans": [_to_candidate_cv_plan_record(p) for p in rows]}
+
+
+@router.put("/candidate-cv-plans/{plan_id}")
+async def admin_update_candidate_cv_plan(
+    plan_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edits an existing tier's content (price/name/features/limits). Tiers
+    themselves (free/pro/premium) are fixed identity — see model docstring —
+    so there's deliberately no create/delete here."""
+    admin = _ensure_admin(current_user)
+    row = db.query(CandidateCvPlan).filter(CandidateCvPlan.id == plan_id).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+
+    if "name" in payload:
+        name = str(payload.get("name", "")).strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name não pode ficar vazio")
+        row.name = name
+    if "price" in payload:
+        row.price = float(payload.get("price") or 0)
+    if "currency" in payload:
+        row.currency = str(payload.get("currency", "AOA")).strip() or "AOA"
+    if "interval" in payload:
+        row.interval = _validate_plan_interval(payload.get("interval"))
+    if "features" in payload:
+        row.features = json.dumps(payload.get("features") or [], ensure_ascii=True)
+    if "maxResumes" in payload:
+        row.max_resumes = int(payload.get("maxResumes"))
+    if "aiScore" in payload:
+        row.ai_score = bool(payload.get("aiScore"))
+    if "aiRewrite" in payload:
+        row.ai_rewrite = bool(payload.get("aiRewrite"))
+    if "coverLetters" in payload:
+        row.cover_letters = bool(payload.get("coverLetters"))
+    if "autoApply" in payload:
+        row.auto_apply = bool(payload.get("autoApply"))
+    if "active" in payload:
+        row.active = bool(payload.get("active"))
+
+    db.commit()
+    db.refresh(row)
+    _record_admin_event(
+        actor=admin, action="candidateCvPlan.update", resource_type="candidate_cv_plan",
+        resource_id=row.id, details={"changes": list(payload.keys())},
+    )
+    return _to_candidate_cv_plan_record(row)
+
+
+@router.get("/transactions")
+async def admin_list_transactions(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=200),
+    status_filter: str | None = Query(default=None, alias="status"),
+    kind: str | None = None,
+    keyword: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    query = db.query(Transaction)
+    if status_filter and status_filter.strip():
+        query = query.filter(Transaction.status == status_filter.strip())
+    if kind and kind.strip():
+        query = query.filter(Transaction.kind == kind.strip())
+    if keyword and keyword.strip():
+        query = query.filter(Transaction.reference.ilike(f"%{keyword.strip()}%"))
+    total = query.count()
+    rows = query.order_by(Transaction.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+
+    # Company transactions carry company_id directly. Candidate CV Builder
+    # transactions don't (subscribe_cv_builder in payments.py never sets
+    # company_id/plan_id on them) — match those by reference against
+    # CandidateCVSubscription.transaction_reference instead.
+    company_ids = {r.company_id for r in rows if r.company_id}
+    companies = {c.id: c.name for c in db.query(Company).filter(Company.id.in_(company_ids)).all()} if company_ids else {}
+
+    candidate_refs = [r.reference for r in rows if not r.company_id and r.reference]
+    cv_subs = (
+        db.query(CandidateCVSubscription).filter(CandidateCVSubscription.transaction_reference.in_(candidate_refs)).all()
+        if candidate_refs else []
+    )
+    sub_by_ref = {s.transaction_reference: s for s in cv_subs}
+    profile_ids = {s.candidate_profile_id for s in cv_subs}
+    profiles = {p.id: p for p in db.query(CandidateProfile).filter(CandidateProfile.id.in_(profile_ids)).all()} if profile_ids else {}
+    user_ids = {p.user_id for p in profiles.values()}
+    users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+
+    records = []
+    for r in rows:
+        if r.company_id:
+            records.append(_to_transaction_record(r, "company", companies.get(r.company_id)))
+            continue
+        sub = sub_by_ref.get(r.reference)
+        if sub:
+            profile = profiles.get(sub.candidate_profile_id)
+            user = users.get(profile.user_id) if profile else None
+            label = (user.full_name if user else None) or (user.email if user else None)
+            records.append(_to_transaction_record(r, "candidate", label))
+        else:
+            records.append(_to_transaction_record(r, "unknown", None))
+
+    return {"transactions": records, "pagination": _pagination(page, limit, total)}
+
+
+def _to_user_subscription_summary(db: Session, target: User) -> dict[str, Any]:
+    """Role-aware subscription snapshot for the admin Users panel."""
+    if target.role == UserRole.company:
+        co = db.query(Company).filter(Company.owner_user_id == target.id).first()
+        if not co:
+            return {"scope": "company", "subscription": None, "transactions": [], "availablePlans": []}
+        sub = db.query(Subscription).filter(Subscription.company_id == co.id).order_by(Subscription.created_at.desc()).first()
+        plan = db.query(Plan).filter(Plan.id == sub.plan_id).first() if sub else None
+        transactions = db.query(Transaction).filter(Transaction.company_id == co.id).order_by(Transaction.created_at.desc()).limit(20).all()
+        return {
+            "scope": "company",
+            "subscription": {
+                "_id": sub.id, "status": sub.status,
+                "planCode": plan.code if plan else None, "planName": plan.name if plan else None,
+                "currentPeriodEnd": sub.current_period_end.isoformat() if sub.current_period_end else None,
+            } if sub else None,
+            "transactions": [_to_transaction_record(t, "company", co.name) for t in transactions],
+            "availablePlans": [_to_plan_record(p) for p in db.query(Plan).filter(Plan.active.is_(True)).all()],
+        }
+
+    if target.role == UserRole.candidate:
+        from app.services.candidate_billing_service import get_cv_builder_plans
+
+        profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == target.id).first()
+        if not profile:
+            return {"scope": "candidate", "subscription": None, "transactions": [], "availablePlans": []}
+        sub = (
+            db.query(CandidateCVSubscription)
+            .filter(CandidateCVSubscription.candidate_profile_id == profile.id)
+            .order_by(CandidateCVSubscription.created_at.desc())
+            .first()
+        )
+        refs = [
+            s.transaction_reference
+            for s in db.query(CandidateCVSubscription).filter(
+                CandidateCVSubscription.candidate_profile_id == profile.id,
+                CandidateCVSubscription.transaction_reference.isnot(None),
+            ).all()
+        ]
+        transactions = (
+            db.query(Transaction).filter(Transaction.reference.in_(refs)).order_by(Transaction.created_at.desc()).all()
+            if refs else []
+        )
+        return {
+            "scope": "candidate",
+            "subscription": {
+                "_id": sub.id, "status": sub.status, "tier": sub.plan_tier,
+                "currentPeriodEnd": sub.current_period_end.isoformat() if sub.current_period_end else None,
+            } if sub else None,
+            "transactions": [_to_transaction_record(t, "candidate", target.full_name) for t in transactions],
+            "availablePlans": get_cv_builder_plans(db),
+        }
+
+    return {"scope": None, "subscription": None, "transactions": [], "availablePlans": []}
+
+
+@router.get("/users/{user_id}/subscription")
+async def admin_get_user_subscription(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+    return _to_user_subscription_summary(db, target)
+
+
+@router.put("/users/{user_id}/subscription")
+async def admin_update_user_subscription(
+    user_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin override of a user's plan tier/status/period — separate from
+    the normal candidate/company self-serve subscribe flow in payments.py.
+    Creates a subscription row if the user doesn't have one yet."""
+    admin = _ensure_admin(current_user)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilizador não encontrado")
+
+    status_value = str(payload.get("status", "")).strip().lower()
+    if status_value and status_value not in {"pending", "active", "expired", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status inválido")
+    period_end = _parse_dt(payload.get("currentPeriodEnd")) if "currentPeriodEnd" in payload else None
+
+    if target.role == UserRole.company:
+        co = db.query(Company).filter(Company.owner_user_id == target.id).first()
+        if not co:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilizador não tem perfil de empresa")
+        sub = db.query(Subscription).filter(Subscription.company_id == co.id).order_by(Subscription.created_at.desc()).first()
+        plan_code = payload.get("planCode")
+        if plan_code:
+            plan = db.query(Plan).filter(Plan.code == str(plan_code).strip()).first()
+            if not plan:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plano inválido")
+            if sub:
+                sub.plan_id = plan.id
+            else:
+                sub = Subscription(company_id=co.id, plan_id=plan.id, status="active")
+                db.add(sub)
+        elif not sub:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilizador não tem subscrição — indique um planCode para criar uma")
+        if status_value:
+            sub.status = status_value
+        if "currentPeriodEnd" in payload:
+            sub.current_period_end = period_end
+        db.commit()
+        db.refresh(sub)
+        _record_admin_event(
+            actor=admin, action="subscription.override", resource_type="subscription",
+            resource_id=sub.id, details={"userId": user_id, "changes": list(payload.keys())},
+        )
+        return _to_user_subscription_summary(db, target)
+
+    if target.role == UserRole.candidate:
+        from app.services.candidate_billing_service import KNOWN_CV_TIERS
+
+        profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == target.id).first()
+        if not profile:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilizador não tem perfil de candidato")
+        sub = (
+            db.query(CandidateCVSubscription)
+            .filter(CandidateCVSubscription.candidate_profile_id == profile.id)
+            .order_by(CandidateCVSubscription.created_at.desc())
+            .first()
+        )
+        tier = payload.get("tier")
+        if tier:
+            tier = str(tier).strip().lower()
+            if tier not in KNOWN_CV_TIERS:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tier inválido")
+            if sub:
+                sub.plan_tier = tier
+            else:
+                sub = CandidateCVSubscription(candidate_profile_id=profile.id, plan_tier=tier, status="active")
+                db.add(sub)
+        elif not sub:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilizador não tem subscrição — indique um tier para criar uma")
+        if status_value:
+            sub.status = status_value
+        if "currentPeriodEnd" in payload:
+            sub.current_period_end = period_end
+        db.commit()
+        db.refresh(sub)
+        _record_admin_event(
+            actor=admin, action="cvSubscription.override", resource_type="candidate_cv_subscription",
+            resource_id=sub.id, details={"userId": user_id, "changes": list(payload.keys())},
+        )
+        return _to_user_subscription_summary(db, target)
+
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este utilizador não tem subscrições geridas por este painel")
 
 
 @router.get("/audit-logs")
@@ -1346,49 +1949,38 @@ async def admin_audit_logs_csv(
     actorUserId: str | None = None,
     from_date: str | None = Query(default=None, alias="from"),
     to_date: str | None = Query(default=None, alias="to"),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _ensure_admin(current_user)
-    keyword_norm = (keyword or "").strip().lower()
-    action_norm = (action or "").strip().lower()
-    resource_norm = (resourceType or "").strip().lower()
-    actor_norm = (actorUserId or "").strip().lower()
+    query = db.query(AuditLog)
+    if action and action.strip():
+        query = query.filter(AuditLog.action.ilike(f"%{action.strip()}%"))
+    if resourceType and resourceType.strip():
+        query = query.filter(AuditLog.resource_type.ilike(f"%{resourceType.strip()}%"))
+    if actorUserId and actorUserId.strip():
+        query = query.filter(AuditLog.actor_user_id == actorUserId.strip())
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = query.filter(AuditLog.action.ilike(like) | AuditLog.details.ilike(like) | AuditLog.resource_id.ilike(like))
+    rows = query.order_by(AuditLog.created_at.desc()).all()
 
     stream = StringIO()
     writer = csv.writer(stream)
     writer.writerow(["id", "action", "resourceType", "resourceId", "actorUserId", "details", "createdAt"])
-    for entry in _AUDIT_LOGS:
-        if action_norm and action_norm not in str(entry.get("action", "")).lower():
+    for r in rows:
+        created_at = r.created_at.isoformat() if r.created_at else ""
+        if not _is_in_range(created_at, from_date, to_date):
             continue
-        if resource_norm and resource_norm not in str(entry.get("resourceType", "")).lower():
-            continue
-        if actor_norm and actor_norm not in str(entry.get("actorUserId", "")).lower():
-            continue
-        if not _is_in_range(entry.get("createdAt"), from_date, to_date):
-            continue
-        details_json = json.dumps(entry.get("details", {}), ensure_ascii=True, default=_json_default)
-        if keyword_norm:
-            haystack = " ".join(
-                [
-                    str(entry.get("action", "")),
-                    str(entry.get("resourceType", "")),
-                    str(entry.get("resourceId", "")),
-                    str(entry.get("actorUserId", "")),
-                    details_json,
-                ]
-            ).lower()
-            if keyword_norm not in haystack:
-                continue
-
         writer.writerow(
             [
-                entry.get("_id", ""),
-                entry.get("action", ""),
-                entry.get("resourceType", ""),
-                entry.get("resourceId", ""),
-                entry.get("actorUserId", ""),
-                details_json,
-                entry.get("createdAt", ""),
+                r.id,
+                r.action or "",
+                r.resource_type or "",
+                r.resource_id or "",
+                r.actor_user_id or "",
+                r.details or "",
+                created_at,
             ]
         )
 
@@ -1406,38 +1998,37 @@ async def admin_actions(
     keyword: str | None = None,
     action: str | None = None,
     targetType: str | None = None,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Same durable AuditLog rows as /audit-logs, under the field names the
+    'Admin actions' tab expects (adminUserId/targetType/targetId/payload).
+    Previously backed by an in-memory list that was wiped on every restart —
+    now reads the same DB table /audit-logs already persists to."""
     _ensure_admin(current_user)
-    entries = list(_ADMIN_ACTIONS)
-    keyword_norm = (keyword or "").strip().lower()
-    action_norm = (action or "").strip().lower()
-    target_norm = (targetType or "").strip().lower()
-
-    filtered: list[dict[str, Any]] = []
-    for entry in entries:
-        if action_norm and action_norm not in str(entry.get("action", "")).lower():
-            continue
-        if target_norm and target_norm not in str(entry.get("targetType", "")).lower():
-            continue
-        if keyword_norm:
-            haystack = " ".join(
-                [
-                    str(entry.get("action", "")),
-                    str(entry.get("targetType", "")),
-                    str(entry.get("targetId", "")),
-                    str(entry.get("adminUserId", "")),
-                    json.dumps(entry.get("payload", {}), ensure_ascii=True, default=_json_default),
-                ]
-            ).lower()
-            if keyword_norm not in haystack:
-                continue
-        filtered.append(entry)
-
-    total = len(filtered)
-    start = (page - 1) * limit
-    end = start + limit
-    return {"adminActions": filtered[start:end], "pagination": _pagination(page, limit, total)}
+    query = db.query(AuditLog)
+    if action and action.strip():
+        query = query.filter(AuditLog.action.ilike(f"%{action.strip()}%"))
+    if targetType and targetType.strip():
+        query = query.filter(AuditLog.resource_type.ilike(f"%{targetType.strip()}%"))
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = query.filter(AuditLog.action.ilike(like) | AuditLog.details.ilike(like) | AuditLog.resource_id.ilike(like))
+    total = query.count()
+    rows = query.order_by(AuditLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    admin_actions_page = [
+        {
+            "_id": r.id,
+            "adminUserId": r.actor_user_id,
+            "action": r.action,
+            "targetType": r.resource_type,
+            "targetId": r.resource_id,
+            "payload": json.loads(r.details) if r.details else {},
+            "createdAt": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+    return {"adminActions": admin_actions_page, "pagination": _pagination(page, limit, total)}
 
 
 @router.get("/launch-readiness")
@@ -2035,7 +2626,7 @@ async def cv_builder_readiness(
     Returns a checklist of items with pass/fail/warn status that an admin
     can review before enabling the feature in production.
     """
-    _require_admin(admin)
+    _ensure_admin(admin)
     from app.core.config import get_settings
     from app.models import Resume, ResumeTemplate, CandidateCVSubscription, CVUpload
 
@@ -2163,7 +2754,7 @@ async def deploy_diff(
     admin: User = Depends(get_current_user),
 ):
     """Return pending commits and changed files between local HEAD and origin/main."""
-    _require_admin(admin)
+    _ensure_admin(admin)
     if admin.admin_level != AdminLevel.super_admin.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
 
@@ -2241,7 +2832,7 @@ async def deploy_push(
 
     A note/reason from the admin (payload.reason) is recorded in the audit log.
     """
-    _require_admin(admin)
+    _ensure_admin(admin)
     if admin.admin_level != AdminLevel.super_admin.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
 
@@ -2301,7 +2892,7 @@ async def deploy_history(
     admin: User = Depends(get_current_user),
 ):
     """Last 20 deploy events recorded in the audit log."""
-    _require_admin(admin)
+    _ensure_admin(admin)
     events = (
         db.query(AuditLog)
         .filter(AuditLog.action.in_(["deploy.push", "deploy.push.failed"]))

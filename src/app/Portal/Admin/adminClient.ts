@@ -39,6 +39,8 @@ export const AdminPermissions = {
   EXPORT_USERS: "admin.exports.users",
   EXPORT_JOBS: "admin.exports.jobs",
   EXPORT_COMPANIES: "admin.exports.companies",
+  SCRAPER_SOURCES_MANAGE: "admin.scraperSources.manage",
+  SUBSCRIPTIONS_MANAGE: "admin.subscriptions.manage",
 } as const;
 
 export function hasPermission(me: AdminMe | null | undefined, permission: string) {
@@ -284,6 +286,50 @@ export type LaunchReadinessResponse = {
   checks: LaunchReadinessCheck[];
 };
 
+export type CvBuilderReadinessCheck = {
+  name: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+};
+
+export type CvBuilderReadinessResponse = {
+  ready: boolean;
+  summary: { pass: number; warn: number; fail: number; total: number };
+  checks: CvBuilderReadinessCheck[];
+  message: string;
+};
+
+// Scraper types the admin board can select — kept in sync with the backend's
+// VALID_SCRAPER_SOURCE_TYPES (careerjet is intentionally excluded there).
+export const SCRAPER_SOURCE_TYPES = ["json", "rss", "greenhouse", "lever"] as const;
+export type ScraperSourceType = (typeof SCRAPER_SOURCE_TYPES)[number];
+
+export type ScraperSourceRecord = {
+  _id: string;
+  name: string;
+  type: string;
+  url: string;
+  category?: string | null;
+  enabled: boolean;
+  maxResults?: number | null;
+  lastRunAt?: string | null;
+  lastRunStatus?: string | null;
+  lastRunDetail?: string | null;
+  lastRunJobCount?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type ScraperSettingsRecord = {
+  enabled: boolean;
+  defaultTimeoutSeconds: number;
+  defaultMaxPerSource: number;
+  userAgent?: string | null;
+  maxIngestPerRun: number;
+  runBudgetSeconds: number;
+  updatedAt?: string | null;
+};
+
 export function listQuery(params: Record<string, string | number | undefined>) {
   const qs = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -381,6 +427,50 @@ export async function fetchAdminActions(token: string, params: Record<string, st
 
 export async function fetchLaunchReadiness(token: string, checkServices = false) {
   return authFetch<LaunchReadinessResponse>(`/admin/launch-readiness${listQuery({ checkServices: checkServices ? "true" : undefined })}`, token);
+}
+
+export async function fetchCvBuilderReadiness(token: string) {
+  return authFetch<CvBuilderReadinessResponse>("/admin/cv-builder/readiness", token);
+}
+
+// ── Scraper Config — admin-managed sources + global tuning ────────────────
+
+export async function fetchScraperSources(token: string) {
+  return authFetch<{ scraperSources: ScraperSourceRecord[] }>("/admin/scraper-sources", token);
+}
+
+export async function createScraperSource(token: string, payload: Partial<ScraperSourceRecord>) {
+  return authFetch<ScraperSourceRecord>("/admin/scraper-sources", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function updateScraperSource(token: string, id: string, payload: Partial<ScraperSourceRecord>) {
+  return authFetch<ScraperSourceRecord>(`/admin/scraper-sources/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function deleteScraperSource(token: string, id: string) {
+  return authFetch<{ deleted: boolean; id: string }>(`/admin/scraper-sources/${id}`, token, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchScraperSettings(token: string) {
+  return authFetch<ScraperSettingsRecord>("/admin/scraper-settings", token);
+}
+
+export async function updateScraperSettings(token: string, payload: Partial<ScraperSettingsRecord>) {
+  return authFetch<ScraperSettingsRecord>("/admin/scraper-settings", token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
 }
 
 // ── Deploy panel ──────────────────────────────────────────────────────────
@@ -585,4 +675,155 @@ export async function runAdminScraper(token: string) {
     method: "POST",
     suppressGlobalErrors: true,
   });
+}
+
+// ── Subscriptions & Plans ───────────────────────────────────────────────────
+// General "offers" catalogue (company plans + candidate CV Builder plans)
+// plus per-user subscription management surfaced under the Users tab.
+
+export type PlanRecord = {
+  _id: string;
+  code: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: "month" | "one_time";
+  features: string[];
+  active: boolean;
+};
+
+export type CandidateCvPlanRecord = {
+  _id: string;
+  tier: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: "month" | "one_time";
+  features: string[];
+  maxResumes: number;
+  aiScore: boolean;
+  aiRewrite: boolean;
+  coverLetters: boolean;
+  autoApply: boolean;
+  active: boolean;
+};
+
+// The candidate side's "availablePlans" shape differs from PlanRecord (it
+// mirrors the old CV_BUILDER_PLANS dict shape — snake_case limits — not the
+// DB row shape) — kept distinct rather than forced into PlanRecord's fields.
+export type CvPlanOffer = {
+  tier: string;
+  name: string;
+  price: number;
+  interval: "month" | "one_time";
+  features: string[];
+  limits: {
+    max_resumes: number;
+    ai_score: boolean;
+    ai_rewrite: boolean;
+    cover_letters: boolean;
+    auto_apply: boolean;
+  };
+};
+
+export type TransactionRecord = {
+  _id: string;
+  companyId?: string | null;
+  planId?: string | null;
+  amount: number;
+  currency: string;
+  provider: string;
+  reference?: string | null;
+  status: string;
+  kind: string;
+  partyType: "company" | "candidate" | "unknown";
+  partyName?: string | null;
+  createdAt?: string | null;
+};
+
+export type UserSubscriptionSummary = {
+  scope: "company" | "candidate" | null;
+  subscription: {
+    _id?: string;
+    status?: string;
+    planCode?: string | null;
+    planName?: string | null;
+    tier?: string;
+    currentPeriodEnd?: string | null;
+  } | null;
+  transactions: TransactionRecord[];
+  availablePlans: PlanRecord[] | CvPlanOffer[];
+};
+
+export async function fetchAdminPlans(token: string) {
+  return authFetch<{ plans: PlanRecord[] }>("/admin/plans", token);
+}
+
+export async function createAdminPlan(token: string, payload: Partial<PlanRecord>) {
+  return authFetch<PlanRecord>("/admin/plans", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function updateAdminPlan(token: string, id: string, payload: Partial<PlanRecord>) {
+  return authFetch<PlanRecord>(`/admin/plans/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function deleteAdminPlan(token: string, id: string) {
+  return authFetch<{ deleted: boolean; id: string }>(`/admin/plans/${id}`, token, {
+    method: "DELETE",
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function fetchAdminCandidateCvPlans(token: string) {
+  return authFetch<{ candidateCvPlans: CandidateCvPlanRecord[] }>("/admin/candidate-cv-plans", token);
+}
+
+export async function updateAdminCandidateCvPlan(token: string, id: string, payload: Partial<CandidateCvPlanRecord>) {
+  return authFetch<CandidateCvPlanRecord>(`/admin/candidate-cv-plans/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function fetchAdminTransactions(token: string, params: Record<string, string | number | undefined> = {}) {
+  return authFetch<Paginated<"transactions", TransactionRecord>>(`/admin/transactions${listQuery(params)}`, token);
+}
+
+export async function fetchUserSubscription(token: string, userId: string) {
+  return authFetch<UserSubscriptionSummary>(`/admin/users/${userId}/subscription`, token);
+}
+
+export async function updateUserSubscription(
+  token: string,
+  userId: string,
+  payload: { planCode?: string; tier?: string; status?: string; currentPeriodEnd?: string },
+) {
+  return authFetch<UserSubscriptionSummary>(`/admin/users/${userId}/subscription`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+// Reuses the existing candidate/company payment-confirm endpoints (already
+// admin-gated) rather than duplicating that logic under /admin.
+export async function confirmCompanyPayment(token: string, reference: string) {
+  return authFetch<{ transaction: { _id: string; reference: string; status: string }; activated: boolean }>(
+    `/payments/${reference}/confirm`, token, { method: "POST", suppressGlobalErrors: true },
+  );
+}
+
+export async function confirmCandidateCvPayment(token: string, reference: string) {
+  return authFetch<{ activated: boolean; tier: string; reference: string }>(
+    `/cv-builder/confirm/${reference}`, token, { method: "POST", suppressGlobalErrors: true },
+  );
 }

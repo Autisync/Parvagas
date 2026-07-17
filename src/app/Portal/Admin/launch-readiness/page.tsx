@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  fetchCvBuilderReadiness,
   fetchLaunchReadiness,
+  type CvBuilderReadinessResponse,
   type LaunchReadinessCheck,
   type LaunchReadinessResponse,
 } from "../adminClient";
@@ -22,6 +24,9 @@ export default function AdminLaunchReadinessPage() {
   const [checkServices, setCheckServices] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [cvReport, setCvReport] = useState<CvBuilderReadinessResponse | null>(null);
+  const [cvLoading, setCvLoading] = useState(true);
+  const [cvError, setCvError] = useState("");
 
   const adminLevel = useMemo(
     () => (user?.adminLevel === "moderator" ? "moderator" : "super-admin"),
@@ -45,9 +50,24 @@ export default function AdminLaunchReadinessPage() {
     [token]
   );
 
+  const loadCv = useCallback(async () => {
+    if (!token) return;
+    setCvLoading(true);
+    setCvError("");
+    try {
+      const data = await fetchCvBuilderReadiness(token);
+      setCvReport(data);
+    } catch (err: unknown) {
+      setCvError(err instanceof Error ? err.message : "Erro ao carregar readiness do CV Builder.");
+    } finally {
+      setCvLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     load(false);
-  }, [load]);
+    loadCv();
+  }, [load, loadCv]);
 
   if (adminLevel !== "super-admin") {
     return (
@@ -127,6 +147,57 @@ export default function AdminLaunchReadinessPage() {
           </section>
         </>
       )}
+
+      <div className="mt-10 border-t border-slate-200 pt-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">CV Builder Readiness</h2>
+            <p className="mt-1 text-sm text-slate-500">Checklist específico para o lançamento da funcionalidade de construção de CV com IA.</p>
+          </div>
+          <button onClick={loadCv} disabled={cvLoading} className={adminSecondaryButtonClass}>
+            {cvLoading ? "A validar..." : "Revalidar"}
+          </button>
+        </div>
+
+        {cvError ? <div className="mt-4"><InlineErrorState /></div> : null}
+
+        {cvReport && (
+          <>
+            <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="app-card p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Total checks</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{cvReport.summary.total}</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-emerald-700">Pass</p>
+                <p className="mt-2 text-3xl font-bold text-emerald-800">{cvReport.summary.pass}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-amber-700">Warn</p>
+                <p className="mt-2 text-3xl font-bold text-amber-800">{cvReport.summary.warn}</p>
+              </div>
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-rose-700">Fail</p>
+                <p className="mt-2 text-3xl font-bold text-rose-800">{cvReport.summary.fail}</p>
+              </div>
+            </section>
+
+            <p className={`mt-4 text-sm font-semibold ${cvReport.ready ? "text-emerald-700" : "text-rose-700"}`}>{cvReport.message}</p>
+
+            <section className="mt-4 space-y-3">
+              {cvReport.checks.map((check) => (
+                <article key={check.name} className={`rounded-xl border p-4 ${statusClass(check.status)}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-bold">{check.name}</p>
+                    <span className="rounded-full border border-current px-2.5 py-0.5 text-xs font-semibold uppercase">{check.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm">{check.detail}</p>
+                </article>
+              ))}
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 }

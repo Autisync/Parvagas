@@ -11,7 +11,7 @@ import {
   HomeIcon, ChartBarIcon, BriefcaseIcon, BuildingOffice2Icon,
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
-  RocketLaunchIcon,
+  RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -25,7 +25,9 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/jobs",         label: "Vagas",          hint: "Moderação",              levels: ["super-admin", "moderator"], icon: <BriefcaseIcon className="h-5 w-5" />,             pinned: true },
   { href: "/Portal/Admin/companies",    label: "Empresas",       hint: "Verificação",            levels: ["super-admin", "moderator"], icon: <BuildingOffice2Icon className="h-5 w-5" />,       pinned: true },
   { href: "/Portal/Admin/scraped",      label: "Scraped Jobs",   hint: "Curadoria",              levels: ["super-admin", "moderator"], icon: <CloudArrowDownIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/scraper-config", label: "Scraper Config", hint: "Fontes e afinação",     levels: ["super-admin"],             icon: <AdjustmentsHorizontalIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/users",        label: "Utilizadores",   hint: "Acesso e estado",        levels: ["super-admin", "moderator"], icon: <UsersIcon className="h-5 w-5" />,                 pinned: true },
+  { href: "/Portal/Admin/subscriptions", label: "Subscrições",   hint: "Planos e pagamentos",    levels: ["super-admin"],             icon: <CreditCardIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/blog",         label: "Conteúdo",       hint: "Dicas de Carreira / Blog", levels: ["super-admin", "moderator"], icon: <NewspaperIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/ads",          label: "Campanhas",      hint: "Ads e placements",       levels: ["super-admin"],             icon: <MegaphoneIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/admin-levels", label: "Super-admin",    hint: "Admins e moderadores",   levels: ["super-admin"],             icon: <ShieldCheckIcon className="h-5 w-5" /> },
@@ -33,6 +35,7 @@ const ALL_ITEMS: Item[] = [
   { href: "/Portal/Admin/security",     label: "Segurança",      hint: "Logins falhados e alertas", levels: ["super-admin"],          icon: <ShieldExclamationIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/exports",      label: "Exportações CSV",hint: "Dados operacionais",     levels: ["super-admin"],             icon: <CloudArrowDownIcon className="h-5 w-5" /> },
   { href: "/Portal/Admin/deploy",       label: "Deploy",         hint: "Lançar para produção",   levels: ["super-admin"],             icon: <RocketLaunchIcon className="h-5 w-5" /> },
+  { href: "/Portal/Admin/launch-readiness", label: "Launch Readiness", hint: "Checklist de produção", levels: ["super-admin"],       icon: <CheckBadgeIcon className="h-5 w-5" /> },
 ];
 
 export default function AdminSidebar({

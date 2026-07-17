@@ -670,6 +670,45 @@ class ScrapedJob(Base, TimestampMixin):
     quality_flags = Column(Text, nullable=True)  # JSON array of reasons
 
 
+class ScraperSource(Base, TimestampMixin):
+    """Admin-managed external job-board source for the scraper worker.
+
+    Replaces the old SCRAPER_SOURCES env var so sources can be added,
+    edited, or disabled from the admin board without a redeploy. `type`
+    must be one of the adapter keys the scraper service actually supports
+    ("careerjet" is deliberately excluded — see scraper_service.py for why).
+    """
+    __tablename__ = "scraper_sources"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(120), nullable=False)
+    type = Column(String(20), nullable=False)  # json | rss | greenhouse | lever
+    url = Column(String(1000), nullable=False)  # feed URL, board token/slug, or full API URL
+    category = Column(String(120), nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    max_results = Column(Integer, nullable=True)  # per-source override; falls back to ScraperSettings default
+    last_run_at = Column(DateTime, nullable=True)
+    last_run_status = Column(String(20), nullable=True)  # ok | error | empty
+    last_run_detail = Column(Text, nullable=True)
+    last_run_job_count = Column(Integer, nullable=True)
+
+
+class ScraperSettings(Base, TimestampMixin):
+    """Singleton row of admin-tunable global scraper defaults — the runtime
+    knobs that used to be env vars (SCRAPER_TIMEOUT, SCRAPER_MAX_PER_SOURCE,
+    SCRAPER_USER_AGENT, SCRAPER_MAX_INGEST_PER_RUN, SCRAPER_RUN_BUDGET_SECONDS),
+    now editable from the admin board without a redeploy."""
+    __tablename__ = "scraper_settings"
+
+    id = Column(String(20), primary_key=True, default="default")
+    enabled = Column(Boolean, nullable=False, default=True)  # master kill-switch for the whole scrape run
+    default_timeout_seconds = Column(Integer, nullable=False, default=12)
+    default_max_per_source = Column(Integer, nullable=False, default=100)
+    user_agent = Column(String(255), nullable=True)  # blank = use the built-in default
+    max_ingest_per_run = Column(Integer, nullable=False, default=200)
+    run_budget_seconds = Column(Integer, nullable=False, default=300)
+
+
 class Plan(Base, TimestampMixin):
     """Employer subscription / pay-per-post plan."""
     __tablename__ = "plans"
@@ -693,6 +732,33 @@ class Subscription(Base, TimestampMixin):
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False)
     status = Column(String(20), nullable=False, default="pending")  # pending|active|expired|cancelled
     current_period_end = Column(DateTime, nullable=True)
+
+
+class CandidateCvPlan(Base, TimestampMixin):
+    """Admin-editable CV Builder plan catalogue (candidate side).
+
+    Replaces the old hardcoded CV_BUILDER_PLANS constant in
+    candidate_billing_service.py. `tier` is the fixed identity used
+    everywhere else (CandidateCVSubscription.plan_tier, quota checks) —
+    kept to the three known values (free|pro|premium) by the admin API,
+    not by a DB constraint; content (price/name/features/limits) is
+    admin-editable via /admin/candidate-cv-plans.
+    """
+    __tablename__ = "candidate_cv_plans"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tier = Column(String(20), nullable=False, unique=True)  # free | pro | premium
+    name = Column(String(120), nullable=False)
+    price = Column(Float, nullable=False, default=0)
+    currency = Column(String(8), nullable=False, default="AOA")
+    interval = Column(String(20), nullable=False, default="month")  # month | one_time
+    features = Column(Text, nullable=True)  # JSON array of display strings
+    max_resumes = Column(Integer, nullable=False, default=1)  # -1 = unlimited
+    ai_score = Column(Boolean, nullable=False, default=False)
+    ai_rewrite = Column(Boolean, nullable=False, default=False)
+    cover_letters = Column(Boolean, nullable=False, default=False)
+    auto_apply = Column(Boolean, nullable=False, default=False)
+    active = Column(Boolean, nullable=False, default=True)
 
 
 class SecurityEvent(Base, TimestampMixin):

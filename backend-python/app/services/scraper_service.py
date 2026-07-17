@@ -1,28 +1,29 @@
 """Pluggable job aggregation (scraping) service.
 
 Fetches job listings from external sources and normalises them into dicts the
-ScrapedJob ingestion pipeline understands. Safe by default: no sources are
-configured unless SCRAPER_SOURCES is set, and every adapter sends a polite
-User-Agent, respects robots.txt, and backs off on errors.
+ScrapedJob ingestion pipeline understands. Safe by default: no sources exist
+until an admin adds one on the Scraper Config board, and every adapter sends
+a polite User-Agent, respects robots.txt, and backs off on errors.
 
-Configure via env SCRAPER_SOURCES — a JSON array, e.g.:
-  [{"type":"json","name":"MyBoard","url":"https://api.board.com/jobs","category":"Tech"},
-   {"type":"rss","name":"FeedX","url":"https://feedx.com/jobs.rss"},
-   {"type":"greenhouse","name":"Acme","url":"acme"},
-   {"type":"lever","name":"Acme","url":"acme"},
-   {"type":"careerjet","name":"Careerjet Angola","url":"<your affid>","category":"Tecnologia"}]
+Sources and runtime tuning (timeout, per-source cap, user agent, overall
+run budget) are admin-managed DB rows — ScraperSource and ScraperSettings
+(app/models/__init__.py) — editable from /Portal/Admin without a redeploy.
+This replaced the old SCRAPER_SOURCES/SCRAPER_* env vars; the module-level
+_FALLBACK_* constants below only cover the case where ScraperSettings hasn't
+been seeded yet (defensive — the migration seeds a default row).
 
-JSON adapter expects a list of objects (or {"jobs":[...]}) with keys like
-title/company/location/category/description/url. RSS adapter reads item
-title/description/link. Greenhouse/Lever talk to each platform's public
-job-board API directly — `url` can be a bare board token/company slug, or a
-full API URL — and are relevant to the Angola market via the multinational
-employers who post through them, not because the platforms are Angola-native
-(see GreenhouseAdapter's docstring). CareerjetAdapter is the one adapter here
-verified against official docs to actually serve the Angola market
-(careerjet.co.ao) — READ ITS DOCSTRING before enabling: it's a live search
-proxy, not a bulk-export feed, and using it to republish listings onto our
-own board wasn't confirmed to comply with Careerjet's partner terms.
+ScraperSource.type selects the adapter: "json" expects a list of objects (or
+{"jobs":[...]}) with keys like title/company/location/category/description/
+url. "rss" reads item title/description/link. "greenhouse"/"lever" talk to
+each platform's public job-board API directly — `url` can be a bare board
+token/company slug, or a full API URL — and are relevant to the Angola
+market via the multinational employers who post through them, not because
+the platforms are Angola-native (see GreenhouseAdapter's docstring).
+
+"careerjet" is deliberately NOT a selectable type (see CareerjetAdapter's
+docstring and get_adapters() below): it's a live search proxy, not a
+bulk-export feed, and using it to republish listings onto our own board
+wasn't confirmed to comply with Careerjet's partner terms.
 
 Angola-native boards (Jobartis, emprego.co.ao, angolaemprego.com's listing
 pages) were checked and do NOT currently expose a discoverable public
@@ -37,23 +38,40 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree as ET
 
 from app.core.logging import get_logger
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 logger = get_logger(__name__)
 
-USER_AGENT = os.getenv("SCRAPER_USER_AGENT", "Parvagas-Bot/1.0 (+https://parvagas.pt/robots.txt)")
-_REQUEST_TIMEOUT = float(os.getenv("SCRAPER_TIMEOUT", "12"))
-# Per-source cap — raised from the original 50 now that ingestion is bounded
-# by an overall per-run budget (see tasks.scrape_external_jobs), not just this.
-_MAX_PER_SOURCE = int(os.getenv("SCRAPER_MAX_PER_SOURCE", "100"))
+# Only used when no ScraperSettings row exists yet (the migration seeds one,
+# so this is a defensive fallback, not the normal path).
+_FALLBACK_USER_AGENT = "Parvagas-Bot/1.0 (+https://parvagas.pt/robots.txt)"
+_FALLBACK_TIMEOUT = 12.0
+_FALLBACK_MAX_PER_SOURCE = 100
+
+
+def get_scraper_settings(db: "Session"):
+    """Load the singleton ScraperSettings row, creating it with defaults if
+    the migration's seed row is somehow missing (defensive — never let a
+    missing settings row block scraping)."""
+    from app.models import ScraperSettings
+
+    settings = db.query(ScraperSettings).filter(ScraperSettings.id == "default").first()
+    if settings is None:
+        settings = ScraperSettings(id="default")
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
 
 
 def content_hash(title: str | None, company: str | None, location: str | None) -> str:
@@ -149,30 +167,33 @@ def assess_scraped_job_quality(
     return min(score, 100), flags
 
 
-def _robots_ok(url: str) -> bool:
+def _robots_ok(url: str, user_agent: str) -> bool:
     try:
         parts = urlparse(url)
         rp = RobotFileParser()
         rp.set_url(f"{parts.scheme}://{parts.netloc}/robots.txt")
         rp.read()
-        return rp.can_fetch(USER_AGENT, url)
+        return rp.can_fetch(user_agent, url)
     except Exception:
         # If robots can't be read, be permissive but log it.
         logger.info("robots.txt unreadable for %s; proceeding", url)
         return True
 
 
-def _get(url: str, retries: int = 3) -> str | None:
+def _get(url: str, retries: int = 3, timeout: float | None = None, user_agent: str | None = None) -> str | None:
     """GET with polite UA + exponential backoff. Returns text or None."""
     import httpx
 
-    if not _robots_ok(url):
+    effective_timeout = timeout if timeout is not None else _FALLBACK_TIMEOUT
+    effective_ua = user_agent or _FALLBACK_USER_AGENT
+
+    if not _robots_ok(url, effective_ua):
         logger.warning("robots.txt disallows scraping %s", url)
         return None
     delay = 1.0
     for attempt in range(retries):
         try:
-            resp = httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=_REQUEST_TIMEOUT, follow_redirects=True)
+            resp = httpx.get(url, headers={"User-Agent": effective_ua}, timeout=effective_timeout, follow_redirects=True)
             if resp.status_code == 200:
                 return resp.text
             if resp.status_code in (429, 503):
@@ -191,10 +212,34 @@ def _get(url: str, retries: int = 3) -> str | None:
 class SourceAdapter:
     """Base adapter. Subclasses implement fetch() -> list of normalised job dicts."""
 
-    def __init__(self, name: str, url: str, category: str | None = None):
+    def __init__(
+        self,
+        name: str,
+        url: str,
+        category: str | None = None,
+        max_results: int | None = None,
+        timeout: float | None = None,
+        user_agent: str | None = None,
+    ):
         self.name = name
         self.url = url
         self.category = category
+        # None means "use the admin-configured global default" (per-source
+        # override wins when set) — get_adapters() rebuilds adapters fresh
+        # from ScraperSource/ScraperSettings on every run, so this always
+        # reflects the latest admin config.
+        self.max_results = max_results
+        self.timeout = timeout
+        self.user_agent = user_agent
+        # Set by get_adapters() to the originating ScraperSource.id, so the
+        # worker task can write last_run_* stats back onto the right row.
+        self.source_id: str | None = None
+
+    def _limit(self) -> int:
+        return self.max_results if self.max_results is not None else _FALLBACK_MAX_PER_SOURCE
+
+    def _get_url(self, url: str, retries: int = 3) -> str | None:
+        return _get(url, retries=retries, timeout=self.timeout, user_agent=self.user_agent)
 
     def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - interface
         raise NotImplementedError
@@ -218,7 +263,7 @@ class SourceAdapter:
 
 class JSONFeedAdapter(SourceAdapter):
     def fetch(self) -> list[dict[str, Any]]:
-        body = _get(self.url)
+        body = self._get_url(self.url)
         if not body:
             return []
         try:
@@ -229,13 +274,13 @@ class JSONFeedAdapter(SourceAdapter):
         items = data.get("jobs", data) if isinstance(data, dict) else data
         if not isinstance(items, list):
             return []
-        out = [self._normalise(it) for it in items[: _MAX_PER_SOURCE] if isinstance(it, dict)]
+        out = [self._normalise(it) for it in items[: self._limit()] if isinstance(it, dict)]
         return [o for o in out if o["title"]]
 
 
 class RSSAdapter(SourceAdapter):
     def fetch(self) -> list[dict[str, Any]]:
-        body = _get(self.url)
+        body = self._get_url(self.url)
         if not body:
             return []
         try:
@@ -253,7 +298,7 @@ class RSSAdapter(SourceAdapter):
                 "description": (item.findtext("description") or "").strip(),
                 "link": (item.findtext("link") or "").strip(),
             }))
-            if len(out) >= _MAX_PER_SOURCE:
+            if len(out) >= self._limit():
                 break
         return out
 
@@ -281,7 +326,7 @@ class GreenhouseAdapter(SourceAdapter):
         return f"https://boards-api.greenhouse.io/v1/boards/{self.url}/jobs?content=true"
 
     def fetch(self) -> list[dict[str, Any]]:
-        body = _get(self._api_url())
+        body = self._get_url(self._api_url())
         if not body:
             return []
         try:
@@ -293,7 +338,7 @@ class GreenhouseAdapter(SourceAdapter):
         if not isinstance(jobs, list):
             return []
         out = []
-        for job in jobs[:_MAX_PER_SOURCE]:
+        for job in jobs[:self._limit()]:
             if not isinstance(job, dict):
                 continue
             location = job.get("location")
@@ -328,7 +373,7 @@ class LeverAdapter(SourceAdapter):
         return f"https://api.lever.co/v0/postings/{self.url}?mode=json"
 
     def fetch(self) -> list[dict[str, Any]]:
-        body = _get(self._api_url())
+        body = self._get_url(self._api_url())
         if not body:
             return []
         try:
@@ -339,7 +384,7 @@ class LeverAdapter(SourceAdapter):
         if not isinstance(data, list):
             return []
         out = []
-        for posting in data[:_MAX_PER_SOURCE]:
+        for posting in data[:self._limit()]:
             if not isinstance(posting, dict):
                 continue
             categories = posting.get("categories") or {}
@@ -368,9 +413,9 @@ class CareerjetAdapter(SourceAdapter):
     feed meant for harvesting-and-republishing listings onto a third-party
     board. Using it to populate Parvagas's own catalogue may not comply
     with Careerjet's partner terms — that wasn't reviewed here. Get an
-    affiliate ID and read their actual partner agreement before turning
-    this on in SCRAPER_SOURCES; it's provided verified-and-ready, not
-    pre-approved for this use case.
+    affiliate ID and read their actual partner agreement before adding
+    "careerjet" back as a selectable ScraperSource type; it's provided
+    verified-and-ready, not pre-approved for this use case.
 
     `url` holds the affiliate ID (`affid`) issued by Careerjet on partner
     signup — required, there is no anonymous/keyless access. `category`
@@ -387,14 +432,14 @@ class CareerjetAdapter(SourceAdapter):
         params = {
             "affid": self.url,
             "user_ip": "127.0.0.1",
-            "user_agent": USER_AGENT,
+            "user_agent": self.user_agent or _FALLBACK_USER_AGENT,
             "url": "https://parvagas.pt/Vagas-Disponiveis",
             "location": "Angola",
             "keywords": self.category or "",
-            "pagesize": str(_MAX_PER_SOURCE),
+            "pagesize": str(self._limit()),
         }
         query = "&".join(f"{k}={v}" for k, v in params.items() if v)
-        body = _get(f"{self._ENDPOINT}?{query}")
+        body = self._get_url(f"{self._ENDPOINT}?{query}")
         if not body:
             return []
         try:
@@ -406,7 +451,7 @@ class CareerjetAdapter(SourceAdapter):
         if not isinstance(jobs, list):
             return []
         out = []
-        for job in jobs[:_MAX_PER_SOURCE]:
+        for job in jobs[:self._limit()]:
             if not isinstance(job, dict):
                 continue
             out.append(self._normalise({
@@ -427,30 +472,47 @@ _ADAPTERS = {
     # "careerjet" intentionally omitted — disabled pending confirmation that
     # republishing Careerjet's live-search results onto our own board
     # complies with their partner terms (see CareerjetAdapter docstring).
-    # Re-add once that's confirmed; the adapter class below still works.
+    # Re-add once that's confirmed; the adapter class below still works. The
+    # admin API also rejects "careerjet" at ScraperSource create/update time
+    # (see admin.py) so this can't be worked around from the admin board.
 }
 
+# The set of source types selectable from the admin board — single source of
+# truth shared with the admin API's create/update validation.
+VALID_SCRAPER_SOURCE_TYPES = frozenset(_ADAPTERS.keys())
 
-def get_adapters() -> list[SourceAdapter]:
-    """Build adapters from SCRAPER_SOURCES env (empty list when unconfigured)."""
-    raw = os.getenv("SCRAPER_SOURCES", "").strip()
-    if not raw:
+
+def get_adapters(db: "Session") -> list[SourceAdapter]:
+    """Build adapters from admin-managed ScraperSource rows (empty list when
+    none are configured, or when the ScraperSettings master switch is off)."""
+    from app.models import ScraperSource
+
+    settings = get_scraper_settings(db)
+    if not settings.enabled:
+        logger.info("get_adapters: scraping disabled via ScraperSettings.enabled=False")
         return []
-    try:
-        specs = json.loads(raw)
-    except Exception:
-        logger.warning("SCRAPER_SOURCES is not valid JSON; ignoring")
-        return []
+
+    rows = db.query(ScraperSource).filter(ScraperSource.enabled.is_(True)).all()
     adapters: list[SourceAdapter] = []
-    for spec in specs if isinstance(specs, list) else []:
-        source_type = str(spec.get("type", "")).lower()
+    for row in rows:
+        source_type = str(row.type or "").lower()
         if source_type == "careerjet":
             logger.warning(
-                "SCRAPER_SOURCES requests 'careerjet' but that adapter is disabled "
-                "pending partner-terms confirmation; skipping %s", spec.get("name")
+                "ScraperSource %s requests 'careerjet' but that adapter is disabled "
+                "pending partner-terms confirmation; skipping", row.name
             )
             continue
         cls = _ADAPTERS.get(source_type)
-        if cls and spec.get("url") and spec.get("name"):
-            adapters.append(cls(name=spec["name"], url=spec["url"], category=spec.get("category")))
+        if not cls or not row.url or not row.name:
+            continue
+        adapter = cls(
+            name=row.name,
+            url=row.url,
+            category=row.category,
+            max_results=row.max_results if row.max_results is not None else settings.default_max_per_source,
+            timeout=float(settings.default_timeout_seconds),
+            user_agent=settings.user_agent or None,
+        )
+        adapter.source_id = row.id
+        adapters.append(adapter)
     return adapters

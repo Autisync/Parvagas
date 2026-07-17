@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
-from app.services.candidate_billing_service import CV_BUILDER_PLANS
+from app.services.candidate_billing_service import get_cv_builder_plans
 
 logger = get_logger(__name__)
 
@@ -196,20 +196,21 @@ async def confirm_payment(reference: str, db: Session = Depends(get_db), current
 
 # ── Candidate CV Builder subscription ──────────────────────────────────────
 #
-# Plan catalogue (tiers, pricing, limits) lives in
-# app.services.candidate_billing_service.CV_BUILDER_PLANS — the single
-# source of truth shared with the quota/feature checks that gate resume and
-# cover-letter CRUD in app.api.v1.resumes, so the pricing page and actual
-# enforcement can never drift apart.
+# Plan catalogue (tiers, pricing, limits) lives in the admin-editable
+# candidate_cv_plans table (app.services.candidate_billing_service.
+# get_cv_builder_plans) — the single source of truth shared with the
+# quota/feature checks that gate resume and cover-letter CRUD in
+# app.api.v1.resumes, so the pricing page and actual enforcement can never
+# drift apart.
 #
 # Payment flow mirrors the company subscription flow (manual → bank reference →
 # admin/webhook confirms → subscription activates).
 
 
 @router.get("/cv-builder/plans")
-async def list_cv_builder_plans():
+async def list_cv_builder_plans(db: Session = Depends(get_db)):
     """Public CV Builder plan catalogue."""
-    return {"plans": CV_BUILDER_PLANS}
+    return {"plans": get_cv_builder_plans(db)}
 
 
 @router.get("/cv-builder/subscription")
@@ -233,7 +234,8 @@ async def my_cv_builder_subscription(
 
     # Default to free if no subscription record yet.
     tier = sub.plan_tier if sub and sub.status == "active" else "free"
-    plan_info = next((p for p in CV_BUILDER_PLANS if p["tier"] == tier), CV_BUILDER_PLANS[0])
+    plans = get_cv_builder_plans(db)
+    plan_info = next((p for p in plans if p["tier"] == tier), plans[0])
 
     return {
         "subscription": {
@@ -258,7 +260,7 @@ async def subscribe_cv_builder(
     flow used by company subscriptions.
     """
     tier = str(payload.get("tier", "free")).strip().lower()
-    plan_info = next((p for p in CV_BUILDER_PLANS if p["tier"] == tier), None)
+    plan_info = next((p for p in get_cv_builder_plans(db) if p["tier"] == tier), None)
     if not plan_info:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plano inválido")
 

@@ -3,8 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
-import { fetchUsers, fetchAdminMe, runVerificationBackfill, statusBadgeClass, toDateLabel, type UserRecord, type AdminLevel, type Pagination } from "../adminClient";
-import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminFieldClass } from "../components/AdminUI";
+import {
+  fetchUsers, fetchAdminMe, runVerificationBackfill, statusBadgeClass, toDateLabel,
+  fetchUserSubscription, updateUserSubscription, confirmCompanyPayment, confirmCandidateCvPayment,
+  type UserRecord, type AdminLevel, type Pagination, type UserSubscriptionSummary,
+} from "../adminClient";
+import { AdminEmptyState, AdminFilterBar, AdminModal, AdminPageHeader, adminButtonClass, adminFieldClass, adminSecondaryButtonClass } from "../components/AdminUI";
 import PaginationControls from "../components/PaginationControls";
 import { collectAllIdsAcrossPages } from "../hooks/bulkSelectionFetch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
@@ -29,6 +33,12 @@ export default function AdminUsersPage() {
   const [bulkReason, setBulkReason] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [modalReason, setModalReason] = useState("");
+  const [subscription, setSubscription] = useState<UserSubscriptionSummary | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subPlanChoice, setSubPlanChoice] = useState("");
+  const [subStatusChoice, setSubStatusChoice] = useState("");
+  const [subPeriodEnd, setSubPeriodEnd] = useState("");
   // quickSuspend holds the target user when the row "Suspender" button is pressed
   // so we can prompt for a reason via the modal instead of window.prompt.
   const [quickSuspend, setQuickSuspend] = useState<{ user: UserRecord; suspended: boolean } | null>(null);
@@ -91,6 +101,63 @@ export default function AdminUsersPage() {
     notify(notice, "success");
     setNotice("");
   }, [notice, notify]);
+
+  const managesSubscription = selectedUser?.role === "company" || selectedUser?.role === "candidate";
+
+  useEffect(() => {
+    if (!token || !selectedUser || !managesSubscription) {
+      setSubscription(null);
+      return;
+    }
+    setSubLoading(true);
+    fetchUserSubscription(token, selectedUser._id)
+      .then((res) => {
+        setSubscription(res);
+        setSubPlanChoice(res.subscription?.planCode || "");
+        setSubStatusChoice(res.subscription?.status || "");
+        setSubPeriodEnd(res.subscription?.currentPeriodEnd ? res.subscription.currentPeriodEnd.slice(0, 10) : "");
+      })
+      .catch((err: unknown) => notify(getErrorMessage(err, "Erro ao carregar subscrição."), "error"))
+      .finally(() => setSubLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, selectedUser?._id, managesSubscription]);
+
+  const saveSubscription = async () => {
+    if (!token || !selectedUser || !subscription) return;
+    setSubBusy(true);
+    try {
+      const payload: { planCode?: string; tier?: string; status?: string; currentPeriodEnd?: string } = {};
+      if (subscription.scope === "company" && subPlanChoice) payload.planCode = subPlanChoice;
+      if (subscription.scope === "candidate" && subPlanChoice) payload.tier = subPlanChoice;
+      if (subStatusChoice) payload.status = subStatusChoice;
+      if (subPeriodEnd) payload.currentPeriodEnd = subPeriodEnd;
+      const updated = await updateUserSubscription(token, selectedUser._id, payload);
+      setSubscription(updated);
+      notify("Subscrição atualizada.", "success");
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao atualizar subscrição."), "error");
+    } finally {
+      setSubBusy(false);
+    }
+  };
+
+  const confirmTxPayment = async (reference: string, partyType: string) => {
+    if (!token) return;
+    setSubBusy(true);
+    try {
+      if (partyType === "company") await confirmCompanyPayment(token, reference);
+      else if (partyType === "candidate") await confirmCandidateCvPayment(token, reference);
+      notify("Pagamento confirmado.", "success");
+      if (selectedUser) {
+        const refreshed = await fetchUserSubscription(token, selectedUser._id);
+        setSubscription(refreshed);
+      }
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao confirmar pagamento."), "error");
+    } finally {
+      setSubBusy(false);
+    }
+  };
 
   const clearSelectionState = () => {
     clearSelection();
@@ -341,6 +408,83 @@ export default function AdminUsersPage() {
               <p><span className="font-semibold">Email:</span> {selectedUser.email || "--"}</p>
               <p><span className="font-semibold">Registo:</span> {toDateLabel(selectedUser.createdAt)}</p>
             </div>
+
+            {managesSubscription && (
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="font-semibold text-slate-900">Subscrição</p>
+                {subLoading ? (
+                  <p className="mt-2 text-xs text-slate-500">A carregar...</p>
+                ) : subscription ? (
+                  <>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-semibold text-slate-700">
+                        {subscription.subscription
+                          ? `${subscription.scope === "candidate" ? subscription.subscription.tier : subscription.subscription.planName || subscription.subscription.planCode} · ${subscription.subscription.status}`
+                          : "Sem subscrição"}
+                      </span>
+                      {subscription.subscription?.currentPeriodEnd ? (
+                        <span className="text-slate-500">até {toDateLabel(subscription.subscription.currentPeriodEnd)}</span>
+                      ) : null}
+                    </div>
+
+                    {level === "super-admin" && (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <label className="text-xs">
+                          <span className="mb-1 block font-medium text-slate-700">{subscription.scope === "candidate" ? "Nível" : "Plano"}</span>
+                          <select value={subPlanChoice} onChange={(e) => setSubPlanChoice(e.target.value)} className={adminFieldClass}>
+                            <option value="">-- manter --</option>
+                            {subscription.availablePlans.map((p) => (
+                              <option key={"tier" in p ? p.tier : p.code} value={"tier" in p ? p.tier : p.code}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          <span className="mb-1 block font-medium text-slate-700">Estado</span>
+                          <select value={subStatusChoice} onChange={(e) => setSubStatusChoice(e.target.value)} className={adminFieldClass}>
+                            <option value="">-- manter --</option>
+                            <option value="pending">pending</option>
+                            <option value="active">active</option>
+                            <option value="expired">expired</option>
+                            <option value="cancelled">cancelled</option>
+                          </select>
+                        </label>
+                        <label className="text-xs">
+                          <span className="mb-1 block font-medium text-slate-700">Válido até</span>
+                          <input type="date" value={subPeriodEnd} onChange={(e) => setSubPeriodEnd(e.target.value)} className={adminFieldClass} />
+                        </label>
+                      </div>
+                    )}
+                    {level === "super-admin" && (
+                      <button type="button" onClick={saveSubscription} disabled={subBusy} className={`${adminButtonClass} mt-3`}>
+                        {subBusy ? "A guardar..." : "Guardar subscrição"}
+                      </button>
+                    )}
+
+                    {subscription.transactions.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Transações</p>
+                        <div className="mt-2 space-y-2">
+                          {subscription.transactions.map((tx) => (
+                            <div key={tx._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs">
+                              <span>{tx.reference} · {tx.amount.toLocaleString("pt-PT")} {tx.currency} · {tx.status}</span>
+                              {level === "super-admin" && tx.status === "pending" && (
+                                <button type="button" onClick={() => confirmTxPayment(tx.reference || "", tx.partyType)} disabled={subBusy} className={adminSecondaryButtonClass}>
+                                  Confirmar
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">Sem dados de subscrição.</p>
+                )}
+              </div>
+            )}
           </div>
         ) : null}
       </AdminModal>

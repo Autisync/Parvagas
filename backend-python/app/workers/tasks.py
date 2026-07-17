@@ -439,18 +439,42 @@ def _parse_scraped_deadline(value) -> "datetime | None":
         return None
 
 
-# Per-run ingestion budget — "as much volume as possible" is bounded here,
-# not left unbounded, so a single scrape run can't outgrow the resources
-# reserved for it (see the dedicated 'scraping' queue/worker in celery_app.py).
-SCRAPER_MAX_INGEST_PER_RUN = int(os.getenv("SCRAPER_MAX_INGEST_PER_RUN", "200"))
-SCRAPER_RUN_BUDGET_SECONDS = int(os.getenv("SCRAPER_RUN_BUDGET_SECONDS", "300"))
+# Per-run ingestion budget fallback — only used if the ScraperSettings row
+# is somehow missing (see scraper_service.get_scraper_settings); the normal
+# path reads these from the admin-editable ScraperSettings row instead, so
+# a single scrape run can't outgrow the resources reserved for it (see the
+# dedicated 'scraping' queue/worker in celery_app.py).
+_FALLBACK_SCRAPER_MAX_INGEST_PER_RUN = 200
+_FALLBACK_SCRAPER_RUN_BUDGET_SECONDS = 300
 
 
-def _scrape_budget_exhausted(ingested: int, started_at: datetime, now: datetime) -> bool:
+def _scrape_budget_exhausted(
+    ingested: int, started_at: datetime, now: datetime,
+    max_ingest_per_run: int = _FALLBACK_SCRAPER_MAX_INGEST_PER_RUN,
+    run_budget_seconds: int = _FALLBACK_SCRAPER_RUN_BUDGET_SECONDS,
+) -> bool:
     """True once the run should stop pulling in more sources/items."""
-    if ingested >= SCRAPER_MAX_INGEST_PER_RUN:
+    if ingested >= max_ingest_per_run:
         return True
-    return (now - started_at).total_seconds() >= SCRAPER_RUN_BUDGET_SECONDS
+    return (now - started_at).total_seconds() >= run_budget_seconds
+
+
+def _record_scraper_source_run(db, source_id: str | None, status: str, detail: str | None, job_count: int) -> None:
+    """Best-effort write-back of the last run's outcome onto its
+    ScraperSource row — never let this break the actual scrape run."""
+    if not source_id:
+        return
+    try:
+        from app.models import ScraperSource
+
+        row = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
+        if row:
+            row.last_run_at = datetime.utcnow()
+            row.last_run_status = status
+            row.last_run_detail = (detail or "")[:2000] or None
+            row.last_run_job_count = job_count
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"could not record scraper source run for {source_id}: {exc}")
 
 
 @celery.task(
@@ -465,35 +489,43 @@ def _scrape_budget_exhausted(ingested: int, started_at: datetime, now: datetime)
     time_limit=10 * 60,
 )
 def scrape_external_jobs() -> dict:
-    """Fetch jobs from configured external sources into the ScrapedJob queue (pending review)."""
+    """Fetch jobs from admin-configured external sources into the ScrapedJob queue (pending review)."""
     from app.models import ScrapedJob
-    from app.services.scraper_service import get_adapters, content_hash, classify_audience_lane, assess_scraped_job_quality
-
-    adapters = get_adapters()
-    if not adapters:
-        logger.info("scrape_external_jobs: no SCRAPER_SOURCES configured; nothing to do")
-        return {"sources": 0, "ingested": 0, "skipped": 0}
+    from app.services.scraper_service import get_adapters, get_scraper_settings, content_hash, classify_audience_lane, assess_scraped_job_quality
 
     db = SessionLocal()
+    adapters: list = []
     ingested = 0
     skipped = 0
     sources_processed = 0
     budget_hit = False
     started_at = datetime.utcnow()
     try:
+        adapters = get_adapters(db)
+        if not adapters:
+            logger.info("scrape_external_jobs: no scraper sources configured (or disabled); nothing to do")
+            return {"sources": 0, "ingested": 0, "skipped": 0}
+
+        settings = get_scraper_settings(db)
+        max_ingest_per_run = settings.max_ingest_per_run
+        run_budget_seconds = settings.run_budget_seconds
+
         now = datetime.utcnow()
         for adapter in adapters:
-            if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow()):
+            if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
                 budget_hit = True
                 break
             sources_processed += 1
+            source_ingested = 0
             try:
                 items = adapter.fetch()
             except Exception as e:
                 logger.warning(f"scraper source '{adapter.name}' failed: {e}")
+                _record_scraper_source_run(db, adapter.source_id, "error", str(e), 0)
+                db.commit()
                 continue
             for it in items:
-                if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow()):
+                if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
                     budget_hit = True
                     break
                 title = (it.get("title") or "").strip()
@@ -509,6 +541,7 @@ def scrape_external_jobs() -> dict:
                     if new_deadline:
                         existing.application_deadline = new_deadline
                     skipped += 1
+                    source_ingested += 1
                     continue
                 quality_score, quality_flags = assess_scraped_job_quality(
                     title, it.get("description"), it.get("company"),
@@ -524,6 +557,8 @@ def scrape_external_jobs() -> dict:
                     status="pending", content_hash=chash, last_seen_at=now,
                 ))
                 ingested += 1
+                source_ingested += 1
+            _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)
             db.commit()
             if budget_hit:
                 break

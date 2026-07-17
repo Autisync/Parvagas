@@ -11,9 +11,24 @@ CareerjetAdapter's docstring for the important caveat about using it as a
 scraping source at all.
 """
 import json
+import uuid
 
 import app.services.scraper_service as svc
+from app.db.base import Base
+from app.db.session import engine, SessionLocal
+from app.models import ScraperSettings, ScraperSource
 from app.services.scraper_service import CareerjetAdapter, GreenhouseAdapter, LeverAdapter, get_adapters
+
+Base.metadata.create_all(engine)
+
+
+def _make_source(db, **over):
+    base = dict(id=str(uuid.uuid4()), name="Acme GH", type="greenhouse", url="acme", enabled=True)
+    base.update(over)
+    row = ScraperSource(**base)
+    db.add(row)
+    db.flush()
+    return row
 
 
 # ── Greenhouse ───────────────────────────────────────────────────────────────
@@ -34,7 +49,7 @@ GREENHOUSE_FIXTURE = {
 
 
 def test_greenhouse_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: json.dumps(GREENHOUSE_FIXTURE))
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(GREENHOUSE_FIXTURE))
     adapter = GreenhouseAdapter(name="Acme", url="acme")
     jobs = adapter.fetch()
     assert len(jobs) == 1
@@ -58,12 +73,12 @@ def test_greenhouse_adapter_accepts_full_url_unchanged():
 
 
 def test_greenhouse_adapter_malformed_json_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: "not json")
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: "not json")
     assert GreenhouseAdapter(name="Acme", url="acme").fetch() == []
 
 
 def test_greenhouse_adapter_unreachable_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: None)
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: None)
     assert GreenhouseAdapter(name="Acme", url="acme").fetch() == []
 
 
@@ -83,7 +98,7 @@ LEVER_FIXTURE = [
 
 
 def test_lever_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: json.dumps(LEVER_FIXTURE))
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(LEVER_FIXTURE))
     jobs = LeverAdapter(name="Acme", url="acme").fetch()
     assert len(jobs) == 1
     job = jobs[0]
@@ -100,7 +115,7 @@ def test_lever_adapter_expands_bare_slug_to_api_url():
 
 
 def test_lever_adapter_non_list_response_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: json.dumps({"unexpected": "shape"}))
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps({"unexpected": "shape"}))
     assert LeverAdapter(name="Acme", url="acme").fetch() == []
 
 
@@ -125,7 +140,7 @@ CAREERJET_FIXTURE = {
 
 
 def test_careerjet_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: json.dumps(CAREERJET_FIXTURE))
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(CAREERJET_FIXTURE))
     adapter = CareerjetAdapter(name="Careerjet Angola", url="test-affid", category="Tecnologia")
     jobs = adapter.fetch()
     assert len(jobs) == 1
@@ -138,7 +153,7 @@ def test_careerjet_adapter_normalises(monkeypatch):
 
 def test_careerjet_adapter_without_affid_skips_request(monkeypatch):
     calls = []
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: calls.append(url) or json.dumps(CAREERJET_FIXTURE))
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: calls.append(url) or json.dumps(CAREERJET_FIXTURE))
     assert CareerjetAdapter(name="Careerjet Angola", url="").fetch() == []
     assert calls == []  # never even attempted the request without an affid
 
@@ -146,7 +161,7 @@ def test_careerjet_adapter_without_affid_skips_request(monkeypatch):
 def test_careerjet_adapter_request_includes_affid_and_angola_location(monkeypatch):
     captured = {}
 
-    def _fake_get(url, retries=3):
+    def _fake_get(url, retries=3, timeout=None, user_agent=None):
         captured["url"] = url
         return json.dumps(CAREERJET_FIXTURE)
 
@@ -158,34 +173,106 @@ def test_careerjet_adapter_request_includes_affid_and_angola_location(monkeypatc
 
 
 def test_careerjet_adapter_malformed_json_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: "not json")
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: "not json")
     assert CareerjetAdapter(name="Careerjet Angola", url="test-affid").fetch() == []
 
 
 def test_careerjet_adapter_unreachable_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3: None)
+    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: None)
     assert CareerjetAdapter(name="Careerjet Angola", url="test-affid").fetch() == []
 
 
-# ── SCRAPER_SOURCES wiring ────────────────────────────────────────────────────
+# ── get_adapters() wiring — admin-managed ScraperSource/ScraperSettings ──────
 
-def test_get_adapters_builds_new_portal_types(monkeypatch):
-    specs = [
-        {"type": "greenhouse", "name": "Acme GH", "url": "acme"},
-        {"type": "lever", "name": "Acme Lever", "url": "acme"},
-    ]
-    monkeypatch.setenv("SCRAPER_SOURCES", json.dumps(specs))
-    adapters = get_adapters()
-    assert [type(a).__name__ for a in adapters] == ["GreenhouseAdapter", "LeverAdapter"]
+def test_get_adapters_builds_new_portal_types():
+    db = SessionLocal()
+    try:
+        _make_source(db, name="Acme GH", type="greenhouse", url="acme")
+        _make_source(db, id=str(uuid.uuid4()), name="Acme Lever", type="lever", url="acme")
+        db.commit()
+
+        adapters = get_adapters(db)
+        assert [type(a).__name__ for a in adapters] == ["GreenhouseAdapter", "LeverAdapter"]
+    finally:
+        db.query(ScraperSource).delete()
+        db.commit()
+        db.close()
 
 
-def test_get_adapters_skips_careerjet_while_disabled(monkeypatch):
-    specs = [{"type": "careerjet", "name": "Careerjet Angola", "url": "my-affid"}]
-    monkeypatch.setenv("SCRAPER_SOURCES", json.dumps(specs))
-    assert get_adapters() == []
+def test_get_adapters_skips_disabled_sources():
+    db = SessionLocal()
+    try:
+        _make_source(db, name="Acme GH", type="greenhouse", url="acme", enabled=False)
+        db.commit()
+        assert get_adapters(db) == []
+    finally:
+        db.query(ScraperSource).delete()
+        db.commit()
+        db.close()
 
 
-def test_get_adapters_ignores_unknown_type(monkeypatch):
-    specs = [{"type": "carrier-pigeon", "name": "X", "url": "https://example.com"}]
-    monkeypatch.setenv("SCRAPER_SOURCES", json.dumps(specs))
-    assert get_adapters() == []
+def test_get_adapters_skips_careerjet_even_if_row_exists():
+    """Belt-and-suspenders: the admin API rejects creating a 'careerjet' row
+    at all, but get_adapters() must never build one even if a row somehow
+    exists (e.g. restored from an old backup)."""
+    db = SessionLocal()
+    try:
+        _make_source(db, name="Careerjet Angola", type="careerjet", url="my-affid")
+        db.commit()
+        assert get_adapters(db) == []
+    finally:
+        db.query(ScraperSource).delete()
+        db.commit()
+        db.close()
+
+
+def test_get_adapters_ignores_unknown_type():
+    db = SessionLocal()
+    try:
+        _make_source(db, name="X", type="carrier-pigeon", url="https://example.com")
+        db.commit()
+        assert get_adapters(db) == []
+    finally:
+        db.query(ScraperSource).delete()
+        db.commit()
+        db.close()
+
+
+def test_get_adapters_respects_master_kill_switch():
+    db = SessionLocal()
+    try:
+        _make_source(db, name="Acme GH", type="greenhouse", url="acme")
+        db.commit()
+
+        settings = svc.get_scraper_settings(db)
+        settings.enabled = False
+        db.commit()
+
+        assert get_adapters(db) == []
+    finally:
+        db.query(ScraperSource).delete()
+        db.query(ScraperSettings).delete()
+        db.commit()
+        db.close()
+
+
+def test_get_adapters_per_source_max_results_overrides_global_default():
+    db = SessionLocal()
+    try:
+        settings = svc.get_scraper_settings(db)
+        settings.default_max_per_source = 5
+        db.commit()
+
+        _make_source(db, name="Acme GH", type="greenhouse", url="acme", max_results=2)
+        _make_source(db, id=str(uuid.uuid4()), name="Acme Lever", type="lever", url="acme")
+        db.commit()
+
+        adapters = get_adapters(db)
+        by_name = {a.name: a for a in adapters}
+        assert by_name["Acme GH"]._limit() == 2  # per-source override wins
+        assert by_name["Acme Lever"]._limit() == 5  # falls back to global default
+    finally:
+        db.query(ScraperSource).delete()
+        db.query(ScraperSettings).delete()
+        db.commit()
+        db.close()

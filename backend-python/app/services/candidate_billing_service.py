@@ -15,14 +15,21 @@ as entitled, so premium AI tools ship as a free feature today. Flipping the
 flag on later starts enforcing subscription tier without another migration.
 
 This module also owns the CV Builder plan catalogue (single source of
-truth — app.api.v1.payments imports CV_BUILDER_PLANS for its pricing
+truth — app.api.v1.payments calls get_cv_builder_plans() for its pricing
 endpoints rather than redefining it) and the quota/feature checks that gate
 resume/cover-letter CRUD in app.api.v1.resumes. Those checks share the same
 CANDIDATE_PREMIUM_ENABLED switch: while it's off, the plan catalogue is
 advertised on the pricing page but nothing is actually enforced — turning
 the flag on is what makes both the premium AI tools *and* these CV Builder
 quotas real at once.
+
+The catalogue itself lives in the admin-editable `candidate_cv_plans` table
+(see /admin/candidate-cv-plans) rather than as a hardcoded constant, so
+prices/features/limits can change without a deploy. `_FALLBACK_TIERS` below
+is only a defensive fallback for the (should-never-happen) case where the
+table is empty — e.g. a fresh test DB that skips the seed migration.
 """
+import json
 from datetime import datetime
 
 from fastapi import HTTPException, status
@@ -30,38 +37,75 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import CandidateCVSubscription, CandidateProfile, Resume
+from app.models import CandidateCVSubscription, CandidateCvPlan, CandidateProfile, Resume
 
 settings = get_settings()
 
-# Three tiers (AOA pricing for Angola market):
-#   free     – 1 resume, basic templates, no AI
-#   pro      – 3 resumes, all templates, AI score, PDF export  (15 000 AOA/month)
-#   premium  – Unlimited resumes, AI rewrite, cover letters,   (30 000 AOA/month)
-#              auto-apply queue, priority support
-CV_BUILDER_PLANS = [
-    {
-        "tier": "free", "name": "CV Grátis", "price": 0, "interval": "month",
+# Fixed tier identity — content (price/name/features/limits) is admin-editable,
+# but which tiers exist is not (matches the fixed candidate_cv_plans.tier
+# values seeded by the migration and the fixed CandidateCVSubscription.plan_tier
+# values used elsewhere).
+KNOWN_CV_TIERS = ("free", "pro", "premium")
+
+# AOA pricing for Angola market — used only if candidate_cv_plans is empty.
+_FALLBACK_TIERS = {
+    "free": {
+        "name": "CV Grátis", "price": 0, "interval": "month",
         "features": ["1 CV", "Modelos básicos", "Download PDF"],
         "limits": {"max_resumes": 1, "ai_score": False, "ai_rewrite": False,
                    "cover_letters": False, "auto_apply": False},
     },
-    {
-        "tier": "pro", "name": "CV Pro", "price": 15000, "interval": "month",
+    "pro": {
+        "name": "CV Pro", "price": 15000, "interval": "month",
         "features": ["3 CVs", "Todos os modelos", "Pontuação ATS por IA",
                      "Export PDF e DOCX", "Carta de apresentação"],
         "limits": {"max_resumes": 3, "ai_score": True, "ai_rewrite": False,
                    "cover_letters": True, "auto_apply": False},
     },
-    {
-        "tier": "premium", "name": "CV Premium", "price": 30000, "interval": "month",
+    "premium": {
+        "name": "CV Premium", "price": 30000, "interval": "month",
         "features": ["CVs ilimitados", "IA rewrite completo", "Fila auto-candidatura",
                      "Suporte prioritário", "Todas as funcionalidades Pro"],
         "limits": {"max_resumes": -1, "ai_score": True, "ai_rewrite": True,
                    "cover_letters": True, "auto_apply": True},
     },
-]
-CV_BUILDER_PLAN_LIMITS = {plan["tier"]: plan["limits"] for plan in CV_BUILDER_PLANS}
+}
+
+
+def _row_to_plan_dict(row: CandidateCvPlan) -> dict:
+    return {
+        "tier": row.tier, "name": row.name, "price": row.price, "interval": row.interval,
+        "features": json.loads(row.features) if row.features else [],
+        "limits": {
+            "max_resumes": row.max_resumes, "ai_score": row.ai_score, "ai_rewrite": row.ai_rewrite,
+            "cover_letters": row.cover_letters, "auto_apply": row.auto_apply,
+        },
+    }
+
+
+def _fallback_plan_dict(tier: str) -> dict:
+    data = _FALLBACK_TIERS.get(tier, _FALLBACK_TIERS["free"])
+    return {"tier": tier, "name": data["name"], "price": data["price"], "interval": data["interval"],
+            "features": data["features"], "limits": data["limits"]}
+
+
+def get_cv_builder_plans(db: Session) -> list[dict]:
+    """Admin-editable CV Builder plan catalogue, ordered cheapest-first.
+    Falls back to the built-in tier definitions if candidate_cv_plans is
+    empty (defensive — the seed migration should always populate it)."""
+    rows = db.query(CandidateCvPlan).filter(CandidateCvPlan.active.is_(True)).order_by(CandidateCvPlan.price.asc()).all()
+    if rows:
+        return [_row_to_plan_dict(r) for r in rows]
+    return [_fallback_plan_dict(t) for t in KNOWN_CV_TIERS]
+
+
+def get_cv_plan_limits(db: Session, tier: str) -> dict:
+    """A single tier's quota/feature limits — the DB-backed replacement for
+    the old CV_BUILDER_PLAN_LIMITS[tier] dict lookup."""
+    row = db.query(CandidateCvPlan).filter(CandidateCvPlan.tier == tier).first()
+    if row:
+        return _row_to_plan_dict(row)["limits"]
+    return _fallback_plan_dict(tier)["limits"]
 
 
 def _active_cv_subscription(db: Session, candidate_profile_id: str) -> CandidateCVSubscription | None:
@@ -85,7 +129,7 @@ def get_cv_plan_tier(db: Session, candidate_profile_id: str) -> str:
         return "free"
     if sub.current_period_end and sub.current_period_end < datetime.utcnow():
         return "free"
-    return sub.plan_tier if sub.plan_tier in CV_BUILDER_PLAN_LIMITS else "free"
+    return sub.plan_tier if sub.plan_tier in KNOWN_CV_TIERS else "free"
 
 
 def cv_uses_free_ai_tier(db: Session, candidate_profile_id: str) -> bool:
@@ -131,7 +175,7 @@ def assert_resume_quota(db: Session, candidate_profile_id: str) -> None:
 
     db.query(CandidateProfile).filter(CandidateProfile.id == candidate_profile_id).with_for_update().first()
 
-    max_resumes = CV_BUILDER_PLAN_LIMITS[get_cv_plan_tier(db, candidate_profile_id)]["max_resumes"]
+    max_resumes = get_cv_plan_limits(db, get_cv_plan_tier(db, candidate_profile_id))["max_resumes"]
     if max_resumes < 0:
         return  # unlimited (premium)
 
@@ -154,7 +198,7 @@ def assert_cover_letters_allowed(db: Session, candidate_profile_id: str) -> None
     if not settings.CANDIDATE_PREMIUM_ENABLED:
         return
 
-    if not CV_BUILDER_PLAN_LIMITS[get_cv_plan_tier(db, candidate_profile_id)]["cover_letters"]:
+    if not get_cv_plan_limits(db, get_cv_plan_tier(db, candidate_profile_id))["cover_letters"]:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Cartas de apresentação exigem o plano Pro ou Premium.",
@@ -167,7 +211,7 @@ def assert_auto_apply_allowed(db: Session, candidate_profile_id: str) -> None:
     if not settings.CANDIDATE_PREMIUM_ENABLED:
         return
 
-    if not CV_BUILDER_PLAN_LIMITS[get_cv_plan_tier(db, candidate_profile_id)]["auto_apply"]:
+    if not get_cv_plan_limits(db, get_cv_plan_tier(db, candidate_profile_id))["auto_apply"]:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="A auto-candidatura exige o plano Premium.",
