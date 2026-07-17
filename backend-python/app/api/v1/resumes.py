@@ -45,7 +45,6 @@ from app.models import (
     ResumeVersion,
     CoverLetter,
     CandidateScore,
-    JobMatch,
     User,
     UserRole,
 )
@@ -55,7 +54,6 @@ from app.schemas import (
     CoverLetterUpdateRequest,
     ExperienceImproveRequest,
     ExperienceImproveResponse,
-    JobMatchResponse,
     MessageResponse,
     ResumeApplyToProfileResponse,
     ResumeCreateRequest,
@@ -264,25 +262,11 @@ async def list_resumes(
     return [_resume_payload(resume) for resume in resumes]
 
 
-# NOTE: /matches (and any other static single-segment GET route) must be
-# registered before GET /{resume_id} — Starlette matches routes in
+# NOTE: /cover-letters (and any other static single-segment GET route) must
+# be registered before GET /{resume_id} — Starlette matches routes in
 # registration order, so a static route defined after a dynamic one is
-# unreachable (GET /resumes/matches would match /{resume_id} first with
-# resume_id="matches" and 404). This was a pre-existing bug; fixed by
-# ordering, not by changing the URL shape.
-@router.get("/matches", response_model=list[JobMatchResponse])
-async def list_job_matches(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_candidate_user(current_user)
-    profile = _ensure_candidate_profile(db, current_user)
-    matches = db.query(JobMatch).filter(JobMatch.candidate_profile_id == profile.id).order_by(JobMatch.match_percentage.desc()).all()
-    return matches
-
-
-# Same registration-order rule as /matches above — /cover-letters (static)
-# must come before GET /{resume_id} (dynamic).
+# unreachable (GET /resumes/cover-letters would match /{resume_id} first
+# with resume_id="cover-letters" and 404).
 @router.get("/cover-letters", response_model=list[CoverLetterResponse])
 async def list_cover_letters(
     db: Session = Depends(get_db),

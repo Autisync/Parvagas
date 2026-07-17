@@ -283,20 +283,6 @@ class CandidateScore(Base, TimestampMixin):
     resume = relationship("Resume")
 
 
-class JobMatch(Base, TimestampMixin):
-    """Job matching results for candidate/job recommendation flows."""
-    __tablename__ = "job_matches"
-
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    candidate_profile_id = Column(String(36), ForeignKey("candidate_profiles.id"), nullable=False)
-    job_id = Column(String(36), nullable=False)
-    match_percentage = Column(Float, nullable=True)
-    skills_gap = Column(Text, nullable=True)
-    recommendation = Column(Text, nullable=True)
-
-    candidate_profile = relationship("CandidateProfile")
-
-
 class ATSStage(Base, TimestampMixin):
     """ATS pipeline stage definitions."""
     __tablename__ = "ats_stages"

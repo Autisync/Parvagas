@@ -333,20 +333,6 @@ class CoverLetterResponse(BaseModel):
         from_attributes = True
 
 
-class JobMatchResponse(BaseModel):
-    id: str
-    candidate_profile_id: str
-    job_id: str
-    match_percentage: Optional[float] = None
-    skills_gap: Optional[str] = None
-    recommendation: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class ATSStageCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None

@@ -834,20 +834,6 @@ def test_cover_letters_are_ownership_isolated(db):
 
 # ------------------------------ route ordering ----------------------------- #
 
-def test_matches_route_registered_before_dynamic_resume_id_route():
-    """Regression: Starlette matches routes in registration order, not by
-    specificity. /matches (static) must be registered before GET
-    /{resume_id} (dynamic) — otherwise a GET to /resumes/matches matches
-    /{resume_id} first with resume_id="matches" and 404s, permanently
-    shadowing the real endpoint. This was a real pre-existing bug."""
-    get_paths_in_order = [
-        r.path for r in resumes_module.router.routes if "GET" in r.methods
-    ]
-    matches_index = get_paths_in_order.index("/resumes/matches")
-    dynamic_index = get_paths_in_order.index("/resumes/{resume_id}")
-    assert matches_index < dynamic_index
-
-
 def test_cover_letters_list_route_registered_before_dynamic_resume_id_route():
     """Same bug class, same fix (Phase C3): GET /cover-letters is a static
     single-segment path added after this endpoint existed in name only —
