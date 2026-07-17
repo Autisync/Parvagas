@@ -462,10 +462,20 @@ def _normalize_phone(raw: str) -> str:
     return digits
 
 
+def _ensure_otp_login_enabled(db: Session) -> None:
+    """Belt-and-suspenders check even though the frontend entry point only
+    renders behind its own public flag — a leaked/bookmarked link shouldn't
+    still work while OTP login is meant to be off."""
+    from app.services.feature_flags import get_flag
+    if not get_flag("OTP_LOGIN_ENABLED", settings.OTP_LOGIN_ENABLED, db=db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Login por telemóvel não está disponível.")
+
+
 @router.post("/otp/request", response_model=None)
 @limiter.limit("5/hour")
 async def otp_request(request: Request, payload: dict, db: Session = Depends(get_db)):
     """Generate and send a one-time login code to a phone number."""
+    _ensure_otp_login_enabled(db)
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_request", remote_ip=_ip):
@@ -491,6 +501,7 @@ async def otp_request(request: Request, payload: dict, db: Session = Depends(get
 @limiter.limit("10/hour")
 async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_db)):
     """Verify an OTP and issue a session token (creates a candidate on first login)."""
+    _ensure_otp_login_enabled(db)
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_verify", remote_ip=_ip):

@@ -240,6 +240,12 @@ class Settings(BaseSettings):
     # reject passwords found in breach corpora with a friendly PT message.
     HIBP_PASSWORD_CHECK_ENABLED: bool = os.getenv("HIBP_PASSWORD_CHECK_ENABLED", "false").lower() == "true"
 
+    # Phone/OTP login (mobile-first market). Backend is complete but ships
+    # dark: off by default, flippable at runtime via the OTP_LOGIN_ENABLED
+    # feature flag without a redeploy. Real SMS delivery is a separate,
+    # not-yet-done task — send_sms() stays on its log-only provider either way.
+    OTP_LOGIN_ENABLED: bool = os.getenv("OTP_LOGIN_ENABLED", "false").lower() == "true"
+
     # Observability
     SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
     SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0"))

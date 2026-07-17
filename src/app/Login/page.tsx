@@ -10,6 +10,7 @@ import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import GoogleSignInButton from "@/app/components/GoogleSignInButton";
+import PhoneLoginForm from "@/app/components/PhoneLoginForm";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import FeedbackAlert, { type FeedbackVariant } from "@/app/components/errors/FeedbackAlert";
@@ -112,6 +113,8 @@ function LoginContent() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
   const feedbackHashRef = useRef("");
+  const [loginMethod, setLoginMethod] = useState<"password" | "phone">("password");
+  const otpLoginEnabled = process.env.NEXT_PUBLIC_OTP_LOGIN_ENABLED === "true";
   const { dict } = useClientLocale();
   const roleTabs: Array<{ id: AuthRole; label: string; hint: string }> = [
     { id: "candidate", label: dict.auth.login.roleCandidate, hint: dict.auth.login.roleCandidateHint },
@@ -513,6 +516,29 @@ function LoginContent() {
               })}
             </div>
 
+            {otpLoginEnabled && selectedRole === "candidate" && !modeReset ? (
+              <div className="mt-4 flex justify-center gap-4 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod("password")}
+                  className={loginMethod === "password" ? "font-semibold text-red-600" : "text-slate-500 hover:text-slate-800"}
+                >
+                  Entrar com email
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod("phone")}
+                  className={loginMethod === "phone" ? "font-semibold text-red-600" : "text-slate-500 hover:text-slate-800"}
+                >
+                  Entrar com telemóvel
+                </button>
+              </div>
+            ) : null}
+
+            {loginMethod === "phone" && otpLoginEnabled && selectedRole === "candidate" && !modeReset ? (
+              <PhoneLoginForm />
+            ) : (
             <form
               className="mt-6 space-y-4"
               onSubmit={passwordResetToken ? handlePasswordReset : firstLoginResetToken ? handleFirstLoginReset : handleSubmit}
@@ -700,6 +726,7 @@ function LoginContent() {
 
               <RecaptchaNotice />
             </form>
+            )}
           </div>
         </section>
       </div>
