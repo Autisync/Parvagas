@@ -23,7 +23,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, ClientErrorLog, Company, CompanyInvite, CompanyMember, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    CareerPost, ClientErrorLog, Company, CompanyInvite, CompanyMember, CVUpload, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
     LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
@@ -1200,6 +1200,101 @@ async def admin_client_errors_analytics(
         ],
         "pagination": _pagination(page, limit, total),
         "dailySeries": _daily_series(db, ClientErrorLog, datetime.utcnow() - timedelta(days=14)),
+    }
+
+
+@router.get("/analytics/funnels")
+async def admin_business_funnels_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Business-funnel rollups from data that already exists — no new
+    tables, just queries nothing had surfaced yet."""
+    _ensure_admin(current_user)
+    import statistics
+
+    # Signup -> verified -> first application, candidates only (the step
+    # only makes sense for the accounts that actually apply to jobs).
+    # Uses User.email_verified rather than EmailVerificationToken.used_at:
+    # cleanup_expired_tokens deletes a token once it expires regardless of
+    # whether it was used, so the token table alone would under-count
+    # verified users whose token has since aged out.
+    signups = db.query(func.count(User.id)).filter(User.role == UserRole.candidate).scalar() or 0
+    verified = db.query(func.count(User.id)).filter(
+        User.role == UserRole.candidate, User.email_verified.is_(True),
+    ).scalar() or 0
+    applied = db.query(func.count(func.distinct(JobApplication.candidate_user_id))).filter(
+        JobApplication.candidate_user_id.isnot(None),
+    ).scalar() or 0
+    funnel = {
+        "signups": signups,
+        "verified": verified,
+        "appliedAtLeastOnce": applied,
+        "verifiedRate": round((verified / signups) * 100, 1) if signups else None,
+        "appliedRate": round((applied / signups) * 100, 1) if signups else None,
+    }
+
+    # Moderation SLA — time from submission to publish, for jobs actually
+    # published. Median computed in Python (portable across SQLite/Postgres,
+    # neither of which this app can rely on having a built-in percentile
+    # function it can use identically in both).
+    published = db.query(Job.created_at, Job.published_at).filter(Job.published_at.isnot(None)).all()
+    hours = [(p - c).total_seconds() / 3600 for c, p in published if c and p]
+    moderation_sla = {
+        "avgHours": round(sum(hours) / len(hours), 1) if hours else None,
+        "medianHours": round(statistics.median(hours), 1) if hours else None,
+        "sampleSize": len(hours),
+    }
+
+    # CV parse-failure rate — only the two terminal outcomes count toward
+    # the rate; pending/processing are in-flight and not_applicable/skipped
+    # were never attempted.
+    parse_rows = dict(db.query(CVUpload.parse_status, func.count(CVUpload.id)).group_by(CVUpload.parse_status).all())
+    parse_completed = int(parse_rows.get("completed", 0))
+    parse_failed = int(parse_rows.get("failed", 0))
+    parse_terminal = parse_completed + parse_failed
+    cv_parsing = {
+        "completed": parse_completed,
+        "failed": parse_failed,
+        "failureRate": round((parse_failed / parse_terminal) * 100, 1) if parse_terminal else None,
+    }
+
+    # Newsletter growth — weekly signups over the last 8 weeks, bucketed in
+    # Python (portable; avoids a Postgres-only date_trunc vs SQLite-only
+    # strftime split for a once-a-week granularity that doesn't need SQL-
+    # level aggregation).
+    since = datetime.utcnow() - timedelta(weeks=8)
+    recent_subs = db.query(NewsletterSubscriber.created_at).filter(NewsletterSubscriber.created_at >= since).all()
+    weekly_buckets: dict[str, int] = {}
+    for (created,) in recent_subs:
+        week_start = (created - timedelta(days=created.weekday())).date().isoformat()
+        weekly_buckets[week_start] = weekly_buckets.get(week_start, 0) + 1
+    newsletter = {
+        "weeklySignups": [{"label": k, "value": v} for k, v in sorted(weekly_buckets.items())],
+        "totalSubscribers": db.query(func.count(NewsletterSubscriber.id)).scalar() or 0,
+        "activeSubscribers": db.query(func.count(NewsletterSubscriber.id)).filter(
+            NewsletterSubscriber.unsubscribed_at.is_(None),
+        ).scalar() or 0,
+    }
+
+    # Job spam-score distribution — already computed on every job, never
+    # surfaced anywhere before this.
+    spam_rows = db.query(Job.spam_score, func.count(Job.id)).group_by(Job.spam_score).all()
+    spam_buckets = [(0, 0, "0"), (1, 25, "1-25"), (26, 50, "26-50"), (51, 75, "51-75"), (76, 100, "76-100")]
+    spam_distribution = [
+        {
+            "label": label,
+            "value": sum(int(c) for score, c in spam_rows if score is not None and lo <= score <= hi),
+        }
+        for lo, hi, label in spam_buckets
+    ]
+
+    return {
+        "signupFunnel": funnel,
+        "moderationSla": moderation_sla,
+        "cvParsing": cv_parsing,
+        "newsletter": newsletter,
+        "spamScoreDistribution": spam_distribution,
     }
 
 
@@ -2974,6 +3069,43 @@ async def admin_launch_readiness(
         except Exception:  # noqa: BLE001
             pass
         add("hibp", "security", "warn", "Não foi possível verificar o estado do HIBP")
+
+    # Celery queue depth — inspect() round-trips through the broker to ask
+    # live workers what they're doing; a short timeout + broad except keeps
+    # a slow/unreachable broker from ever blocking this readiness page.
+    try:
+        from app.workers.celery_app import celery
+
+        insp = celery.control.inspect(timeout=2.0)
+        active = insp.active() or {}
+        reserved = insp.reserved() or {}
+        worker_count = len(set(active.keys()) | set(reserved.keys()))
+        if worker_count == 0:
+            add("celery", "infra", "warn", "Nenhum worker Celery respondeu — verifique se está em execução")
+        else:
+            active_count = sum(len(v) for v in active.values())
+            reserved_count = sum(len(v) for v in reserved.values())
+            add(
+                "celery", "infra", "pass",
+                f"{worker_count} worker(s) ativo(s) — {active_count} tarefa(s) em execução, {reserved_count} em fila",
+            )
+    except Exception:  # noqa: BLE001
+        add("celery", "infra", "warn", "Não foi possível verificar o estado dos workers Celery")
+
+    # Database size — Postgres-only (pg_database_size has no SQLite
+    # equivalent); silently skipped rather than a permanent warning on
+    # environments where this was never going to apply (dev/test on SQLite).
+    try:
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            size_bytes = db.execute(text("SELECT pg_database_size(current_database())")).scalar()
+            size_mb = round((size_bytes or 0) / (1024 * 1024), 1)
+            add("db-size", "infra", "pass", f"Tamanho da base de dados: {size_mb} MB")
+    except Exception:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        add("db-size", "infra", "warn", "Não foi possível verificar o tamanho da base de dados")
 
     summary = {
         "total": len(checks),

@@ -506,6 +506,28 @@ export async function fetchClientErrors(token: string, params: Record<string, st
   );
 }
 
+export type BusinessFunnelsAnalytics = {
+  signupFunnel: {
+    signups: number;
+    verified: number;
+    appliedAtLeastOnce: number;
+    verifiedRate: number | null;
+    appliedRate: number | null;
+  };
+  moderationSla: { avgHours: number | null; medianHours: number | null; sampleSize: number };
+  cvParsing: { completed: number; failed: number; failureRate: number | null };
+  newsletter: {
+    weeklySignups: Array<{ label: string; value: number }>;
+    totalSubscribers: number;
+    activeSubscribers: number;
+  };
+  spamScoreDistribution: Array<{ label: string; value: number }>;
+};
+
+export async function fetchBusinessFunnelsAnalytics(token: string) {
+  return authFetch<BusinessFunnelsAnalytics>("/admin/analytics/funnels", token);
+}
+
 export async function downloadAuditLogsCsv(token: string, params: Record<string, string | number | undefined> = {}) {
   const query = listQuery(params);
   return downloadCsv(`/admin/audit-logs/export.csv${query}`, token, "parvagas-audit-logs.csv");
