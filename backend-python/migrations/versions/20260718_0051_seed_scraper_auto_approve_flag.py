@@ -10,6 +10,7 @@ Revision ID: 20260718_0051
 Revises: 20260718_0050
 Create Date: 2026-07-18 00:00:00
 """
+from datetime import datetime
 from typing import Sequence, Union
 
 from alembic import op
@@ -31,18 +32,30 @@ _FLAG_DESCRIPTION = (
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # created_at/updated_at are nullable=False with only a Python-side ORM
+    # default (TimestampMixin, app/db/base.py) — no DB server_default — so a
+    # raw Core insert that omits them (as this migration originally did)
+    # hits a NOT NULL violation on Postgres and crash-loops the app on every
+    # boot. Every other seed migration in this repo (0028, 0029, 0042, 0039)
+    # sets both explicitly; this one must too.
     feature_flags = sa.table(
         "feature_flags",
         sa.column("key", sa.String),
         sa.column("value", sa.Boolean),
         sa.column("description", sa.Text),
+        sa.column("created_at", sa.DateTime),
+        sa.column("updated_at", sa.DateTime),
     )
     existing = bind.execute(
         sa.text("SELECT 1 FROM feature_flags WHERE key = :key"), {"key": _FLAG_KEY}
     ).first()
     if not existing:
+        now = datetime.utcnow()
         bind.execute(
-            feature_flags.insert().values(key=_FLAG_KEY, value=False, description=_FLAG_DESCRIPTION)
+            feature_flags.insert().values(
+                key=_FLAG_KEY, value=False, description=_FLAG_DESCRIPTION,
+                created_at=now, updated_at=now,
+            )
         )
 
 
