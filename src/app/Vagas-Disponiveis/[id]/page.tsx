@@ -11,6 +11,7 @@ import ReportJobButton from "./ReportJobButton";
 import JobPrepPanel from "./JobPrepPanel";
 import TrackOnMount from "@/app/components/TrackOnMount";
 import { toJsonLdString } from "@/lib/jsonLd";
+import { safeExternalHref } from "@/lib/safeUrl";
 
 type Job = {
   _id: string;
@@ -106,6 +107,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const company = job.companyId && typeof job.companyId === "object" ? job.companyId : null;
   const companyName = job.externalCompanyName || company?.name || dict.jobDetail.companyFallback;
   const mode = job.workMode || "";
+  const companyWebsiteHref = safeExternalHref(company?.website);
+  const externalCompanyLogoHref = safeExternalHref(job.externalCompanyLogo);
+  const companyLogoHref = safeExternalHref(company?.logo);
+  const sourceUrlHref = safeExternalHref(job.sourceUrl);
 
   const jobLd = {
     "@context": "https://schema.org/",
@@ -118,8 +123,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     hiringOrganization: {
       "@type": "Organization",
       name: companyName,
-      ...(!job.externalCompanyName && company?.website ? { sameAs: company.website } : {}),
-      ...(job.externalCompanyLogo ? { logo: job.externalCompanyLogo } : !job.externalCompanyName && company?.logo ? { logo: company.logo } : {}),
+      ...(!job.externalCompanyName && companyWebsiteHref ? { sameAs: companyWebsiteHref } : {}),
+      ...(externalCompanyLogoHref ? { logo: externalCompanyLogoHref } : !job.externalCompanyName && companyLogoHref ? { logo: companyLogoHref } : {}),
     },
     jobLocation: {
       "@type": "Place",
@@ -276,8 +281,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <h3 className="font-bold text-lg mb-3">{dict.jobDetail.company}</h3>
                 {company.description && <p className="text-sm text-gray-600 mb-3 leading-relaxed">{company.description}</p>}
                 {company.size && <p className="text-sm text-gray-500">{dict.jobDetail.companySize}: <strong>{company.size}</strong></p>}
-                {company.website && (
-                  <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-sm text-red-600 hover:underline mt-1 block">{company.website}</a>
+                {companyWebsiteHref && (
+                  <a href={companyWebsiteHref} target="_blank" rel="noopener noreferrer" className="text-sm text-red-600 hover:underline mt-1 block">{companyWebsiteHref}</a>
                 )}
               </div>
             )}
@@ -305,11 +310,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
             <Link href="/Vagas-Disponiveis" className="block text-center text-sm text-gray-500 hover:text-red-600">← {dict.jobDetail.viewAllJobs}</Link>
 
-            {job.sourceUrl ? (
+            {sourceUrlHref ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
                 <p className="text-xs text-amber-800">
                   Vaga agregada{job.source ? ` de ${job.source}` : ""}.{" "}
-                  <a href={job.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline">
+                  <a href={sourceUrlHref} target="_blank" rel="noopener noreferrer" className="font-semibold underline">
                     Ver anúncio original
                   </a>
                 </p>

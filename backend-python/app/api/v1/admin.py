@@ -30,7 +30,7 @@ from app.models import (
 )
 from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
-from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality
+from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url
 from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
@@ -1557,9 +1557,9 @@ def _publish_scraped_job(db: Session, s: ScrapedJob, admin: User | None = None) 
         responsibilities=s.responsibilities, requirements=s.requirements,
         status="approved", visibility="public",
         published_at=datetime.utcnow(),
-        source=s.source, source_url=s.source_url,
+        source=s.source, source_url=safe_http_url(s.source_url),
         external_company_name=s.company_name,
-        external_company_logo_url=s.company_logo_url,
+        external_company_logo_url=safe_http_url(s.company_logo_url),
         external_contact_email=s.contact_email,
         expires_at=expires_at,
     )
@@ -1620,7 +1620,7 @@ async def admin_create_scraped(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title is required")
     company_name = str(payload.get("company", "") or payload.get("companyName", "")).strip() or None
     location = str(payload.get("location", "")).strip() or None
-    source_url = str(payload.get("sourceUrl", "")).strip() or None
+    source_url = safe_http_url(payload.get("sourceUrl"))
     chash = scraped_content_hash(title, company_name, location)
     # Dedup: same content hash OR same source_url already ingested.
     dup = db.query(ScrapedJob).filter(ScrapedJob.content_hash == chash).first()
@@ -1650,8 +1650,8 @@ async def admin_create_scraped(
         application_deadline=_parse_date(payload.get("applicationDeadline") or payload.get("deadline")),
         responsibilities=responsibilities_json,
         requirements=requirements_json,
-        company_logo_url=str(payload.get("companyLogoUrl", "")).strip() or None,
-        company_website=str(payload.get("companyWebsite", "")).strip() or None,
+        company_logo_url=safe_http_url(payload.get("companyLogoUrl")),
+        company_website=safe_http_url(payload.get("companyWebsite")),
         contact_email=str(payload.get("contactEmail", "")).strip().lower() or None,
         audience_lane=audience_lane,
         quality_score=quality_score,
@@ -1681,10 +1681,13 @@ async def admin_update_scraped(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scraped job not found")
     changed = []
     for key, attr in (("title", "title"), ("company", "company_name"), ("location", "location"),
-                      ("category", "category"), ("sourceUrl", "source_url"), ("description", "description")):
+                      ("category", "category"), ("description", "description")):
         if key in payload:
             setattr(s, attr, str(payload[key] or "").strip() or None)
             changed.append(key)
+    if "sourceUrl" in payload:
+        s.source_url = safe_http_url(payload.get("sourceUrl"))
+        changed.append("sourceUrl")
     if "applicationDeadline" in payload:
         s.application_deadline = _parse_date(payload.get("applicationDeadline"))
         changed.append("applicationDeadline")
@@ -1695,10 +1698,10 @@ async def admin_update_scraped(
         s.requirements = _list_to_json(payload.get("requirements"))
         changed.append("requirements")
     if "companyLogoUrl" in payload:
-        s.company_logo_url = str(payload.get("companyLogoUrl") or "").strip() or None
+        s.company_logo_url = safe_http_url(payload.get("companyLogoUrl"))
         changed.append("companyLogoUrl")
     if "companyWebsite" in payload:
-        s.company_website = str(payload.get("companyWebsite") or "").strip() or None
+        s.company_website = safe_http_url(payload.get("companyWebsite"))
         changed.append("companyWebsite")
     if "contactEmail" in payload:
         s.contact_email = str(payload.get("contactEmail") or "").strip().lower() or None

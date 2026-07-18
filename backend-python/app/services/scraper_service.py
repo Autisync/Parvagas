@@ -80,6 +80,25 @@ def content_hash(title: str | None, company: str | None, location: str | None) -
     return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
+def safe_http_url(value: str | None) -> str | None:
+    """Reject anything that isn't a real http(s) URL — a scraped feed is
+    third-party content with no scheme guarantee, and a stored `javascript:`
+    (or `data:`, `vbscript:`, ...) URL rendered later as an <a href> is
+    click-to-execute XSS. Applied at every point an external URL enters the
+    pipeline (adapter normalisation, publish-to-live-Job, admin edit) so a
+    bad value can't survive any single gap."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = urlparse(value)
+    except Exception:  # noqa: BLE001
+        return None
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    return value
+
+
 # Ordered so the first lane whose keywords match wins — professional/remote
 # terms take priority over generic entry-level phrasing that can co-occur
 # (e.g. "estágio para engenheiro" should read as professional, not entry).
@@ -380,7 +399,7 @@ class SourceAdapter:
             "description": (raw.get("description") or "").strip() or None,
             "deadline": str(deadline_raw).strip() or None,
             "source": self.name,
-            "sourceUrl": (raw.get("url") or raw.get("link") or raw.get("sourceUrl") or "").strip() or None,
+            "sourceUrl": safe_http_url(raw.get("url") or raw.get("link") or raw.get("sourceUrl")),
         }
 
 
