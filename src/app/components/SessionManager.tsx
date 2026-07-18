@@ -64,7 +64,9 @@ export default function SessionManager() {
       if (expiryTimeoutId !== undefined) window.clearTimeout(expiryTimeoutId);
       const expMs = getTokenExpiryMs(getToken());
       if (!expMs) return; // No exp claim — fall back to idle timeout only.
-      const remainingMs = Math.max(expMs - Date.now(), 0);
+      // setTimeout treats delays above 2^31-1 ms (~24.8 days) as 0 and fires
+      // immediately — a far-future exp must clamp, not instantly log out.
+      const remainingMs = Math.min(Math.max(expMs - Date.now(), 0), 2 ** 31 - 1);
       expiryTimeoutId = window.setTimeout(() => forceLogout("expired"), remainingMs);
     };
 
