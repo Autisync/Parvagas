@@ -170,6 +170,8 @@ class ResumeAIService:
                 body,
                 fallback={},
                 timeout=settings.OLLAMA_TIMEOUT_SECONDS,
+                feature="resume_ai_free",
+                provider="ollama",
             )
         return result or None
 
@@ -224,6 +226,8 @@ class ResumeAIService:
             url, headers, body,
             fallback={},
             timeout=settings.RESUME_AI_TIMEOUT_SECONDS,
+            feature="resume_ai_paid",
+            provider=ResumeAIService._ai_provider(),
         )
         return result or None
 

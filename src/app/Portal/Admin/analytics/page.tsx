@@ -50,6 +50,10 @@ const DemandSignalsPanel = dynamic(() => import("../components/DemandSignalsPane
   ssr: false,
 });
 
+const AutoApplyAiUsagePanel = dynamic(() => import("../components/AutoApplyAiUsagePanel"), {
+  ssr: false,
+});
+
 const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
   ssr: false,
 });
@@ -616,6 +620,7 @@ export default function AdminAnalyticsPage() {
       </AnalyticsErrorBoundary>
 
       {token ? <DemandSignalsPanel token={token} /> : null}
+      {token ? <AutoApplyAiUsagePanel token={token} /> : null}
 
       {!isSuperAdmin && (
         <AdminAlert tone="warning">

@@ -23,6 +23,35 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 
+
+def _log_llm_call(feature: str, provider: str, model: str | None, success: bool) -> None:
+    """Best-effort usage metering — never let logging break the caller.
+    Skipped entirely in the test environment: tests call chat_json/
+    chat_json_request directly (no SessionLocal mocking in scope here,
+    unlike the celery task heartbeat pattern), so a real DB write would
+    hit the actual (unreachable-in-tests) database instead.
+
+    Re-fetches settings rather than using the module-level `settings`
+    binding — tests clear get_settings()'s lru_cache around every test
+    (see conftest.py._clear_settings_cache), so the module-level
+    reference captured at import time can go stale relative to a test's
+    own monkeypatched instance."""
+    from app.core.config import get_settings
+    if get_settings().APP_ENV == "test":
+        return
+    try:
+        from app.db.session import SessionLocal
+        from app.models import LlmCallLog
+
+        session = SessionLocal()
+        try:
+            session.add(LlmCallLog(feature=feature, provider=provider, model=model, success=success))
+            session.commit()
+        finally:
+            session.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to record LLM call log (feature=%s): %s", feature, exc)
+
 _OLLAMA_INFLIGHT_KEY = "ollama:inflight_requests"
 _OLLAMA_INFLIGHT_SAFETY_TTL_SECONDS = 30  # >= OLLAMA_TIMEOUT_SECONDS headroom
 
@@ -91,13 +120,19 @@ def chat_json_request(
     *,
     fallback: dict,
     timeout: float,
+    feature: str = "unknown",
+    provider: str = "unknown",
 ) -> dict:
     """Low-level sibling of chat_json for callers that assemble their own
     endpoint config (e.g. ResumeAIService's per-tier providers — Azure's
     deployment-path URLs don't fit a simple base_url join). Same contract:
     POSTs an OpenAI-style chat body, parses choices[0].message.content as a
     JSON object, and returns `fallback` untouched on ANY failure. This is
-    the single HTTP path every LLM feature goes through (plan C1)."""
+    the single HTTP path every LLM feature goes through (plan C1) — also
+    the one place usage gets metered (feature/provider/model, success or
+    fallback) via _log_llm_call()."""
+    model = body.get("model") if isinstance(body, dict) else None
+
     try:
         with httpx.Client(timeout=timeout) as client:
             response = client.post(url, headers=headers, json=body)
@@ -105,6 +140,7 @@ def chat_json_request(
             data = response.json()
     except Exception as exc:  # noqa: BLE001 — never let an LLM outage break the caller
         logger.warning(f"LLM call failed, using fallback: {exc}")
+        _log_llm_call(feature, provider, model, success=False)
         return fallback
 
     try:
@@ -112,12 +148,15 @@ def chat_json_request(
         parsed = json.loads(content)
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"LLM returned invalid JSON, using fallback: {exc}")
+        _log_llm_call(feature, provider, model, success=False)
         return fallback
 
     if not isinstance(parsed, dict):
         logger.warning("LLM JSON response was not an object, using fallback")
+        _log_llm_call(feature, provider, model, success=False)
         return fallback
 
+    _log_llm_call(feature, provider, model, success=True)
     return parsed
 
 
@@ -128,6 +167,7 @@ def chat_json(
     fallback: dict,
     temperature: float = 0.1,
     timeout: float | None = None,
+    feature: str = "unknown",
 ) -> dict:
     """Call the configured LLM in JSON mode and return the parsed object.
 
@@ -136,6 +176,10 @@ def chat_json(
     isn't a JSON object. Callers should treat the result as untrusted input
     (validate/re-normalize) even on success, since the model can still
     return well-formed JSON with the wrong shape.
+
+    `feature` tags the caller (e.g. "auto_apply_scoring") for the
+    LlmCallLog usage-metering table — purely a label, never affects
+    behavior.
     """
     if not llm_enabled():
         return fallback
@@ -155,7 +199,8 @@ def chat_json(
         "response_format": {"type": "json_object"},
     }
 
-    is_ollama = settings.LLM_PROVIDER.strip().lower() == "ollama"
+    provider = settings.LLM_PROVIDER.strip().lower()
+    is_ollama = provider == "ollama"
     if not is_ollama:
         return chat_json_request(
             f"{base_url}/chat/completions",
@@ -163,11 +208,14 @@ def chat_json(
             body,
             fallback=fallback,
             timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
+            feature=feature,
+            provider=provider,
         )
 
     with ollama_concurrency_guard() as has_slot:
         if not has_slot:
             logger.info("Ollama at capacity (OLLAMA_MAX_CONCURRENT), returning fallback without calling it")
+            _log_llm_call(feature, provider, settings.LLM_MODEL, success=False)
             return fallback
         return chat_json_request(
             f"{base_url}/chat/completions",
@@ -175,4 +223,6 @@ def chat_json(
             body,
             fallback=fallback,
             timeout=timeout or settings.LLM_TIMEOUT_SECONDS,
+            feature=feature,
+            provider=provider,
         )

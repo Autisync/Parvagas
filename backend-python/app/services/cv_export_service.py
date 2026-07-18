@@ -69,7 +69,7 @@ def inject_job_keywords(profile: dict[str, Any], job: dict[str, Any] | None) -> 
     }, ensure_ascii=False)
 
     try:
-        result = llm_service.chat_json(_INJECTION_SYSTEM_PROMPT, user_prompt, fallback=fallback)
+        result = llm_service.chat_json(_INJECTION_SYSTEM_PROMPT, user_prompt, fallback=fallback, feature="cv_export_llm_injection")
     except Exception:  # noqa: BLE001 — never let this break a CV download
         return profile
 

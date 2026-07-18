@@ -29,7 +29,7 @@ _SCORE_RESPONSE = {
 def test_score_uses_cloud_tier_through_shared_client(monkeypatch):
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append({"url": url, "body": body, "timeout": timeout})
         return _SCORE_RESPONSE
 
@@ -48,7 +48,7 @@ def test_score_uses_cloud_tier_through_shared_client(monkeypatch):
 def test_free_tier_routes_to_ollama_openai_compat_endpoint(monkeypatch):
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(url)
         return _SCORE_RESPONSE
 
@@ -68,7 +68,7 @@ def test_free_tier_routes_to_ollama_openai_compat_endpoint(monkeypatch):
 
 
 def test_score_falls_through_to_heuristic_when_llm_fails(monkeypatch):
-    def failing_chat_json_request(url, headers, body, *, fallback, timeout):
+    def failing_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         return fallback  # chat_json_request's never-raises failure contract
 
     monkeypatch.setattr(ras_module, "chat_json_request", failing_chat_json_request)
@@ -86,7 +86,7 @@ def test_score_always_includes_explanations_regardless_of_source(monkeypatch):
     """Explanations must be present no matter which path scored the resume —
     an ignorant user asking "why this score" can't be left with nothing just
     because the AI happened to be reachable (or not) that day."""
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         return _SCORE_RESPONSE
 
     monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
@@ -144,7 +144,7 @@ def test_rewrite_returns_unmodified_content_when_ai_unavailable(monkeypatch):
 
 
 def test_rewrite_uses_cloud_result(monkeypatch):
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         return {"title": "Título Melhorado", "summary": "Resumo melhorado.", "notes": "ok"}
 
     monkeypatch.setattr(ras_module, "chat_json_request", fake_chat_json_request)
@@ -169,7 +169,7 @@ def test_improve_experience_returns_unmodified_description_when_ai_unavailable(m
 
 
 def test_improve_experience_uses_cloud_result(monkeypatch):
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         assert "Assistente Administrativo" in body["messages"][1]["content"]
         return {"description": "Geri o expediente administrativo diário, garantindo...", "notes": "ok"}
 
@@ -188,7 +188,7 @@ def test_improve_experience_uses_cloud_result(monkeypatch):
 def test_improve_experience_free_tier_routes_to_ollama(monkeypatch):
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(url)
         return {"description": "Versão melhorada via Ollama.", "notes": "ok"}
 
@@ -213,7 +213,7 @@ def test_improve_experience_free_tier_falls_back_when_ollama_is_at_capacity(monk
     already-busy self-hosted model — same reasoning as llm_service's guard."""
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(url)
         return {"description": "Should never be reached.", "notes": "ok"}
 
@@ -266,7 +266,7 @@ def test_score_resume_cache_hit_skips_second_llm_call(monkeypatch):
     _patch_fake_redis(monkeypatch, fake_redis)
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(1)
         return _SCORE_RESPONSE
 
@@ -290,7 +290,7 @@ def test_score_resume_cache_key_differs_for_different_resume_content(monkeypatch
     _patch_fake_redis(monkeypatch, fake_redis)
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(1)
         return _SCORE_RESPONSE
 
@@ -341,7 +341,7 @@ def test_improve_experience_cache_hit_skips_second_llm_call(monkeypatch):
     _patch_fake_redis(monkeypatch, fake_redis)
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append(1)
         return {"description": "Versão melhorada.", "notes": "ok"}
 
@@ -362,7 +362,7 @@ def test_improve_experience_cache_hit_skips_second_llm_call(monkeypatch):
 def test_azure_provider_builds_deployment_url(monkeypatch):
     calls = []
 
-    def fake_chat_json_request(url, headers, body, *, fallback, timeout):
+    def fake_chat_json_request(url, headers, body, *, fallback, timeout, **_kwargs):
         calls.append({"url": url, "headers": headers, "body": body})
         return _SCORE_RESPONSE
 

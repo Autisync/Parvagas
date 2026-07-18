@@ -23,8 +23,8 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobAlert, JobApplication,
-    NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
+    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
@@ -1056,6 +1056,59 @@ async def admin_task_runs(
         })
 
     return {"tasks": rows}
+
+
+@router.get("/analytics/auto-apply")
+async def admin_auto_apply_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read-only rollup for the auto-apply funnel (JobMatchProposal — a
+    'propose then approve' queue, already populated, unlike the dead
+    JobMatch table) and AI usage metering (LlmCallLog, per-feature call
+    counts/success rate — llm_service.py recorded nothing before this)."""
+    _ensure_admin(current_user)
+
+    total_proposals = db.query(func.count(JobMatchProposal.id)).scalar() or 0
+    status_counts = dict(
+        db.query(JobMatchProposal.status, func.count(JobMatchProposal.id))
+        .group_by(JobMatchProposal.status)
+        .all()
+    )
+    approved = int(status_counts.get("approved", 0))
+    approval_rate = round((approved / total_proposals) * 100, 1) if total_proposals else None
+
+    llm_rows = (
+        db.query(LlmCallLog.feature, LlmCallLog.success, func.count(LlmCallLog.id))
+        .group_by(LlmCallLog.feature, LlmCallLog.success)
+        .all()
+    )
+    llm_by_feature: dict[str, dict[str, int]] = {}
+    for feature, success, count in llm_rows:
+        entry = llm_by_feature.setdefault(feature, {"success": 0, "failed": 0})
+        entry["success" if success else "failed"] = int(count)
+
+    llm_usage = [
+        {
+            "feature": feature,
+            "success": counts["success"],
+            "failed": counts["failed"],
+            "total": counts["success"] + counts["failed"],
+        }
+        for feature, counts in sorted(llm_by_feature.items(), key=lambda kv: -(kv[1]["success"] + kv[1]["failed"]))
+    ]
+
+    return {
+        "autoApplyFunnel": {
+            "total": total_proposals,
+            "pending": int(status_counts.get("pending", 0)),
+            "approved": approved,
+            "dismissed": int(status_counts.get("dismissed", 0)),
+            "expired": int(status_counts.get("expired", 0)),
+            "approvalRate": approval_rate,
+        },
+        "llmUsage": llm_usage,
+    }
 
 
 @router.get("/analytics/demand")

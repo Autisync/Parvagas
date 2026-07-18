@@ -178,7 +178,7 @@ def _llm_refine_score(
     }, ensure_ascii=False)
 
     try:
-        result = llm_service.chat_json(_LLM_SCORING_SYSTEM_PROMPT, user_prompt, fallback=fallback)
+        result = llm_service.chat_json(_LLM_SCORING_SYSTEM_PROMPT, user_prompt, fallback=fallback, feature="auto_apply_scoring")
     except Exception:  # noqa: BLE001 — defense in depth: chat_json shouldn't
         # raise, but a bug here must never take down the whole candidate's
         # proposal sweep (see module docstring: auto-apply must never crash).

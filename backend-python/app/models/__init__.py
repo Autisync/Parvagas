@@ -392,6 +392,22 @@ class JobMatchProposal(Base, TimestampMixin):
     resulting_application_id = Column(String(36), nullable=True)
 
 
+class LlmCallLog(Base, TimestampMixin):
+    """One row per call through app.services.llm_service — the shared LLM
+    invocation layer every AI feature (auto-apply scoring, CV keyword
+    injection, resume rewrite free/paid tiers) goes through. Written by
+    llm_service.chat_json_request(), the single low-level HTTP path every
+    caller funnels through, so this captures usage regardless of which
+    feature or provider triggered the call."""
+    __tablename__ = "llm_call_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    feature = Column(String(60), nullable=False, index=True)
+    provider = Column(String(40), nullable=False, default="unknown")
+    model = Column(String(120), nullable=True)
+    success = Column(Boolean, nullable=False, default=False)
+
+
 class AdCampaign(Base, TimestampMixin):
     """Ad campaign model used by admin and public placements."""
     __tablename__ = "ad_campaigns"
