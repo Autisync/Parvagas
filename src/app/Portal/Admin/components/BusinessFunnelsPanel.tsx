@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { fetchBusinessFunnelsAnalytics, type BusinessFunnelsAnalytics } from "../adminClient";
 import { AdminEmptyState } from "./AdminUI";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { describeAnalyticsPanelError } from "./analyticsPanelError";
+
+const TITLE = "Funis de negócio";
+const SUBTITLE = "Aquisição de candidatos, SLA de moderação, qualidade de parsing de CV e crescimento da newsletter.";
 
 /** Business-funnel rollups from data that already existed but was never
  * surfaced: signup->verified->first-application, moderation SLA, CV parse
@@ -11,18 +16,34 @@ import { AdminEmptyState } from "./AdminUI";
 export default function BusinessFunnelsPanel({ token }: { token: string }) {
   const [data, setData] = useState<BusinessFunnelsAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     fetchBusinessFunnelsAnalytics(token)
       .then((res) => { if (!cancelled) setData(res); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .catch((err) => { if (!cancelled) { setData(null); setError(describeAnalyticsPanelError(err)); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
 
   if (loading) {
     return <div className="app-card mt-6 p-4"><div className="h-24 animate-pulse rounded-xl bg-slate-100" /></div>;
+  }
+
+  if (error) {
+    return (
+      <section className="app-card mt-6 p-4">
+        <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{SUBTITLE}</p>
+        <div className="mt-4">
+          <InlineErrorState message={error} onAction={() => setReloadKey((k) => k + 1)} />
+        </div>
+      </section>
+    );
   }
 
   if (!data) {
@@ -34,8 +55,8 @@ export default function BusinessFunnelsPanel({ token }: { token: string }) {
 
   return (
     <section className="app-card mt-6 p-4">
-      <h2 className="text-sm font-semibold text-[var(--text-strong)]">Funis de negócio</h2>
-      <p className="mt-1 text-xs text-[var(--text-muted)]">Aquisição de candidatos, SLA de moderação, qualidade de parsing de CV e crescimento da newsletter.</p>
+      <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">{SUBTITLE}</p>
 
       {!hasAnyData ? (
         <div className="mt-4">

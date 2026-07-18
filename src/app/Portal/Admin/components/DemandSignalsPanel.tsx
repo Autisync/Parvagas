@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/api";
 import { AdminEmptyState } from "./AdminUI";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { describeAnalyticsPanelError } from "./analyticsPanelError";
 
 type DemandAnalytics = {
   topSavedJobs: Array<{ jobId: string; title: string | null; saves: number }>;
@@ -11,24 +13,43 @@ type DemandAnalytics = {
   topAlertKeywords: Array<{ label: string; value: number }>;
 };
 
+const TITLE = "Sinais de procura";
+const SUBTITLE = "Vagas mais guardadas e volume/tópicos dos alertas de emprego dos candidatos.";
+
 /** Read-only demand signals — most-saved jobs and JobAlert volume/top
  * categories/keywords, aggregated from existing tables (SavedJob,
  * JobAlert). Fetches independently of the parent analytics page. */
 export default function DemandSignalsPanel({ token }: { token: string }) {
   const [data, setData] = useState<DemandAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     authFetch<DemandAnalytics>("/admin/analytics/demand", token, { suppressGlobalErrors: true })
       .then((res) => { if (!cancelled) setData(res); })
-      .catch(() => { if (!cancelled) setData(null); })
+      .catch((err) => { if (!cancelled) { setData(null); setError(describeAnalyticsPanelError(err)); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
 
   if (loading) {
     return <div className="app-card mt-6 p-4"><div className="h-24 animate-pulse rounded-xl bg-slate-100" /></div>;
+  }
+
+  if (error) {
+    return (
+      <section className="app-card mt-6 p-4">
+        <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{SUBTITLE}</p>
+        <div className="mt-4">
+          <InlineErrorState message={error} onAction={() => setReloadKey((k) => k + 1)} />
+        </div>
+      </section>
+    );
   }
 
   if (!data) {
@@ -39,8 +60,8 @@ export default function DemandSignalsPanel({ token }: { token: string }) {
 
   return (
     <section className="app-card mt-6 p-4">
-      <h2 className="text-sm font-semibold text-[var(--text-strong)]">Sinais de procura</h2>
-      <p className="mt-1 text-xs text-[var(--text-muted)]">Vagas mais guardadas e volume/tópicos dos alertas de emprego dos candidatos.</p>
+      <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">{SUBTITLE}</p>
 
       {!hasAnyData ? (
         <div className="mt-4">

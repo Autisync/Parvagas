@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import { fetchClientErrors, type ClientErrorLogRecord } from "../adminClient";
 import { AdminEmptyState } from "./AdminUI";
+import InlineErrorState from "@/app/components/errors/InlineErrorState";
+import { describeAnalyticsPanelError } from "./analyticsPanelError";
 
 const LEVEL_STYLES: Record<string, string> = {
   critical: "border-red-200 bg-red-50 text-red-700",
   error: "border-amber-200 bg-amber-50 text-amber-700",
   warning: "border-slate-200 bg-slate-50 text-slate-600",
 };
+
+const TITLE = "Erros do frontend";
 
 /** Recent frontend runtime errors reported via the public
  * POST /api/v1/events/client-errors endpoint (src/lib/errorMonitoring.ts).
@@ -19,19 +23,25 @@ export default function ClientErrorsPanel({ token }: { token: string }) {
   const [errors, setErrors] = useState<ClientErrorLogRecord[]>([]);
   const [dailySeries, setDailySeries] = useState<Array<{ label: string; value: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     fetchClientErrors(token, { limit: 10 })
       .then((res) => {
         if (cancelled) return;
         setErrors(res.errors || []);
         setDailySeries(res.dailySeries || []);
       })
-      .catch(() => { if (!cancelled) { setErrors([]); setDailySeries([]); } })
+      // A fetch failure must never look like "no errors reported" — that's
+      // an error-monitoring dashboard silently lying about its own health.
+      .catch((err) => { if (!cancelled) { setErrors([]); setDailySeries([]); setError(describeAnalyticsPanelError(err)); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, reloadKey]);
 
   if (loading) {
     return <div className="app-card mt-6 p-4"><div className="h-24 animate-pulse rounded-xl bg-slate-100" /></div>;
@@ -39,9 +49,21 @@ export default function ClientErrorsPanel({ token }: { token: string }) {
 
   const last14dTotal = dailySeries.reduce((sum, d) => sum + d.value, 0);
 
+  if (error) {
+    return (
+      <section className="app-card mt-6 p-4">
+        <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">Erros de runtime reportados pelo browser dos utilizadores.</p>
+        <div className="mt-4">
+          <InlineErrorState message={error} onAction={() => setReloadKey((k) => k + 1)} />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="app-card mt-6 p-4">
-      <h2 className="text-sm font-semibold text-[var(--text-strong)]">Erros do frontend</h2>
+      <h2 className="text-sm font-semibold text-[var(--text-strong)]">{TITLE}</h2>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
         Erros de runtime reportados pelo browser dos utilizadores — {last14dTotal} nos últimos 14 dias.
       </p>

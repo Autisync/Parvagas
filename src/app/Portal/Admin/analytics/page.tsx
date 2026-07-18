@@ -629,13 +629,13 @@ export default function AdminAnalyticsPage() {
           />
         </article>
       </section>
-      </AnalyticsErrorBoundary>
 
       {token ? <DemandSignalsPanel token={token} /> : null}
       {token ? <AutoApplyAiUsagePanel token={token} /> : null}
       {token ? <EmailDeliverabilityPanel token={token} /> : null}
       {token ? <ClientErrorsPanel token={token} /> : null}
       {token ? <BusinessFunnelsPanel token={token} /> : null}
+      </AnalyticsErrorBoundary>
 
       {!isSuperAdmin && (
         <AdminAlert tone="warning">
