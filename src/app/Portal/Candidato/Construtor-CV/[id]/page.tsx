@@ -846,6 +846,7 @@ export default function ConstrutorCvEditorPage() {
 
       <input
         type="text"
+        aria-label="Título do CV"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Título do CV"
@@ -1266,18 +1267,35 @@ export default function ConstrutorCvEditorPage() {
         onClose={() => setExpModalOpen(false)}
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Cargo" value={draftExperience.jobTitle} onChange={(e) => setDraftExperience((prev) => ({ ...prev, jobTitle: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Empresa" value={draftExperience.company} onChange={(e) => setDraftExperience((prev) => ({ ...prev, company: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftExperience.location} onChange={(e) => setDraftExperience((prev) => ({ ...prev, location: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.startDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, startDate: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.endDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, endDate: e.target.value }))} disabled={draftExperience.current} />
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Cargo</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Gestor de Projetos" value={draftExperience.jobTitle} onChange={(e) => setDraftExperience((prev) => ({ ...prev, jobTitle: e.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Empresa</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Banco ABC" value={draftExperience.company} onChange={(e) => setDraftExperience((prev) => ({ ...prev, company: e.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Local</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Luanda" value={draftExperience.location} onChange={(e) => setDraftExperience((prev) => ({ ...prev, location: e.target.value }))} />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="grid gap-1 text-xs font-medium text-slate-600">
+              <span>Início</span>
+              <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.startDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, startDate: e.target.value }))} />
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-slate-600">
+              <span>Fim</span>
+              <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftExperience.endDate} onChange={(e) => setDraftExperience((prev) => ({ ...prev, endDate: e.target.value }))} disabled={draftExperience.current} />
+            </label>
+          </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={draftExperience.current} onChange={(e) => setDraftExperience((prev) => ({ ...prev, current: e.target.checked, endDate: e.target.checked ? "" : prev.endDate }))} />
             Trabalho atual
           </label>
         </div>
         <div className="mt-4 flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-slate-500">Descrição</p>
+          <label htmlFor="exp-description" className="text-xs font-medium text-slate-500">Descrição</label>
           <button
             type="button"
             onClick={improveExperienceDescription}
@@ -1289,7 +1307,7 @@ export default function ConstrutorCvEditorPage() {
             {improvingExperience ? "A melhorar…" : "Melhorar com IA"}
           </button>
         </div>
-        <textarea className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição — comece com um verbo: 'Geri uma equipa de 5...'" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
+        <textarea id="exp-description" className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição — comece com um verbo: 'Geri uma equipa de 5...'" value={draftExperience.description} onChange={(e) => setDraftExperience((prev) => ({ ...prev, description: e.target.value }))} />
         {expFormError ? <p className="mt-2 text-xs text-rose-700">{expFormError}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setExpModalOpen(false)}>Cancelar</button>
@@ -1303,13 +1321,33 @@ export default function ConstrutorCvEditorPage() {
         onClose={() => setEduModalOpen(false)}
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Curso / Grau" value={draftEducation.degree} onChange={(e) => setDraftEducation((prev) => ({ ...prev, degree: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Instituição" value={draftEducation.institution} onChange={(e) => setDraftEducation((prev) => ({ ...prev, institution: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Local" value={draftEducation.location} onChange={(e) => setDraftEducation((prev) => ({ ...prev, location: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.startDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, startDate: e.target.value }))} />
-          <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.endDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, endDate: e.target.value }))} />
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Curso / Grau</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Licenciatura em Gestão" value={draftEducation.degree} onChange={(e) => setDraftEducation((prev) => ({ ...prev, degree: e.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Instituição</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Universidade Agostinho Neto" value={draftEducation.institution} onChange={(e) => setDraftEducation((prev) => ({ ...prev, institution: e.target.value }))} />
+          </label>
+          <label className="grid gap-1 text-xs font-medium text-slate-600">
+            <span>Local</span>
+            <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Luanda" value={draftEducation.location} onChange={(e) => setDraftEducation((prev) => ({ ...prev, location: e.target.value }))} />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="grid gap-1 text-xs font-medium text-slate-600">
+              <span>Início</span>
+              <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.startDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, startDate: e.target.value }))} />
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-slate-600">
+              <span>Fim</span>
+              <input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="month" value={draftEducation.endDate} onChange={(e) => setDraftEducation((prev) => ({ ...prev, endDate: e.target.value }))} />
+            </label>
+          </div>
         </div>
-        <textarea className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Descrição (opcional)" value={draftEducation.description} onChange={(e) => setDraftEducation((prev) => ({ ...prev, description: e.target.value }))} />
+        <label className="mt-4 grid gap-1 text-xs font-medium text-slate-600">
+          <span>Descrição (opcional)</span>
+          <textarea className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" rows={3} placeholder="Ex.: Distinções, projetos relevantes, média final" value={draftEducation.description} onChange={(e) => setDraftEducation((prev) => ({ ...prev, description: e.target.value }))} />
+        </label>
         {eduFormError ? <p className="mt-2 text-xs text-rose-700">{eduFormError}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={() => setEduModalOpen(false)}>Cancelar</button>

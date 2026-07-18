@@ -396,18 +396,24 @@ function EmpresaPerfilContent() {
             <p className="mt-1 text-sm text-slate-600">Histórico de alterações em perfil, vagas, candidaturas e convites.</p>
 
             <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <input
-                value={auditFilters.keyword}
-                onChange={(e) => setAuditFilters((prev) => ({ ...prev, keyword: e.target.value, page: 1 }))}
-                placeholder="Pesquisar evento"
-                className="app-input"
-              />
-              <input
-                value={auditFilters.action}
-                onChange={(e) => setAuditFilters((prev) => ({ ...prev, action: e.target.value, page: 1 }))}
-                placeholder="Filtrar por ação"
-                className="app-input"
-              />
+              <label className="grid gap-1 text-xs font-medium text-slate-600">
+                <span>Pesquisar evento</span>
+                <input
+                  value={auditFilters.keyword}
+                  onChange={(e) => setAuditFilters((prev) => ({ ...prev, keyword: e.target.value, page: 1 }))}
+                  placeholder="Ex.: alteração de vaga"
+                  className="app-input"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-slate-600">
+                <span>Filtrar por ação</span>
+                <input
+                  value={auditFilters.action}
+                  onChange={(e) => setAuditFilters((prev) => ({ ...prev, action: e.target.value, page: 1 }))}
+                  placeholder="Ex.: job.update"
+                  className="app-input"
+                />
+              </label>
               <select
                 value={auditFilters.resourceType}
                 onChange={(e) => setAuditFilters((prev) => ({ ...prev, resourceType: e.target.value, page: 1 }))}
