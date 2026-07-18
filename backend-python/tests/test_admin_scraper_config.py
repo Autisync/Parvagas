@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.api.v1.admin as admin_module
 from app.db.base import Base
 from app.models import AuditLog, ScraperSettings, ScraperSource, User, UserRole
 from app.api.v1.admin import (
@@ -29,7 +30,7 @@ from app.api.v1.admin import (
     admin_update_scraper_settings,
     admin_update_scraper_source,
 )
-from app.services.scraper_service import get_adapters
+from app.services.scraper_service import get_adapters, is_public_scraper_url
 
 
 @pytest.fixture()
@@ -42,20 +43,39 @@ def db():
     session.close()
 
 
-def _make_admin(db):
+@pytest.fixture(autouse=True)
+def _allow_any_scraper_url(monkeypatch):
+    """Most tests below exercise CRUD/validation logic unrelated to the SSRF
+    guard — real DNS resolution has no place in a unit test, and the
+    `.example` fixture URLs used throughout this file are RFC 2606
+    documentation-reserved (they don't resolve). The guard itself is
+    exercised directly against the real function in
+    test_create_scraper_source_rejects_non_public_url below, which restores
+    the real implementation just for that one test."""
+    monkeypatch.setattr(admin_module, "is_public_scraper_url", lambda url: True)
+
+
+def _make_admin(db, admin_level=None):
     user = User(
         id=str(uuid.uuid4()), email=f"admin-{uuid.uuid4()}@parvagas.pt",
         full_name="Admin", password_hash="x", role=UserRole.admin,
+        **({"admin_level": admin_level} if admin_level else {}),
     )
     db.add(user)
     db.commit()
     return user
 
 
+def _make_super_admin(db):
+    """Scraper-source create/update require super-admin (SSRF-capable —
+    the URL is fetched by the backend itself on every scrape run)."""
+    return _make_admin(db, admin_level="super-admin")
+
+
 # ── Scraper sources CRUD ─────────────────────────────────────────────────
 
 def test_create_scraper_source(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     result = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme", "category": "Tech"},
         db=db, current_user=admin,
@@ -67,7 +87,7 @@ def test_create_scraper_source(db):
 
 
 def test_create_scraper_source_rejects_careerjet(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(admin_create_scraper_source(
             {"name": "Careerjet Angola", "type": "careerjet", "url": "my-affid"},
@@ -78,7 +98,7 @@ def test_create_scraper_source_rejects_careerjet(db):
 
 
 def test_create_scraper_source_rejects_unknown_type(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(admin_create_scraper_source(
             {"name": "X", "type": "carrier-pigeon", "url": "https://x.example"},
@@ -88,7 +108,7 @@ def test_create_scraper_source_rejects_unknown_type(db):
 
 
 def test_create_scraper_source_requires_name_and_url(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     with pytest.raises(HTTPException):
         asyncio.run(admin_create_scraper_source(
             {"name": "", "type": "rss", "url": "https://x.example/feed"},
@@ -97,7 +117,7 @@ def test_create_scraper_source_requires_name_and_url(db):
 
 
 def test_update_scraper_source_toggles_enabled(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     created = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
     ))
@@ -110,7 +130,7 @@ def test_update_scraper_source_toggles_enabled(db):
 
 
 def test_update_scraper_source_rejects_careerjet(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     created = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
     ))
@@ -124,7 +144,7 @@ def test_create_scraper_source_rejects_trusted_auto_approve_for_any_current_type
     """TRUSTED_AUTO_APPROVE_TYPES is deliberately empty — every real source
     today is HTML-scraped or a generic feed, none schema-vouchable — so
     this must reject regardless of which otherwise-valid type is chosen."""
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     for source_type in ("json", "rss", "greenhouse", "lever"):
         with pytest.raises(HTTPException) as exc:
             asyncio.run(admin_create_scraper_source(
@@ -136,7 +156,7 @@ def test_create_scraper_source_rejects_trusted_auto_approve_for_any_current_type
 
 
 def test_create_scraper_source_allows_trusted_auto_approve_false(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     result = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme", "trustedAutoApprove": False},
         db=db, current_user=admin,
@@ -145,7 +165,7 @@ def test_create_scraper_source_allows_trusted_auto_approve_false(db):
 
 
 def test_update_scraper_source_rejects_trusted_auto_approve(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     created = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
     ))
@@ -168,7 +188,7 @@ def test_get_adapters_never_trusts_a_hand_edited_row_regardless_of_type(db):
     (bypassing the admin API validation entirely — e.g. a direct DB edit),
     get_adapters() is the independent choke point that must still refuse
     to mark the resulting adapter as trusted."""
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     created = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
     ))
@@ -182,7 +202,7 @@ def test_get_adapters_never_trusts_a_hand_edited_row_regardless_of_type(db):
 
 
 def test_delete_scraper_source(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     created = asyncio.run(admin_create_scraper_source(
         {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
     ))
@@ -191,11 +211,68 @@ def test_delete_scraper_source(db):
 
 
 def test_list_scraper_sources(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     asyncio.run(admin_create_scraper_source({"name": "A", "type": "rss", "url": "https://a.example/feed"}, db=db, current_user=admin))
     asyncio.run(admin_create_scraper_source({"name": "B", "type": "json", "url": "https://b.example/jobs"}, db=db, current_user=admin))
     result = asyncio.run(admin_list_scraper_sources(db=db, current_user=admin))
     assert len(result["scraperSources"]) == 2
+
+
+def test_create_scraper_source_requires_super_admin(db):
+    """A plain (moderator-level) admin can view scraper sources but must not
+    be able to set an arbitrary fetch URL — the backend fetches that URL
+    itself on every scrape run, so this is an SSRF-capable action gated the
+    same way as this file's other outbound-URL-adjacent admin actions."""
+    moderator = _make_admin(db, admin_level="moderator")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_create_scraper_source(
+            {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=moderator,
+        ))
+    assert exc.value.status_code == 403
+    assert db.query(ScraperSource).count() == 0
+
+
+def test_update_scraper_source_requires_super_admin(db):
+    super_admin = _make_super_admin(db)
+    created = asyncio.run(admin_create_scraper_source(
+        {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=super_admin,
+    ))
+    moderator = _make_admin(db, admin_level="moderator")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_update_scraper_source(
+            created["_id"], {"enabled": False}, db=db, current_user=moderator,
+        ))
+    assert exc.value.status_code == 403
+
+
+def test_create_scraper_source_rejects_non_public_url(db, monkeypatch):
+    """Restores the real is_public_scraper_url (this file's autouse fixture
+    stubs it to True for the CRUD tests above, which aren't testing the SSRF
+    guard) and confirms a URL resolving to a loopback address is rejected."""
+    monkeypatch.setattr(admin_module, "is_public_scraper_url", is_public_scraper_url)
+    admin = _make_super_admin(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_create_scraper_source(
+            {"name": "Evil", "type": "json", "url": "http://127.0.0.1:9999/internal-feed"},
+            db=db, current_user=admin,
+        ))
+    assert exc.value.status_code == 400
+    assert db.query(ScraperSource).count() == 0
+
+
+def test_create_scraper_source_allows_bare_greenhouse_token_without_url_check(db, monkeypatch):
+    """A bare Greenhouse/Lever board token (not a URL) is never the literal
+    fetch target — GreenhouseAdapter interpolates it into a fixed, trusted
+    host template — so it must be accepted without going through
+    is_public_scraper_url at all."""
+    calls = []
+    monkeypatch.setattr(admin_module, "is_public_scraper_url", lambda url: calls.append(url) or True)
+    admin = _make_super_admin(db)
+    result = asyncio.run(admin_create_scraper_source(
+        {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
+    ))
+    assert result["name"] == "Acme GH"
+    assert calls == []
 
 
 # ── Scraper settings ──────────────────────────────────────────────────────
@@ -209,7 +286,7 @@ def test_get_scraper_settings_seeds_defaults(db):
 
 
 def test_update_scraper_settings_master_switch(db):
-    admin = _make_admin(db)
+    admin = _make_super_admin(db)
     asyncio.run(admin_create_scraper_source({"name": "A", "type": "rss", "url": "https://a.example/feed"}, db=db, current_user=admin))
     asyncio.run(admin_update_scraper_settings({"enabled": False}, db=db, current_user=admin))
     assert get_adapters(db) == []

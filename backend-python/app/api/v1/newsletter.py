@@ -1,10 +1,9 @@
 """Public newsletter signup — email opt-in for job-opening announcements."""
-import re
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.security import has_leading_formula_char, is_valid_email_format
 from app.db.session import get_db
 from app.models import NewsletterSubscriber
 from app.workers.tasks import send_newsletter_confirmation_email
@@ -12,8 +11,6 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["newsletter"])
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class NewsletterSubscribeRequest(BaseModel):
@@ -36,8 +33,12 @@ async def subscribe_newsletter(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
 
     email = (payload.email or "").strip().lower()
-    if not email or not EMAIL_RE.match(email):
+    if not email or not is_valid_email_format(email) or has_leading_formula_char(email):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail inválido.")
+
+    source = (payload.source or "").strip()[:50] or None
+    if source and has_leading_formula_char(source):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Origem inválida.")
 
     existing = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == email).first()
     if existing:
@@ -48,7 +49,7 @@ async def subscribe_newsletter(
 
     subscriber = NewsletterSubscriber(
         email=email,
-        source=(payload.source or "").strip()[:50] or None,
+        source=source,
     )
     db.add(subscriber)
     db.commit()

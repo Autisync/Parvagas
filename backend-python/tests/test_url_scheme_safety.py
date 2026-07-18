@@ -88,6 +88,65 @@ def test_legitimate_source_url_survives_ingestion(monkeypatch):
     assert jobs[0]["sourceUrl"] == "https://example.com/vaga/123"
 
 
+# ── is_public_scraper_url() — SSRF guard ─────────────────────────────────────
+# IP literals are used throughout (not hostnames) so these tests never touch
+# real DNS/network — socket.getaddrinfo on a literal IP just parses the
+# string, no resolver round-trip involved.
+
+@pytest.mark.parametrize("unsafe", [
+    "http://127.0.0.1/x",
+    "http://127.0.0.1:8080/internal",
+    "http://169.254.169.254/latest/meta-data/",  # cloud metadata endpoint
+    "http://10.0.0.5/internal-api",
+    "http://172.16.0.1/x",
+    "http://192.168.1.1/x",
+    "http://[::1]/x",  # IPv6 loopback
+    "http://0.0.0.0/x",
+])
+def test_is_public_scraper_url_rejects_internal_ip_literals(unsafe):
+    assert svc.is_public_scraper_url(unsafe) is False
+
+
+@pytest.mark.parametrize("public", [
+    "http://8.8.8.8/x",
+    "https://1.1.1.1/x",
+])
+def test_is_public_scraper_url_allows_public_ip_literals(public):
+    assert svc.is_public_scraper_url(public) is True
+
+
+def test_is_public_scraper_url_rejects_bad_scheme_or_missing_host():
+    assert svc.is_public_scraper_url("javascript:alert(1)") is False
+    assert svc.is_public_scraper_url(None) is False
+    assert svc.is_public_scraper_url("") is False
+
+
+def test_conditional_get_blocks_non_public_target_without_any_network_call(monkeypatch):
+    """The SSRF guard runs before robots.txt or the actual fetch — no httpx
+    call (or robots.txt fetch, which hits the same host) should ever happen
+    for a blocked target."""
+    def _boom(*args, **kwargs):
+        raise AssertionError("httpx.get should never be called for a blocked SSRF target")
+
+    monkeypatch.setattr("httpx.get", _boom)
+    outcome = svc._conditional_get("http://127.0.0.1:9999/internal")
+    assert outcome.unchanged is False
+    assert outcome.body is None
+
+
+def test_get_following_safe_redirects_blocks_redirect_to_internal_host(monkeypatch):
+    """A source that starts out public but redirects to an internal address
+    must not be followed — this is exactly the bypass `follow_redirects=
+    True` alone would allow, and why every hop is re-validated."""
+    class _FakeResp:
+        status_code = 302
+        headers = {"location": "http://127.0.0.1:9999/internal"}
+
+    monkeypatch.setattr("httpx.get", lambda *a, **kw: _FakeResp())
+    with pytest.raises(ValueError):
+        svc._get_following_safe_redirects("http://8.8.8.8/redirector", headers={}, timeout=5.0)
+
+
 # ── _publish_scraped_job (admin.py) ───────────────────────────────────────────
 
 def test_publish_scraped_job_nulls_dangerous_source_url_and_logo(db):

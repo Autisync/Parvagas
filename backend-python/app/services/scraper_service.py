@@ -41,8 +41,10 @@ from __future__ import annotations
 
 import hashlib
 import html
+import ipaddress
 import json
 import re
+import socket
 import time
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin, urlparse
@@ -103,6 +105,50 @@ def safe_http_url(value: str | None) -> str | None:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
     return value
+
+
+def _is_public_hostname(hostname: str) -> bool:
+    """Resolve `hostname` and confirm EVERY returned address is a public,
+    routable IP — blocks loopback (127.0.0.1), link-local (169.254.0.0/16,
+    which includes the 169.254.169.254 cloud-metadata address on AWS/GCP/
+    Azure), RFC1918 private ranges, and other reserved/multicast blocks.
+    A hostname resolving to nothing, or to anything unresolvable, is
+    treated as unsafe rather than silently allowed."""
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except Exception:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        raw_ip = info[4][0]
+        try:
+            ip = ipaddress.ip_address(raw_ip)
+        except ValueError:
+            return False
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
+def is_public_scraper_url(url: str | None) -> bool:
+    """SSRF guard: true only for an http(s) URL whose host resolves
+    exclusively to public addresses. An admin-configured scraper source is
+    fetched by the backend itself (from inside its own network), so an
+    admin able to set an arbitrary URL could otherwise point the fetcher at
+    internal infrastructure (cloud metadata, internal APIs) and read the
+    response back through the normal scraped-jobs review UI. Checked both
+    when an admin saves a source (fast feedback) and again immediately
+    before every actual fetch — including each redirect hop — since DNS
+    can change between the two (DNS rebinding) and a redirect is the
+    standard way to bypass a check performed only once, up front."""
+    safe = safe_http_url(url)
+    if not safe:
+        return False
+    hostname = urlparse(safe).hostname
+    if not hostname:
+        return False
+    return _is_public_hostname(hostname)
 
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -282,6 +328,31 @@ def _body_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
 
 
+_MAX_SAFE_REDIRECTS = 5
+
+
+def _get_following_safe_redirects(url: str, headers: dict[str, str], timeout: float):
+    """GET `url`, following redirects manually instead of via httpx's
+    `follow_redirects=True` — each hop is re-validated with
+    `is_public_scraper_url` immediately before it's requested, so a source
+    that starts out pointing at a public host can't use a redirect (or a
+    DNS answer that changes between validation and request) to smuggle the
+    actual request to an internal address."""
+    import httpx
+
+    current = url
+    for _ in range(_MAX_SAFE_REDIRECTS + 1):
+        if not is_public_scraper_url(current):
+            raise ValueError(f"blocked non-public scrape target: {current}")
+        resp = httpx.get(current, headers=headers, timeout=timeout, follow_redirects=False)
+        location = resp.headers.get("location")
+        if resp.status_code in (301, 302, 303, 307, 308) and location:
+            current = urljoin(current, location)
+            continue
+        return resp
+    raise ValueError(f"too many redirects: {url}")
+
+
 def _conditional_get(
     url: str,
     retries: int = 3,
@@ -298,10 +369,12 @@ def _conditional_get(
     to unchanged=True (body=None) so the caller skips parse+dedup. On a real
     network/robots failure returns unchanged=False, body=None — indistinguish-
     able from an empty source, exactly as the old _get contract behaved."""
-    import httpx
-
     effective_timeout = timeout if timeout is not None else _FALLBACK_TIMEOUT
     effective_ua = user_agent or _FALLBACK_USER_AGENT
+
+    if not is_public_scraper_url(url):
+        logger.warning("scrape target %s does not resolve to a public address; blocking (SSRF guard)", url)
+        return FetchOutcome(body=None, unchanged=False)
 
     if not _robots_ok(url, effective_ua):
         logger.warning("robots.txt disallows scraping %s", url)
@@ -316,7 +389,7 @@ def _conditional_get(
     delay = 1.0
     for attempt in range(retries):
         try:
-            resp = httpx.get(url, headers=headers, timeout=effective_timeout, follow_redirects=True)
+            resp = _get_following_safe_redirects(url, headers=headers, timeout=effective_timeout)
             if resp.status_code == 304:
                 # Server confirms nothing changed — keep prior validators.
                 return FetchOutcome(

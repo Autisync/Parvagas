@@ -5,6 +5,7 @@ for the actual hiring company to ever see applications, and guest applicants
 had no way to check status without an account.
 """
 import asyncio
+import io
 import uuid
 from datetime import datetime
 
@@ -12,10 +13,11 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from starlette.datastructures import UploadFile
 
 from app.db.base import Base
 from app.models import Company, Job, JobApplication, User, UserRole
-from app.api.v1.applications import track_guest_application, view_external_job_applications
+from app.api.v1.applications import submit_quick_apply, track_guest_application, view_external_job_applications
 
 
 @pytest.fixture()
@@ -113,3 +115,78 @@ def test_view_external_job_applications_never_leaks_across_jobs(db):
     result = asyncio.run(view_external_job_applications(job_id=job1.id, token="token-one", db=db))
     names = [a["fullName"] for a in result["applications"]]
     assert names == ["A"]
+
+
+# ── POST /public/jobs/{job_id}/quick-apply — fullName/email hardening ─────
+# CSV/formula-injection (CWE-1236): these two fields flow unauthenticated
+# straight into the "applications" admin CSV export (see test_admin_exports
+# .py's neutralisation tests for the export-side defense-in-depth layer).
+# Validation here rejects the payload outright, before it's ever stored.
+
+class _FakeClient:
+    host = "127.0.0.1"
+
+
+class _FakeRequest:
+    client = _FakeClient()
+    headers = {}
+
+
+def _dummy_cv():
+    return UploadFile(filename="cv.pdf", file=io.BytesIO(b"dummy"), headers={"content-type": "application/pdf"})
+
+
+@pytest.fixture(autouse=True)
+def _pass_captcha(monkeypatch):
+    async def _ok(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr("app.core.captcha.verify_captcha", _ok)
+
+
+def test_quick_apply_rejects_formula_shaped_full_name(db):
+    job = _make_aggregator_job(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(submit_quick_apply(
+            request=_FakeRequest(), job_id=job.id, companyId=None,
+            fullName='=HYPERLINK("http://evil.example","x")', email="ana@example.com",
+            phone="900000000", location="Luanda", coverLetter="", cv=_dummy_cv(), db=db,
+        ))
+    assert exc.value.status_code == 400
+    assert db.query(JobApplication).count() == 0
+
+
+def test_quick_apply_rejects_formula_shaped_email(db):
+    job = _make_aggregator_job(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(submit_quick_apply(
+            request=_FakeRequest(), job_id=job.id, companyId=None,
+            fullName="Ana Sousa", email="=2+2@x.com",
+            phone="900000000", location="Luanda", coverLetter="", cv=_dummy_cv(), db=db,
+        ))
+    assert exc.value.status_code == 400
+    assert db.query(JobApplication).count() == 0
+
+
+def test_quick_apply_rejects_malformed_email(db):
+    job = _make_aggregator_job(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(submit_quick_apply(
+            request=_FakeRequest(), job_id=job.id, companyId=None,
+            fullName="Ana Sousa", email="not-an-email",
+            phone="900000000", location="Luanda", coverLetter="", cv=_dummy_cv(), db=db,
+        ))
+    assert exc.value.status_code == 400
+    assert db.query(JobApplication).count() == 0
+
+
+def test_quick_apply_rejects_excessively_long_full_name(db):
+    job = _make_aggregator_job(db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(submit_quick_apply(
+            request=_FakeRequest(), job_id=job.id, companyId=None,
+            fullName="A" * 201, email="ana@example.com",
+            phone="900000000", location="Luanda", coverLetter="", cv=_dummy_cv(), db=db,
+        ))
+    assert exc.value.status_code == 400
+    assert db.query(JobApplication).count() == 0

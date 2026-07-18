@@ -1,4 +1,5 @@
 """Security utilities for JWT, password hashing, etc."""
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt, JWTError
@@ -9,6 +10,32 @@ from app.core.config import get_settings
 
 settings = get_settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+EMAIL_FORMAT_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# Characters Excel/Google Sheets treat as a live-formula trigger when they
+# open a CSV cell — a leading one turns the cell into a formula instead of
+# literal text (CWE-1236). Free text from public forms (quick-apply,
+# newsletter signup) eventually reaches admin CSV exports (see admin.py's
+# `_csv_safe_cell`, which also neutralises at export time as defense-in-
+# depth); rejecting it at submission time gives the submitter immediate
+# feedback instead of silently mangling a legitimate name/email.
+_FORMULA_INJECTION_TRIGGERS = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def is_valid_email_format(value: str) -> bool:
+    """Basic email shape check — not a full RFC 5322 validator, just enough
+    to reject obviously-malformed input on public forms."""
+    return bool(EMAIL_FORMAT_RE.match(value))
+
+
+def has_leading_formula_char(value: str | None) -> bool:
+    """True if `value` starts with a spreadsheet formula-trigger character.
+    See `_FORMULA_INJECTION_TRIGGERS` above for why this matters. Checks the
+    literal leading character with no trimming — a leading tab/CR/LF is
+    itself one of the trigger characters, so stripping it first would
+    silently defeat that check."""
+    return bool(value) and value.startswith(_FORMULA_INJECTION_TRIGGERS)
 
 
 def hash_password(password: str) -> str:

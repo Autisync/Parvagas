@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
+from app.core.security import has_leading_formula_char, is_valid_email_format
 from app.db.session import get_db
 from app.models import (
     CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, Resume, User, UserRole,
@@ -306,6 +307,12 @@ async def submit_quick_apply(
     applicant_email = (email or "").strip().lower()
     if not full_name or not applicant_email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="fullName and email are required")
+    if not is_valid_email_format(applicant_email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail inválido.")
+    if len(full_name) > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome demasiado longo.")
+    if has_leading_formula_char(full_name) or has_leading_formula_char(applicant_email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome ou e-mail contém um carácter não permitido.")
 
     _validate_upload(cv)
     file_bytes = await cv.read()

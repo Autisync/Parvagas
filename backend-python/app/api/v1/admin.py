@@ -30,7 +30,7 @@ from app.models import (
 )
 from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
-from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url
+from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
 from app.core.logging import get_logger
 
@@ -1896,6 +1896,34 @@ def _validate_trusted_auto_approve(trusted: bool, source_type: str) -> None:
         )
 
 
+def _validate_scraper_source_url(url: str) -> None:
+    """Reject a scraper-source URL whose host doesn't resolve to a public
+    address — the backend fetches this URL itself on every scrape run, so
+    an unrestricted URL lets an admin point that outbound request at
+    internal infrastructure (SSRF). This is fast feedback at save time;
+    scraper_service._conditional_get re-checks the same thing immediately
+    before every actual fetch (and again on every redirect hop), since DNS
+    can change between now and then.
+
+    Only applies when `url` actually looks like a URL: Greenhouse/Lever
+    accept a bare board token/company slug (e.g. "acme") that's never
+    fetched directly — it's interpolated into a fixed, trusted host
+    template (boards-api.greenhouse.io / api.lever.co) — so a non-"http…"
+    value here is never the literal fetch target and needs no check."""
+    if not url.lower().startswith("http"):
+        return
+    if not is_public_scraper_url(url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL inválido — tem de ser um endereço público (http/https); endereços internos/privados não são permitidos.",
+        )
+
+
+def _ensure_super_admin(admin: User) -> None:
+    if getattr(admin, "admin_level", "moderator") != "super-admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super-admin required")
+
+
 def _validate_max_results(value: Any) -> int | None:
     if value in (None, ""):
         return None
@@ -1922,11 +1950,13 @@ async def admin_create_scraper_source(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     name = str(payload.get("name", "")).strip()
     url = str(payload.get("url", "")).strip()
     source_type = _validate_scraper_source_type(str(payload.get("type", "")))
     if not name or not url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name e url são obrigatórios")
+    _validate_scraper_source_url(url)
     trusted_auto_approve = bool(payload.get("trustedAutoApprove", False))
     _validate_trusted_auto_approve(trusted_auto_approve, source_type)
 
@@ -1957,6 +1987,7 @@ async def admin_update_scraper_source(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     row = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte não encontrada")
@@ -1972,6 +2003,7 @@ async def admin_update_scraper_source(
         url = str(payload.get("url", "")).strip()
         if not url:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url não pode ficar vazia")
+        _validate_scraper_source_url(url)
         row.url = url
     if "category" in payload:
         row.category = str(payload.get("category", "")).strip() or None
@@ -3570,6 +3602,26 @@ async def admin_delete_career_post(
     return {"deleted": True, "id": post_id}
 
 
+_CSV_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def _csv_safe_cell(value: Any) -> Any:
+    """Neutralise CSV/formula injection (CWE-1236): a string cell starting
+    with =, +, -, @, or a tab/CR/LF is evaluated as a live formula by
+    Excel/Google Sheets when an admin opens the exported file. Several kinds
+    below source fields from unauthenticated public forms (quick-apply,
+    newsletter signup), so an attacker can plant a payload with no account.
+    Prefixing a single quote forces spreadsheet apps to treat the value as
+    literal text; non-string values and ordinary text pass through as-is."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_TRIGGERS):
+        return "'" + value
+    return value
+
+
+def _csv_safe_row(row: list[Any]) -> list[Any]:
+    return [_csv_safe_cell(v) for v in row]
+
+
 @router.get("/exports/{kind}.csv")
 async def admin_export_csv(
     kind: str,
@@ -3590,7 +3642,7 @@ async def admin_export_csv(
             created_at = user.created_at.isoformat() if user.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     user.id,
                     user.full_name,
@@ -3601,7 +3653,7 @@ async def admin_export_csv(
                     bool(user.email_verified),
                     created_at,
                 ]
-            )
+            ))
     elif kind_norm == "companies":
         writer.writerow(["id", "name", "status", "email", "nif", "ownerUserId", "createdAt"])
         companies = db.query(Company).order_by(Company.created_at.desc()).all()
@@ -3609,7 +3661,7 @@ async def admin_export_csv(
             created_at = company.created_at.isoformat() if company.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     company.id,
                     company.name,
@@ -3619,7 +3671,7 @@ async def admin_export_csv(
                     company.owner_user_id,
                     created_at,
                 ]
-            )
+            ))
     elif kind_norm == "jobs":
         writer.writerow(["id", "title", "status", "visibility", "companyId", "createdAt"])
         jobs = db.query(Job).order_by(Job.created_at.desc()).all()
@@ -3627,7 +3679,7 @@ async def admin_export_csv(
             created_at = job.created_at.isoformat() if job.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     job.id,
                     job.title,
@@ -3636,7 +3688,7 @@ async def admin_export_csv(
                     job.company_id,
                     created_at,
                 ]
-            )
+            ))
     elif kind_norm == "applications":
         writer.writerow(["id", "jobId", "companyId", "applicantFullName", "applicantEmail", "status", "createdAt"])
         applications = db.query(JobApplication).order_by(JobApplication.created_at.desc()).all()
@@ -3644,7 +3696,7 @@ async def admin_export_csv(
             created_at = application.created_at.isoformat() if application.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     application.id,
                     application.job_id,
@@ -3654,7 +3706,7 @@ async def admin_export_csv(
                     application.status,
                     created_at,
                 ]
-            )
+            ))
     elif kind_norm == "transactions":
         writer.writerow(["id", "companyId", "amount", "currency", "provider", "reference", "status", "kind", "createdAt"])
         transactions = db.query(Transaction).order_by(Transaction.created_at.desc()).all()
@@ -3662,7 +3714,7 @@ async def admin_export_csv(
             created_at = transaction.created_at.isoformat() if transaction.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     transaction.id,
                     transaction.company_id,
@@ -3674,7 +3726,7 @@ async def admin_export_csv(
                     transaction.kind,
                     created_at,
                 ]
-            )
+            ))
     elif kind_norm == "newsletter":
         writer.writerow(["id", "email", "source", "unsubscribedAt", "createdAt"])
         subscribers = db.query(NewsletterSubscriber).order_by(NewsletterSubscriber.created_at.desc()).all()
@@ -3682,7 +3734,7 @@ async def admin_export_csv(
             created_at = subscriber.created_at.isoformat() if subscriber.created_at else ""
             if not _is_in_range(created_at, from_date, to_date):
                 continue
-            writer.writerow(
+            writer.writerow(_csv_safe_row(
                 [
                     subscriber.id,
                     subscriber.email,
@@ -3690,7 +3742,7 @@ async def admin_export_csv(
                     subscriber.unsubscribed_at.isoformat() if subscriber.unsubscribed_at else "",
                     created_at,
                 ]
-            )
+            ))
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported export kind")
 
