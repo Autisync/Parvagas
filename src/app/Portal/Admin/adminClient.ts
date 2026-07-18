@@ -823,6 +823,13 @@ export async function flagAdminAd(token: string, id: string, reason: string) {
   });
 }
 
+export async function unflagAdminAd(token: string, id: string) {
+  return authFetch<{ ad: AdCampaignRecord }>(`/admin/ads/${id}/unflag`, token, {
+    method: "POST",
+    suppressGlobalErrors: true,
+  });
+}
+
 export async function deleteAdminAd(token: string, id: string) {
   return authFetch<{ deleted: boolean }>(`/admin/ads/${id}`, token, {
     method: "DELETE",

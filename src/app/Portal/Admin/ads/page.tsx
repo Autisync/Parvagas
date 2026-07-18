@@ -17,6 +17,7 @@ import {
   setAdminAdStatus,
   statusBadgeClass,
   toDateLabel,
+  unflagAdminAd,
   uploadAdminAdImage,
   type AdCampaignRecord,
   type AdminMe,
@@ -286,6 +287,7 @@ export default function AdminAdsPage() {
   const [selectedAd, setSelectedAd] = useState<AdCampaignRecord | null>(null);
   const [previewAd, setPreviewAd] = useState<AdCampaignRecord | null>(null);
   const [view, setView] = useState<"list" | "funnel">("list");
+  const [scheduleDates, setScheduleDates] = useState<Record<string, string>>({});
   const [previewImage, setPreviewImage] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -388,6 +390,20 @@ export default function AdminAdsPage() {
     }
   };
 
+  const unflag = async (ad: AdCampaignRecord) => {
+    if (!token || !canFlag) return;
+    setBusy(true);
+    try {
+      await unflagAdminAd(token, ad._id);
+      await load();
+      notify("Sinalização removida.", "success");
+    } catch (err: unknown) {
+      notify(err instanceof Error ? err.message : "Erro ao remover sinalização.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async (ad: AdCampaignRecord) => {
     if (!token || !canManage) return;
     if (!window.confirm("Eliminar esta campanha?")) return;
@@ -398,6 +414,30 @@ export default function AdminAdsPage() {
       notify("Anúncio eliminado.", "success");
     } catch (err: unknown) {
       notify(err instanceof Error ? err.message : "Erro ao remover anúncio.", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scheduleAd = async (ad: AdCampaignRecord) => {
+    if (!token || !canPublish) return;
+    const date = scheduleDates[ad._id];
+    if (!date) {
+      notify("Escolha uma data de início.", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await replaceAdminAd(token, ad._id, { startDate: date, active: true });
+      await load();
+      setScheduleDates((prev) => {
+        const next = { ...prev };
+        delete next[ad._id];
+        return next;
+      });
+      notify("Campanha agendada.", "success");
+    } catch (err: unknown) {
+      notify(err instanceof Error ? err.message : "Erro ao agendar campanha.", "error");
     } finally {
       setBusy(false);
     }
@@ -549,7 +589,36 @@ export default function AdminAdsPage() {
                           {canPublish && (stage === "active" || stage === "scheduled") ? (
                             <button onClick={() => toggle(ad)} disabled={busy} className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50">Desativar</button>
                           ) : null}
+                          {canPause && ad.active ? (
+                            <button onClick={() => pause(ad)} disabled={busy} className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 disabled:opacity-50">Pausar</button>
+                          ) : null}
+                          {canFlag && !ad.flagged ? (
+                            <button onClick={() => flag(ad)} disabled={busy} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Sinalizar</button>
+                          ) : null}
+                          {canFlag && ad.flagged ? (
+                            <button onClick={() => unflag(ad)} disabled={busy} className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50">Remover sinalização</button>
+                          ) : null}
+                          {canManage ? (
+                            <button onClick={() => remove(ad)} disabled={busy} className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Eliminar</button>
+                          ) : null}
                         </div>
+                        {canPublish && stage === "draft" ? (
+                          <div className="mt-2 flex items-center gap-1.5 border-t border-slate-100 pt-2">
+                            <input
+                              type="date"
+                              value={scheduleDates[ad._id] || ""}
+                              onChange={(e) => setScheduleDates((prev) => ({ ...prev, [ad._id]: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                            />
+                            <button
+                              onClick={() => scheduleAd(ad)}
+                              disabled={busy || !scheduleDates[ad._id]}
+                              className="shrink-0 rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 disabled:opacity-50"
+                            >
+                              Agendar
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}

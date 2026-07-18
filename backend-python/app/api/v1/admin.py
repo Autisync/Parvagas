@@ -3337,6 +3337,30 @@ async def admin_ad_flag(
     return {"ad": _to_ad_record(ad)}
 
 
+@router.post("/ads/{ad_id}/unflag")
+async def admin_ad_unflag(
+    ad_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
+    if not ad:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
+    ad.flagged = False
+    ad.flag_reason = None
+    ad.status = _compute_ad_status(ad)
+    db.commit()
+    db.refresh(ad)
+    _record_admin_event(
+        actor=admin,
+        action="ad.unflag",
+        resource_type="ad",
+        resource_id=ad.id,
+    )
+    return {"ad": _to_ad_record(ad)}
+
+
 @router.delete("/ads/{ad_id}")
 async def admin_delete_ad(
     ad_id: str,
