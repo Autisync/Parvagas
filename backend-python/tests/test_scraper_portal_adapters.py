@@ -62,6 +62,37 @@ def test_greenhouse_adapter_normalises(monkeypatch):
     assert job["category"] == "Engineering"
     assert job["sourceUrl"] == "https://boards.greenhouse.io/acme/jobs/123"
     assert job["source"] == "Acme"
+    # Greenhouse's `content` field is HTML — stripped to plain text so it
+    # doesn't render literal tags downstream (rendered as plain JSX text).
+    assert job["description"] == "We are hiring."
+
+
+def test_greenhouse_adapter_unescapes_html_entities_before_stripping_tags(monkeypatch):
+    fixture = {
+        "jobs": [
+            {
+                "id": 125,
+                "title": "Data Analyst",
+                "content": "&lt;p&gt;We need a &quot;great&quot; analyst.&lt;/p&gt;",
+            },
+        ]
+    }
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps(fixture), unchanged=False),
+    )
+    jobs = GreenhouseAdapter(name="Acme", url="acme").fetch()
+    assert jobs[0]["description"] == 'We need a "great" analyst.'
+
+
+def test_greenhouse_adapter_leaves_plain_text_description_untouched(monkeypatch):
+    fixture = {"jobs": [{"id": 126, "title": "Recruiter", "content": "A perfectly plain description."}]}
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps(fixture), unchanged=False),
+    )
+    jobs = GreenhouseAdapter(name="Acme", url="acme").fetch()
+    assert jobs[0]["description"] == "A perfectly plain description."
 
 
 def test_greenhouse_adapter_expands_bare_token_to_api_url():
@@ -303,3 +334,25 @@ def test_get_adapters_per_source_max_results_overrides_global_default():
         db.query(ScraperSettings).delete()
         db.commit()
         db.close()
+
+
+# ── strip_html() direct unit coverage ────────────────────────────────────────
+
+def test_strip_html_removes_tags_and_collapses_whitespace():
+    assert svc.strip_html("<p>Hello   <b>world</b>.</p>") == "Hello world ."
+
+
+def test_strip_html_returns_none_for_empty_or_none_input():
+    assert svc.strip_html(None) is None
+    assert svc.strip_html("") is None
+    assert svc.strip_html("   ") is None
+    assert svc.strip_html("<br/>") is None
+
+
+def test_strip_html_leaves_plain_text_untouched():
+    assert svc.strip_html("Just plain text, no markup.") == "Just plain text, no markup."
+
+
+def test_strip_html_unescapes_common_entities():
+    assert svc.strip_html("Tom &amp; Jerry") == "Tom & Jerry"
+    assert svc.strip_html("&quot;quoted&quot;") == '"quoted"'

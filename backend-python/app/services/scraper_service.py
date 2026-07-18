@@ -37,6 +37,7 @@ by someone with browser access, which this module doesn't attempt.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 import time
@@ -97,6 +98,32 @@ def safe_http_url(value: str | None) -> str | None:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
     return value
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"[ \t\r\f\v]+")
+_BLANK_LINES_RE = re.compile(r"\n{3,}")
+
+
+def strip_html(text: str | None) -> str | None:
+    """Best-effort plain-text extraction from a feed field that may carry
+    HTML (Greenhouse's `content` is HTML, often entity-encoded — e.g.
+    `&lt;p&gt;`; RSS descriptions commonly are too). Rendered as plain JSX
+    text downstream, so leaving markup in place shows literal tags to
+    users; it also inflates the quality gate's description-length check
+    with tag noise. Unescapes entities once (single-pass — matches how
+    these feeds actually encode content; doesn't attempt to recover from
+    genuinely double-encoded input), then drops tags, then collapses runs
+    of whitespace — not a sanitizer for trusted-HTML rendering, just
+    cleanup for plain-text display."""
+    if not text:
+        return None
+    unescaped = html.unescape(text)
+    no_tags = _TAG_RE.sub(" ", unescaped)
+    collapsed = _WHITESPACE_RE.sub(" ", no_tags)
+    collapsed = _BLANK_LINES_RE.sub("\n\n", collapsed)
+    cleaned = collapsed.strip()
+    return cleaned or None
 
 
 # Ordered so the first lane whose keywords match wins — professional/remote
@@ -392,11 +419,11 @@ class SourceAdapter:
             or raw.get("expiresAt") or raw.get("expires_at") or ""
         )
         return {
-            "title": (raw.get("title") or "").strip(),
-            "company": (raw.get("company") or raw.get("companyName") or "").strip() or None,
+            "title": strip_html(raw.get("title")) or "",
+            "company": strip_html(raw.get("company") or raw.get("companyName")),
             "location": (raw.get("location") or "").strip() or None,
             "category": (raw.get("category") or self.category or "").strip() or None,
-            "description": (raw.get("description") or "").strip() or None,
+            "description": strip_html(raw.get("description")),
             "deadline": str(deadline_raw).strip() or None,
             "source": self.name,
             "sourceUrl": safe_http_url(raw.get("url") or raw.get("link") or raw.get("sourceUrl")),
