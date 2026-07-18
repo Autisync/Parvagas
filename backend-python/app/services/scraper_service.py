@@ -342,6 +342,19 @@ class SourceAdapter:
     def _limit(self) -> int:
         return self.max_results if self.max_results is not None else _FALLBACK_MAX_PER_SOURCE
 
+    def host_key(self) -> str:
+        """Grouping key for per-host fetch politeness (parallel fetch never
+        runs two sources against the same host concurrently). `self.url` is
+        a bare token/slug for Greenhouse/Lever, not a real URL — subclasses
+        that build their request URL elsewhere override this; falling back
+        to the adapter name just means "never parallelize with itself",
+        which is always safe even if imprecise."""
+        try:
+            netloc = urlparse(self.url).netloc
+            return netloc or self.name
+        except Exception:
+            return self.name
+
     def _get_url(self, url: str, retries: int = 3) -> str | None:
         outcome = _conditional_get(
             url, retries=retries, timeout=self.timeout, user_agent=self.user_agent,
@@ -435,6 +448,9 @@ class GreenhouseAdapter(SourceAdapter):
             return self.url
         return f"https://boards-api.greenhouse.io/v1/boards/{self.url}/jobs?content=true"
 
+    def host_key(self) -> str:
+        return urlparse(self._api_url()).netloc or self.name
+
     def fetch(self) -> list[dict[str, Any]]:
         body = self._get_url(self._api_url())
         if not body:
@@ -481,6 +497,9 @@ class LeverAdapter(SourceAdapter):
         if self.url.startswith("http"):
             return self.url
         return f"https://api.lever.co/v0/postings/{self.url}?mode=json"
+
+    def host_key(self) -> str:
+        return urlparse(self._api_url()).netloc or self.name
 
     def fetch(self) -> list[dict[str, Any]]:
         body = self._get_url(self._api_url())
@@ -534,6 +553,9 @@ class CareerjetAdapter(SourceAdapter):
     """
 
     _ENDPOINT = "https://search.api.careerjet.net/v4/query"
+
+    def host_key(self) -> str:
+        return urlparse(self._ENDPOINT).netloc
 
     def fetch(self) -> list[dict[str, Any]]:
         if not self.url:

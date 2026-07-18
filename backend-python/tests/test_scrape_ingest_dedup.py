@@ -42,6 +42,9 @@ class _FakeAdapter:
         # ingestion loop checks it for the conditional-GET short-circuit.
         self.last_fetch = None
 
+    def host_key(self):
+        return self.name
+
     def fetch(self):
         from app.services.scraper_service import FetchOutcome
         self.last_fetch = FetchOutcome(body="fake", unchanged=False)
@@ -144,6 +147,9 @@ def test_unchanged_source_skips_ingestion_and_persists_validators(db, monkeypatc
             self.name = "unchanged-source"
             self.source_id = source_id
             self.last_fetch = None
+
+        def host_key(self):
+            return self.name
 
         def fetch(self):
             self.last_fetch = FetchOutcome(unchanged=True, etag='"new-etag"', last_modified="new-date", body_hash="newhash")

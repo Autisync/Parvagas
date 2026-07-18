@@ -1,6 +1,8 @@
 """Celery tasks for async operations."""
 import json
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import quote
 from celery.exceptions import SoftTimeLimitExceeded
@@ -500,6 +502,41 @@ def _record_scraper_source_validators(db, source_id: str | None, outcome) -> Non
         logger.warning(f"could not record scraper source validators for {source_id}: {exc}")
 
 
+_SCRAPE_FETCH_MAX_WORKERS = 4
+
+
+def _fetch_adapters_parallel(adapters: list) -> list[tuple]:
+    """Fetch a batch of adapters concurrently (network I/O only — no DB
+    session is touched here or from any worker thread; ingestion happens
+    back on the caller's thread after this returns). Returns
+    (adapter, items, error) tuples in COMPLETION order, not input order —
+    the caller doesn't depend on ordering within a batch.
+
+    Politeness: a per-host threading.Semaphore(1), built up front so the
+    dict itself is never mutated concurrently, ensures two sources on the
+    same host never fetch at the same time; different hosts still run in
+    parallel up to _SCRAPE_FETCH_MAX_WORKERS at once."""
+    host_locks: dict[str, threading.Semaphore] = {}
+    for adapter in adapters:
+        host = adapter.host_key()
+        if host not in host_locks:
+            host_locks[host] = threading.Semaphore(1)
+
+    def _run(adapter):
+        with host_locks[adapter.host_key()]:
+            try:
+                return adapter, adapter.fetch(), None
+            except Exception as e:  # noqa: BLE001 — surfaced to the caller, not raised in-thread
+                return adapter, None, e
+
+    results: list[tuple] = []
+    with ThreadPoolExecutor(max_workers=min(_SCRAPE_FETCH_MAX_WORKERS, len(adapters))) as executor:
+        futures = [executor.submit(_run, adapter) for adapter in adapters]
+        for future in as_completed(futures):
+            results.append(future.result())
+    return results
+
+
 @celery.task(
     name='app.workers.tasks.scrape_external_jobs',
     # Runs on its own low-priority queue/worker (see celery_app.py) so a heavy
@@ -535,90 +572,104 @@ def scrape_external_jobs() -> dict:
         run_budget_seconds = settings.run_budget_seconds
 
         now = datetime.utcnow()
-        for adapter in adapters:
+        # Fetch (network I/O) happens in parallel, chunked by
+        # _SCRAPE_FETCH_MAX_WORKERS so a budget check between chunks still
+        # stops the run from dispatching new fetches once exhausted —
+        # ingestion (DB writes) always happens back here, sequentially, one
+        # adapter's results at a time, same as before parallelizing fetch.
+        for chunk_start in range(0, len(adapters), _SCRAPE_FETCH_MAX_WORKERS):
             if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
                 budget_hit = True
                 break
-            sources_processed += 1
-            source_ingested = 0
-            try:
-                items = adapter.fetch()
-            except Exception as e:
-                logger.warning(f"scraper source '{adapter.name}' failed: {e}")
-                _record_scraper_source_run(db, adapter.source_id, "error", str(e), 0)
-                db.commit()
-                continue
+            chunk = adapters[chunk_start:chunk_start + _SCRAPE_FETCH_MAX_WORKERS]
+            fetch_results = _fetch_adapters_parallel(chunk)
 
-            # Conditional-GET short-circuit: the source confirmed (via 304 or
-            # an identical body hash) that nothing changed since last run —
-            # skip parsing/dedup entirely for this source. Validators are
-            # still refreshed (a 304 can arrive with a rotated ETag).
-            if adapter.last_fetch is not None and adapter.last_fetch.unchanged:
-                _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
-                _record_scraper_source_run(db, adapter.source_id, "unchanged", None, 0)
-                db.commit()
-                continue
-
-            # Batched dedup: previously every item cost up to 2 DB round-trips
-            # (hash lookup + URL lookup) — hundreds of queries per run. Two IN
-            # queries per source replace them; the dicts are then also updated
-            # with rows added below so intra-batch duplicates keep deduping
-            # (matching the old per-item autoflush behavior).
-            prepared: list[tuple[dict, str, str]] = []
-            for it in items:
-                title = (it.get("title") or "").strip()
-                if not title:
-                    continue
-                prepared.append((it, title, content_hash(title, it.get("company"), it.get("location"))))
-
-            existing_by_hash: dict[str, ScrapedJob] = {}
-            existing_by_url: dict[str, ScrapedJob] = {}
-            batch_hashes = [chash for _, _, chash in prepared]
-            batch_urls = [it["sourceUrl"] for it, _, _ in prepared if it.get("sourceUrl")]
-            if batch_hashes:
-                for row in db.query(ScrapedJob).filter(ScrapedJob.content_hash.in_(batch_hashes)).all():
-                    existing_by_hash[row.content_hash] = row
-            if batch_urls:
-                for row in db.query(ScrapedJob).filter(ScrapedJob.source_url.in_(batch_urls)).all():
-                    existing_by_url[row.source_url] = row
-
-            for it, title, chash in prepared:
+            for adapter, items, fetch_error in fetch_results:
                 if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
                     budget_hit = True
                     break
-                existing = existing_by_hash.get(chash)
-                if not existing and it.get("sourceUrl"):
-                    existing = existing_by_url.get(it["sourceUrl"])
-                if existing:
-                    existing.last_seen_at = now  # keep alive; don't re-create
-                    new_deadline = _parse_scraped_deadline(it.get("deadline"))
-                    if new_deadline:
-                        existing.application_deadline = new_deadline
-                    skipped += 1
-                    source_ingested += 1
+                sources_processed += 1
+                source_ingested = 0
+                if fetch_error is not None:
+                    logger.warning(f"scraper source '{adapter.name}' failed: {fetch_error}")
+                    _record_scraper_source_run(db, adapter.source_id, "error", str(fetch_error), 0)
+                    db.commit()
                     continue
-                quality_score, quality_flags = assess_scraped_job_quality(
-                    title, it.get("description"), it.get("company"),
-                )
-                created = ScrapedJob(
-                    title=title, company_name=it.get("company"), location=it.get("location"),
-                    category=it.get("category"), description=it.get("description"),
-                    source=it.get("source"), source_url=it.get("sourceUrl"),
-                    application_deadline=_parse_scraped_deadline(it.get("deadline")),
-                    audience_lane=classify_audience_lane(title, it.get("category"), it.get("description")),
-                    quality_score=quality_score,
-                    quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
-                    status="pending", content_hash=chash, last_seen_at=now,
-                )
-                db.add(created)
-                existing_by_hash[chash] = created
-                if it.get("sourceUrl"):
-                    existing_by_url[it["sourceUrl"]] = created
-                ingested += 1
-                source_ingested += 1
-            _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
-            _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)
-            db.commit()
+
+                # Conditional-GET short-circuit: the source confirmed (via 304
+                # or an identical body hash) that nothing changed since last
+                # run — skip parsing/dedup entirely for this source.
+                # Validators are still refreshed (a 304 can arrive with a
+                # rotated ETag).
+                if adapter.last_fetch is not None and adapter.last_fetch.unchanged:
+                    _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
+                    _record_scraper_source_run(db, adapter.source_id, "unchanged", None, 0)
+                    db.commit()
+                    continue
+
+                # Batched dedup: previously every item cost up to 2 DB
+                # round-trips (hash lookup + URL lookup) — hundreds of
+                # queries per run. Two IN queries per source replace them;
+                # the dicts are then also updated with rows added below so
+                # intra-batch duplicates keep deduping (matching the old
+                # per-item autoflush behavior).
+                prepared: list[tuple[dict, str, str]] = []
+                for it in items:
+                    title = (it.get("title") or "").strip()
+                    if not title:
+                        continue
+                    prepared.append((it, title, content_hash(title, it.get("company"), it.get("location"))))
+
+                existing_by_hash: dict[str, ScrapedJob] = {}
+                existing_by_url: dict[str, ScrapedJob] = {}
+                batch_hashes = [chash for _, _, chash in prepared]
+                batch_urls = [it["sourceUrl"] for it, _, _ in prepared if it.get("sourceUrl")]
+                if batch_hashes:
+                    for row in db.query(ScrapedJob).filter(ScrapedJob.content_hash.in_(batch_hashes)).all():
+                        existing_by_hash[row.content_hash] = row
+                if batch_urls:
+                    for row in db.query(ScrapedJob).filter(ScrapedJob.source_url.in_(batch_urls)).all():
+                        existing_by_url[row.source_url] = row
+
+                for it, title, chash in prepared:
+                    if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
+                        budget_hit = True
+                        break
+                    existing = existing_by_hash.get(chash)
+                    if not existing and it.get("sourceUrl"):
+                        existing = existing_by_url.get(it["sourceUrl"])
+                    if existing:
+                        existing.last_seen_at = now  # keep alive; don't re-create
+                        new_deadline = _parse_scraped_deadline(it.get("deadline"))
+                        if new_deadline:
+                            existing.application_deadline = new_deadline
+                        skipped += 1
+                        source_ingested += 1
+                        continue
+                    quality_score, quality_flags = assess_scraped_job_quality(
+                        title, it.get("description"), it.get("company"),
+                    )
+                    created = ScrapedJob(
+                        title=title, company_name=it.get("company"), location=it.get("location"),
+                        category=it.get("category"), description=it.get("description"),
+                        source=it.get("source"), source_url=it.get("sourceUrl"),
+                        application_deadline=_parse_scraped_deadline(it.get("deadline")),
+                        audience_lane=classify_audience_lane(title, it.get("category"), it.get("description")),
+                        quality_score=quality_score,
+                        quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
+                        status="pending", content_hash=chash, last_seen_at=now,
+                    )
+                    db.add(created)
+                    existing_by_hash[chash] = created
+                    if it.get("sourceUrl"):
+                        existing_by_url[it["sourceUrl"]] = created
+                    ingested += 1
+                    source_ingested += 1
+                _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
+                _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)
+                db.commit()
+                if budget_hit:
+                    break
             if budget_hit:
                 break
         if budget_hit:
