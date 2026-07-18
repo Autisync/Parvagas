@@ -15,12 +15,14 @@ import {
 import {
   HomeIcon, UserIcon, DocumentIcon, HeartIcon, SparklesIcon,
   BriefcaseIcon, CheckCircleIcon, BellIcon, CogIcon, RocketLaunchIcon,
-  PencilSquareIcon, ChevronLeftIcon, ArrowRightOnRectangleIcon,
+  PencilSquareIcon, ChevronLeftIcon, ArrowRightOnRectangleIcon, ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState, type ReactNode } from "react";
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "candidateSidebarCollapsed";
 const BUILDER_ROUTE = "/Portal/Candidato/Construtor-CV";
+
+type NavGroup = { key: string; label: string; items: MobileNavItem[] };
 
 /**
  * Owns the sidebar's collapse state AND the content offset, so the two
@@ -55,25 +57,103 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
       .catch(() => {});
   }, [token]);
 
-  const navItems: MobileNavItem[] = [
-    { href: "/Portal/Candidato/Dashboard",         label: dict.portal.candidate.dashboard,    icon: <HomeIcon className="h-5 w-5" />,          pinned: true },
-    { href: "/Portal/Candidato/Candidaturas",      label: dict.portal.candidate.applications, icon: <CheckCircleIcon className="h-5 w-5" />,   pinned: true },
-    { href: "/Portal/Candidato/Vagas-Disponiveis", label: dict.portal.candidate.jobs,         icon: <BriefcaseIcon className="h-5 w-5" />,     pinned: true },
-    { href: "/Portal/Candidato/Meu-Perfil",        label: dict.portal.candidate.profile,      icon: <UserIcon className="h-5 w-5" />,          pinned: true },
-    { href: "/Portal/Candidato/Onboarding",        label: "Configurar Perfil",                icon: <RocketLaunchIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/CV-e-Documentos",   label: dict.portal.candidate.cvDocs,       icon: <DocumentIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/Construtor-CV",     label: dict.portal.candidate.cvBuilder,    icon: <PencilSquareIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/Vagas-Recomendadas",label: dict.portal.candidate.recommended,  icon: <SparklesIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/Vagas-Guardadas",   label: dict.portal.candidate.saved,        icon: <HeartIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/Alertas",           label: dict.portal.candidate.alerts,       icon: <BellIcon className="h-5 w-5" /> },
-    { href: "/Portal/Candidato/Definicoes",        label: dict.portal.candidate.settings,     icon: <CogIcon className="h-5 w-5" /> },
+  // Top-level entries stay outside any group — the two "home" views a
+  // candidate returns to most.
+  const topItems: MobileNavItem[] = [
+    { href: "/Portal/Candidato/Dashboard",    label: dict.portal.candidate.dashboard,    icon: <HomeIcon className="h-5 w-5" />,        pinned: true },
+    { href: "/Portal/Candidato/Candidaturas", label: dict.portal.candidate.applications, icon: <CheckCircleIcon className="h-5 w-5" />, pinned: true },
   ];
+
+  const groups: NavGroup[] = [
+    {
+      key: "vagas",
+      label: "Vagas",
+      items: [
+        { href: "/Portal/Candidato/Vagas-Disponiveis",  label: dict.portal.candidate.jobs,        icon: <BriefcaseIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/Vagas-Recomendadas", label: dict.portal.candidate.recommended, icon: <SparklesIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/Vagas-Guardadas",    label: dict.portal.candidate.saved,       icon: <HeartIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/Alertas",            label: dict.portal.candidate.alerts,      icon: <BellIcon className="h-5 w-5" /> },
+      ],
+    },
+    {
+      key: "perfil-cv",
+      label: "Perfil & CV",
+      items: [
+        { href: "/Portal/Candidato/Meu-Perfil",      label: dict.portal.candidate.profile, icon: <UserIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/Onboarding",      label: "Configurar Perfil",           icon: <RocketLaunchIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/CV-e-Documentos", label: dict.portal.candidate.cvDocs,  icon: <DocumentIcon className="h-5 w-5" /> },
+        { href: "/Portal/Candidato/Construtor-CV",   label: dict.portal.candidate.cvBuilder, icon: <PencilSquareIcon className="h-5 w-5" /> },
+      ],
+    },
+    {
+      key: "conta",
+      label: "Conta",
+      items: [
+        { href: "/Portal/Candidato/Definicoes", label: dict.portal.candidate.settings, icon: <CogIcon className="h-5 w-5" /> },
+      ],
+    },
+  ];
+
+  // Flat list for the mobile bottom-nav/drawer, which has its own layout
+  // and doesn't do grouping.
+  const navItems: MobileNavItem[] = [...topItems, ...groups.flatMap((group) => group.items)];
 
   const handleSignout = () => logoutCurrentSession(token);
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href);
   }
+
+  const activeGroupKey = groups.find((group) => group.items.some((item) => isActive(item.href)))?.key ?? null;
+
+  // Every group starts closed — the effect below force-opens the one
+  // holding the active route, so the user always lands with their current
+  // section visible and just needs the chevron to explore the rest.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(groups.map((group) => [group.key, false])),
+  );
+
+  useEffect(() => {
+    if (activeGroupKey) {
+      setOpenGroups((current) => (current[activeGroupKey] ? current : { ...current, [activeGroupKey]: true }));
+    }
+  }, [activeGroupKey]);
+
+  const renderNavItem = (item: MobileNavItem) => {
+    const active = isActive(item.href);
+    const showDot = item.href === "/Portal/Candidato/Meu-Perfil" && profileCompletion !== null && profileCompletion < 100;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        aria-current={active ? "page" : undefined}
+        title={showExpanded ? undefined : item.label}
+        className={[
+          "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+          active
+            ? "border-red-200 bg-red-50 text-red-800 shadow-sm"
+            : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900",
+        ].join(" ")}
+      >
+        <span className={`shrink-0 relative ${active ? "text-red-700" : "text-slate-500"}`}>
+          {item.icon}
+          {showDot && !showExpanded && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+            </span>
+          )}
+        </span>
+        <span className={labelClass("flex-1")}>{item.label}</span>
+        {showDot && showExpanded && (
+          <span className="relative flex h-2.5 w-2.5 shrink-0" title={`Perfil ${profileCompletion}% completo`}>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -125,41 +205,34 @@ export default function CandidatePortalShell({ children }: { children: ReactNode
           </div>
 
           <nav className="mt-6 space-y-1">
-            {navItems.map((item) => {
-              const active = isActive(item.href);
-              const showDot = item.href === "/Portal/Candidato/Meu-Perfil" && profileCompletion !== null && profileCompletion < 100;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  title={showExpanded ? undefined : item.label}
-                  className={[
-                    "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
-                    active
-                      ? "border-red-200 bg-red-50 text-red-800 shadow-sm"
-                      : "border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900",
-                  ].join(" ")}
-                >
-                  <span className={`shrink-0 relative ${active ? "text-red-700" : "text-slate-500"}`}>
-                    {item.icon}
-                    {showDot && !showExpanded && (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-                      </span>
-                    )}
-                  </span>
-                  <span className={labelClass("flex-1")}>{item.label}</span>
-                  {showDot && showExpanded && (
-                    <span className="relative flex h-2.5 w-2.5 shrink-0" title={`Perfil ${profileCompletion}% completo`}>
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {showExpanded ? (
+              <>
+                {topItems.map(renderNavItem)}
+                {groups.map((group) => {
+                  const open = Boolean(openGroups[group.key]);
+                  const containsActive = group.key === activeGroupKey;
+                  return (
+                    <div key={group.key} className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: !open }))}
+                        aria-expanded={open}
+                        className={[
+                          "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition",
+                          containsActive ? "text-red-700" : "text-slate-500 hover:text-slate-800",
+                        ].join(" ")}
+                      >
+                        <span>{group.label}</span>
+                        <ChevronDownIcon className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`} />
+                      </button>
+                      {open ? <div className="mt-1 space-y-1">{group.items.map(renderNavItem)}</div> : null}
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              navItems.map(renderNavItem)
+            )}
           </nav>
 
           <div className="mt-8 border-t border-slate-200 pt-4">

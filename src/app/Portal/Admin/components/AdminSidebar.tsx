@@ -105,11 +105,11 @@ export default function AdminSidebar({
 
   const activeGroupKey = GROUPS.find((group) => group.items.some((item) => isActive(item.href)))?.key ?? null;
 
-  // Every group starts open so nothing is hidden on first visit; the user
-  // can collapse the ones they don't use. The group holding the active
-  // route is re-opened on navigation in case it was collapsed.
+  // Every group starts closed — the effect below force-opens the one
+  // holding the active route, so the user always lands with their current
+  // section visible and just needs the chevron to explore the rest.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(GROUPS.map((group) => [group.key, true])),
+    () => Object.fromEntries(GROUPS.map((group) => [group.key, false])),
   );
 
   useEffect(() => {
