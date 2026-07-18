@@ -408,6 +408,21 @@ class LlmCallLog(Base, TimestampMixin):
     success = Column(Boolean, nullable=False, default=False)
 
 
+class EmailLog(Base, TimestampMixin):
+    """One row per attempted send through send_templated_email — the shared
+    dispatcher every templated outbound email in the app goes through.
+    recipient_hash is a sha256 of the address, never the raw address itself:
+    send-volume and failure-rate per template is the useful monitoring
+    signal here, not who received what."""
+    __tablename__ = "email_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    template = Column(String(120), nullable=False, index=True)
+    recipient_hash = Column(String(64), nullable=True, index=True)
+    success = Column(Boolean, nullable=False, default=False)
+    error = Column(Text, nullable=True)
+
+
 class AdCampaign(Base, TimestampMixin):
     """Ad campaign model used by admin and public placements."""
     __tablename__ = "ad_campaigns"

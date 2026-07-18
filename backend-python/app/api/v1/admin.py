@@ -23,7 +23,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, CompanyInvite, CompanyMember, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    CareerPost, Company, CompanyInvite, CompanyMember, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
     LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
@@ -1109,6 +1109,58 @@ async def admin_auto_apply_analytics(
             "approvalRate": approval_rate,
         },
         "llmUsage": llm_usage,
+    }
+
+
+@router.get("/analytics/email-deliverability")
+async def admin_email_deliverability_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Per-template send success/failure rollup from EmailLog (one row per
+    attempted send through send_templated_email) plus a short recent-
+    failures list for triage — no recipient shown, EmailLog only ever
+    stores a hash."""
+    _ensure_admin(current_user)
+
+    rows = (
+        db.query(EmailLog.template, EmailLog.success, func.count(EmailLog.id))
+        .group_by(EmailLog.template, EmailLog.success)
+        .all()
+    )
+    by_template: dict[str, dict[str, int]] = {}
+    for template, success, count in rows:
+        entry = by_template.setdefault(template, {"success": 0, "failed": 0})
+        entry["success" if success else "failed"] = int(count)
+
+    templates = [
+        {
+            "template": template,
+            "success": counts["success"],
+            "failed": counts["failed"],
+            "total": counts["success"] + counts["failed"],
+        }
+        for template, counts in sorted(by_template.items(), key=lambda kv: -(kv[1]["success"] + kv[1]["failed"]))
+    ]
+
+    recent_failures = (
+        db.query(EmailLog)
+        .filter(EmailLog.success.is_(False))
+        .order_by(EmailLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "templates": templates,
+        "recentFailures": [
+            {
+                "template": row.template,
+                "error": (row.error or "")[:300],
+                "createdAt": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in recent_failures
+        ],
     }
 
 

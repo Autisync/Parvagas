@@ -220,6 +220,33 @@ def send_newsletter_confirmation_email(self, email: str) -> bool:
         raise
 
 
+def _log_email_attempt(template: str, payload: dict, success: bool, error: str | None) -> None:
+    """Best-effort deliverability record — one row per attempt (a retried
+    send logs once per attempt, not once per logical email; a template
+    that's actually struggling still shows up with a worse ratio either
+    way). Opens its own short-lived session since this task has no
+    request-scoped db. Never let logging break the send/retry."""
+    try:
+        import hashlib
+        from app.db.session import SessionLocal
+        from app.models import EmailLog
+
+        recipient = (payload or {}).get("email") or ""
+        db = SessionLocal()
+        try:
+            db.add(EmailLog(
+                template=template,
+                recipient_hash=hashlib.sha256(recipient.strip().lower().encode("utf-8")).hexdigest() if recipient else None,
+                success=success,
+                error=(error or "")[:2000] or None,
+            ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"could not record email log for '{template}': {exc}")
+
+
 @celery.task(
     name='app.workers.tasks.send_templated_email',
     bind=True,
@@ -245,9 +272,11 @@ def send_templated_email(self, method: str, payload: dict) -> bool:
         ok = fn(**(payload or {}))
         if not ok:
             raise RuntimeError(f"Email '{method}' send failed")
+        _log_email_attempt(method, payload, True, None)
         return ok
     except Exception as e:
         logger.error(f"Failed to send templated email '{method}': {str(e)}")
+        _log_email_attempt(method, payload, False, str(e))
         raise
 
 
