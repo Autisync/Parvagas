@@ -478,6 +478,28 @@ def _record_scraper_source_run(db, source_id: str | None, status: str, detail: s
         logger.warning(f"could not record scraper source run for {source_id}: {exc}")
 
 
+def _record_scraper_source_validators(db, source_id: str | None, outcome) -> None:
+    """Persist fresh conditional-GET validators (ETag/Last-Modified/body
+    hash) onto the ScraperSource row so the *next* run can send them back
+    and short-circuit an unchanged feed. Best-effort, same as
+    _record_scraper_source_run."""
+    if not source_id or outcome is None:
+        return
+    try:
+        from app.models import ScraperSource
+
+        row = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
+        if row:
+            if outcome.etag is not None:
+                row.http_etag = outcome.etag[:500]
+            if outcome.last_modified is not None:
+                row.http_last_modified = outcome.last_modified[:200]
+            if outcome.body_hash is not None:
+                row.last_body_hash = outcome.body_hash
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"could not record scraper source validators for {source_id}: {exc}")
+
+
 @celery.task(
     name='app.workers.tasks.scrape_external_jobs',
     # Runs on its own low-priority queue/worker (see celery_app.py) so a heavy
@@ -526,6 +548,17 @@ def scrape_external_jobs() -> dict:
                 _record_scraper_source_run(db, adapter.source_id, "error", str(e), 0)
                 db.commit()
                 continue
+
+            # Conditional-GET short-circuit: the source confirmed (via 304 or
+            # an identical body hash) that nothing changed since last run —
+            # skip parsing/dedup entirely for this source. Validators are
+            # still refreshed (a 304 can arrive with a rotated ETag).
+            if adapter.last_fetch is not None and adapter.last_fetch.unchanged:
+                _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
+                _record_scraper_source_run(db, adapter.source_id, "unchanged", None, 0)
+                db.commit()
+                continue
+
             # Batched dedup: previously every item cost up to 2 DB round-trips
             # (hash lookup + URL lookup) — hundreds of queries per run. Two IN
             # queries per source replace them; the dicts are then also updated
@@ -583,6 +616,7 @@ def scrape_external_jobs() -> dict:
                     existing_by_url[it["sourceUrl"]] = created
                 ingested += 1
                 source_ingested += 1
+            _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
             _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)
             db.commit()
             if budget_hit:

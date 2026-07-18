@@ -38,8 +38,13 @@ class _FakeAdapter:
         self.name = "fake-source"
         self.source_id = str(uuid.uuid4())
         self._items = items
+        # A real SourceAdapter sets this during fetch() (see _get_url); the
+        # ingestion loop checks it for the conditional-GET short-circuit.
+        self.last_fetch = None
 
     def fetch(self):
+        from app.services.scraper_service import FetchOutcome
+        self.last_fetch = FetchOutcome(body="fake", unchanged=False)
         return self._items
 
 
@@ -113,3 +118,50 @@ def test_intra_batch_duplicates_produce_one_row(db, monkeypatch):
     assert result["ingested"] == 1
     assert result["skipped"] == 1
     assert db.query(ScrapedJob).count() == 1
+
+
+def test_unchanged_source_skips_ingestion_and_persists_validators(db, monkeypatch):
+    """A source whose conditional GET comes back unchanged must skip
+    parse+dedup entirely — no rows created, no items even considered —
+    while still recording the run and refreshing the validators (a 304
+    can still carry a rotated ETag)."""
+    import app.services.scraper_service as scraper_service
+    from app.models import ScraperSource
+    from app.services.scraper_service import FetchOutcome
+
+    source = ScraperSource(name="Unchanged Source", type="json", url="http://x", enabled=True)
+    db.add(source)
+    db.commit()
+    source_id = source.id
+    # Detach from the identity map before the task runs: the task shares
+    # this exact session (monkeypatched SessionLocal) and closes it in its
+    # own `finally`, which otherwise leaves `source` a stale, unrefreshable
+    # instance that a later re-query by the same PK collides with.
+    db.expunge(source)
+
+    class _UnchangedAdapter:
+        def __init__(self):
+            self.name = "unchanged-source"
+            self.source_id = source_id
+            self.last_fetch = None
+
+        def fetch(self):
+            self.last_fetch = FetchOutcome(unchanged=True, etag='"new-etag"', last_modified="new-date", body_hash="newhash")
+            return []  # a real adapter also returns no items when unchanged (body=None)
+
+    monkeypatch.setattr(tasks, "get_adapters", lambda _db: [_UnchangedAdapter()], raising=False)
+    monkeypatch.setattr(scraper_service, "get_adapters", lambda _db: [_UnchangedAdapter()])
+
+    result = tasks.scrape_external_jobs()
+
+    assert result["ingested"] == 0
+    assert result["skipped"] == 0
+    assert db.query(ScrapedJob).count() == 0
+
+    # Re-query rather than refresh(source): the task's own db.close() on
+    # the shared monkeypatched session detached the original instance.
+    refreshed = db.query(ScraperSource).filter(ScraperSource.id == source_id).first()
+    assert refreshed.last_run_status == "unchanged"
+    assert refreshed.http_etag == '"new-etag"'
+    assert refreshed.http_last_modified == "new-date"
+    assert refreshed.last_body_hash == "newhash"

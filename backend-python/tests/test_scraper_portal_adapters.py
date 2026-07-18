@@ -49,7 +49,10 @@ GREENHOUSE_FIXTURE = {
 
 
 def test_greenhouse_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(GREENHOUSE_FIXTURE))
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps(GREENHOUSE_FIXTURE), unchanged=False),
+    )
     adapter = GreenhouseAdapter(name="Acme", url="acme")
     jobs = adapter.fetch()
     assert len(jobs) == 1
@@ -73,12 +76,18 @@ def test_greenhouse_adapter_accepts_full_url_unchanged():
 
 
 def test_greenhouse_adapter_malformed_json_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: "not json")
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body="not json", unchanged=False),
+    )
     assert GreenhouseAdapter(name="Acme", url="acme").fetch() == []
 
 
 def test_greenhouse_adapter_unreachable_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: None)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=None, unchanged=False),
+    )
     assert GreenhouseAdapter(name="Acme", url="acme").fetch() == []
 
 
@@ -98,7 +107,10 @@ LEVER_FIXTURE = [
 
 
 def test_lever_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(LEVER_FIXTURE))
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps(LEVER_FIXTURE), unchanged=False),
+    )
     jobs = LeverAdapter(name="Acme", url="acme").fetch()
     assert len(jobs) == 1
     job = jobs[0]
@@ -115,7 +127,10 @@ def test_lever_adapter_expands_bare_slug_to_api_url():
 
 
 def test_lever_adapter_non_list_response_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps({"unexpected": "shape"}))
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps({"unexpected": "shape"}), unchanged=False),
+    )
     assert LeverAdapter(name="Acme", url="acme").fetch() == []
 
 
@@ -140,7 +155,10 @@ CAREERJET_FIXTURE = {
 
 
 def test_careerjet_adapter_normalises(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: json.dumps(CAREERJET_FIXTURE))
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=json.dumps(CAREERJET_FIXTURE), unchanged=False),
+    )
     adapter = CareerjetAdapter(name="Careerjet Angola", url="test-affid", category="Tecnologia")
     jobs = adapter.fetch()
     assert len(jobs) == 1
@@ -153,7 +171,10 @@ def test_careerjet_adapter_normalises(monkeypatch):
 
 def test_careerjet_adapter_without_affid_skips_request(monkeypatch):
     calls = []
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: calls.append(url) or json.dumps(CAREERJET_FIXTURE))
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=calls.append(url) or json.dumps(CAREERJET_FIXTURE), unchanged=False),
+    )
     assert CareerjetAdapter(name="Careerjet Angola", url="").fetch() == []
     assert calls == []  # never even attempted the request without an affid
 
@@ -161,11 +182,11 @@ def test_careerjet_adapter_without_affid_skips_request(monkeypatch):
 def test_careerjet_adapter_request_includes_affid_and_angola_location(monkeypatch):
     captured = {}
 
-    def _fake_get(url, retries=3, timeout=None, user_agent=None):
+    def _fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
         captured["url"] = url
-        return json.dumps(CAREERJET_FIXTURE)
+        return svc.FetchOutcome(body=json.dumps(CAREERJET_FIXTURE), unchanged=False)
 
-    monkeypatch.setattr(svc, "_get", _fake_get)
+    monkeypatch.setattr(svc, "_conditional_get", _fake_get)
     CareerjetAdapter(name="Careerjet Angola", url="my-affid").fetch()
     assert "affid=my-affid" in captured["url"]
     assert "location=Angola" in captured["url"]
@@ -173,12 +194,18 @@ def test_careerjet_adapter_request_includes_affid_and_angola_location(monkeypatc
 
 
 def test_careerjet_adapter_malformed_json_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: "not json")
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body="not json", unchanged=False),
+    )
     assert CareerjetAdapter(name="Careerjet Angola", url="test-affid").fetch() == []
 
 
 def test_careerjet_adapter_unreachable_returns_empty(monkeypatch):
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: None)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=None, unchanged=False),
+    )
     assert CareerjetAdapter(name="Careerjet Angola", url="test-affid").fetch() == []
 
 

@@ -1652,6 +1652,7 @@ def _to_scraper_source_record(row: ScraperSource) -> dict[str, Any]:
         "lastRunStatus": row.last_run_status,
         "lastRunDetail": row.last_run_detail,
         "lastRunJobCount": row.last_run_job_count,
+        "trustedAutoApprove": bool(row.trusted_auto_approve),
         "createdAt": row.created_at.isoformat() if row.created_at else None,
         "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -1729,6 +1730,7 @@ async def admin_create_scraper_source(
         category=str(payload.get("category", "")).strip() or None,
         enabled=bool(payload.get("enabled", True)),
         max_results=_validate_max_results(payload.get("maxResults")),
+        trusted_auto_approve=bool(payload.get("trustedAutoApprove", False)),
     )
     db.add(created)
     db.commit()
@@ -1770,6 +1772,8 @@ async def admin_update_scraper_source(
         row.enabled = bool(payload.get("enabled"))
     if "maxResults" in payload:
         row.max_results = _validate_max_results(payload.get("maxResults"))
+    if "trustedAutoApprove" in payload:
+        row.trusted_auto_approve = bool(payload.get("trustedAutoApprove"))
 
     db.commit()
     db.refresh(row)

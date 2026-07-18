@@ -206,6 +206,47 @@ def _robots_ok(url: str, user_agent: str) -> bool:
 
 def _get(url: str, retries: int = 3, timeout: float | None = None, user_agent: str | None = None) -> str | None:
     """GET with polite UA + exponential backoff. Returns text or None."""
+    outcome = _conditional_get(url, retries=retries, timeout=timeout, user_agent=user_agent)
+    return None if outcome.unchanged else outcome.body
+
+
+class FetchOutcome:
+    """Result of a (possibly conditional) GET. `unchanged` means the source's
+    content hasn't changed since last run — either a 304 or an identical body
+    hash — so the caller can skip parsing and dedup entirely. `etag`,
+    `last_modified` and `body_hash` are the fresh validators to persist for
+    next run's conditional request."""
+
+    __slots__ = ("body", "unchanged", "etag", "last_modified", "body_hash")
+
+    def __init__(self, body=None, unchanged=False, etag=None, last_modified=None, body_hash=None):
+        self.body = body
+        self.unchanged = unchanged
+        self.etag = etag
+        self.last_modified = last_modified
+        self.body_hash = body_hash
+
+
+def _body_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def _conditional_get(
+    url: str,
+    retries: int = 3,
+    timeout: float | None = None,
+    user_agent: str | None = None,
+    prev_etag: str | None = None,
+    prev_last_modified: str | None = None,
+    prev_body_hash: str | None = None,
+) -> FetchOutcome:
+    """GET with polite UA + exponential backoff + conditional-request support.
+
+    Sends If-None-Match / If-Modified-Since when prior validators are known.
+    A 304, or a 200 whose body hashes identically to last run, both resolve
+    to unchanged=True (body=None) so the caller skips parse+dedup. On a real
+    network/robots failure returns unchanged=False, body=None — indistinguish-
+    able from an empty source, exactly as the old _get contract behaved."""
     import httpx
 
     effective_timeout = timeout if timeout is not None else _FALLBACK_TIMEOUT
@@ -213,24 +254,53 @@ def _get(url: str, retries: int = 3, timeout: float | None = None, user_agent: s
 
     if not _robots_ok(url, effective_ua):
         logger.warning("robots.txt disallows scraping %s", url)
-        return None
+        return FetchOutcome(body=None, unchanged=False)
+
+    headers = {"User-Agent": effective_ua}
+    if prev_etag:
+        headers["If-None-Match"] = prev_etag
+    if prev_last_modified:
+        headers["If-Modified-Since"] = prev_last_modified
+
     delay = 1.0
     for attempt in range(retries):
         try:
-            resp = httpx.get(url, headers={"User-Agent": effective_ua}, timeout=effective_timeout, follow_redirects=True)
+            resp = httpx.get(url, headers=headers, timeout=effective_timeout, follow_redirects=True)
+            if resp.status_code == 304:
+                # Server confirms nothing changed — keep prior validators.
+                return FetchOutcome(
+                    body=None, unchanged=True,
+                    etag=prev_etag, last_modified=prev_last_modified, body_hash=prev_body_hash,
+                )
             if resp.status_code == 200:
-                return resp.text
+                text = resp.text
+                digest = _body_hash(text)
+                new_etag = resp.headers.get("ETag")
+                new_last_modified = resp.headers.get("Last-Modified")
+                if prev_body_hash and digest == prev_body_hash:
+                    # Server didn't honor conditional headers, but the content
+                    # is byte-identical — treat as unchanged all the same.
+                    return FetchOutcome(
+                        body=None, unchanged=True,
+                        etag=new_etag or prev_etag,
+                        last_modified=new_last_modified or prev_last_modified,
+                        body_hash=digest,
+                    )
+                return FetchOutcome(
+                    body=text, unchanged=False,
+                    etag=new_etag, last_modified=new_last_modified, body_hash=digest,
+                )
             if resp.status_code in (429, 503):
                 time.sleep(delay)
                 delay *= 2
                 continue
             logger.warning("scrape GET %s -> HTTP %s", url, resp.status_code)
-            return None
+            return FetchOutcome(body=None, unchanged=False)
         except Exception as exc:  # pragma: no cover - network
             logger.warning("scrape GET %s failed (attempt %s): %s", url, attempt + 1, exc)
             time.sleep(delay)
             delay *= 2
-    return None
+    return FetchOutcome(body=None, unchanged=False)
 
 
 class SourceAdapter:
@@ -258,12 +328,28 @@ class SourceAdapter:
         # Set by get_adapters() to the originating ScraperSource.id, so the
         # worker task can write last_run_* stats back onto the right row.
         self.source_id: str | None = None
+        # Conditional-GET validators from the previous run (set by
+        # get_adapters); `last_fetch` is populated during _get_url so the
+        # task can persist fresh validators and detect an unchanged source.
+        self.prev_etag: str | None = None
+        self.prev_last_modified: str | None = None
+        self.prev_body_hash: str | None = None
+        self.last_fetch: FetchOutcome | None = None
+        # Set by get_adapters() from ScraperSource.trusted_auto_approve —
+        # gates the (default-off) auto-publish path in tasks.py.
+        self.trusted_auto_approve: bool = False
 
     def _limit(self) -> int:
         return self.max_results if self.max_results is not None else _FALLBACK_MAX_PER_SOURCE
 
     def _get_url(self, url: str, retries: int = 3) -> str | None:
-        return _get(url, retries=retries, timeout=self.timeout, user_agent=self.user_agent)
+        outcome = _conditional_get(
+            url, retries=retries, timeout=self.timeout, user_agent=self.user_agent,
+            prev_etag=self.prev_etag, prev_last_modified=self.prev_last_modified,
+            prev_body_hash=self.prev_body_hash,
+        )
+        self.last_fetch = outcome
+        return None if outcome.unchanged else outcome.body
 
     def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - interface
         raise NotImplementedError
@@ -547,5 +633,12 @@ def get_adapters(db: "Session") -> list[SourceAdapter]:
             user_agent=settings.user_agent or None,
         )
         adapter.source_id = row.id
+        # Conditional-GET validators from the previous run — lets the fetch
+        # short-circuit to "unchanged" instead of re-parsing an identical feed.
+        adapter.prev_etag = row.http_etag
+        adapter.prev_last_modified = row.http_last_modified
+        adapter.prev_body_hash = row.last_body_hash
+        # Gate for the (default-off) trusted-auto-approve path — see tasks.py.
+        adapter.trusted_auto_approve = bool(row.trusted_auto_approve)
         adapters.append(adapter)
     return adapters

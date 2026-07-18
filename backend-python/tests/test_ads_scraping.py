@@ -70,7 +70,10 @@ def test_content_hash_is_stable_and_case_insensitive():
 def test_json_adapter_normalises(monkeypatch):
     import app.services.scraper_service as svc
     payload = '{"jobs":[{"title":"Dev","company":"X","location":"Luanda","url":"http://x/1"},{"title":""}]}'
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: payload)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=payload, unchanged=False),
+    )
     out = JSONFeedAdapter(name="X", url="http://x", category="Tech").fetch()
     assert len(out) == 1  # blank-title row dropped
     assert out[0]["title"] == "Dev"
@@ -85,7 +88,10 @@ def test_rss_adapter_parses_items(monkeypatch):
       <item><title>Vaga A</title><description>d</description><link>http://a/1</link></item>
       <item><title></title></item>
     </channel></rss>"""
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: rss)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=rss, unchanged=False),
+    )
     out = RSSAdapter(name="Feed", url="http://f").fetch()
     assert len(out) == 1
     assert out[0]["title"] == "Vaga A"
@@ -97,7 +103,10 @@ def test_rss_adapter_parses_items(monkeypatch):
 def test_json_adapter_normalises_deadline_field(monkeypatch):
     import app.services.scraper_service as svc
     payload = '{"jobs":[{"title":"Dev","company":"X","deadline":"2026-08-01"}]}'
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: payload)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=payload, unchanged=False),
+    )
     out = JSONFeedAdapter(name="X", url="http://x").fetch()
     assert out[0]["deadline"] == "2026-08-01"
 
@@ -106,7 +115,10 @@ def test_json_adapter_accepts_deadline_field_aliases(monkeypatch):
     import app.services.scraper_service as svc
     for key in ("closingDate", "applicationDeadline", "expiresAt"):
         payload = f'{{"jobs":[{{"title":"Dev","{key}":"2026-09-15"}}]}}'
-        monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: payload)
+        monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=payload, unchanged=False),
+    )
         out = JSONFeedAdapter(name="X", url="http://x").fetch()
         assert out[0]["deadline"] == "2026-09-15", f"alias {key} not picked up"
 
@@ -114,7 +126,10 @@ def test_json_adapter_accepts_deadline_field_aliases(monkeypatch):
 def test_json_adapter_deadline_absent_is_none(monkeypatch):
     import app.services.scraper_service as svc
     payload = '{"jobs":[{"title":"Dev"}]}'
-    monkeypatch.setattr(svc, "_get", lambda url, retries=3, timeout=None, user_agent=None: payload)
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=payload, unchanged=False),
+    )
     out = JSONFeedAdapter(name="X", url="http://x").fetch()
     assert out[0]["deadline"] is None
 

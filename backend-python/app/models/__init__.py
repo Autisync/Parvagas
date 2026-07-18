@@ -769,9 +769,24 @@ class ScraperSource(Base, TimestampMixin):
     enabled = Column(Boolean, nullable=False, default=True)
     max_results = Column(Integer, nullable=True)  # per-source override; falls back to ScraperSettings default
     last_run_at = Column(DateTime, nullable=True)
-    last_run_status = Column(String(20), nullable=True)  # ok | error | empty
+    last_run_status = Column(String(20), nullable=True)  # ok | error | empty | unchanged
     last_run_detail = Column(Text, nullable=True)
     last_run_job_count = Column(Integer, nullable=True)
+
+    # Conditional-GET cache: sent back as If-None-Match / If-Modified-Since on
+    # the next run; last_body_hash short-circuits parsing even for servers
+    # that don't honor those headers. When the fetch comes back unchanged the
+    # whole parse+dedup phase is skipped for that source.
+    http_etag = Column(String(500), nullable=True)
+    http_last_modified = Column(String(200), nullable=True)
+    last_body_hash = Column(String(64), nullable=True)
+
+    # Trusted auto-approval: when True AND the global
+    # SCRAPER_AUTO_APPROVE_ENABLED flag is on, spotless items (quality_score
+    # 0, no flags) from this source auto-publish without manual curation.
+    # Default False — publishing third-party content unreviewed has source-
+    # ToS and quality implications, so it stays opt-in per source.
+    trusted_auto_approve = Column(Boolean, nullable=False, default=False)
 
 
 class ScraperSettings(Base, TimestampMixin):
