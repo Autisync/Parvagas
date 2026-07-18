@@ -25,14 +25,17 @@ docstring and get_adapters() below): it's a live search proxy, not a
 bulk-export feed, and using it to republish listings onto our own board
 wasn't confirmed to comply with Careerjet's partner terms.
 
-Angola-native boards (Jobartis, emprego.co.ao, angolaemprego.com's listing
-pages) were checked and do NOT currently expose a discoverable public
-API/JSON-LD/RSS feed for their job listings (angolaemprego.com's own
-/feed/ endpoint exists but publishes daily-roundup articles, not one item
-per job, so the generic RSS adapter above can point at it but won't produce
-clean per-job records) — building a scraper for those would mean fragile
-HTML-selector scraping that needs to be verified against their live markup
-by someone with browser access, which this module doesn't attempt.
+Angolan-market boards, live-checked (2026-07):
+- Ango Emprego (angoemprego.com — NOT angolaemprego.com, a different site)
+  publishes a valid per-job RSS 2.0 feed at angoemprego.com/feed; the
+  generic RSSAdapter above ingests it directly, no dedicated adapter
+  needed. It occasionally mixes in daily-roundup articles alongside real
+  per-job items — the adapter doesn't try to filter those out (see
+  test_ads_scraping.py's angoemprego fixture test); an admin rejects them
+  by eye in the pending curation queue.
+- Jobartis (jobartis.com) and Airswift (airswift.com) have no discoverable
+  JSON/RSS feed, but do have server-rendered HTML listing pages — see
+  JobartisAdapter and AirswiftAdapter below.
 """
 from __future__ import annotations
 

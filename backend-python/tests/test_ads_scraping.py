@@ -98,6 +98,57 @@ def test_rss_adapter_parses_items(monkeypatch):
     assert out[0]["sourceUrl"] == "http://a/1"
 
 
+def test_rss_adapter_ingests_angoemprego_feed_shape_including_roundup_articles(monkeypatch):
+    """Ango Emprego (angoemprego.com/feed) is a live, scoutable RSS 2.0
+    feed the existing RSSAdapter already handles — no new adapter code
+    needed, just a ScraperSource row of type "rss" pointed at it. Its
+    items are mostly one-per-job, but it occasionally mixes in daily
+    roundup articles ("🔥 30 Vagas..."). The adapter deliberately does NOT
+    try to filter those out — they land in the pending curation queue like
+    everything else, where an admin recognises and rejects them by eye;
+    building title-pattern heuristics into the scraper itself would be
+    fragile and just move the false-negative risk somewhere less visible.
+    """
+    import app.services.scraper_service as svc
+
+    rss = """<rss version="2.0"><channel>
+      <title>Ango Emprego</title>
+      <item>
+        <title>Coordenador(a) Técnico(a) de Farmácia</title>
+        <link>https://angoemprego.com/vagas/coordenador-tecnico-farmacia/</link>
+        <description>Empresa do setor farmacêutico procura coordenador... Continue Lendo</description>
+        <pubDate>Fri, 17 Jul 2026 08:00:00 +0000</pubDate>
+      </item>
+      <item>
+        <title>Mecânico de Veículos Sénior</title>
+        <link>https://angoemprego.com/vagas/mecanico-veiculos-senior/</link>
+        <description>Oficina em Luanda contrata mecânico com experiência... Continue Lendo</description>
+        <pubDate>Fri, 17 Jul 2026 07:30:00 +0000</pubDate>
+      </item>
+      <item>
+        <title>🔥 30 Vagas de Emprego em Angola Hoje – 17/07/2026</title>
+        <link>https://angoemprego.com/2026/07/17/30-vagas-hoje/</link>
+        <description>Confira as 30 vagas selecionadas para hoje... Continue Lendo</description>
+        <pubDate>Fri, 17 Jul 2026 06:00:00 +0000</pubDate>
+      </item>
+    </channel></rss>"""
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=rss, unchanged=False),
+    )
+
+    out = RSSAdapter(name="Ango Emprego", url="https://angoemprego.com/feed").fetch()
+
+    assert len(out) == 3
+    titles = {item["title"] for item in out}
+    assert "Coordenador(a) Técnico(a) de Farmácia" in titles
+    assert "Mecânico de Veículos Sénior" in titles
+    assert "🔥 30 Vagas de Emprego em Angola Hoje – 17/07/2026" in titles
+    for item in out:
+        assert item["sourceUrl"].startswith("https://angoemprego.com/")
+        assert item["source"] == "Ango Emprego"
+
+
 # ---- scraper hiring-deadline normalisation ----
 
 def test_json_adapter_normalises_deadline_field(monkeypatch):

@@ -417,6 +417,7 @@ export default function AdminScraperConfigPage() {
             />
             <span className="mt-1 block text-xs text-slate-500">
               Depende do tipo: JSON/RSS → URL completo do feed; Greenhouse/Lever → apenas o identificador da empresa no URL do board (ex.: em greenhouse.io/<b>acme</b>, é &quot;acme&quot;).
+              Ex. de fonte RSS do mercado angolano: Ango Emprego → <code>https://angoemprego.com/feed</code> (mistura ocasionalmente artigos de resumo diário — reveja e rejeite esses na fila de curadoria).
             </span>
           </label>
           <label className="block text-sm">
