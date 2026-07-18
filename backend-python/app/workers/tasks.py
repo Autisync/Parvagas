@@ -502,6 +502,35 @@ def _record_scraper_source_validators(db, source_id: str | None, outcome) -> Non
         logger.warning(f"could not record scraper source validators for {source_id}: {exc}")
 
 
+def _find_matching_live_job(db, title: str, company: str | None):
+    """Best-effort match against a Job a real employer already posted
+    directly through the platform (Company portal) — lets the scraper skip
+    re-adding something that's already live rather than duplicating it into
+    the curation queue. Deliberately excludes aggregator-published Jobs
+    (`source` set) so this only catches genuine employer postings; scraped-
+    vs-scraped duplicates are already handled by the content_hash/source_url
+    dedup above this call in the ingestion loop."""
+    norm_title = (title or "").strip().lower()
+    norm_company = (company or "").strip().lower()
+    if not norm_title or not norm_company:
+        return None
+    from sqlalchemy import func
+    from app.models import Job, Company
+    from app.api.v1.jobs import PUBLIC_JOB_STATUSES
+
+    return (
+        db.query(Job)
+        .join(Company, Job.company_id == Company.id)
+        .filter(
+            Job.status.in_(PUBLIC_JOB_STATUSES),
+            Job.source.is_(None),
+            func.lower(func.trim(Job.title)) == norm_title,
+            func.lower(func.trim(Company.name)) == norm_company,
+        )
+        .first()
+    )
+
+
 _SCRAPE_FETCH_MAX_WORKERS = 4
 
 
@@ -553,11 +582,14 @@ def scrape_external_jobs() -> dict:
     """Fetch jobs from admin-configured external sources into the ScrapedJob queue (pending review)."""
     from app.models import ScrapedJob
     from app.services.scraper_service import get_adapters, get_scraper_settings, content_hash, classify_audience_lane, assess_scraped_job_quality
+    from app.services.feature_flags import get_flag
+    from app.api.v1.admin import _publish_scraped_job, _list_to_json
 
     db = SessionLocal()
     adapters: list = []
     ingested = 0
     skipped = 0
+    auto_approved = 0
     sources_processed = 0
     budget_hit = False
     started_at = datetime.utcnow()
@@ -646,8 +678,35 @@ def scrape_external_jobs() -> dict:
                         skipped += 1
                         source_ingested += 1
                         continue
+                    live_match = _find_matching_live_job(db, title, it.get("company"))
+                    if live_match is not None:
+                        duplicate_row = ScrapedJob(
+                            title=title, company_name=it.get("company"), location=it.get("location"),
+                            category=it.get("category"), description=it.get("description"),
+                            source=it.get("source"), source_url=it.get("sourceUrl"),
+                            application_deadline=_parse_scraped_deadline(it.get("deadline")),
+                            audience_lane=classify_audience_lane(title, it.get("category"), it.get("description")),
+                            status="duplicate", duplicate_of=live_match.id,
+                            content_hash=chash, last_seen_at=now,
+                        )
+                        db.add(duplicate_row)
+                        existing_by_hash[chash] = duplicate_row
+                        if it.get("sourceUrl"):
+                            existing_by_url[it["sourceUrl"]] = duplicate_row
+                        skipped += 1
+                        source_ingested += 1
+                        continue
+                    # Structured content (when a source's feed actually provides
+                    # it) both fills in the same fields an admin would otherwise
+                    # curate by hand, and feeds the quality gate below — a
+                    # listing missing both is flagged, so quality_score can only
+                    # reach 0 (eligible for auto-approve) when a source's feed is
+                    # genuinely complete, not just has a long description.
+                    responsibilities_json = _list_to_json(it.get("responsibilities"))
+                    requirements_json = _list_to_json(it.get("requirements"))
                     quality_score, quality_flags = assess_scraped_job_quality(
                         title, it.get("description"), it.get("company"),
+                        has_responsibilities=bool(responsibilities_json), has_requirements=bool(requirements_json),
                     )
                     created = ScrapedJob(
                         title=title, company_name=it.get("company"), location=it.get("location"),
@@ -655,6 +714,7 @@ def scrape_external_jobs() -> dict:
                         source=it.get("source"), source_url=it.get("sourceUrl"),
                         application_deadline=_parse_scraped_deadline(it.get("deadline")),
                         audience_lane=classify_audience_lane(title, it.get("category"), it.get("description")),
+                        responsibilities=responsibilities_json, requirements=requirements_json,
                         quality_score=quality_score,
                         quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
                         status="pending", content_hash=chash, last_seen_at=now,
@@ -665,6 +725,19 @@ def scrape_external_jobs() -> dict:
                         existing_by_url[it["sourceUrl"]] = created
                     ingested += 1
                     source_ingested += 1
+                    # Trusted-source auto-approve: gated OFF by default at both
+                    # the global flag and per-source levels — an admin must
+                    # deliberately opt in to both before anything here
+                    # publishes without human review. quality_score == 0 (no
+                    # flags at all) keeps this to the cleanest items only.
+                    if (
+                        adapter.trusted_auto_approve
+                        and quality_score == 0
+                        and not quality_flags
+                        and get_flag("SCRAPER_AUTO_APPROVE_ENABLED", False, db=db)
+                    ):
+                        _publish_scraped_job(db, created)
+                        auto_approved += 1
                 _record_scraper_source_validators(db, adapter.source_id, adapter.last_fetch)
                 _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)
                 db.commit()
@@ -675,18 +748,25 @@ def scrape_external_jobs() -> dict:
         if budget_hit:
             logger.info(
                 f"scrape_external_jobs: run budget exhausted after {sources_processed}/{len(adapters)} "
-                f"source(s) — {ingested} ingested, {skipped} skipped so far"
+                f"source(s) — {ingested} ingested ({auto_approved} auto-approved), {skipped} skipped so far"
             )
         else:
-            logger.info(f"scrape_external_jobs: {ingested} ingested, {skipped} skipped from {len(adapters)} source(s)")
+            logger.info(
+                f"scrape_external_jobs: {ingested} ingested ({auto_approved} auto-approved), "
+                f"{skipped} skipped from {len(adapters)} source(s)"
+            )
         return {
             "sources": len(adapters), "sourcesProcessed": sources_processed,
-            "ingested": ingested, "skipped": skipped, "budgetExhausted": budget_hit,
+            "ingested": ingested, "skipped": skipped, "autoApproved": auto_approved,
+            "budgetExhausted": budget_hit,
         }
     except SoftTimeLimitExceeded:
         # Keep whatever was already committed per-source; don't lose the run entirely.
         logger.warning(f"scrape_external_jobs: soft time limit hit — {ingested} ingested before cutoff")
-        return {"sources": len(adapters), "ingested": ingested, "skipped": skipped, "budgetExhausted": True}
+        return {
+            "sources": len(adapters), "ingested": ingested, "skipped": skipped,
+            "autoApproved": auto_approved, "budgetExhausted": True,
+        }
     except Exception as e:
         logger.error(f"scrape_external_jobs failed: {str(e)}")
         db.rollback()

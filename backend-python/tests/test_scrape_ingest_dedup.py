@@ -34,13 +34,14 @@ def db(monkeypatch):
 
 
 class _FakeAdapter:
-    def __init__(self, items):
+    def __init__(self, items, trusted_auto_approve=False):
         self.name = "fake-source"
         self.source_id = str(uuid.uuid4())
         self._items = items
         # A real SourceAdapter sets this during fetch() (see _get_url); the
         # ingestion loop checks it for the conditional-GET short-circuit.
         self.last_fetch = None
+        self.trusted_auto_approve = trusted_auto_approve
 
     def host_key(self):
         return self.name
@@ -51,21 +52,24 @@ class _FakeAdapter:
         return self._items
 
 
-def _run_with_items(db, monkeypatch, items):
+def _run_with_items(db, monkeypatch, items, trusted_auto_approve=False):
     import app.services.scraper_service as scraper_service
 
-    monkeypatch.setattr(tasks, "get_adapters", lambda _db: [_FakeAdapter(items)], raising=False)
+    adapter = _FakeAdapter(items, trusted_auto_approve=trusted_auto_approve)
+    monkeypatch.setattr(tasks, "get_adapters", lambda _db: [adapter], raising=False)
     # scrape_external_jobs imports these inside the function body, so patch
     # them on the scraper_service module it imports from.
-    monkeypatch.setattr(scraper_service, "get_adapters", lambda _db: [_FakeAdapter(items)])
+    monkeypatch.setattr(scraper_service, "get_adapters", lambda _db: [adapter])
     return tasks.scrape_external_jobs()
 
 
-def _item(title="Analista Financeiro", company="Banco ABC", location="Luanda", source_url=None):
+def _item(title="Analista Financeiro", company="Banco ABC", location="Luanda", source_url=None,
+          description="Descrição da vaga com detalhe suficiente.", responsibilities=None, requirements=None):
     return {
         "title": title, "company": company, "location": location,
-        "category": "Finanças", "description": "Descrição da vaga com detalhe suficiente.",
+        "category": "Finanças", "description": description,
         "source": "fake-source", "sourceUrl": source_url,
+        "responsibilities": responsibilities, "requirements": requirements,
     }
 
 
@@ -171,3 +175,89 @@ def test_unchanged_source_skips_ingestion_and_persists_validators(db, monkeypatc
     assert refreshed.http_etag == '"new-etag"'
     assert refreshed.http_last_modified == "new-date"
     assert refreshed.last_body_hash == "newhash"
+
+
+def _make_live_employer_job(db, title="Analista Financeiro", company_name="Banco ABC"):
+    """A Job posted directly by a real Company account (source=None) — the
+    kind of listing the scraper should recognise instead of re-adding as a
+    fresh curation item."""
+    from app.models import Company, Job, User, UserRole
+
+    owner = User(id=str(uuid.uuid4()), email=f"{uuid.uuid4()}@example.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name=company_name, status="active")
+    db.add(company)
+    db.flush()
+    job = Job(company_id=company.id, title=title, status="approved", visibility="public")
+    db.add(job)
+    db.commit()
+    return job
+
+
+def test_job_dedup_matches_live_employer_job(db, monkeypatch):
+    """A scraped item matching a Job a real employer already posted directly
+    must be recorded as a duplicate (linked via duplicate_of), not queued
+    for curation as if it were new."""
+    job = _make_live_employer_job(db)
+    job_id = job.id
+    db.expunge(job)
+
+    result = _run_with_items(db, monkeypatch, [_item(title="Analista Financeiro", company="Banco ABC")])
+
+    assert result["ingested"] == 0
+    assert result["skipped"] == 1
+    row = db.query(ScrapedJob).first()
+    assert row.status == "duplicate"
+    assert row.duplicate_of == job_id
+
+
+def _clean_quality_item():
+    """An item with every signal assess_scraped_job_quality checks for —
+    real company, long description, no scam phrasing, and structured
+    content — the only shape that can score quality_score == 0."""
+    return _item(
+        description="Procuramos um profissional experiente para integrar a nossa equipa financeira em Luanda, com boas condições.",
+        responsibilities=["Gerir contas a pagar e receber", "Preparar relatórios financeiros mensais"],
+        requirements=["Licenciatura em Finanças ou Contabilidade", "3+ anos de experiência"],
+    )
+
+
+def test_auto_approve_gated_off_by_default_even_when_source_trusted(db, monkeypatch):
+    """The global SCRAPER_AUTO_APPROVE_ENABLED flag has no row yet (ships
+    unset = off) — even a source explicitly marked trusted must NOT
+    auto-publish until an admin deliberately flips the global switch too."""
+    result = _run_with_items(db, monkeypatch, [_clean_quality_item()], trusted_auto_approve=True)
+
+    assert result["ingested"] == 1
+    assert result.get("autoApproved", 0) == 0
+    row = db.query(ScrapedJob).first()
+    assert row.status == "pending"
+    assert row.published_job_id is None
+
+
+def test_auto_approve_publishes_when_global_flag_and_source_both_enabled(db, monkeypatch):
+    """Only once BOTH the global flag and the per-source trusted toggle are
+    on does a clean-quality item from that source publish immediately."""
+    from app.models import User, UserRole
+    from app.services.feature_flags import set_flag
+
+    # _publish_scraped_job's aggregator-company bootstrap falls back to any
+    # admin account when called with admin=None (the scheduled/background
+    # path) — needs one to exist, same as it would in a real deployment.
+    db.add(User(id=str(uuid.uuid4()), email="admin@parvagas.pt", full_name="Admin", password_hash="x", role=UserRole.admin))
+    db.commit()
+
+    set_flag(db, "SCRAPER_AUTO_APPROVE_ENABLED", True)
+
+    result = _run_with_items(db, monkeypatch, [_clean_quality_item()], trusted_auto_approve=True)
+
+    assert result["ingested"] == 1
+    assert result["autoApproved"] == 1
+    row = db.query(ScrapedJob).first()
+    assert row.status == "approved"
+    assert row.published_job_id is not None
+    from app.models import Job
+    published = db.query(Job).filter(Job.id == row.published_job_id).first()
+    assert published is not None
+    assert published.status == "approved"

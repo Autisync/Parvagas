@@ -333,6 +333,7 @@ export type ScraperSourceRecord = {
   category?: string | null;
   enabled: boolean;
   maxResults?: number | null;
+  trustedAutoApprove?: boolean;
   lastRunAt?: string | null;
   lastRunStatus?: string | null;
   lastRunDetail?: string | null;

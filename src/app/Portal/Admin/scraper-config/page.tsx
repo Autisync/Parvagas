@@ -31,9 +31,12 @@ const emptySourceForm = {
   category: "",
   enabled: true,
   maxResults: "",
+  trustedAutoApprove: false,
 };
 
 type SourceFormState = typeof emptySourceForm;
+
+const FLAG_KEY = "SCRAPER_AUTO_APPROVE_ENABLED";
 
 const TYPE_LABELS: Record<string, string> = {
   json: "JSON feed",
@@ -50,6 +53,7 @@ function sourceFormFromRecord(record: ScraperSourceRecord): SourceFormState {
     category: record.category || "",
     enabled: record.enabled,
     maxResults: record.maxResults != null ? String(record.maxResults) : "",
+    trustedAutoApprove: Boolean(record.trustedAutoApprove),
   };
 }
 
@@ -61,6 +65,7 @@ function toSourcePayload(form: SourceFormState) {
     category: form.category.trim() || null,
     enabled: form.enabled,
     maxResults: form.maxResults.trim() ? Number(form.maxResults) : null,
+    trustedAutoApprove: form.trustedAutoApprove,
   };
 }
 
@@ -333,6 +338,14 @@ export default function AdminScraperConfigPage() {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${source.enabled ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : "border border-slate-200 bg-slate-100 text-slate-500"}`}>
                         {source.enabled ? "Ativa" : "Desativada"}
                       </span>
+                      {source.trustedAutoApprove ? (
+                        <span
+                          className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                          title="Publica automaticamente vagas de qualidade perfeita quando a auto-aprovação global estiver ativa."
+                        >
+                          Fonte confiável
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 break-all text-xs text-slate-500">{source.url}</p>
                     {source.category ? <p className="mt-1 text-xs text-slate-500">Categoria: {source.category}</p> : null}
@@ -447,6 +460,22 @@ export default function AdminScraperConfigPage() {
             />
             Ativa
           </label>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <label className="inline-flex items-start gap-2 text-sm font-semibold text-amber-900">
+              <input
+                type="checkbox"
+                checked={form.trustedAutoApprove}
+                onChange={(e) => setForm((prev) => ({ ...prev, trustedAutoApprove: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-amber-300"
+              />
+              Fonte confiável (auto-aprovação)
+            </label>
+            <p className="mt-1 text-xs text-amber-800">
+              Publica automaticamente vagas desta fonte sem revisão humana quando a opção global &quot;{FLAG_KEY}&quot; estiver ativa
+              e a vaga tiver pontuação de qualidade perfeita. Confirme os termos de republicação da fonte antes de ativar — esta
+              opção sozinha não faz nada enquanto o interruptor global estiver desligado (padrão).
+            </p>
+          </div>
         </form>
       </AdminModal>
     </div>
