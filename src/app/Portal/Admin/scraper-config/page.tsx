@@ -41,6 +41,7 @@ const TYPE_LABELS: Record<string, string> = {
   greenhouse: "Greenhouse",
   lever: "Lever",
   jobartis: "Jobartis (Angola)",
+  airswift: "Airswift (energia)",
 };
 
 function sourceFormFromRecord(record: ScraperSourceRecord): SourceFormState {
@@ -417,7 +418,7 @@ export default function AdminScraperConfigPage() {
               required
             />
             <span className="mt-1 block text-xs text-slate-500">
-              Depende do tipo: JSON/RSS → URL completo do feed; Greenhouse/Lever → apenas o identificador da empresa no URL do board (ex.: em greenhouse.io/<b>acme</b>, é &quot;acme&quot;); Jobartis → URL completo da página de listagem, ex.: <code>https://www.jobartis.com/vagas-emprego</code> (ou uma página filtrada por categoria/província).
+              Depende do tipo: JSON/RSS → URL completo do feed; Greenhouse/Lever → apenas o identificador da empresa no URL do board (ex.: em greenhouse.io/<b>acme</b>, é &quot;acme&quot;); Jobartis → URL completo da página de listagem, ex.: <code>https://www.jobartis.com/vagas-emprego</code> (ou uma página filtrada por categoria/província); Airswift → URL completo da página de vagas, ex.: <code>https://www.airswift.com/jobs</code> (filtra automaticamente apenas vagas com &quot;Angola&quot; na localização).
               Ex. de fonte RSS do mercado angolano: Ango Emprego → <code>https://angoemprego.com/feed</code> (mistura ocasionalmente artigos de resumo diário — reveja e rejeite esses na fila de curadoria).
             </span>
           </label>

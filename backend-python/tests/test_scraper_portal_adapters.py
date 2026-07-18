@@ -382,6 +382,121 @@ def test_jobartis_adapter_defaults_url_when_source_row_url_is_not_absolute(monke
     assert calls[0] == "https://www.jobartis.com/vagas-emprego"
 
 
+# ── Airswift (international energy/engineering recruiter, Angola-market
+# postings — card structure verified live 2026-07 against airswift.com/jobs) ─
+
+def _airswift_card(title, location, employment_type, summary, href):
+    return f"""<article class="c-card-job-item">
+      <div class="c-card-job-item__top">
+        <p class="c-card-job-item__top-cell c-card-job-item__top-cell--left">{employment_type}</p>
+        <p class="c-card-job-item__top-cell c-card-job-item__top-cell--right">17 Jul 2026</p>
+      </div>
+      <div>
+        <p class="c-card-job-item__location">{location}</p>
+        <p class="c-card-job-item__title"><a href="{href}">{title}</a></p>
+        <p class="c-card-job-item__summary">{summary}</p>
+      </div>
+      <div class="c-card-job-item__bottom"><a class="c-button c-button--alpha" href="{href}">View Job and Apply</a></div>
+    </article>"""
+
+
+AIRSWIFT_PAGE_1 = f"""<html><body><div class="jobs-list">
+  {_airswift_card(
+      "Project Information Consultant", "Houston, Texas, United States", "Contract",
+      "Duration: Initially 1-year. Location: Houston, TX.",
+      "/jobs/project-information-consultant-1277208",
+  )}
+  {_airswift_card(
+      "Commissioning Engineer", "Luanda, Angola", "Permanent",
+      "Airswift is partnering with a major operator to recruit a commissioning engineer.",
+      "/jobs/commissioning-engineer-1277300",
+  )}
+  {_airswift_card(
+      "HSE Advisor", "Soyo, Angola", "Contract",
+      "Support HSE compliance for an offshore project.",
+      "/jobs/hse-advisor-1277301",
+  )}
+  <article class="c-card-job-item">
+    <div><p class="c-card-job-item__location">Luanda, Angola</p></div>
+    <!-- malformed: no title link -->
+  </article>
+</div></body></html>"""
+
+
+def test_airswift_adapter_filters_out_non_angola_listings(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=AIRSWIFT_PAGE_1, unchanged=False),
+    )
+    # Caps at exactly page 1's 2 Angola-matching cards — this test is about
+    # the location filter, not pagination (covered separately below).
+    jobs = svc.AirswiftAdapter(name="Airswift", url="https://www.airswift.com/jobs", max_results=2).fetch()
+
+    titles = {j["title"] for j in jobs}
+    assert "Project Information Consultant" not in titles  # Houston, not Angola — dropped
+    assert "Commissioning Engineer" in titles
+    assert "HSE Advisor" in titles
+    assert len(jobs) == 2  # the malformed (no-link) card is also dropped
+
+
+def test_airswift_adapter_normalises_matching_cards(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=AIRSWIFT_PAGE_1, unchanged=False),
+    )
+    jobs = svc.AirswiftAdapter(name="Airswift", url="https://www.airswift.com/jobs", max_results=2).fetch()
+    job = next(j for j in jobs if j["title"] == "Commissioning Engineer")
+
+    assert job["company"] == "Airswift"  # fixed — the card never names the real hiring company
+    assert job["location"] == "Luanda, Angola"
+    assert job["sourceUrl"] == "https://www.airswift.com/jobs/commissioning-engineer-1277300"
+    assert "Permanent" in job["description"]
+    assert "commissioning engineer" in job["description"]
+
+
+def test_airswift_adapter_case_insensitive_angola_match(monkeypatch):
+    page = f"""<html><body>{_airswift_card("Field Tech", "ANGOLA (Cabinda)", "Contract", "desc", "/jobs/field-tech-1")}</body></html>"""
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=page, unchanged=False),
+    )
+    jobs = svc.AirswiftAdapter(name="Airswift", url="https://www.airswift.com/jobs", max_results=1).fetch()
+    assert len(jobs) == 1
+
+
+def test_airswift_adapter_unreachable_returns_empty(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=None, unchanged=False),
+    )
+    assert svc.AirswiftAdapter(name="Airswift", url="https://www.airswift.com/jobs").fetch() == []
+
+
+def test_airswift_adapter_paginates_using_page_num_param(monkeypatch):
+    calls = []
+
+    def fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
+        calls.append(url)
+        return svc.FetchOutcome(body=AIRSWIFT_PAGE_1, unchanged=False)
+
+    monkeypatch.setattr(svc, "_conditional_get", fake_get)
+    svc.AirswiftAdapter(name="Airswift", url="https://www.airswift.com/jobs", max_results=100).fetch()
+    assert len(calls) == svc.AirswiftAdapter._MAX_PAGES
+    assert any("page_num=2" in u for u in calls)
+
+
+def test_airswift_adapter_defaults_url_when_source_row_url_is_not_absolute(monkeypatch):
+    calls = []
+
+    def fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
+        calls.append(url)
+        return svc.FetchOutcome(body=AIRSWIFT_PAGE_1, unchanged=False)
+
+    monkeypatch.setattr(svc, "_conditional_get", fake_get)
+    svc.AirswiftAdapter(name="Airswift", url="not-a-url", max_results=2).fetch()
+    assert calls[0] == "https://www.airswift.com/jobs"
+
+
 # ── get_adapters() wiring — admin-managed ScraperSource/ScraperSettings ──────
 
 def test_get_adapters_builds_new_portal_types():

@@ -729,12 +729,96 @@ class JobartisAdapter(SourceAdapter):
         return [o for o in out if o["title"]]
 
 
+class AirswiftAdapter(SourceAdapter):
+    """Airswift (airswift.com) — an international energy/engineering
+    recruiter with Angola-market postings, not an Angola-native board.
+    No public API or feed; scrapes the server-rendered /jobs listing page.
+    Card structure verified live 2026-07: each `article.c-card-job-item`
+    holds `p.c-card-job-item__top-cell--left` (employment type),
+    `p.c-card-job-item__location`, `p.c-card-job-item__title a` (relative
+    href), and `p.c-card-job-item__summary`. Company is fixed to
+    "Airswift" — the card never names the actual hiring company, only the
+    recruiter.
+
+    Airswift's own search only filters to the region "Africa", not to
+    Angola specifically, so this adapter ALWAYS keyword-filters
+    `location` for "angola" (case-insensitive) after parsing — even if
+    the admin's configured URL already carries a region/keyword filter,
+    this still narrows out off-market listings before they ever reach
+    the curation queue. Listing-page-only (no detail-page fetches) and
+    page-capped, same reasoning as JobartisAdapter."""
+
+    _DEFAULT_URL = "https://www.airswift.com/jobs"
+    _MAX_PAGES = 3
+    _COMPANY = "Airswift"
+
+    def _listing_url(self) -> str:
+        return self.url if self.url and self.url.startswith("http") else self._DEFAULT_URL
+
+    def host_key(self) -> str:
+        try:
+            return urlparse(self._listing_url()).netloc or self.name
+        except Exception:  # noqa: BLE001
+            return self.name
+
+    def _page_url(self, base_url: str, page: int) -> str:
+        if page <= 1:
+            return base_url
+        separator = "&" if "?" in base_url else "?"
+        return f"{base_url}{separator}page_num={page}"
+
+    def fetch(self) -> list[dict[str, Any]]:
+        base_url = self._listing_url()
+        out: list[dict[str, Any]] = []
+        page = 1
+        pages_fetched = 0
+        while page <= self._MAX_PAGES and len(out) < self._limit():
+            body = self._get_url(self._page_url(base_url, page))
+            pages_fetched += 1
+            if not body:
+                break
+            try:
+                soup = BeautifulSoup(body, "html.parser")
+            except Exception:  # noqa: BLE001
+                logger.warning("Airswift HTML parse failed for %s", self.name)
+                break
+            cards = soup.select("article.c-card-job-item")
+            if not cards:
+                break
+            for card in cards:
+                location_el = card.select_one("p.c-card-job-item__location")
+                location = location_el.get_text(strip=True) if location_el else ""
+                if "angola" not in location.lower():
+                    continue
+                title_link = card.select_one("p.c-card-job-item__title a")
+                if not title_link or not title_link.get("href"):
+                    continue
+                type_el = card.select_one("p.c-card-job-item__top-cell--left")
+                summary_el = card.select_one("p.c-card-job-item__summary")
+                employment_type = type_el.get_text(strip=True) if type_el else None
+                description = " — ".join(filter(None, [employment_type, summary_el.get_text(strip=True) if summary_el else None]))
+                out.append(self._normalise({
+                    "title": title_link.get_text(strip=True),
+                    "company": self._COMPANY,
+                    "location": location,
+                    "description": description,
+                    "url": urljoin(base_url, title_link.get("href")),
+                }))
+                if len(out) >= self._limit():
+                    break
+            page += 1
+        if pages_fetched >= self._MAX_PAGES:
+            logger.info("AirswiftAdapter %s: stopped at the %d-page cap this run", self.name, self._MAX_PAGES)
+        return [o for o in out if o["title"]]
+
+
 _ADAPTERS = {
     "json": JSONFeedAdapter,
     "rss": RSSAdapter,
     "greenhouse": GreenhouseAdapter,
     "lever": LeverAdapter,
     "jobartis": JobartisAdapter,
+    "airswift": AirswiftAdapter,
     # "careerjet" intentionally omitted — disabled pending confirmation that
     # republishing Careerjet's live-search results onto our own board
     # complies with their partner terms (see CareerjetAdapter docstring).

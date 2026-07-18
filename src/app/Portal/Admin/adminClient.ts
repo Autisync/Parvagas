@@ -331,7 +331,7 @@ export type CvBuilderReadinessResponse = {
 
 // Scraper types the admin board can select — kept in sync with the backend's
 // VALID_SCRAPER_SOURCE_TYPES (careerjet is intentionally excluded there).
-export const SCRAPER_SOURCE_TYPES = ["json", "rss", "greenhouse", "lever", "jobartis"] as const;
+export const SCRAPER_SOURCE_TYPES = ["json", "rss", "greenhouse", "lever", "jobartis", "airswift"] as const;
 export type ScraperSourceType = (typeof SCRAPER_SOURCE_TYPES)[number];
 
 export type ScraperSourceRecord = {
