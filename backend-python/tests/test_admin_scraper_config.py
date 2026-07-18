@@ -120,6 +120,67 @@ def test_update_scraper_source_rejects_careerjet(db):
         ))
 
 
+def test_create_scraper_source_rejects_trusted_auto_approve_for_any_current_type(db):
+    """TRUSTED_AUTO_APPROVE_TYPES is deliberately empty — every real source
+    today is HTML-scraped or a generic feed, none schema-vouchable — so
+    this must reject regardless of which otherwise-valid type is chosen."""
+    admin = _make_admin(db)
+    for source_type in ("json", "rss", "greenhouse", "lever"):
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(admin_create_scraper_source(
+                {"name": f"X-{source_type}", "type": source_type, "url": "https://x.example", "trustedAutoApprove": True},
+                db=db, current_user=admin,
+            ))
+        assert exc.value.status_code == 400
+    assert db.query(ScraperSource).count() == 0
+
+
+def test_create_scraper_source_allows_trusted_auto_approve_false(db):
+    admin = _make_admin(db)
+    result = asyncio.run(admin_create_scraper_source(
+        {"name": "Acme GH", "type": "greenhouse", "url": "acme", "trustedAutoApprove": False},
+        db=db, current_user=admin,
+    ))
+    assert result["trustedAutoApprove"] is False
+
+
+def test_update_scraper_source_rejects_trusted_auto_approve(db):
+    admin = _make_admin(db)
+    created = asyncio.run(admin_create_scraper_source(
+        {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
+    ))
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_update_scraper_source(
+            created["_id"], {"trustedAutoApprove": True}, db=db, current_user=admin,
+        ))
+    assert exc.value.status_code == 400
+    # The handler mutates row.trusted_auto_approve in memory before the
+    # validation raises (never committed) — roll back so the re-query
+    # below reflects actual persisted state, not the discarded in-memory
+    # attribute still sitting on the identity-mapped object.
+    db.rollback()
+    row = db.query(ScraperSource).filter(ScraperSource.id == created["_id"]).first()
+    assert row.trusted_auto_approve is False
+
+
+def test_get_adapters_never_trusts_a_hand_edited_row_regardless_of_type(db):
+    """Even if trusted_auto_approve=True somehow ends up set on the DB row
+    (bypassing the admin API validation entirely — e.g. a direct DB edit),
+    get_adapters() is the independent choke point that must still refuse
+    to mark the resulting adapter as trusted."""
+    admin = _make_admin(db)
+    created = asyncio.run(admin_create_scraper_source(
+        {"name": "Acme GH", "type": "greenhouse", "url": "acme"}, db=db, current_user=admin,
+    ))
+    row = db.query(ScraperSource).filter(ScraperSource.id == created["_id"]).first()
+    row.trusted_auto_approve = True  # bypass the API layer entirely
+    db.commit()
+
+    adapters = get_adapters(db)
+    assert len(adapters) == 1
+    assert adapters[0].trusted_auto_approve is False
+
+
 def test_delete_scraper_source(db):
     admin = _make_admin(db)
     created = asyncio.run(admin_create_scraper_source(

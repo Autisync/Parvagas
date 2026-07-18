@@ -659,6 +659,19 @@ _ADAPTERS = {
 # truth shared with the admin API's create/update validation.
 VALID_SCRAPER_SOURCE_TYPES = frozenset(_ADAPTERS.keys())
 
+# Source types allowed to ever auto-publish (trusted_auto_approve=True AND
+# the global SCRAPER_AUTO_APPROVE_ENABLED flag on) — deliberately empty.
+# A type earns a place here only once BOTH are true: (1) its feed schema is
+# structured/vouchable, not arbitrary third-party HTML/JSON an admin could
+# point at anything, and (2) that specific source's republishing terms have
+# been explicitly checked (same standing caution as Careerjet). The current
+# real sources (Jobartis, Airswift — HTML-scraped listing pages; Ango
+# Emprego — a generic WordPress RSS feed) never qualify: their content is
+# exactly the kind of unvetted third-party markup a human curator exists to
+# review before it reaches candidates. Enforced in get_adapters() below, not
+# just at admin API validation time, so a hand-edited DB row can't bypass it.
+TRUSTED_AUTO_APPROVE_TYPES: frozenset[str] = frozenset()
+
 
 def get_adapters(db: "Session") -> list[SourceAdapter]:
     """Build adapters from admin-managed ScraperSource rows (empty list when
@@ -706,7 +719,10 @@ def get_adapters(db: "Session") -> list[SourceAdapter]:
         adapter.prev_etag = row.http_etag
         adapter.prev_last_modified = row.http_last_modified
         adapter.prev_body_hash = row.last_body_hash
-        # Gate for the (default-off) trusted-auto-approve path — see tasks.py.
-        adapter.trusted_auto_approve = bool(row.trusted_auto_approve)
+        # Gate for the (default-off) trusted-auto-approve path — see
+        # tasks.py. Even a hand-edited DB row can't auto-publish from a
+        # type outside TRUSTED_AUTO_APPROVE_TYPES; this is the one choke
+        # point the ingestion loop actually trusts.
+        adapter.trusted_auto_approve = bool(row.trusted_auto_approve) and source_type in TRUSTED_AUTO_APPROVE_TYPES
         adapters.append(adapter)
     return adapters

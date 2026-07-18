@@ -1880,6 +1880,22 @@ def _validate_scraper_source_type(source_type: str) -> str:
     return normalized
 
 
+def _validate_trusted_auto_approve(trusted: bool, source_type: str) -> None:
+    """Reject trustedAutoApprove=True for any source type outside the
+    (currently empty) TRUSTED_AUTO_APPROVE_TYPES allowlist — see that
+    constant's docstring in scraper_service.py for the admission bar. This
+    is feedback for the admin UI; get_adapters() enforces the same rule
+    independently so a row that somehow got saved with it set can't
+    auto-publish anyway."""
+    from app.services.scraper_service import TRUSTED_AUTO_APPROVE_TYPES
+
+    if trusted and source_type not in TRUSTED_AUTO_APPROVE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Auto-aprovação automática não está disponível — todas as fontes atuais requerem revisão humana.",
+        )
+
+
 def _validate_max_results(value: Any) -> int | None:
     if value in (None, ""):
         return None
@@ -1911,6 +1927,8 @@ async def admin_create_scraper_source(
     source_type = _validate_scraper_source_type(str(payload.get("type", "")))
     if not name or not url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name e url são obrigatórios")
+    trusted_auto_approve = bool(payload.get("trustedAutoApprove", False))
+    _validate_trusted_auto_approve(trusted_auto_approve, source_type)
 
     created = ScraperSource(
         name=name,
@@ -1919,7 +1937,7 @@ async def admin_create_scraper_source(
         category=str(payload.get("category", "")).strip() or None,
         enabled=bool(payload.get("enabled", True)),
         max_results=_validate_max_results(payload.get("maxResults")),
-        trusted_auto_approve=bool(payload.get("trustedAutoApprove", False)),
+        trusted_auto_approve=trusted_auto_approve,
     )
     db.add(created)
     db.commit()
@@ -1963,6 +1981,10 @@ async def admin_update_scraper_source(
         row.max_results = _validate_max_results(payload.get("maxResults"))
     if "trustedAutoApprove" in payload:
         row.trusted_auto_approve = bool(payload.get("trustedAutoApprove"))
+    # Re-check against the row's FINAL type — covers both setting the flag
+    # on an ineligible type and changing type away from an eligible one
+    # while the flag stays set from before.
+    _validate_trusted_auto_approve(bool(row.trusted_auto_approve), row.type)
 
     db.commit()
     db.refresh(row)
