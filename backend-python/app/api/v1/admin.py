@@ -23,7 +23,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, Company, CompanyInvite, CompanyMember, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    CareerPost, ClientErrorLog, Company, CompanyInvite, CompanyMember, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
     LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
@@ -1161,6 +1161,45 @@ async def admin_email_deliverability_analytics(
             }
             for row in recent_failures
         ],
+    }
+
+
+@router.get("/analytics/client-errors")
+async def admin_client_errors_analytics(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    level: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Paginated recent client-error reports (ClientErrorLog, populated by
+    the public POST /api/v1/events/client-errors endpoint) plus a 14-day
+    daily rate series. Every field returned here is rendered as plain text
+    by the admin frontend — never dangerouslySetInnerHTML — since this
+    table's content originates from an unauthenticated public endpoint."""
+    _ensure_admin(current_user)
+
+    query = db.query(ClientErrorLog)
+    if level and level != "all":
+        query = query.filter(ClientErrorLog.level == level)
+
+    total = query.count()
+    rows = query.order_by(ClientErrorLog.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+
+    return {
+        "errors": [
+            {
+                "_id": row.id,
+                "level": row.level,
+                "message": row.message,
+                "path": row.path,
+                "details": row.details,
+                "createdAt": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+        "pagination": _pagination(page, limit, total),
+        "dailySeries": _daily_series(db, ClientErrorLog, datetime.utcnow() - timedelta(days=14)),
     }
 
 

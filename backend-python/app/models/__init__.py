@@ -423,6 +423,25 @@ class EmailLog(Base, TimestampMixin):
     error = Column(Text, nullable=True)
 
 
+class ClientErrorLog(Base, TimestampMixin):
+    """Frontend runtime errors reported by src/lib/errorMonitoring.ts via
+    the public POST /api/v1/events/client-errors endpoint. Every string
+    field is hard-truncated at the application layer to match its column
+    width before insert (not just validated) — a malicious payload can't
+    grow a row past a fixed bound. Rendered as plain text everywhere in the
+    admin UI (never dangerouslySetInnerHTML) — that's the actual XSS
+    boundary for this table's inherently-untrusted content."""
+    __tablename__ = "client_error_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    level = Column(String(10), nullable=False, index=True)  # warning|error|critical
+    message = Column(String(500), nullable=False)
+    path = Column(String(300), nullable=True)
+    details = Column(String(1000), nullable=True)  # JSON string, truncated
+    user_agent = Column(String(400), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+
+
 class AdCampaign(Base, TimestampMixin):
     """Ad campaign model used by admin and public placements."""
     __tablename__ = "ad_campaigns"

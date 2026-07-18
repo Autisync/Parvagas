@@ -58,6 +58,10 @@ const EmailDeliverabilityPanel = dynamic(() => import("../components/EmailDelive
   ssr: false,
 });
 
+const ClientErrorsPanel = dynamic(() => import("../components/ClientErrorsPanel"), {
+  ssr: false,
+});
+
 const AnalyticsErrorBoundary = dynamic(() => import("../components/AnalyticsErrorBoundary"), {
   ssr: false,
 });
@@ -626,6 +630,7 @@ export default function AdminAnalyticsPage() {
       {token ? <DemandSignalsPanel token={token} /> : null}
       {token ? <AutoApplyAiUsagePanel token={token} /> : null}
       {token ? <EmailDeliverabilityPanel token={token} /> : null}
+      {token ? <ClientErrorsPanel token={token} /> : null}
 
       {!isSuperAdmin && (
         <AdminAlert tone="warning">

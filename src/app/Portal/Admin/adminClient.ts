@@ -289,6 +289,15 @@ export type SecuritySummary = {
   last24hFailedLogins: number | null;
 };
 
+export type ClientErrorLogRecord = {
+  _id: string;
+  level: "warning" | "error" | "critical";
+  message: string;
+  path?: string | null;
+  details?: string | null;
+  createdAt?: string | null;
+};
+
 export type LaunchReadinessCheck = {
   id: string;
   scope: string;
@@ -486,6 +495,13 @@ export async function fetchAuditLogs(token: string, params: Record<string, strin
 export async function fetchSecurityEvents(token: string, params: Record<string, string | number | undefined> = {}) {
   return authFetch<Paginated<"securityEvents", SecurityEventRecord> & { summary?: SecuritySummary }>(
     `/admin/security/events${listQuery(params)}`,
+    token,
+  );
+}
+
+export async function fetchClientErrors(token: string, params: Record<string, string | number | undefined> = {}) {
+  return authFetch<Paginated<"errors", ClientErrorLogRecord> & { dailySeries?: Array<{ label: string; value: number }> }>(
+    `/admin/analytics/client-errors${listQuery(params)}`,
     token,
   );
 }
