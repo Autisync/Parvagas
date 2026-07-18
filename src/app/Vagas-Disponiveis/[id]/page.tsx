@@ -10,6 +10,7 @@ import { serverGetJson } from "@/lib/dataClient";
 import ReportJobButton from "./ReportJobButton";
 import JobPrepPanel from "./JobPrepPanel";
 import TrackOnMount from "@/app/components/TrackOnMount";
+import { toJsonLdString } from "@/lib/jsonLd";
 
 type Job = {
   _id: string;
@@ -130,7 +131,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   return (
     <div className="bg-white min-h-screen">
       <TrackOnMount event="job_view" />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jobLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdString(jobLd) }} />
       <Header />
       <main className="px-6 py-8 max-w-5xl mx-auto">
         <Breadcrumbs

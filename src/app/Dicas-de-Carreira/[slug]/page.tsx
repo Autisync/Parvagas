@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
+import { toJsonLdString } from "@/lib/jsonLd";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://parvagas.pt";
 
@@ -93,7 +94,7 @@ export default async function CareerPostPage({ params }: { params: Promise<{ slu
 
   return (
     <div className="bg-white min-h-screen">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: toJsonLdString(articleLd) }} />
       <Header />
       <main className="py-10 pb-20 px-6 mx-auto max-w-3xl">
         <Link href="/Dicas-de-Carreira/" className="text-sm text-red-700 font-semibold hover:underline">

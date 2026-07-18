@@ -17,6 +17,7 @@ import { Providers } from "./Providers";
 // import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics } from "@vercel/analytics/react";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
+import { toJsonLdString } from "@/lib/jsonLd";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -91,7 +92,7 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: toJsonLdString({
               "@context": "https://schema.org",
               "@type": "Organization",
               name: "Parvagas",
