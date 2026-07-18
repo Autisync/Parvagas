@@ -526,17 +526,36 @@ def scrape_external_jobs() -> dict:
                 _record_scraper_source_run(db, adapter.source_id, "error", str(e), 0)
                 db.commit()
                 continue
+            # Batched dedup: previously every item cost up to 2 DB round-trips
+            # (hash lookup + URL lookup) — hundreds of queries per run. Two IN
+            # queries per source replace them; the dicts are then also updated
+            # with rows added below so intra-batch duplicates keep deduping
+            # (matching the old per-item autoflush behavior).
+            prepared: list[tuple[dict, str, str]] = []
             for it in items:
-                if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
-                    budget_hit = True
-                    break
                 title = (it.get("title") or "").strip()
                 if not title:
                     continue
-                chash = content_hash(title, it.get("company"), it.get("location"))
-                existing = db.query(ScrapedJob).filter(ScrapedJob.content_hash == chash).first()
+                prepared.append((it, title, content_hash(title, it.get("company"), it.get("location"))))
+
+            existing_by_hash: dict[str, ScrapedJob] = {}
+            existing_by_url: dict[str, ScrapedJob] = {}
+            batch_hashes = [chash for _, _, chash in prepared]
+            batch_urls = [it["sourceUrl"] for it, _, _ in prepared if it.get("sourceUrl")]
+            if batch_hashes:
+                for row in db.query(ScrapedJob).filter(ScrapedJob.content_hash.in_(batch_hashes)).all():
+                    existing_by_hash[row.content_hash] = row
+            if batch_urls:
+                for row in db.query(ScrapedJob).filter(ScrapedJob.source_url.in_(batch_urls)).all():
+                    existing_by_url[row.source_url] = row
+
+            for it, title, chash in prepared:
+                if _scrape_budget_exhausted(ingested, started_at, datetime.utcnow(), max_ingest_per_run, run_budget_seconds):
+                    budget_hit = True
+                    break
+                existing = existing_by_hash.get(chash)
                 if not existing and it.get("sourceUrl"):
-                    existing = db.query(ScrapedJob).filter(ScrapedJob.source_url == it["sourceUrl"]).first()
+                    existing = existing_by_url.get(it["sourceUrl"])
                 if existing:
                     existing.last_seen_at = now  # keep alive; don't re-create
                     new_deadline = _parse_scraped_deadline(it.get("deadline"))
@@ -548,7 +567,7 @@ def scrape_external_jobs() -> dict:
                 quality_score, quality_flags = assess_scraped_job_quality(
                     title, it.get("description"), it.get("company"),
                 )
-                db.add(ScrapedJob(
+                created = ScrapedJob(
                     title=title, company_name=it.get("company"), location=it.get("location"),
                     category=it.get("category"), description=it.get("description"),
                     source=it.get("source"), source_url=it.get("sourceUrl"),
@@ -557,7 +576,11 @@ def scrape_external_jobs() -> dict:
                     quality_score=quality_score,
                     quality_flags=json.dumps(quality_flags, ensure_ascii=False) if quality_flags else None,
                     status="pending", content_hash=chash, last_seen_at=now,
-                ))
+                )
+                db.add(created)
+                existing_by_hash[chash] = created
+                if it.get("sourceUrl"):
+                    existing_by_url[it["sourceUrl"]] = created
                 ingested += 1
                 source_ingested += 1
             _record_scraper_source_run(db, adapter.source_id, "ok" if source_ingested else "empty", None, source_ingested)

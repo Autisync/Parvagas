@@ -167,12 +167,36 @@ def assess_scraped_job_quality(
     return min(score, 100), flags
 
 
+# robots.txt cache — previously every single GET re-downloaded the target
+# host's robots.txt (RobotFileParser.read() is itself an HTTP request),
+# literally doubling outbound requests for single-feed adapters. Parsers are
+# cached per (scheme, host) with a TTL; module-level is fine because each
+# scrape run is one worker process.
+_ROBOTS_CACHE: dict[str, tuple[float, RobotFileParser | None]] = {}
+_ROBOTS_CACHE_TTL_SECONDS = 24 * 3600
+
+
 def _robots_ok(url: str, user_agent: str) -> bool:
     try:
         parts = urlparse(url)
-        rp = RobotFileParser()
-        rp.set_url(f"{parts.scheme}://{parts.netloc}/robots.txt")
-        rp.read()
+        cache_key = f"{parts.scheme}://{parts.netloc}"
+        cached = _ROBOTS_CACHE.get(cache_key)
+        if cached and (time.time() - cached[0]) < _ROBOTS_CACHE_TTL_SECONDS:
+            rp = cached[1]
+        else:
+            try:
+                rp = RobotFileParser()
+                rp.set_url(f"{cache_key}/robots.txt")
+                rp.read()
+            except Exception:
+                # Unreadable robots caches as None (= permissive) too, so a
+                # host with no robots.txt isn't re-fetched on every item.
+                rp = None
+            _ROBOTS_CACHE[cache_key] = (time.time(), rp)
+
+        if rp is None:
+            logger.info("robots.txt unreadable for %s; proceeding", url)
+            return True
         return rp.can_fetch(user_agent, url)
     except Exception:
         # If robots can't be read, be permissive but log it.
@@ -492,7 +516,16 @@ def get_adapters(db: "Session") -> list[SourceAdapter]:
         logger.info("get_adapters: scraping disabled via ScraperSettings.enabled=False")
         return []
 
-    rows = db.query(ScraperSource).filter(ScraperSource.enabled.is_(True)).all()
+    # Least-recently-run first (never-run before everything): when a run
+    # exhausts its ingest/time budget mid-way, iteration order decides who
+    # gets skipped — DB row order would starve the *same* tail sources on
+    # every single run, whereas this rotates the pain fairly.
+    rows = (
+        db.query(ScraperSource)
+        .filter(ScraperSource.enabled.is_(True))
+        .order_by(ScraperSource.last_run_at.asc().nulls_first(), ScraperSource.created_at.asc())
+        .all()
+    )
     adapters: list[SourceAdapter] = []
     for row in rows:
         source_type = str(row.type or "").lower()
