@@ -219,6 +219,7 @@ export type AdCampaignRecord = {
   imageUrl?: string;
   status?: string;
   active?: boolean;
+  flagged?: boolean;
   budget?: number;
   costPerClick?: number;
   costPerImpression?: number;

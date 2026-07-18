@@ -283,13 +283,27 @@ export default function AdminScrapedPage() {
       {error ? <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div> : null}
 
       <form onSubmit={createScraped} className="mt-5 app-card p-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Título" required className={adminFieldClass} />
-          <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Empresa/Fonte" required className={adminFieldClass} />
-          <input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Local" className={adminFieldClass} />
-          <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} placeholder="URL de origem" className={adminFieldClass} />
+        <p className="text-sm font-semibold text-slate-900">Adicionar vaga manualmente</p>
+        <p className="mt-1 text-xs text-slate-500">Para vagas encontradas fora dos scrapers automáticos (jornal, redes sociais, email). Entra na fila de curadoria como pendente, igual às importadas.</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="grid gap-1 text-xs text-slate-600">
-            <span>Prazo de candidatura (opcional)</span>
+            <span>Título da vaga *</span>
+            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ex.: Contabilista Sénior" required className={adminFieldClass} />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Empresa que contrata *</span>
+            <input value={newCompany} onChange={(e) => setNewCompany(e.target.value)} placeholder="Ex.: Banco ABC" required className={adminFieldClass} />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Localização</span>
+            <input value={newLocation} onChange={(e) => setNewLocation(e.target.value)} placeholder="Ex.: Luanda" className={adminFieldClass} />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>URL do anúncio original (para referência e deteção de duplicados)</span>
+            <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} placeholder="https://…" className={adminFieldClass} />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Prazo de candidatura (opcional — sem prazo, expira em 45 dias)</span>
             <input type="date" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} className={adminFieldClass} />
           </label>
         </div>
@@ -472,16 +486,34 @@ export default function AdminScrapedPage() {
             </div>
             <div className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Editar antes de rever</p>
-              <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={adminFieldClass} placeholder="Título" />
-              <input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} className={adminFieldClass} placeholder="Empresa" />
-              <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className={adminFieldClass} placeholder="Localização" />
-              <input value={editSourceUrl} onChange={(e) => setEditSourceUrl(e.target.value)} className={adminFieldClass} placeholder="URL de origem" />
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Título da vaga</span>
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className={adminFieldClass} placeholder="Ex.: Contabilista Sénior" />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Empresa que contrata</span>
+                <input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} className={adminFieldClass} placeholder="Ex.: Banco ABC" />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Localização</span>
+                <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} className={adminFieldClass} placeholder="Ex.: Luanda" />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>URL do anúncio original</span>
+                <input value={editSourceUrl} onChange={(e) => setEditSourceUrl(e.target.value)} className={adminFieldClass} placeholder="https://…" />
+              </label>
               <label className="grid gap-1 text-xs text-slate-600">
                 <span>Prazo de candidatura</span>
                 <input type="date" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} className={adminFieldClass} />
               </label>
-              <input value={editCompanyLogoUrl} onChange={(e) => setEditCompanyLogoUrl(e.target.value)} className={adminFieldClass} placeholder="URL do logo da empresa" />
-              <input value={editCompanyWebsite} onChange={(e) => setEditCompanyWebsite(e.target.value)} className={adminFieldClass} placeholder="Website da empresa" />
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>URL do logo da empresa (mostrado no cartão da vaga)</span>
+                <input value={editCompanyLogoUrl} onChange={(e) => setEditCompanyLogoUrl(e.target.value)} className={adminFieldClass} placeholder="https://…/logo.png" />
+              </label>
+              <label className="grid gap-1 text-xs text-slate-600">
+                <span>Website da empresa</span>
+                <input value={editCompanyWebsite} onChange={(e) => setEditCompanyWebsite(e.target.value)} className={adminFieldClass} placeholder="https://www.empresa.pt" />
+              </label>
               <label className="grid gap-1 text-xs text-slate-600">
                 <span>Email de contacto da empresa (esta empresa não tem conta Parvagas — as candidaturas são-lhe enviadas por email para este endereço)</span>
                 <input

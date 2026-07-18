@@ -73,6 +73,208 @@ function validateAdForm(values: AdFormState): AdFormErrors {
   return errors;
 }
 
+const PLACEMENT_LABELS: Record<string, string> = {
+  homepage_banner: "Banner da Homepage",
+  job_list: "Listagem de Vagas",
+  sidebar: "Barra lateral (detalhe da vaga)",
+};
+
+/** Label + helper text wrapper — every campaign field explains itself. */
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
+      {children}
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      {error ? <FormFieldError id={`ad-${label}-error`} message={error} /> : null}
+    </div>
+  );
+}
+
+/** Faithful miniature of SponsoredAdSlot (the public renderer) so the admin
+ * sees the creative exactly as visitors will, sized per placement. */
+function AdCreativePreview({ title, imageUrl, link, placement }: { title?: string; imageUrl?: string; link?: string; placement?: string }) {
+  const widthClass = placement === "sidebar" ? "max-w-xs" : placement === "job_list" ? "max-w-md" : "max-w-2xl";
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        Como aparece em: {PLACEMENT_LABELS[placement || ""] || "—"}
+      </p>
+      {!imageUrl && !title ? (
+        <p className="rounded-2xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-400">
+          Preencha o título e a imagem para ver a pré-visualização do anúncio.
+        </p>
+      ) : (
+        <div className={`block overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm ${widthClass}`}>
+          {imageUrl ? (
+            <div className="relative h-40 w-full">
+              <Image src={imageUrl} alt={title || "Publicidade"} fill sizes="400px" className="object-cover" unoptimized />
+            </div>
+          ) : null}
+          <div className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-red-600">Patrocinado</p>
+            <h3 className="mt-1.5 text-base font-bold text-slate-900">{title || "Publicidade"}</h3>
+            {link ? <p className="mt-1.5 text-sm font-semibold text-red-700">Ver oferta patrocinada</p> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type AdStage = "draft" | "scheduled" | "active" | "expired" | "flagged";
+
+/** Client-side mirror of the backend's _compute_ad_status — computed from
+ * the live fields (not the stored status string) so date-driven
+ * transitions (scheduled→active→expired) are never stale. */
+function computeAdStage(ad: AdCampaignRecord): AdStage {
+  if (!ad.active) return "draft";
+  if (ad.flagged) return "flagged";
+  const now = Date.now();
+  if (ad.startDate && now < new Date(ad.startDate).getTime()) return "scheduled";
+  if (ad.endDate && now > new Date(ad.endDate).getTime()) return "expired";
+  return "active";
+}
+
+const FUNNEL_STAGES: Array<{ stage: AdStage; label: string; hint: string; tone: string }> = [
+  { stage: "draft",     label: "Rascunho / Inativa", hint: "Preparadas mas não exibidas", tone: "border-slate-200 bg-slate-50" },
+  { stage: "scheduled", label: "Agendadas",          hint: "Entram em exibição na data de início", tone: "border-blue-200 bg-blue-50" },
+  { stage: "active",    label: "Em exibição",        hint: "A ser mostradas aos visitantes agora", tone: "border-emerald-200 bg-emerald-50" },
+  { stage: "expired",   label: "Terminadas",         hint: "Passaram a data de fim", tone: "border-slate-200 bg-white" },
+  { stage: "flagged",   label: "Sinalizadas",        hint: "Retiradas para revisão", tone: "border-rose-200 bg-rose-50" },
+];
+
+/** Single source of truth for the campaign form — used by both the create
+ * card and the edit modal so labels/hints never drift between the two. */
+function AdFormFields({
+  form,
+  formErrors,
+  uploadingImage,
+  setField,
+  clearError,
+  onImageFile,
+  showActiveToggle,
+}: {
+  form: AdFormState;
+  formErrors: AdFormErrors;
+  uploadingImage: boolean;
+  setField: <K extends keyof AdFormState>(key: K, value: AdFormState[K]) => void;
+  clearError: (key: keyof AdFormState) => void;
+  onImageFile: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  showActiveToggle?: boolean;
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Field label="Título da campanha" hint="Nome do anúncio, visível aos visitantes no cartão patrocinado." error={formErrors.title}>
+        <input
+          value={form.title}
+          onChange={(e) => { setField("title", e.target.value); clearError("title"); }}
+          placeholder="Ex.: Curso de Informática — Instituto XYZ"
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Placement (onde aparece)" hint="A posição do site onde o anúncio será exibido." error={formErrors.placement}>
+        <select
+          value={form.placement}
+          onChange={(e) => { setField("placement", e.target.value); clearError("placement"); }}
+          className={adminFieldClass}
+        >
+          <option value="homepage_banner">Banner da Homepage</option>
+          <option value="job_list">Listagem de Vagas</option>
+          <option value="sidebar">Barra lateral (detalhe da vaga)</option>
+        </select>
+      </Field>
+      <Field label="Link de destino" hint="Para onde o visitante vai ao clicar. URL completo, começando por https://" error={formErrors.link}>
+        <input
+          value={form.link}
+          onChange={(e) => { setField("link", e.target.value); clearError("link"); }}
+          placeholder="https://www.anunciante.pt/oferta"
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Imagem do anúncio" hint="Envie um ficheiro (recomendado) ou cole o URL de uma imagem já alojada.">
+        <div className="grid gap-2">
+          <input type="file" accept="image/*" onChange={onImageFile} disabled={uploadingImage} className={adminFieldClass} />
+          <input
+            value={form.imageUrl}
+            onChange={(e) => setField("imageUrl", e.target.value)}
+            placeholder="ou URL: https://…/banner.png"
+            className={adminFieldClass}
+          />
+          {uploadingImage ? <p className="text-xs text-slate-500">A enviar imagem...</p> : null}
+        </div>
+      </Field>
+      <Field label="Data de início" hint="Primeiro dia em que o anúncio é exibido." error={formErrors.startDate}>
+        <input
+          type="date"
+          value={form.startDate}
+          onChange={(e) => { setField("startDate", e.target.value); clearError("startDate"); }}
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Data de fim" hint="Último dia de exibição — o anúncio pára automaticamente depois desta data." error={formErrors.endDate}>
+        <input
+          type="date"
+          value={form.endDate}
+          onChange={(e) => { setField("endDate", e.target.value); clearError("endDate"); }}
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Orçamento total (AOA)" hint="Teto de gasto da campanha. Deixe 0 para não impor limite.">
+        <input
+          type="number" min={0} step="0.01"
+          value={form.budget}
+          onChange={(e) => setField("budget", Number(e.target.value))}
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Custo por clique (AOA)" hint="Quanto o anunciante paga por cada clique. 0 se cobrado apenas por impressão ou valor fixo.">
+        <input
+          type="number" min={0} step="0.01"
+          value={form.costPerClick}
+          onChange={(e) => setField("costPerClick", Number(e.target.value))}
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Custo por impressão (AOA)" hint="Quanto o anunciante paga por cada visualização. Normalmente uma fração pequena, ex.: 0.05.">
+        <input
+          type="number" min={0} step="0.0001"
+          value={form.costPerImpression}
+          onChange={(e) => setField("costPerImpression", Number(e.target.value))}
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Segmentar por categoria (opcional)" hint="Mostrar apenas em vagas desta categoria, ex.: Tecnologia. Vazio = todas.">
+        <input
+          value={form.targetCategory}
+          onChange={(e) => setField("targetCategory", e.target.value)}
+          placeholder="Ex.: Tecnologia"
+          className={adminFieldClass}
+        />
+      </Field>
+      <Field label="Segmentar por localização (opcional)" hint="Mostrar apenas em vagas desta localização, ex.: Luanda. Vazio = todas.">
+        <input
+          value={form.targetLocation}
+          onChange={(e) => setField("targetLocation", e.target.value)}
+          placeholder="Ex.: Luanda"
+          className={adminFieldClass}
+        />
+      </Field>
+      {showActiveToggle ? (
+        <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+          <input
+            type="checkbox"
+            checked={form.active}
+            onChange={(e) => setField("active", e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+          />
+          Campanha ativa (desmarcada = guardada mas não exibida)
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminAdsPage() {
   const { token } = useAuth("admin");
   const [me, setMe] = useState<AdminMe | null>(null);
@@ -82,10 +284,21 @@ export default function AdminAdsPage() {
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState<AdFormErrors>({});
   const [selectedAd, setSelectedAd] = useState<AdCampaignRecord | null>(null);
+  const [previewAd, setPreviewAd] = useState<AdCampaignRecord | null>(null);
+  const [view, setView] = useState<"list" | "funnel">("list");
   const [previewImage, setPreviewImage] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const { notify } = useAppNotifier();
+
+  const setField = useCallback(<K extends keyof AdFormState>(key: K, value: AdFormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === "imageUrl") setPreviewImage(String(value));
+  }, []);
+
+  const clearError = useCallback((key: keyof AdFormState) => {
+    setFormErrors((prev) => ({ ...prev, [key]: undefined }));
+  }, []);
 
   const canManage = useMemo(() => hasPermission(me, AdminPermissions.ADS_MANAGE), [me]);
   const canCreate = useMemo(() => hasPermission(me, AdminPermissions.ADS_CREATE) || hasPermission(me, AdminPermissions.AD_DRAFT), [me]);
@@ -265,107 +478,88 @@ export default function AdminAdsPage() {
 
       {canCreate && (
         <form onSubmit={submit} className="mt-5 app-card p-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <input
-              required
-              value={form.title}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, title: value }));
-                setFormErrors((prev) => ({ ...prev, title: undefined }));
-              }}
-              placeholder="Título da campanha"
-              className={adminFieldClass}
-            />
-            <FormFieldError id="ad-title-error" message={formErrors.title} />
-            <select
-              value={form.placement}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, placement: value }));
-                setFormErrors((prev) => ({ ...prev, placement: undefined }));
-              }}
-              className={adminFieldClass}
-            >
-              <option value="homepage_banner">Banner da Homepage</option>
-              <option value="job_list">Listagem de Vagas</option>
-              <option value="sidebar">Barra lateral (detalhe da vaga)</option>
-            </select>
-            <FormFieldError id="ad-placement-error" message={formErrors.placement} />
-            <input
-              required
-              value={form.link}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, link: value }));
-                setFormErrors((prev) => ({ ...prev, link: undefined }));
-              }}
-              placeholder="https://example.com"
-              className={adminFieldClass}
-            />
-            <FormFieldError id="ad-link-error" message={formErrors.link} />
-            <input
-              value={form.imageUrl}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, imageUrl: value }));
-                setPreviewImage(value);
-              }}
-              placeholder="URL da imagem/banner"
-              className={adminFieldClass}
-            />
-            <input type="file" accept="image/*" onChange={onImageFile} disabled={uploadingImage} className={adminFieldClass} />
-            {uploadingImage ? <p className="text-xs text-slate-500">A enviar imagem...</p> : null}
-            <input
-              type="date"
-              required
-              value={form.startDate}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, startDate: value }));
-                setFormErrors((prev) => ({ ...prev, startDate: undefined }));
-              }}
-              className={adminFieldClass}
-            />
-            <FormFieldError id="ad-start-date-error" message={formErrors.startDate} />
-            <input
-              type="date"
-              required
-              value={form.endDate}
-              onChange={(e) => {
-                const value = e.target.value;
-                setForm((prev) => ({ ...prev, endDate: value }));
-                setFormErrors((prev) => ({ ...prev, endDate: undefined }));
-              }}
-              className={adminFieldClass}
-            />
-            <FormFieldError id="ad-end-date-error" message={formErrors.endDate} />
-            <input type="number" min={0} step="0.01" value={form.budget}
-              onChange={(e) => setForm((prev) => ({ ...prev, budget: Number(e.target.value) }))}
-              placeholder="Orçamento total (0 = ilimitado)" className={adminFieldClass} />
-            <input type="number" min={0} step="0.01" value={form.costPerClick}
-              onChange={(e) => setForm((prev) => ({ ...prev, costPerClick: Number(e.target.value) }))}
-              placeholder="Custo por clique" className={adminFieldClass} />
-            <input type="number" min={0} step="0.0001" value={form.costPerImpression}
-              onChange={(e) => setForm((prev) => ({ ...prev, costPerImpression: Number(e.target.value) }))}
-              placeholder="Custo por impressão" className={adminFieldClass} />
-            <input value={form.targetCategory}
-              onChange={(e) => setForm((prev) => ({ ...prev, targetCategory: e.target.value }))}
-              placeholder="Segmentar por categoria (opcional)" className={adminFieldClass} />
-            <input value={form.targetLocation}
-              onChange={(e) => setForm((prev) => ({ ...prev, targetLocation: e.target.value }))}
-              placeholder="Segmentar por localização (opcional)" className={adminFieldClass} />
+          <p className="mb-3 text-sm font-semibold text-slate-900">Nova campanha</p>
+          <AdFormFields
+            form={form}
+            formErrors={formErrors}
+            uploadingImage={uploadingImage}
+            setField={setField}
+            clearError={clearError}
+            onImageFile={onImageFile}
+          />
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <AdCreativePreview title={form.title} imageUrl={previewImage || form.imageUrl} link={form.link} placement={form.placement} />
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-4 flex gap-2">
             <button type="submit" disabled={busy} className={adminButtonClass}>
               <AdminLoadingLabel loading={busy} idle="Criar anúncio" busy="A guardar..." />
             </button>
           </div>
-          {previewImage ? <Image src={previewImage} alt="Pré-visualização do anúncio" width={240} height={96} className="mt-3 h-24 w-auto rounded-xl border border-slate-200 object-contain p-1" unoptimized /> : null}
         </form>
       )}
 
-      <div className="mt-5 grid gap-3">
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setView("list")}
+          className={`rounded-xl border px-3 py-2 text-sm font-semibold ${view === "list" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-600"}`}
+        >
+          Vista Lista
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("funnel")}
+          className={`rounded-xl border px-3 py-2 text-sm font-semibold ${view === "funnel" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 text-slate-600"}`}
+        >
+          Vista Funil
+        </button>
+      </div>
+
+      {view === "funnel" ? (
+        <div className="mt-4 flex gap-4 overflow-x-auto pb-4">
+          {FUNNEL_STAGES.map(({ stage, label, hint, tone }) => {
+            const stageAds = ads.filter((ad) => computeAdStage(ad) === stage);
+            return (
+              <div key={stage} className={`w-72 shrink-0 rounded-2xl border p-3 ${tone}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-slate-900">{label}</p>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-500">{stageAds.length}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
+                <div className="mt-3 space-y-2">
+                  {stageAds.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-slate-300 bg-white/60 p-3 text-center text-xs text-slate-400">Sem campanhas</p>
+                  ) : (
+                    stageAds.map((ad) => (
+                      <div key={ad._id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <p className="text-sm font-semibold text-slate-900">{ad.title || "Campanha"}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{PLACEMENT_LABELS[ad.placement || ""] || ad.placement || "—"}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{toDateLabel(ad.startDate)} → {toDateLabel(ad.endDate)}</p>
+                        {ad.budget ? (
+                          <p className="mt-0.5 text-xs text-slate-500">Gasto: {(ad.spent ?? 0).toLocaleString("pt-PT")} / {ad.budget.toLocaleString("pt-PT")}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button onClick={() => setPreviewAd(ad)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">Pré-ver</button>
+                          {canCreate ? (
+                            <button onClick={() => openEdit(ad)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">Editar</button>
+                          ) : null}
+                          {canPublish && stage === "draft" ? (
+                            <button onClick={() => toggle(ad)} disabled={busy} className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 disabled:opacity-50">Publicar</button>
+                          ) : null}
+                          {canPublish && (stage === "active" || stage === "scheduled") ? (
+                            <button onClick={() => toggle(ad)} disabled={busy} className="rounded-lg border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50">Desativar</button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+      <div className="mt-4 grid gap-3">
         {ads.map((ad) => (
           <article key={ad._id} className="app-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -391,6 +585,9 @@ export default function AdminAdsPage() {
               </span>
             </div>
             <div className="mt-3 flex gap-2">
+              <button onClick={() => setPreviewAd(ad)} disabled={busy} className={adminSecondaryButtonClass}>
+                Pré-ver
+              </button>
               <button onClick={() => openEdit(ad)} disabled={busy || !canCreate} className={adminSecondaryButtonClass}>
                 Editar
               </button>
@@ -416,6 +613,7 @@ export default function AdminAdsPage() {
           </article>
         ))}
       </div>
+      )}
 
       <AdminModal
         open={Boolean(selectedAd)}
@@ -436,71 +634,33 @@ export default function AdminAdsPage() {
           </div>
         )}
       >
-        <div className="grid gap-3 md:grid-cols-2">
-          <input value={form.title} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, title: value }));
-            setFormErrors((prev) => ({ ...prev, title: undefined }));
-          }} placeholder="Título" className={adminFieldClass} />
-          <select value={form.placement} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, placement: value }));
-            setFormErrors((prev) => ({ ...prev, placement: undefined }));
-          }} className={adminFieldClass}>
-            <option value="homepage_banner">Banner da Homepage</option>
-            <option value="job_list">Listagem de Vagas</option>
-            <option value="sidebar">Barra lateral (detalhe da vaga)</option>
-          </select>
-          <FormFieldError id="edit-ad-title-error" message={formErrors.title} />
-          <FormFieldError id="edit-ad-placement-error" message={formErrors.placement} />
-          <input value={form.link} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, link: value }));
-            setFormErrors((prev) => ({ ...prev, link: undefined }));
-          }} placeholder="Link URL" className={adminFieldClass} />
-          <input value={form.imageUrl} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, imageUrl: value }));
-            setPreviewImage(value);
-          }} placeholder="URL da imagem" className={adminFieldClass} />
-          <input type="file" accept="image/*" onChange={onImageFile} disabled={uploadingImage} className={adminFieldClass} />
-          {uploadingImage ? <p className="text-xs text-slate-500 md:col-span-2">A enviar imagem...</p> : null}
-          {previewImage ? (
-            <Image src={previewImage} alt="Pré-visualização do anúncio" width={240} height={96} className="mt-1 h-24 w-auto rounded-xl border border-slate-200 object-contain p-1 md:col-span-2" unoptimized />
-          ) : null}
-          <FormFieldError id="edit-ad-link-error" message={formErrors.link} />
-          <input type="date" value={form.startDate} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, startDate: value }));
-            setFormErrors((prev) => ({ ...prev, startDate: undefined }));
-          }} className={adminFieldClass} />
-          <input type="date" value={form.endDate} onChange={(e) => {
-            const value = e.target.value;
-            setForm((prev) => ({ ...prev, endDate: value }));
-            setFormErrors((prev) => ({ ...prev, endDate: undefined }));
-          }} className={adminFieldClass} />
-          <FormFieldError id="edit-ad-start-date-error" message={formErrors.startDate} />
-          <FormFieldError id="edit-ad-end-date-error" message={formErrors.endDate} />
-          <input type="number" min={0} step="0.01" value={form.budget}
-            onChange={(e) => setForm((prev) => ({ ...prev, budget: Number(e.target.value) }))}
-            placeholder="Orçamento total (0 = ilimitado)" className={adminFieldClass} />
-          <input type="number" min={0} step="0.01" value={form.costPerClick}
-            onChange={(e) => setForm((prev) => ({ ...prev, costPerClick: Number(e.target.value) }))}
-            placeholder="Custo por clique" className={adminFieldClass} />
-          <input type="number" min={0} step="0.0001" value={form.costPerImpression}
-            onChange={(e) => setForm((prev) => ({ ...prev, costPerImpression: Number(e.target.value) }))}
-            placeholder="Custo por impressão" className={adminFieldClass} />
-          <input value={form.targetCategory}
-            onChange={(e) => setForm((prev) => ({ ...prev, targetCategory: e.target.value }))}
-            placeholder="Segmentar por categoria (opcional)" className={adminFieldClass} />
-          <input value={form.targetLocation}
-            onChange={(e) => setForm((prev) => ({ ...prev, targetLocation: e.target.value }))}
-            placeholder="Segmentar por localização (opcional)" className={adminFieldClass} />
-          <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
-            <input type="checkbox" checked={form.active} onChange={(e) => setForm((prev) => ({ ...prev, active: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
-            Campanha ativa
-          </label>
+        <AdFormFields
+          form={form}
+          formErrors={formErrors}
+          uploadingImage={uploadingImage}
+          setField={setField}
+          clearError={clearError}
+          onImageFile={onImageFile}
+          showActiveToggle
+        />
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <AdCreativePreview title={form.title} imageUrl={previewImage || form.imageUrl} link={form.link} placement={form.placement} />
         </div>
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(previewAd)}
+        title={previewAd ? `Pré-visualização — ${previewAd.title || "Campanha"}` : "Pré-visualização"}
+        onClose={() => setPreviewAd(null)}
+      >
+        {previewAd ? (
+          <AdCreativePreview
+            title={previewAd.title}
+            imageUrl={previewAd.imageUrl || undefined}
+            link={previewAd.link || undefined}
+            placement={previewAd.placement || undefined}
+          />
+        ) : null}
       </AdminModal>
     </div>
   );

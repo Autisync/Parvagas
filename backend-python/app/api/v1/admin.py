@@ -197,6 +197,7 @@ def _to_ad_record(ad: AdCampaign) -> dict[str, Any]:
         "imageUrl": StorageService.resolve_public_url(ad.image_url),
         "status": ad.status,
         "active": bool(ad.active),
+        "flagged": bool(ad.flagged),
         "budget": ad.budget,
         "costPerClick": float(ad.cost_per_click or 0),
         "costPerImpression": float(ad.cost_per_impression or 0),

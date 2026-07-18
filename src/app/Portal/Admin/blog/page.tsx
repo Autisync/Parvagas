@@ -82,6 +82,77 @@ function validate(form: BlogForm): BlogErrors {
   return errors;
 }
 
+/** Mirror of the public article's **bold** handling (Dicas-de-Carreira/[slug]). */
+function PreviewParagraph({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/);
+  return (
+    <p className="mt-4 leading-relaxed text-gray-700">
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i}>{part.slice(2, -2)}</strong>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
+type PreviewData = {
+  title: string;
+  category?: string | null;
+  author?: string | null;
+  readTime?: string | null;
+  coverImage?: string | null;
+  excerpt?: string | null;
+  body: string[];
+  takeaways: string[];
+};
+
+/** Faithful miniature of the public article page so the admin sees the
+ * post exactly as readers will, without leaving the console. */
+function ArticlePreview({ data }: { data: PreviewData }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      {data.category ? (
+        <span className="inline-block rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700">{data.category}</span>
+      ) : null}
+      <h1 className="mt-3 text-2xl font-bold leading-tight text-slate-950">{data.title || "Sem título"}</h1>
+      <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500">
+        {data.author ? <span>Por {data.author}</span> : null}
+        {data.readTime ? <span>⏱ {data.readTime}</span> : null}
+      </div>
+      {data.coverImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={data.coverImage} alt={data.title} className="mt-4 max-h-56 w-full rounded-2xl object-cover" />
+      ) : null}
+      {data.excerpt ? (
+        <p className="mt-4 border-l-4 border-red-200 pl-4 text-base italic text-gray-600">{data.excerpt}</p>
+      ) : null}
+      <article className="mt-2">
+        {data.body.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-400">O corpo do artigo aparece aqui…</p>
+        ) : (
+          data.body.map((paragraph, i) => <PreviewParagraph key={i} text={paragraph} />)
+        )}
+      </article>
+      {data.takeaways.length > 0 ? (
+        <aside className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-4">
+          <h2 className="text-base font-bold text-red-700">Pontos-chave</h2>
+          <ul className="mt-2 space-y-1.5">
+            {data.takeaways.map((point, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <span className="mt-0.5 text-red-500">✓</span>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminBlogPage() {
   const { token } = useAuth("admin");
   const { notify } = useAppNotifier();
@@ -95,6 +166,8 @@ export default function AdminBlogPage() {
   const [formErrors, setFormErrors] = useState<BlogErrors>({});
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [modalTab, setModalTab] = useState<"edit" | "preview">("edit");
+  const [previewPost, setPreviewPost] = useState<CareerPostRecord | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -118,6 +191,7 @@ export default function AdminBlogPage() {
     setEditingId(null);
     setForm(emptyForm);
     setFormErrors({});
+    setModalTab("edit");
     setModalOpen(true);
   };
 
@@ -125,8 +199,20 @@ export default function AdminBlogPage() {
     setEditingId(post._id);
     setForm(recordToForm(post));
     setFormErrors({});
+    setModalTab("edit");
     setModalOpen(true);
   };
+
+  const formPreviewData = (): PreviewData => ({
+    title: form.title.trim(),
+    category: form.category.trim() || null,
+    author: form.author.trim() || null,
+    readTime: form.readTime.trim() || null,
+    coverImage: form.coverImage.trim() || null,
+    excerpt: form.excerpt.trim() || null,
+    body: form.body.split("\n\n").map((p) => p.trim()).filter(Boolean),
+    takeaways: form.takeaways.split("\n").map((p) => p.trim()).filter(Boolean),
+  });
 
   const handleSave = async () => {
     if (!token) return;
@@ -241,6 +327,9 @@ export default function AdminBlogPage() {
                     <td className="px-4 py-3">{post.featuredOnHome ? "⭐" : "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setPreviewPost(post)} className={adminSecondaryButtonClass}>
+                          Pré-ver
+                        </button>
                         <button type="button" onClick={() => openEdit(post)} className={adminSecondaryButtonClass}>
                           Editar
                         </button>
@@ -276,6 +365,25 @@ export default function AdminBlogPage() {
           </div>
         }
       >
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1">
+          {([["edit", "Editar"], ["preview", "Pré-visualizar"]] as const).map(([tab, label]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setModalTab(tab)}
+              className={[
+                "rounded-xl px-3 py-2 text-sm font-semibold transition",
+                modalTab === tab ? "bg-white text-red-700 shadow-sm ring-1 ring-red-100" : "text-slate-600 hover:text-slate-950",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {modalTab === "preview" ? (
+          <ArticlePreview data={formPreviewData()} />
+        ) : (
         <div className="grid gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Título *</label>
@@ -405,6 +513,28 @@ export default function AdminBlogPage() {
             </label>
           </div>
         </div>
+        )}
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(previewPost)}
+        title={previewPost ? `Pré-visualização — ${previewPost.title}` : "Pré-visualização"}
+        onClose={() => setPreviewPost(null)}
+      >
+        {previewPost ? (
+          <ArticlePreview
+            data={{
+              title: previewPost.title ?? "",
+              category: previewPost.category,
+              author: previewPost.author,
+              readTime: previewPost.readTime,
+              coverImage: previewPost.coverImage,
+              excerpt: previewPost.excerpt,
+              body: previewPost.body ?? [],
+              takeaways: previewPost.takeaways ?? [],
+            }}
+          />
+        ) : null}
       </AdminModal>
 
       <AdminModal

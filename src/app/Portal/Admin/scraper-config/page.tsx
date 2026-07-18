@@ -415,6 +415,9 @@ export default function AdminScraperConfigPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, url: e.target.value }))}
               required
             />
+            <span className="mt-1 block text-xs text-slate-500">
+              Depende do tipo: JSON/RSS → URL completo do feed; Greenhouse/Lever → apenas o identificador da empresa no URL do board (ex.: em greenhouse.io/<b>acme</b>, é &quot;acme&quot;).
+            </span>
           </label>
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-slate-700">Categoria (opcional)</span>

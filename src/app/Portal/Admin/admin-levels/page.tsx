@@ -146,37 +146,49 @@ export default function AdminLevelsPage() {
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <input
-            value={newAdmin.fullName}
-            onChange={(e) => setNewAdmin((prev) => ({ ...prev, fullName: e.target.value }))}
-            placeholder="Nome completo"
-            className={adminFieldClass}
-            required
-          />
-          <input
-            value={newAdmin.email}
-            onChange={(e) => setNewAdmin((prev) => ({ ...prev, email: e.target.value }))}
-            placeholder="email@empresa.com"
-            type="email"
-            className={adminFieldClass}
-            required
-          />
-          <select
-            value={newAdmin.adminLevel}
-            onChange={(e) => setNewAdmin((prev) => ({ ...prev, adminLevel: e.target.value as AdminLevel }))}
-            className={adminFieldClass}
-          >
-            <option value="moderator">Moderator</option>
-            <option value="super-admin">Super-admin</option>
-          </select>
-          <select
-            value={newAdmin.credentialDeliveryMode}
-            onChange={(e) => setNewAdmin((prev) => ({ ...prev, credentialDeliveryMode: e.target.value as "set_password_link" | "temporary_password" }))}
-            className={adminFieldClass}
-          >
-            <option value="set_password_link">Link único para definir password (recomendado)</option>
-            <option value="temporary_password">Enviar password temporária por email</option>
-          </select>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Nome completo *</span>
+            <input
+              value={newAdmin.fullName}
+              onChange={(e) => setNewAdmin((prev) => ({ ...prev, fullName: e.target.value }))}
+              placeholder="Ex.: Maria dos Santos"
+              className={adminFieldClass}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Email de acesso (para onde vão as credenciais) *</span>
+            <input
+              value={newAdmin.email}
+              onChange={(e) => setNewAdmin((prev) => ({ ...prev, email: e.target.value }))}
+              placeholder="email@empresa.com"
+              type="email"
+              className={adminFieldClass}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Nível de acesso — moderador revê conteúdo; super-admin controla tudo</span>
+            <select
+              value={newAdmin.adminLevel}
+              onChange={(e) => setNewAdmin((prev) => ({ ...prev, adminLevel: e.target.value as AdminLevel }))}
+              className={adminFieldClass}
+            >
+              <option value="moderator">Moderator</option>
+              <option value="super-admin">Super-admin</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-slate-600">
+            <span>Como entregar as credenciais</span>
+            <select
+              value={newAdmin.credentialDeliveryMode}
+              onChange={(e) => setNewAdmin((prev) => ({ ...prev, credentialDeliveryMode: e.target.value as "set_password_link" | "temporary_password" }))}
+              className={adminFieldClass}
+            >
+              <option value="set_password_link">Link único para definir password (recomendado)</option>
+              <option value="temporary_password">Enviar password temporária por email</option>
+            </select>
+          </label>
         </div>
 
         <button
