@@ -240,6 +240,148 @@ def test_careerjet_adapter_unreachable_returns_empty(monkeypatch):
     assert CareerjetAdapter(name="Careerjet Angola", url="test-affid").fetch() == []
 
 
+# ── Jobartis (Angola general-market board — HTML listing pages, no API/feed;
+# card structure verified live 2026-07 against jobartis.com/vagas-emprego) ───
+
+def _jobartis_card(title, company, location, details, description, href, category="Categoria X"):
+    detail_items = "".join(f"<li>{d}</li>" for d in details)
+    return f"""<div class="job"><p class="panel-prefix"><span>x</span></p>
+      <div class="panel panel-default">
+        <a class="job-link" href="{href}">
+          <div class="panel-heading"><div class="w-100">
+            <h2 class="job__title">{title}</h2>
+            <div><h5 class="job__company d-ib">{company}</h5></div>
+          </div></div>
+          <div class="panel-body"><div class="row"><div class="col-md-4">
+            <ul class="list-unstyled job__details"><li>{location}</li>{detail_items}</ul>
+          </div><div class="col-md-8">
+            <div class="job__description">{description}</div>
+          </div></div></div>
+        </a>
+        <div class="panel-footer"><ul class="list-inline"><li><a href="/vagas-emprego/x">{category}</a></li></ul></div>
+      </div></div>"""
+
+
+JOBARTIS_PAGE_1 = f"""<html><body><div id="jobs_search_container">
+  {_jobartis_card(
+      "Logística e transporte", "Empresa líder em Logística", "Luanda, Luanda",
+      ["Estágio", "1 anos de experiência exigido"],
+      "Trabalhei como assistente estagiária de logística.",
+      "https://www.jobartis.com/emprego-logistica-abc123",
+  )}
+  {_jobartis_card(
+      "Contabilista Sénior", "Empresa líder em Finanças", "Benguela, Benguela",
+      ["Tempo indeterminado"],
+      "Procuramos contabilista com experiência em SAP.",
+      "https://www.jobartis.com/emprego-contabilista-def456",
+      category="Contabilidade e finanças",
+  )}
+  <div class="job"><div class="panel panel-default">
+    <!-- malformed: no a.job-link at all -->
+    <div class="panel-body"><h2 class="job__title">Vaga sem link</h2></div>
+  </div></div>
+  {_jobartis_card(
+      "Vaga com link perigoso", "Empresa X", "Luanda, Luanda", [], "desc",
+      "javascript:alert(1)",
+  )}
+</div></body></html>"""
+
+
+def test_jobartis_adapter_normalises_real_card_shape(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=JOBARTIS_PAGE_1, unchanged=False),
+    )
+    # max_results=3 caps at exactly page 1's ingestable cards (2 valid + the
+    # dangerous-href one, which still ingests with sourceUrl nulled) — keeps
+    # this test about field-shape correctness, not pagination behaviour.
+    jobs = svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego", max_results=3).fetch()
+
+    # The malformed (no-link) card is dropped; the dangerous-href card's
+    # sourceUrl is nulled by safe_http_url() inside _normalise but the item
+    # itself still ingests (title/company/etc. are still useful to a curator).
+    assert len(jobs) == 3
+    first = jobs[0]
+    assert first["title"] == "Logística e transporte"
+    assert first["company"] == "Empresa líder em Logística"
+    assert first["location"] == "Luanda, Luanda"
+    assert first["category"] == "Categoria X"
+    assert "Estágio" in first["description"]
+    assert "assistente estagiária" in first["description"]
+    assert first["sourceUrl"] == "https://www.jobartis.com/emprego-logistica-abc123"
+
+    second = jobs[1]
+    assert second["category"] == "Contabilidade e finanças"
+
+    dangerous = next(j for j in jobs if j["title"] == "Vaga com link perigoso")
+    assert dangerous["sourceUrl"] is None
+
+
+def test_jobartis_adapter_drops_malformed_card_without_link(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=JOBARTIS_PAGE_1, unchanged=False),
+    )
+    jobs = svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego").fetch()
+    assert "Vaga sem link" not in [j["title"] for j in jobs]
+
+
+def test_jobartis_adapter_stops_once_limit_reached_without_extra_pages(monkeypatch):
+    calls = []
+
+    def fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
+        calls.append(url)
+        return svc.FetchOutcome(body=JOBARTIS_PAGE_1, unchanged=False)
+
+    monkeypatch.setattr(svc, "_conditional_get", fake_get)
+    jobs = svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego", max_results=2).fetch()
+    assert len(jobs) == 2
+    assert len(calls) == 1  # page 1 alone already had enough valid cards
+
+
+def test_jobartis_adapter_paginates_when_more_results_wanted(monkeypatch):
+    calls = []
+
+    def fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
+        calls.append(url)
+        return svc.FetchOutcome(body=JOBARTIS_PAGE_1, unchanged=False)
+
+    monkeypatch.setattr(svc, "_conditional_get", fake_get)
+    svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego", max_results=100).fetch()
+    # 3 valid cards per page < 100 requested -> keeps paging up to the cap.
+    assert len(calls) == svc.JobartisAdapter._MAX_PAGES
+    assert any("page=2" in u for u in calls)
+    assert any("page=3" in u for u in calls)
+
+
+def test_jobartis_adapter_unreachable_returns_empty(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body=None, unchanged=False),
+    )
+    assert svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego").fetch() == []
+
+
+def test_jobartis_adapter_malformed_html_returns_empty(monkeypatch):
+    monkeypatch.setattr(
+        svc, "_conditional_get",
+        lambda url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None: svc.FetchOutcome(body="not html at all, no job cards here", unchanged=False),
+    )
+    assert svc.JobartisAdapter(name="Jobartis", url="https://www.jobartis.com/vagas-emprego").fetch() == []
+
+
+def test_jobartis_adapter_defaults_url_when_source_row_url_is_not_absolute(monkeypatch):
+    calls = []
+
+    def fake_get(url, retries=3, timeout=None, user_agent=None, prev_etag=None, prev_last_modified=None, prev_body_hash=None):
+        calls.append(url)
+        return svc.FetchOutcome(body=JOBARTIS_PAGE_1, unchanged=False)
+
+    monkeypatch.setattr(svc, "_conditional_get", fake_get)
+    svc.JobartisAdapter(name="Jobartis", url="", max_results=3).fetch()
+    assert calls[0] == "https://www.jobartis.com/vagas-emprego"
+
+
 # ── get_adapters() wiring — admin-managed ScraperSource/ScraperSettings ──────
 
 def test_get_adapters_builds_new_portal_types():

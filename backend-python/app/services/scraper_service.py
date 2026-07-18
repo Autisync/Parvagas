@@ -45,9 +45,11 @@ import json
 import re
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree as ET
+
+from bs4 import BeautifulSoup
 
 from app.core.logging import get_logger
 
@@ -645,11 +647,94 @@ class CareerjetAdapter(SourceAdapter):
         return [o for o in out if o["title"]]
 
 
+class JobartisAdapter(SourceAdapter):
+    """Jobartis (jobartis.com) — the largest general-market job board in
+    Angola. No public API or feed; scrapes the server-rendered listing
+    page directly. Card structure verified live 2026-07 against
+    /vagas-emprego: each `div.job` holds an `a.job-link` (already an
+    absolute URL) wrapping `h2.job__title`, `h5.job__company`, and
+    `ul.job__details li` (first item is location; any further items —
+    employment type, experience required — get folded into the
+    description since ScrapedJob has no dedicated field for them), plus
+    `div.job__description`. The last `div.panel-footer a` link's text is
+    a rough category.
+
+    Deliberately listing-page-only: never fetches individual job detail
+    pages for a fuller description (that's an N+1 request cost against
+    the source per run; the listing snippet is the v1 description).
+    Paginates via `?page=N`, capped at _MAX_PAGES per run regardless of
+    the per-source result limit — politeness over completeness."""
+
+    _DEFAULT_URL = "https://www.jobartis.com/vagas-emprego"
+    _MAX_PAGES = 3
+
+    def _listing_url(self) -> str:
+        return self.url if self.url and self.url.startswith("http") else self._DEFAULT_URL
+
+    def host_key(self) -> str:
+        try:
+            return urlparse(self._listing_url()).netloc or self.name
+        except Exception:  # noqa: BLE001
+            return self.name
+
+    def _page_url(self, base_url: str, page: int) -> str:
+        if page <= 1:
+            return base_url
+        separator = "&" if "?" in base_url else "?"
+        return f"{base_url}{separator}page={page}"
+
+    def fetch(self) -> list[dict[str, Any]]:
+        base_url = self._listing_url()
+        out: list[dict[str, Any]] = []
+        page = 1
+        pages_fetched = 0
+        while page <= self._MAX_PAGES and len(out) < self._limit():
+            body = self._get_url(self._page_url(base_url, page))
+            pages_fetched += 1
+            if not body:
+                break
+            try:
+                soup = BeautifulSoup(body, "html.parser")
+            except Exception:  # noqa: BLE001
+                logger.warning("Jobartis HTML parse failed for %s", self.name)
+                break
+            cards = soup.select("div.job")
+            if not cards:
+                break
+            for card in cards:
+                link = card.select_one("a.job-link")
+                if not link or not link.get("href"):
+                    continue
+                title_el = card.select_one("h2.job__title")
+                company_el = card.select_one("h5.job__company")
+                desc_el = card.select_one("div.job__description")
+                category_el = card.select_one("div.panel-footer a")
+                detail_items = [li.get_text(strip=True) for li in card.select("ul.job__details li")]
+                location = detail_items[0] if detail_items else None
+                extra_details = " · ".join(detail_items[1:])
+                description = " — ".join(filter(None, [extra_details, desc_el.get_text(strip=True) if desc_el else None]))
+                out.append(self._normalise({
+                    "title": title_el.get_text(strip=True) if title_el else "",
+                    "company": company_el.get_text(strip=True) if company_el else "",
+                    "location": location,
+                    "category": category_el.get_text(strip=True) if category_el else None,
+                    "description": description,
+                    "url": urljoin(base_url, link.get("href")),
+                }))
+                if len(out) >= self._limit():
+                    break
+            page += 1
+        if pages_fetched >= self._MAX_PAGES:
+            logger.info("JobartisAdapter %s: stopped at the %d-page cap this run", self.name, self._MAX_PAGES)
+        return [o for o in out if o["title"]]
+
+
 _ADAPTERS = {
     "json": JSONFeedAdapter,
     "rss": RSSAdapter,
     "greenhouse": GreenhouseAdapter,
     "lever": LeverAdapter,
+    "jobartis": JobartisAdapter,
     # "careerjet" intentionally omitted — disabled pending confirmation that
     # republishing Careerjet's live-search results onto our own board
     # complies with their partner terms (see CareerjetAdapter docstring).
