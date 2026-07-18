@@ -28,6 +28,12 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   email_rate_limit: "Limite de envio de emails",
   hibp_breach: "Conta em fuga de dados (HIBP)",
   alert_sent: "Alerta enviado",
+  captcha_failed: "Verificação anti-robô falhada",
+  password_reset_requested: "Pedido de redefinição de password",
+  password_reset_completed: "Password redefinida",
+  admin_login_success: "Login de administrador",
+  otp_verify_failed: "Código OTP inválido",
+  rate_limit_exceeded: "Limite de pedidos excedido",
 };
 
 const SEVERITY_STYLES: Record<string, string> = {

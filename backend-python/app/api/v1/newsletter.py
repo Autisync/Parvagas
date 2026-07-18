@@ -31,6 +31,8 @@ async def subscribe_newsletter(
 
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="newsletter_subscribe", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "newsletter_subscribe"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
 
     email = (payload.email or "").strip().lower()

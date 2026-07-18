@@ -58,7 +58,34 @@ app = FastAPI(
 
 # Rate limiting (slowapi)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def _rate_limit_exceeded_with_logging(request: Request, exc: RateLimitExceeded):
+    """Wraps the stock slowapi handler to also record a security event —
+    purely observational, response behavior is 100% delegated below. Opens
+    its own short-lived session (same never-block pattern as
+    feature_flags.get_flag) since there's no request-scoped db here once a
+    rate limit has already tripped."""
+    try:
+        from app.db.session import SessionLocal
+        from app.services.security_service import record_security_event
+
+        db = SessionLocal()
+        try:
+            record_security_event(
+                db, event_type="rate_limit_exceeded", severity="low",
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                details={"path": request.url.path},
+            )
+        finally:
+            db.close()
+    except Exception as exc2:  # noqa: BLE001 — never let logging break the 429 response
+        logger.warning("rate-limit security event logging failed: %s", exc2)
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_with_logging)
 
 # Trusted hosts (skip when "*").
 _trusted = [h.strip() for h in settings.TRUSTED_HOSTS.split(",") if h.strip()]

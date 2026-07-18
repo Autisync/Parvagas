@@ -99,6 +99,8 @@ async def register(
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="register", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "register"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         # Register user
@@ -158,6 +160,8 @@ async def login(
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="login", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "login"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         user = AuthService.authenticate_user(
@@ -166,10 +170,16 @@ async def login(
             password=payload.password,
             role_hint=payload.role_hint
         )
-        
+
         token = AuthService.create_access_token(user)
         refresh_token = AuthService.issue_refresh_token(db, user)
         _audit(db, action="auth.login", user=user, ip=_ip, extra={"method": "password"})
+        if user.role == UserRole.admin:
+            from app.services.security_service import record_security_event
+            record_security_event(
+                db, event_type="admin_login_success", severity="low",
+                email=user.email, ip_address=_ip, user_agent=request.headers.get("user-agent"),
+            )
 
         return {
             "access_token": token,
@@ -292,20 +302,28 @@ async def forgot_password(
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="forgot_password", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "forgot_password"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         user = db.query(User).filter(User.email == payload.email.lower()).first()
-        
+
         if not user:
             # Don't reveal if email exists
             return {"message": "If an account exists with this email, a password reset link has been sent."}
-        
+
         # Create reset token
         raw_token = AuthService.create_password_reset_token(db, user)
-        
+
+        from app.services.security_service import record_security_event
+        record_security_event(
+            db, event_type="password_reset_requested", severity="low",
+            email=user.email, ip_address=_ip, user_agent=request.headers.get("user-agent"),
+        )
+
         # Send email async
         send_password_reset_email.delay(str(user.id), raw_token)
-        
+
         return {"message": "Password reset link sent. Please check your email."}
     
     except Exception as e:
@@ -324,6 +342,8 @@ async def reset_password(
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="reset_password", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "reset_password"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     try:
         if payload.new_password != payload.confirm_password:
@@ -333,6 +353,11 @@ async def reset_password(
             )
 
         user = AuthService.reset_password(db, payload.token, payload.new_password)
+        from app.services.security_service import record_security_event
+        record_security_event(
+            db, event_type="password_reset_completed", severity="low",
+            email=user.email, ip_address=_ip, user_agent=request.headers.get("user-agent"),
+        )
         return {"message": "Password reset successfully. You can now log in with your new password."}
     
     except (ValidationError, ParavagasException) as e:
@@ -479,6 +504,8 @@ async def otp_request(request: Request, payload: dict, db: Session = Depends(get
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_request", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "otp_request"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     phone = _normalize_phone(payload.get("phone", ""))
     if len(phone) < 9:
@@ -505,6 +532,8 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="otp_verify", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "otp_verify"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     phone = _normalize_phone(payload.get("phone", ""))
     code = str(payload.get("code", "")).strip()
@@ -515,13 +544,19 @@ async def otp_verify(request: Request, payload: dict, db: Session = Depends(get_
         .first()
     )
     if not rec or rec.expires_at < datetime.utcnow():
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="otp_verify_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"phone": phone, "reason": "invalid_or_expired"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código inválido ou expirado")
     rec.attempts = (rec.attempts or 0) + 1
     if rec.attempts > 5:
         db.commit()
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="otp_verify_failed", severity="medium", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"phone": phone, "reason": "too_many_attempts"})
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiadas tentativas")
     if rec.code_hash != hash_token(code):
         db.commit()
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="otp_verify_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"phone": phone, "reason": "wrong_code"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código incorreto")
 
     rec.consumed_at = datetime.utcnow()

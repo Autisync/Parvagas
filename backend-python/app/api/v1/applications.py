@@ -299,6 +299,8 @@ async def submit_quick_apply(
     from app.core.captcha import verify_captcha
     _ip = request.client.host if request.client else None
     if not await verify_captcha(request.headers.get("x-captcha-token"), action="apply", remote_ip=_ip):
+        from app.services.security_service import record_security_event
+        record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "apply"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
     full_name = (fullName or "").strip()
     applicant_email = (email or "").strip().lower()
