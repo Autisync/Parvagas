@@ -5,10 +5,14 @@
 // Pragmatic (not nonce-based) policy: Next injects inline hydration scripts and
 // styles, and reCAPTCHA/Plausible/Vercel Analytics load from known hosts, so we
 // allow 'unsafe-inline' for those while still locking down object/base/frame and
-// upgrading insecure requests.
+// upgrading insecure requests. 'unsafe-eval' was dropped — nothing shipped here
+// needs it, and it's the single most exploitable CSP directive (an XSS via any
+// other gap could otherwise reach eval/Function() to run arbitrary script). If
+// a future dependency needs it, that's a signal to scope it more narrowly
+// (e.g. a nonce) rather than reopening this broadly.
 const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://recaptcha.net https://plausible.io https://va.vercel-scripts.com https://accounts.google.com",
+    "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://recaptcha.net https://plausible.io https://va.vercel-scripts.com https://accounts.google.com",
     "style-src 'self' 'unsafe-inline' https://accounts.google.com",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
