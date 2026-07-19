@@ -83,6 +83,7 @@ export const env = createEnv({
 		// Parvagas integration (optional)
 		PARVAGAS_RESUME_SYNC_ENABLED: z.stringbool().default(false),
 		PARVAGAS_API_URL: z.url({ protocol: /https?/ }).optional(),
+		PARVAGAS_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 		PARVAGAS_API_KEY: z.string().min(1).optional(),
 		PARVAGAS_SERVER_SECRET: z.string().min(1).optional(),
 		PARVAGAS_MAIN_URL: z.url({ protocol: /https?/ }).default("https://parvagas.pt"),

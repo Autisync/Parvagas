@@ -63,6 +63,7 @@ x-cv-env: &cv-env
   OAUTH_SCOPES: "openid profile email"
   PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-true}
   PARVAGAS_API_URL: ${PARVAGAS_API_URL:-https://api-dev.parvagas.pt}
+  PARVAGAS_API_TIMEOUT_MS: ${PARVAGAS_API_TIMEOUT_MS:-10000}
   PARVAGAS_SERVER_SECRET: ${CV_BUILDER_SERVER_SECRET:?CV_BUILDER_SERVER_SECRET is required}
   PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
   PARVAGAS_MAIN_URL: ${PARVAGAS_MAIN_URL:-https://dev.parvagas.pt}
@@ -226,7 +227,7 @@ services:
       start_period: 60s
 
   worker:
-    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}
+    image: ${WORKER_IMAGE:-${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}}
     pull_policy: always
     command: celery -A app.workers.celery_app worker --loglevel=debug --concurrency=2 -Q default,emails,parsing,cleanup,scraping
     restart: unless-stopped
@@ -248,7 +249,7 @@ services:
       start_period: 60s
 
   scheduler:
-    image: ${WORKER_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}
+    image: ${WORKER_IMAGE:-${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:dev}}
     pull_policy: always
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped

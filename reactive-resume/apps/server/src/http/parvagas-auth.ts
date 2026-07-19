@@ -21,6 +21,8 @@ type ExchangePayload = {
 	target_resume_id?: string | null;
 };
 
+const DEFAULT_PARVAGAS_API_TIMEOUT_MS = 10_000;
+
 type CookieOptions = {
 	domain?: string;
 	expires?: Date;
@@ -106,16 +108,34 @@ async function exchangeCodeWithParvagas(code: string): Promise<ExchangePayload> 
 	if (!env.PARVAGAS_API_URL) throw new Error("PARVAGAS_API_URL is not configured");
 	const serverSecret = getParvagasServerSecret();
 	if (!serverSecret) throw new Error("PARVAGAS_SERVER_SECRET is not configured");
+	const timeoutMs =
+		Number.isFinite(env.PARVAGAS_API_TIMEOUT_MS) && env.PARVAGAS_API_TIMEOUT_MS > 0
+			? env.PARVAGAS_API_TIMEOUT_MS
+			: DEFAULT_PARVAGAS_API_TIMEOUT_MS;
 
 	const endpoint = new URL(env.PARVAGAS_AUTH_EXCHANGE_PATH, env.PARVAGAS_API_URL).toString();
-	const response = await fetch(endpoint, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"X-CV-Builder-Key": serverSecret,
-		},
-		body: JSON.stringify({ code }),
-	});
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+	let response: Response;
+	try {
+		response = await fetch(endpoint, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-CV-Builder-Key": serverSecret,
+			},
+			body: JSON.stringify({ code }),
+			signal: controller.signal,
+		});
+	} catch (error) {
+		if (error instanceof Error && error.name === "AbortError") {
+			throw new Error(`Parvagas exchange timed out after ${timeoutMs}ms`);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeoutId);
+	}
 
 	if (!response.ok) {
 		const body = await response.text().catch(() => "");
