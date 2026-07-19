@@ -2,9 +2,14 @@
 // The enterprise.js script is loaded in app/layout.tsx, gated by
 // NEXT_PUBLIC_RECAPTCHA_SITE_KEY. When the key is absent, getRecaptchaToken
 // resolves to null and the backend treats captcha as not-enforced.
-
-export const RECAPTCHA_SITE_KEY =
-  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ";
+//
+// No hardcoded fallback key: a deploy that forgets to set this env var
+// should visibly run without captcha protection, not silently reuse
+// whichever real site key happened to be committed here. layout.tsx skips
+// loading the enterprise.js script entirely in that case, so
+// window.grecaptcha never exists and getRecaptchaToken naturally returns
+// null below regardless of this constant's value.
+export const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || null;
 
 type Grecaptcha = {
   enterprise: {
@@ -41,7 +46,7 @@ function ready(): Promise<void> {
  * so callers can still submit (backend decides whether captcha is enforced).
  */
 export async function getRecaptchaToken(action: string): Promise<string | null> {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !RECAPTCHA_SITE_KEY) return null;
   try {
     await ready();
     if (!window.grecaptcha?.enterprise?.execute) return null;

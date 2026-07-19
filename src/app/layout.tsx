@@ -58,6 +58,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  if (!recaptchaSiteKey) {
+    // Degrade loudly, not silently: a deploy missing this env var runs with
+    // captcha disabled site-wide (src/lib/recaptcha.ts's getRecaptchaToken
+    // returns null when the script below never loads) — that should show up
+    // in server logs, not just be discoverable by noticing the badge is gone.
+    console.error("NEXT_PUBLIC_RECAPTCHA_SITE_KEY not set — captcha disabled");
+  }
   return (
     <html lang="pt" suppressHydrationWarning>
       <head>
@@ -81,12 +89,13 @@ export default function RootLayout({
             src={`${process.env.NEXT_PUBLIC_PLAUSIBLE_SRC || "https://plausible.io"}/js/script.tagged-events.js`}
           />
         ) : null}
-        {/* Always load: uses env var when set, falls back to the hardcoded production site key. */}
-        <script
-          async
-          defer
-          src={`https://www.google.com/recaptcha/enterprise.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfLODItAAAAABwHKetsgIlJJLM7t45ZpoHmYidQ"}`}
-        />
+        {recaptchaSiteKey ? (
+          <script
+            async
+            defer
+            src={`https://www.google.com/recaptcha/enterprise.js?render=${recaptchaSiteKey}`}
+          />
+        ) : null}
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <script
