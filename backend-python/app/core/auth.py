@@ -3,11 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-import time
 
-import requests
-from jose import JWTError, jwk, jwt
-from jose.utils import base64url_decode
+import jwt
+from jwt import PyJWTError
 
 from app.core.config import get_settings
 from app.core.security import decode_token
@@ -15,8 +13,11 @@ from app.core.security import decode_token
 
 settings = get_settings()
 
-_JWKS_CACHE: dict[str, Any] = {"expires_at": 0.0, "jwks": None}
 _JWKS_TTL_SECONDS = 300
+# PyJWKClient's own cache (cache_jwk_set=True by default) replaces the old
+# hand-rolled _JWKS_CACHE dict — its `lifespan` matches the previous TTL.
+# One client per Auth0 domain (in practice there's only ever one).
+_JWKS_CLIENTS: dict[str, "jwt.PyJWKClient"] = {}
 
 
 def extract_bearer_token(authorization: str | None) -> str | None:
@@ -72,39 +73,40 @@ def verify_token(token: str) -> dict[str, Any]:
 
 
 def _validate_auth0_token(token: str) -> dict[str, Any]:
-    """Validate Auth0 JWT using JWKS signature and standard claims checks."""
+    """Validate Auth0 JWT using JWKS signature and standard claims checks.
+
+    Signature verification is delegated to PyJWT (RS256, via the matching
+    JWKS key); claim checks (exp/iss/aud) stay in _validate_auth0_claims
+    unchanged from before, so the custom messages and the conditional
+    audience check (only enforced when AUTH0_AUDIENCE is configured) are
+    preserved exactly — claim-verification options below are all disabled
+    so jwt.decode() here does signature verification ONLY."""
     domain = (settings.AUTH0_DOMAIN or "").strip()
     if not domain:
         raise ValueError("AUTH0_DOMAIN is not configured")
 
-    jwks = _get_auth0_jwks(domain)
-    unverified_header = jwt.get_unverified_header(token)
-    kid = unverified_header.get("kid")
-    if not kid:
-        raise ValueError("Missing key ID in token header")
+    jwks_client = _get_jwks_client(domain)
+    try:
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+    except PyJWTError as exc:
+        raise ValueError("Unable to find matching Auth0 signing key") from exc
 
-    rsa_key = None
-    for key in jwks.get("keys", []):
-        if key.get("kid") == kid:
-            rsa_key = {
-                "kty": key.get("kty"),
-                "kid": key.get("kid"),
-                "use": key.get("use"),
-                "n": key.get("n"),
-                "e": key.get("e"),
-            }
-            break
+    try:
+        claims = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={
+                "verify_exp": False,
+                "verify_iat": False,
+                "verify_nbf": False,
+                "verify_aud": False,
+                "verify_iss": False,
+            },
+        )
+    except PyJWTError as exc:
+        raise ValueError("Invalid Auth0 token signature") from exc
 
-    if not rsa_key:
-        raise ValueError("Unable to find matching Auth0 signing key")
-
-    message, encoded_signature = token.rsplit(".", 1)
-    decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
-
-    if not jwk.construct(rsa_key).verify(message.encode("utf-8"), decoded_signature):
-        raise ValueError("Invalid Auth0 token signature")
-
-    claims = jwt.get_unverified_claims(token)
     _validate_auth0_claims(claims, domain)
     return claims
 
@@ -115,35 +117,30 @@ def _validate_auth0_claims(claims: dict[str, Any], domain: str) -> None:
 
     exp = claims.get("exp")
     if not isinstance(exp, (int, float)) or now_ts >= int(exp):
-        raise JWTError("Token expired")
+        raise PyJWTError("Token expired")
 
     issuer = settings.AUTH0_ISSUER.strip() or f"https://{domain.rstrip('/')}/"
     token_iss = claims.get("iss")
     if token_iss != issuer:
-        raise JWTError("Invalid token issuer")
+        raise PyJWTError("Invalid token issuer")
 
     expected_aud = settings.AUTH0_AUDIENCE.strip()
     if expected_aud:
         token_aud = claims.get("aud")
         if isinstance(token_aud, list):
             if expected_aud not in token_aud:
-                raise JWTError("Invalid token audience")
+                raise PyJWTError("Invalid token audience")
         elif token_aud != expected_aud:
-            raise JWTError("Invalid token audience")
+            raise PyJWTError("Invalid token audience")
 
 
-def _get_auth0_jwks(domain: str) -> dict[str, Any]:
-    """Get Auth0 JWKS with short in-memory cache."""
-    now = time.time()
-    cached = _JWKS_CACHE.get("jwks")
-    if cached and now < float(_JWKS_CACHE.get("expires_at", 0.0)):
-        return cached
-
-    url = f"https://{domain.rstrip('/')}/.well-known/jwks.json"
-    response = requests.get(url, timeout=5)
-    response.raise_for_status()
-    jwks = response.json()
-
-    _JWKS_CACHE["jwks"] = jwks
-    _JWKS_CACHE["expires_at"] = now + _JWKS_TTL_SECONDS
-    return jwks
+def _get_jwks_client(domain: str) -> "jwt.PyJWKClient":
+    """PyJWKClient fetches + caches the JWKS itself (cache_jwk_set=True,
+    lifespan=_JWKS_TTL_SECONDS matches the old manual TTL) — one client per
+    domain, built lazily and reused across requests."""
+    client = _JWKS_CLIENTS.get(domain)
+    if client is None:
+        url = f"https://{domain.rstrip('/')}/.well-known/jwks.json"
+        client = jwt.PyJWKClient(url, cache_jwk_set=True, lifespan=_JWKS_TTL_SECONDS, timeout=5)
+        _JWKS_CLIENTS[domain] = client
+    return client

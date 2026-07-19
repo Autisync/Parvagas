@@ -2,7 +2,8 @@
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt, JWTError
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 
 from app.core.config import get_settings
@@ -63,11 +64,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def decode_token(token: str) -> dict:
-    """Decode and verify a JWT token."""
+    """Decode and verify a JWT token. Tokens minted by create_access_token
+    never carry an aud/iss claim, so PyJWT's defaults (no audience/issuer
+    check unless explicitly requested) match the old jose behavior exactly."""
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError:
+    except PyJWTError:
         return None
 
 
