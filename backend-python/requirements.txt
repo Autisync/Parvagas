@@ -1,27 +1,27 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-gunicorn==21.2.0
-sentry-sdk[fastapi]==1.45.0
+fastapi==0.116.1
+uvicorn[standard]==0.34.3
+gunicorn==23.0.0
+sentry-sdk[fastapi]==2.30.0
 sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg[binary]==3.3.4
 psycopg2-binary==2.9.9
 pydantic-settings==2.1.0
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
-python-multipart==0.0.6
+python-multipart==0.0.20
 redis==5.0.1
 celery==5.3.4
 email-validator==2.1.0
 python-docx==0.8.11
-pypdf==4.0.1
+pypdf==5.9.0
 # CV text extraction + OCR (scanned PDFs and image CVs).
 # PyMuPDF ships musllinux wheels (Alpine-compatible); pytesseract shells out to
 # the tesseract binary installed in the Docker image; Pillow rasterises images.
 pymupdf==1.24.10
 pytesseract==0.3.13
-Pillow==10.4.0
+Pillow==11.3.0
 # Rules-based CV parser: fuzzy field matching + language detection.
 rapidfuzz==3.9.3
 langdetect==1.0.9
@@ -34,10 +34,10 @@ reportlab==4.2.2
 # RESUME_WEASYPRINT_ENABLED, falls back to reportlab's to_pdf() above.
 weasyprint==69.0
 slowapi==0.1.9
-jinja2==3.1.2
-python-dotenv==1.0.0
+jinja2==3.1.6
+python-dotenv==1.1.1
 httpx==0.25.2
-requests==2.31.0
+requests==2.32.4
 # HTML-listing scraper adapters (Jobartis, Airswift — no public API/feed).
 # Pure-Python via stdlib html.parser backend, no build deps.
 beautifulsoup4==4.12.3
