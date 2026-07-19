@@ -374,6 +374,13 @@ RESUME_PARSER_PROVIDER=manual
 
 ## Setup local
 
+> **Aviso:** evite clonar/manter este projeto dentro de uma pasta sincronizada
+> na cloud (ex.: `~/Downloads`, `~/Desktop` ou qualquer pasta OneDrive/iCloud/
+> Dropbox) — os ficheiros `.env`/`.env.local` contêm segredos reais (chaves
+> JWT, credenciais de DB) e uma pasta sincronizada pode replicá-los para
+> serviços de cloud fora do teu controlo. Move o projeto para uma pasta local
+> comum (ex.: `~/dev/`) antes de continuar.
+
 1. Instalar dependências
 ```bash
 npm install
