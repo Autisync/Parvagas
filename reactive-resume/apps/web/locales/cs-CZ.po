@@ -33,11 +33,6 @@ msgstr "Vytvořeno"
 msgid "Name"
 msgstr "Název"
 
-#: src/routes/_home/-sections/footer.tsx
-#: src/routes/_home/-sections/hero.tsx
-msgid "(opens in new tab)"
-msgstr "(otevře se na nové kartě)"
-
 #. placeholder {0}: section.items.length
 #: src/routes/builder/$resumeId/-sidebar/left/sections/custom.tsx
 msgid "{0, plural, one {# item} other {# items}}"
@@ -53,18 +48,14 @@ msgstr "{0, plural, one {# role} few {# role} many {# rolí} other {# rolí}}"
 msgid "{column, plural, one {# Column} other {# Columns}}"
 msgstr "{column, plural, one {# sloupec} few {# sloupce} many {# sloupců} other {# sloupce}}"
 
-#: src/routes/_home/-sections/hero.tsx
-msgid "<0>Finally,</0><1>A free and open-source resume builder</1>"
-msgstr "<0>Konečně</0><1>Bezplatný nástroj pro tvorbu životopisů s otevřeným zdrojovým kódem</1>"
-
-#: src/routes/_home/-sections/faq.tsx
-msgctxt "Home page FAQ section heading with each word visually separated into individual spans"
-msgid "<0>Frequently</0><1>Asked</1><2>Questions</2>"
-msgstr "<0>Často</0><1>Kladené</1><2>Otázky</2>"
-
 #: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "<0>Thank you for using Reactive Resume! This app is a labor of love, created mostly in my spare time, with wonderful support from open-source contributors around the world.</0><1>If Reactive Resume has been helpful to you, and you'd like to help keep it free and open for everyone, please consider making a donation. Every little bit is appreciated!</1>"
-msgstr "<0>Děkujeme, že používáte Reactive Resume! Tato aplikace je prací z lásky, kterou vytvářím převážně ve svém volném čase, s úžasnou podporou přispěvatelů open source z celého světa.</0><1>Pokud pro vás bylo Reactive Resume užitečné a chcete pomoci udržet ho zdarma a otevřené pro všechny, zvažte prosím dar. Každý příspěvek se počítá!</1>"
+msgid "<0>O Parvagas CV Builder faz parte do ecossistema oficial da Parvagas para candidatos e recrutadores.</0><1>Se tiver dificuldades com conta, exportacao, templates ou candidaturas, fale com o suporte oficial.</1>"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.heading"
+msgstr ""
 
 #: src/dialogs/api-key/create.tsx
 msgid "1 month"
@@ -74,10 +65,6 @@ msgstr "1 měsíc"
 msgid "1 year"
 msgstr "1 rok"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "12+ Templates"
-msgstr "12+ šablon"
-
 #: src/dialogs/api-key/create.tsx
 msgid "3 months"
 msgstr "3 měsíce"
@@ -86,42 +73,42 @@ msgstr "3 měsíce"
 msgid "6 months"
 msgstr "6 měsíců"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step1.description"
+msgstr ""
+
 #: src/features/settings/pages/profile.tsx
 msgid "A confirmation link has been sent to your current email address. Please check your inbox to confirm the change."
 msgstr "Potvrzovací odkaz byl odeslán na vaši současnou e-mailovou adresu. Zkontrolujte prosím svou e-mailovou schránku a potvrďte změnu."
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "A free and open-source resume builder that simplifies the process of creating, updating, and sharing your resume."
-msgstr "Bezplatný nástroj pro tvorbu životopisů s otevřeným zdrojovým kódem, který zjednodušuje proces vytváření, aktualizace a sdílení životopisů."
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.description"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-components/dock.tsx
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "A link to your resume has been copied to clipboard."
 msgstr "Odkaz na váš životopis byl zkopírován do schránky."
 
-#: src/routes/_home/-sections/testimonials.tsx
-msgid "A lot of people have written to me over the years to share their experiences with Reactive Resume and how it has helped them, and I never get tired of reading them. If you have a story to share, let me know by sending me an email at <0>{email}</0>."
-msgstr "Spousta lidí mi během let psala, aby se podělili o své zkušenosti s Reactive Resume a tím, jak jim pomohlo, a mě nikdy neomrzí je číst. Pokud máte příběh, o který se chcete podělit, napište mi e-mail na <0>{email}</0>."
-
 #: src/features/settings/pages/profile.tsx
 msgid "A new verification link has been sent to your email address. Please check your inbox to verify your account."
 msgstr "Nový ověřovací odkaz byl odeslán na vaši e-mailovou adresu. Zkontrolujte prosím svou e-mailovou schránku a ověřte svůj účet."
-
-#: src/components/ui/copyright.tsx
-msgid "A passion project by <0>Amruth Pillai</0>."
-msgstr "Osobní projekt <0>Amruth Pillai</0>."
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/page.tsx
 msgid "A4"
 msgstr "A4"
 
-#: src/routes/_home/-sections/faq.tsx
-msgid "Absolutely! You can export your resume to PDF with a single click. The exported PDF maintains all your formatting and styling perfectly."
-msgstr "Ano! Svůj životopis můžete exportovat do PDF jedním kliknutím. Exportované PDF dokonale zachová veškeré vaše formátování a styl."
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.openMenu"
+msgstr ""
 
+#. js-lingui-explicit-id
 #: src/routes/_home/-sections/features.tsx
-msgid "Access your resumes and data programmatically using the API."
-msgstr "Přistupujte ke svým životopisům a datům programově pomocí API."
+msgid "home.features.applications.title"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/left/sections/custom-fields.tsx
 msgid "Add a custom field"
@@ -289,6 +276,11 @@ msgstr "Poskytovatelé umělé inteligence"
 msgid "AI providers require REDIS_URL and ENCRYPTION_SECRET to be configured."
 msgstr "Poskytovatelé umělé inteligence vyžadují konfiguraci parametrů REDIS_URL a ENCRYPTION_SECRET."
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.visual.description"
+msgstr ""
+
 #: src/libs/locale.ts
 msgid "Albanian"
 msgstr "Albánština"
@@ -300,6 +292,11 @@ msgstr "Povolit veřejný přístup"
 #: src/features/auth/pages/register.tsx
 msgid "Already have an account? <0/>"
 msgstr "Máte již účet? <0/>"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.changeLanguage"
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Amharic"
@@ -323,13 +320,13 @@ msgstr "Analýza životopisu"
 msgid "Analyzing…"
 msgstr "Analýza…"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "And many more..."
-msgstr "A mnoho dalších…"
-
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Anthropic Claude"
 msgstr "Antropický Claude"
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Any special instructions for the rewrite?"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Anyone visiting the resume's public URL must enter this password to access it."
@@ -342,10 +339,6 @@ msgstr "Kdokoli, kdo má veřejnou URL adresu životopisu, si bude moci váš ž
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Anyone with the link can view and download the resume."
 msgstr "Každý, kdo má k dispozici odkaz, si může životopis prohlédnout a stáhnout."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "API Access"
-msgstr "Přístup přes API"
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "API Key"
@@ -369,13 +362,17 @@ msgstr "API dokumentace"
 msgid "App"
 msgstr "Aplikace"
 
-#: src/routes/_home/-sections/statistics.tsx
-msgid "Application Statistics"
-msgstr "Statistiky aplikace"
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Applied rewrite to Summary."
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/custom-styles.tsx
 msgid "Applied Rules"
 msgstr "Použitá pravidla"
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Apply to Summary"
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Arabic"
@@ -434,6 +431,11 @@ msgstr "Studijní obor"
 msgid "Artificial Intelligence"
 msgstr "Umělá inteligence"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.description"
+msgstr ""
+
 #: src/routes/agent/$threadId.tsx
 msgid "Ask anything about this resume"
 msgstr "Zeptejte se na cokoli ohledně tohoto životopisu"
@@ -441,6 +443,11 @@ msgstr "Zeptejte se na cokoli ohledně tohoto životopisu"
 #: src/routes/builder/$resumeId/-sidebar/left/sections/picture.tsx
 msgid "Aspect Ratio"
 msgstr "Poměr stran"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.operations"
+msgstr ""
 
 #: src/routes/agent/$threadId.tsx
 msgid "Attach files"
@@ -455,10 +462,6 @@ msgstr "Příloha nahrána."
 #: src/routes/dashboard/settings/authentication/index.tsx
 msgid "Authentication"
 msgstr "Ověřování"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Available in multiple languages. If you would like to contribute, check out Crowdin."
-msgstr "K dispozici v mnoha jazycích. Pokud chcete přispět, podívejte se na Crowdin."
 
 #: src/dialogs/resume/sections/award.tsx
 msgctxt "(noun) person, organization, or entity that gives an award"
@@ -496,13 +499,18 @@ msgstr "Záložní kódy zkopírovány do schránky."
 msgid "Base URL"
 msgstr "Základní URL"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.mitAttribution"
+msgstr ""
+
+#: src/components/ui/copyright.tsx
+msgid "Baseado no projeto open-source Reactive Resume, licenciado sob MIT. <0>Licenca</0>."
+msgstr ""
+
 #: src/libs/resume/section.tsx
 msgid "Basics"
 msgstr "Základy"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Beautiful templates to choose from, with more on the way."
-msgstr "Krásné šablony, ze kterých můžete vybírat, a další jsou na cestě."
 
 #: src/libs/locale.ts
 msgid "Bengali"
@@ -542,17 +550,6 @@ msgstr "Bulharština"
 msgid "Bullet List"
 msgstr "Odrážkový seznam"
 
-#. Tagline shown in app footer/about area
-#: src/components/ui/copyright.tsx
-#: src/routes/_home/-sections/features.tsx
-#: src/routes/_home/-sections/prefooter.tsx
-msgid "By the community, for the community."
-msgstr "Vytvořeno komunitou pro komunitu."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Can I export my resume to PDF?"
-msgstr "Mohu svůj životopis exportovat do PDF?"
-
 #. API key deletion confirmation dialog cancel action in settings
 #. Account deletion confirmation dialog cancel action in danger zone
 #. Confirmation dialog button label to abort deleting a custom section in resume builder
@@ -587,6 +584,11 @@ msgstr "Mohu svůj životopis exportovat do PDF?"
 msgid "Cancel"
 msgstr "Zrušit"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.candidates"
+msgstr ""
+
 #: src/routes/agent/$threadId.tsx
 msgid "Cannot restore; the resume has changed since this edit was applied."
 msgstr "Nelze obnovit; životopis se od provedení této úpravy změnil."
@@ -609,10 +611,6 @@ msgstr "Vycentrovat zobrazení"
 msgid "Certifications"
 msgstr "Osvědčení"
 
-#: src/routes/_home/-sections/header.tsx
-msgid "Change language"
-msgstr "Změnit jazyk"
-
 #: src/features/command-palette/pages/preferences/index.tsx
 msgid "Change language to…"
 msgstr "Změnit jazyk na…"
@@ -624,10 +622,6 @@ msgstr "Změnit téma na…"
 #: src/dialogs/resume/index.tsx
 msgid "Changed your mind? Rename your resume to something more descriptive."
 msgstr "Rozmysleli jste si to? Přejmenujte svůj životopis na něco výstižnějšího."
-
-#: src/routes/_home/-sections/footer.tsx
-msgid "Changelog"
-msgstr "Protokol změn"
 
 #: src/routes/agent/$threadId.tsx
 msgid "Chat"
@@ -663,6 +657,10 @@ msgstr "Vyberte si přednastavený nebo vlastní odstín."
 msgid "Choose a resume"
 msgstr "Vyberte si životopis"
 
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Choose a tone for the rewrite (e.g., professional, friendly, concise)."
+msgstr ""
+
 #: src/routes/agent/index.tsx
 msgid "Choose an existing conversation from the sidebar, or start a new draft-focused thread."
 msgstr "Vyberte existující konverzaci z postranního panelu nebo začněte nové vlákno zaměřené na koncept."
@@ -694,6 +692,11 @@ msgstr "Blok kódu"
 msgid "Columns"
 msgstr "Sloupce"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.primaryCta"
+msgstr ""
+
 #. Accessible label for command list region inside command palette
 #. Accessible label for the command palette dialog
 #: src/features/command-palette/index.tsx
@@ -705,9 +708,15 @@ msgstr "Příkazová paleta"
 msgid "Command Palette - {currentPage}"
 msgstr "Paleta příkazů - {currentPage}"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "Community"
-msgstr "Komunita"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.nav.howItWorks"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.eyebrow"
+msgstr ""
 
 #: src/dialogs/resume/sections/experience.tsx
 msgid "Company"
@@ -716,10 +725,6 @@ msgstr "Společnost"
 #: src/routes/agent/$threadId.tsx
 msgid "Compare this resume against this role URL and update keywords while keeping the voice concise and credible."
 msgstr "Porovnejte tento životopis s URL adresou této pozice a aktualizujte klíčová slova, přičemž zachovejte stručnost a důvěryhodnost textu."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Completely free, forever, no hidden costs."
-msgstr "Zcela zdarma, navždy, bez skrytých poplatků."
 
 #. Account deletion confirmation dialog confirm action in danger zone
 #. Create API key dialog acknowledgment action after copying
@@ -735,10 +740,33 @@ msgstr "Potvrdit"
 msgid "Connect"
 msgstr "Připojit"
 
+#: src/components/ui/copyright.tsx
+msgid "Consulte os <0>Termos e Condicoes</0>."
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.account"
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
+msgid "Contactar suporte Parvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.contacts"
+msgstr ""
+
 #: src/dialogs/resume/sections/cover-letter.tsx
 #: src/dialogs/resume/sections/summary-item.tsx
 msgid "Content"
 msgstr "Obsah"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.ats.title"
+msgstr ""
 
 #. Button label to continue to dashboard after successful registration
 #. Final action button after saving backup codes
@@ -754,12 +782,8 @@ msgid "Continue where you left off"
 msgstr "Pokračujte tam, kde jste skončili"
 
 #: src/dialogs/resume/import.tsx
-msgid "Continue where you left off by importing an existing resume you created using Reactive Resume or any another resume builder. Supported formats include PDF, Microsoft Word, as well as JSON files from Reactive Resume."
-msgstr "Pokračujte tam, kde jste skončili, importováním existujícího životopisu, který jste vytvořili pomocí Reactive Resume nebo jiného nástroje pro tvorbu životopisů. Podporované formáty zahrnují PDF, Microsoft Word a také soubory JSON z Reactive Resume."
-
-#: src/routes/_home/-sections/donate.tsx
-msgid "Contributions fund bug fixes, security updates, and continuous improvements to keep the app running smoothly."
-msgstr "Příspěvky financují opravy chyb, bezpečnostní aktualizace a průběžná vylepšení, aby aplikace běžela hladce."
+msgid "Continue where you left off by importing an existing resume from Parvagas CV Builder or another compatible resume builder. Supported formats include PDF, Microsoft Word, and JSON files exported from this builder."
+msgstr ""
 
 #: src/routes/agent/$threadId.tsx
 msgid "Conversation copied."
@@ -920,10 +944,6 @@ msgstr "Vytvořit novou dobrovolnickou zkušenost"
 msgid "Create a Sample Resume"
 msgstr "Vytvořit ukázkový životopis"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Create as many resumes as you want, without limits."
-msgstr "Vytvářejte neomezené množství životopisů bez omezení."
-
 #: src/routes/agent/-components/new-thread-setup.tsx
 msgid "Create from scratch"
 msgstr "Vytvořte od nuly"
@@ -946,9 +966,42 @@ msgstr "Vytváření API klíče…"
 msgid "Creating your resume..."
 msgstr "Vytváření životopisu…"
 
+#: src/dialogs/resume/index.tsx
+msgid "Criar a partir do meu perfil Parvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.nav.create"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.primaryCta"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.createFree"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.multiple.description"
+msgstr ""
+
 #: src/dialogs/auth/change-password.tsx
 msgid "Current Password"
 msgstr "Aktuální heslo"
+
+#: src/routes/_home/-sections/statistics.tsx
+msgid "Curriculos"
+msgstr ""
 
 #: src/components/input/color-picker.tsx
 msgid "Custom"
@@ -966,6 +1019,11 @@ msgstr "Vlastní sekce"
 #: src/libs/resume/section.tsx
 msgid "Custom Styles"
 msgstr "Vlastní styly"
+
+#. Import source option for legacy CV Builder v4 JSON format
+#: src/dialogs/resume/import.tsx
+msgid "CV Builder v4 (JSON)"
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Czech"
@@ -990,10 +1048,6 @@ msgstr "Tmavý"
 #: src/features/command-palette/pages/preferences/theme.tsx
 msgid "Dark theme"
 msgstr "Tmavý motiv"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Data Security"
-msgstr "Zabezpečení dat"
 
 #: src/dialogs/resume/sections/award.tsx
 #: src/dialogs/resume/sections/certification.tsx
@@ -1074,6 +1128,26 @@ msgstr "Mazání API klíče…"
 msgid "Deleting your resume..."
 msgstr "Mazání životopisu…"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.videoAriaLabel"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.sync.description"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step4.description"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.pdf.description"
+msgstr ""
+
 #: src/dialogs/resume/sections/award.tsx
 #: src/dialogs/resume/sections/certification.tsx
 #: src/dialogs/resume/sections/education.tsx
@@ -1108,15 +1182,15 @@ msgstr "Deaktivace dvoufázového ověření…"
 msgid "Disconnect"
 msgstr "Odpojit"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "Discord"
-msgstr "Discord"
-
 #: src/components/ui/donation-toast.tsx
 msgid "Dismiss"
 msgstr "Propustit"
 
-#: src/routes/_home/-sections/footer.tsx
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.title"
+msgstr ""
+
 #: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
 msgid "Documentation"
 msgstr "Dokumentace"
@@ -1124,14 +1198,6 @@ msgstr "Dokumentace"
 #: src/features/auth/pages/login.tsx
 msgid "Don't have an account? <0/>"
 msgstr "Nemáte účet? <0/>"
-
-#: src/components/ui/donation-toast.tsx
-msgid "Donate"
-msgstr "Darovat"
-
-#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "Donate to Reactive Resume"
-msgstr "Přispět na Reactive Resume"
 
 #. Action button to download two-factor backup codes as a text file
 #: src/dialogs/auth/enable-two-factor.tsx
@@ -1171,6 +1237,11 @@ msgstr "Stažení"
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
 msgid "Drag and drop sections here to move them between columns"
 msgstr "Přetažením sekce sem je přesunete mezi sloupci"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.twoColumns"
+msgstr ""
 
 #. Resume card context menu action to create a copy
 #. Resume card dropdown action to create a copy
@@ -1245,6 +1316,11 @@ msgstr "E-mail"
 msgid "Email Address"
 msgstr "E-mailová adresa"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.companies"
+msgstr ""
+
 #: src/features/settings/authentication/components/two-factor.tsx
 msgid "Enable 2FA"
 msgstr "Aktivovat 2FA"
@@ -1272,10 +1348,6 @@ msgstr "Angličtina"
 #: src/libs/locale.ts
 msgid "English (United Kingdom)"
 msgstr "Angličtina (Spojené království)"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Enhance the security of your account with additional layers of protection."
-msgstr "Zvyšte zabezpečení svého účtu pomocí dalších vrstev ochrany."
 
 #: src/features/settings/authentication/components/passkeys.tsx
 msgid "Enter a name for your passkey."
@@ -1305,13 +1377,49 @@ msgstr "Zadejte své heslo pro potvrzení nastavení dvoufázového ověření. 
 msgid "Enter your password to disable two-factor authentication. Your account will be less secure without 2FA enabled."
 msgstr "Zadejte své heslo pro deaktivaci dvoufázového ověření. Bez aktivního 2FA bude váš účet méně zabezpečený."
 
-#: src/routes/_home/-sections/donate.tsx
-msgid "Every contribution, big or small, makes a huge difference to the project.<0/>Thank you for your support!"
-msgstr "Každý příspěvek, velký i malý, má pro projekt obrovský význam.<0/>Děkujeme za vaši podporu!"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.signIn"
+msgstr ""
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.signInWithParvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step1.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.description"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step3.title"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: src/routes/_home/-sections/features.tsx
-msgid "Everything you need to create, customize, and share professional resumes. Built with privacy in mind, powered by open source, and completely free forever."
-msgstr "Vše, co potřebujete k vytvoření, přizpůsobení a sdílení profesionálních životopisů. Vytvořeno s ohledem na soukromí, poháněno open source a zcela zdarma, navždy."
+msgid "home.features.templates.description"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.title"
+msgstr ""
+
+#: src/routes/_home/-sections/statistics.tsx
+msgid "Estatisticas da Aplicacao"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.executive"
+msgstr ""
 
 #: src/components/input/rich-input.tsx
 msgid "Exit Fullscreen"
@@ -1332,21 +1440,23 @@ msgstr "Vyprší za"
 msgid "Expires on {0}"
 msgstr "Platnost vyprší {0}"
 
-#: src/routes/_home/-sections/templates.tsx
-msgid "Explore our diverse selection of templates, each designed to fit different styles, professions, and personalities. Reactive Resume currently offers 12 templates, with more on the way."
-msgstr "Prozkoumejte naši pestrou nabídku šablon, z nichž každá je navržena pro různé styly, profese a osobnosti. Reactive Resume v současnosti nabízí 12 šablon a další jsou na cestě."
-
 #: src/features/settings/pages/api-keys.tsx
-msgid "Explore the API documentation to learn how to integrate Reactive Resume with your applications. Find detailed endpoints, request examples, and authentication methods."
-msgstr "Prozkoumejte API dokumentaci a zjistěte, jak integrovat Reactive Resume do svých aplikací. Najdete zde podrobné endpointy, ukázky požadavků a způsoby ověřování."
+msgid "Explore the API documentation to learn how to integrate Parvagas CV Builder with your applications. Find detailed endpoints, request examples, and authentication methods."
+msgstr ""
 
 #: src/libs/resume/section.tsx
 msgid "Export"
 msgstr "Export"
 
+#. js-lingui-explicit-id
 #: src/routes/_home/-sections/features.tsx
-msgid "Export your resume to PDF instantly, without any waiting or delays."
-msgstr "Exportujte svůj životopis do PDF okamžitě, bez čekání nebo zpoždění."
+msgid "home.features.pdf.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step4.title"
+msgstr ""
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Failed"
@@ -1435,6 +1545,10 @@ msgstr "Nepodařilo se znovu odeslat ověřovací e-mail. Zkuste to prosím znov
 msgid "Failed to reset your password. Please try again."
 msgstr "Nepodařilo se obnovit heslo. Zkuste to prosím znovu."
 
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Failed to rewrite resume."
+msgstr ""
+
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Failed to save AI provider."
 msgstr "Uložení poskytovatele umělé inteligence se nezdařilo."
@@ -1511,9 +1625,29 @@ msgstr "Nepodařilo se ověřit váš záložní kód. Zkuste to prosím znovu."
 msgid "Failed to verify your code. Please try again."
 msgstr "Nepodařilo se ověřit váš kód. Zkuste to prosím znovu."
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.support.answer"
+msgstr ""
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Fast Candidate Onboarding"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.closeMenu"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.description"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: src/routes/_home/-sections/features.tsx
-msgid "Features"
-msgstr "Funkce"
+msgid "home.features.title"
+msgstr ""
 
 #: src/routes/dashboard/resumes/index.tsx
 msgid "Filter by"
@@ -1526,10 +1660,6 @@ msgstr "Najděte slabé odrážky a přepište je se silnějšími výsledky, č
 #: src/libs/locale.ts
 msgid "Finnish"
 msgstr "Finština"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Flexibility"
-msgstr "Flexibilita"
 
 #: src/dialogs/resume/sections/language.tsx
 msgid "Fluency"
@@ -1550,10 +1680,6 @@ msgstr "Tloušťka písma"
 #: src/routes/builder/$resumeId/-sidebar/right/sections/typography.tsx
 msgid "Font Weights"
 msgstr "Tloušťky písma"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "For a secure and distraction-free experience."
-msgstr "Pro bezpečný a nerušený zážitek."
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/notes.tsx
 msgid "For example, information regarding which companies you sent this resume to or the links to the job descriptions can be noted down here."
@@ -1577,10 +1703,6 @@ msgctxt "Page Format (A4, Letter, Free-form)"
 msgid "Format"
 msgstr "Formát"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Free"
-msgstr "Zdarma"
-
 #: src/routes/builder/$resumeId/-sidebar/right/sections/page.tsx
 msgid "Free-form"
 msgstr "Volný formát"
@@ -1603,6 +1725,11 @@ msgstr "Celá obrazovka"
 msgid "Fullscreen Editor"
 msgstr "Editor na celou obrazovku"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.eyebrow"
+msgstr ""
+
 #: src/dialogs/resume/index.tsx
 msgid "Generate a random name"
 msgstr "Vygenerovat náhodný název"
@@ -1619,15 +1746,14 @@ msgstr "Získejte přehled o svém životopisu s celkovým hodnocením, silnými
 msgid "Get an in-depth AI-powered review of your resume with an overall score, key strengths, and practical suggestions. To activate this feature, please update your AI settings."
 msgstr "Získejte hloubkovou recenzi svého životopisu s celkovým hodnocením, klíčovými přednostmi a praktickými návrhy. Chcete-li tuto funkci aktivovat, aktualizujte nastavení umělé inteligence."
 
-#: src/routes/_home/-sections/hero.tsx
-msgid "Get Started"
-msgstr "Začít"
+#: src/routes/_home/-sections/donate.tsx
+msgid "Get support to help candidates create CVs quickly and apply to relevant jobs."
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Brand name label for GitHub social sign-in button
 #: src/features/auth/components/social-auth.tsx
 #: src/features/settings/authentication/components/hooks.tsx
-#: src/routes/_home/-sections/footer.tsx
 msgid "GitHub"
 msgstr "GitHub"
 
@@ -1636,10 +1762,6 @@ msgstr "GitHub"
 #: src/features/auth/pages/verify-2fa-backup.tsx
 msgid "Go Back"
 msgstr "Zpět"
-
-#: src/routes/_home/-sections/header.tsx
-msgid "Go to dashboard"
-msgstr "Přejít na nástěnku"
 
 #. Accessible label for button navigating from builder to resumes dashboard
 #: src/routes/builder/$resumeId/-components/header.tsx
@@ -1677,10 +1799,6 @@ msgstr "Řečtina"
 msgid "Grid"
 msgstr "Mřížka"
 
-#: src/routes/_home/-sections/donate.tsx
-msgid "Grow the Team"
-msgstr "Rozšířit tým"
-
 #: src/routes/builder/$resumeId/-sidebar/right/sections/typography.tsx
 msgctxt "Headings or Titles (H1, H2, H3, H4, H5, H6)"
 msgid "Heading"
@@ -1717,14 +1835,6 @@ msgstr "Titulek"
 #: src/libs/locale.ts
 msgid "Hebrew"
 msgstr "Hebrejština"
-
-#: src/routes/_home/-sections/donate.tsx
-msgid "Help me bring more experienced contributors on board, reducing the burden on a single maintainer and accelerating development."
-msgstr "Pomozte mi zapojit zkušenější přispěvatele, snížit zátěž jednoho maintainera a zrychlit vývoj."
-
-#: src/features/settings/pages/preferences.tsx
-msgid "Help translate the app to your language"
-msgstr "Pomozte přeložit aplikaci do svého jazyka"
 
 #: src/dialogs/resume/template/gallery.tsx
 msgid "Here's a range of resume templates for different professions and personalities. Whether you prefer modern or classic, bold or simple, there is a design to match you. Look through the options below and choose a template that fits your style."
@@ -1797,17 +1907,9 @@ msgstr "Hindština"
 msgid "Home"
 msgstr "Domů"
 
-#: src/routes/_home/-sections/faq.tsx
-msgid "How do I share my resume?"
-msgstr "Jak mohu sdílet svůj životopis?"
-
 #: src/features/settings/pages/api-keys.tsx
 msgid "How do I use the API?"
 msgstr "Jak používat API?"
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "How is my data protected?"
-msgstr "Jak jsou má data chráněna?"
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "https://gateway.example.com/v1"
@@ -1835,6 +1937,20 @@ msgstr "Importovat"
 #: src/routes/dashboard/resumes/-components/list-view.tsx
 msgid "Import an existing resume"
 msgstr "Importovat existující životopis"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.import.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step2.title"
+msgstr ""
+
+#: src/dialogs/resume/index.tsx
+msgid "Importing your Parvagas profile..."
+msgstr ""
 
 #: src/dialogs/resume/import.tsx
 msgid "Importing your resume..."
@@ -1864,9 +1980,9 @@ msgstr "Řádkový kód"
 msgid "Insert Table"
 msgstr "Vložit tabulku"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Instant Generation"
-msgstr "Okamžité generování"
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Instructions (optional)"
+msgstr ""
 
 #: src/features/command-palette/pages/navigation.tsx
 #: src/routes/dashboard/-components/sidebar.tsx
@@ -1883,14 +1999,6 @@ msgstr "Zájmy"
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Invalid AI provider configuration."
 msgstr "Neplatná konfigurace poskytovatele umělé inteligence."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Is Reactive Resume available in multiple languages?"
-msgstr "Je Reactive Resume dostupné ve více jazycích?"
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Is Reactive Resume really free?"
-msgstr "Je Reactive Resume opravdu zdarma?"
 
 #: src/dialogs/resume/sections/certification.tsx
 msgid "Issuer"
@@ -2016,10 +2124,6 @@ msgstr "Lotyština"
 msgid "Layout"
 msgstr "Rozvržení"
 
-#: src/routes/_home/-sections/hero.tsx
-msgid "Learn More"
-msgstr "Zjistit více"
-
 #: src/hooks/use-form-blocker.tsx
 msgid "Leave"
 msgstr "Odejít"
@@ -2031,6 +2135,11 @@ msgstr "Ponechte prázdné pro resetování názvu na původní."
 #: src/components/input/rich-input.tsx
 msgid "Left Align"
 msgstr "Zarovnat vlevo"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.group.legal"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/page.tsx
 msgid "Letter"
@@ -2047,9 +2156,10 @@ msgstr "Úroveň"
 msgid "Level {level} of 5"
 msgstr "Úroveň {level} z 5"
 
-#: src/components/ui/copyright.tsx
-msgid "Licensed under <0>MIT</0>."
-msgstr "Licencováno pod <0>MIT</0>."
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.mitLicense"
+msgstr ""
 
 #. Appearance theme option for light mode
 #: src/features/user/dropdown-menu.tsx
@@ -2069,7 +2179,6 @@ msgstr "Výška řádku"
 #. Brand name label for LinkedIn social sign-in button
 #: src/features/auth/components/social-auth.tsx
 #: src/features/settings/authentication/components/hooks.tsx
-#: src/routes/_home/-sections/footer.tsx
 msgid "LinkedIn"
 msgstr "LinkedIn"
 
@@ -2131,10 +2240,6 @@ msgstr "Zámek"
 msgid "Logout"
 msgstr "Odhlásit se"
 
-#: src/routes/_home/-sections/donate.tsx
-msgid "Long-term Sustainability"
-msgstr "Dlouhodobá udržitelnost"
-
 #. Link to backup-code verification flow when authenticator app is unavailable
 #: src/features/auth/pages/verify-2fa.tsx
 msgid "Lost access to your authenticator?"
@@ -2149,10 +2254,6 @@ msgstr "Nízká"
 #: src/routes/builder/$resumeId/-sidebar/right/sections/layout/pages.tsx
 msgid "Main"
 msgstr "Hlavní"
-
-#: src/routes/_home/-sections/header.tsx
-msgid "Main navigation"
-msgstr "Hlavní navigace"
 
 #: src/routes/agent/$threadId.tsx
 msgid "Make the experience section more results-oriented and remove vague responsibilities."
@@ -2196,13 +2297,24 @@ msgstr "Chybí pracovní životopis"
 msgid "Model"
 msgstr "Model"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.nav.templates"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.eyebrow"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.templates.title"
+msgstr ""
+
 #: src/routes/builder/$resumeId/-sidebar/left/shared/section-item.tsx
 msgid "Move to"
 msgstr "Přesunout do"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Multilingual"
-msgstr "Vícejazyčné"
 
 #. Placeholder text for custom link URL field in resume builder
 #: src/routes/builder/$resumeId/-sidebar/left/sections/custom-fields.tsx
@@ -2222,6 +2334,28 @@ msgstr "Musí začít na https://"
 msgid "Name"
 msgstr "Název"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.guarantee.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.navAriaLabel"
+msgstr ""
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Need help with CV Builder setup, login, or exports?<0/>Our support team is ready to help."
+msgstr ""
+
+#: src/components/ui/donation-toast.tsx
+msgid "Need help with CV Builder?"
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
+msgid "Need help with Parvagas CV Builder?"
+msgstr ""
+
 #: src/libs/locale.ts
 msgid "Nepali"
 msgstr "Nepálština"
@@ -2229,10 +2363,6 @@ msgstr "Nepálština"
 #: src/dialogs/resume/sections/profile.tsx
 msgid "Network"
 msgstr "Síť"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "New features are constantly being added and improved, so be sure to check back often."
-msgstr "Pravidelně přidáváme a vylepšujeme nové funkce, proto se sem pravidelně vracejte."
 
 #: src/components/input/rich-input.tsx
 msgid "New Line"
@@ -2255,10 +2385,6 @@ msgstr "Nová sekce"
 #: src/routes/agent/-components/thread-sidebar.tsx
 msgid "New thread"
 msgstr "Nové vlákno"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "No Advertising, No Tracking"
-msgstr "Bez reklam, bez sledování"
 
 #. Error shown when AI import endpoint returns no parsed resume data
 #: src/dialogs/resume/import.tsx
@@ -2293,6 +2419,21 @@ msgstr "Norština"
 msgid "Notes"
 msgstr "Poznámky"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.guarantee.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.ats.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.plan.answer"
+msgstr ""
+
 #: src/libs/locale.ts
 msgid "Odia"
 msgstr "Udijština"
@@ -2300,14 +2441,6 @@ msgstr "Udijština"
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Ollama"
 msgstr "Ollama"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "One-Click Sign-In"
-msgstr "Přihlášení jedním kliknutím"
-
-#: src/routes/_home/-sections/donate.tsx
-msgid "Ongoing Maintenance"
-msgstr "Průběžná údržba"
 
 #. Resume card context menu action to open the resume editor
 #. Resume card dropdown action to open the resume editor
@@ -2333,9 +2466,9 @@ msgstr "Otevřít v editoru"
 msgid "Open Integrations Settings"
 msgstr "Otevřít Nastavení integrace"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Open Source"
-msgstr "Open source"
+#: src/components/ui/donation-toast.tsx
+msgid "Open Support"
+msgstr ""
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "OpenAI"
@@ -2350,9 +2483,12 @@ msgid "OpenRouter"
 msgstr "OpenRouter"
 
 #: src/routes/_home/-sections/donate.tsx
-#: src/routes/_home/-sections/footer.tsx
 msgid "opens in new tab"
 msgstr "otevře se na nové kartě"
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Operational Reliability"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Optionally, set a password so that only people with the password can view your resume through the link."
@@ -2371,6 +2507,41 @@ msgstr "Číslovaný seznam"
 msgid "Organization"
 msgstr "Organizace"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.ats.description"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.privacy.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.myCvs"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.secondaryCta"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.privacy.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.ats.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.privacy.description"
+msgstr ""
+
 #: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
 msgid "Overall Score"
 msgstr "Celkové skóre"
@@ -2386,9 +2557,64 @@ msgstr "Stránka"
 msgid "Page {0}"
 msgstr "Stránka {0}"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.eyebrow"
+msgstr ""
+
 #: src/components/input/rich-input.tsx
 msgid "Paragraph"
 msgstr "Odstavec"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.group.parvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.brand"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.badge"
+msgstr ""
+
+#: src/components/ui/copyright.tsx
+msgid "Parvagas CV Builder"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.homeAriaLabel"
+msgstr ""
+
+#. Import source option for current Parvagas CV Builder JSON format
+#: src/dialogs/resume/import.tsx
+msgid "Parvagas CV Builder (JSON)"
+msgstr ""
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Parvagas CV Builder is an official Parvagas service. Contact our support team for onboarding, issue resolution, and account assistance."
+msgstr ""
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Parvagas CV Builder Support"
+msgstr ""
+
+#. App version label in footer; includes semantic version variable
+#: src/components/ui/copyright.tsx
+msgid "Parvagas CV Builder v{__APP_VERSION__}"
+msgstr ""
+
+#: src/components/ui/donation-toast.tsx
+msgid "Parvagas support can help with account, import, and resume publishing issues."
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
+msgid "Parvagas Website"
+msgstr ""
 
 #. Authentication provider display name in account settings
 #. Label for passkey sign-in button
@@ -2409,10 +2635,6 @@ msgstr "Passkey byl úspěšně zaregistrován."
 msgid "Passkeys"
 msgstr "Passkeys"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Passkeys & 2FA"
-msgstr "Přístupové klíče a 2FA"
-
 #. Authentication provider display name in account settings
 #. Label for password input on login form
 #. Label for password input on protected resume access form
@@ -2430,10 +2652,6 @@ msgstr "Heslo"
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Password cannot be empty."
 msgstr "Heslo nesmí být prázdné."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Password Protection"
-msgstr "Ochrana heslem"
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Password protection has been disabled."
@@ -2472,6 +2690,16 @@ msgstr "Patch vrácen zpět."
 msgid "PDF"
 msgstr "PDF"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.profile.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.nav.faq"
+msgstr ""
+
 #: src/dialogs/resume/sections/education.tsx
 #: src/dialogs/resume/sections/experience.tsx
 #: src/dialogs/resume/sections/project.tsx
@@ -2483,9 +2711,10 @@ msgstr "Období"
 msgid "Persian"
 msgstr "Perština"
 
+#. js-lingui-explicit-id
 #: src/routes/_home/-sections/features.tsx
-msgid "Personalize your resume with any colors, fonts or designs, and make it your own."
-msgstr "Personalizujte svůj životopis libovolnými barvami, písmy nebo designem a udělejte ho jedinečným."
+msgid "home.features.visual.title"
+msgstr ""
 
 #: src/dialogs/resume/sections/reference.tsx
 #: src/routes/builder/$resumeId/-sidebar/left/sections/basics.tsx
@@ -2495,6 +2724,15 @@ msgstr "Telefon"
 #: src/libs/resume/section.tsx
 msgid "Picture"
 msgstr "Fotografie"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.technologyAttribution"
+msgstr ""
+
+#: src/components/ui/copyright.tsx
+msgid "Plataforma tecnológica concebida e desenvolvida pela <0>Autisync</0>."
+msgstr ""
 
 #: src/features/auth/pages/reset-password.tsx
 msgid "Please enter a new password for your account"
@@ -2507,10 +2745,6 @@ msgstr "Zadejte prosím heslo, které vám sdílel vlastník životopisu, abyste
 #: src/components/input/rich-input.tsx
 msgid "Please enter the URL you want to link to:"
 msgstr "Zadejte prosím URL, na kterou chcete odkazovat:"
-
-#: src/components/ui/donation-toast.tsx
-msgid "Please support the project"
-msgstr "Prosím, podpořte projekt"
 
 #: src/features/resume/public/public-resume.tsx
 #: src/routes/builder/$resumeId/-components/dock.tsx
@@ -2525,6 +2759,11 @@ msgstr "Počkejte prosím, než se váš PDF vygeneruje…"
 #: src/libs/locale.ts
 msgid "Polish"
 msgstr "Polština"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.candidatePortal"
+msgstr ""
 
 #. Preset button for setting picture aspect ratio to portrait orientation
 #: src/routes/builder/$resumeId/-sidebar/left/sections/picture.tsx
@@ -2543,6 +2782,36 @@ msgstr "Portugalština (Portugalsko)"
 #: src/dialogs/resume/sections/reference.tsx
 msgid "Position"
 msgstr "Pozice"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.multiple.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.edit.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.pdf.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.profile.question"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.previewAlt"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.support.question"
+msgstr ""
 
 #: src/features/command-palette/pages/navigation.tsx
 #: src/features/command-palette/pages/preferences/index.tsx
@@ -2572,6 +2841,25 @@ msgstr "Stisknutím klávesy <0>Enter</0> otevřete"
 msgid "Primary Color"
 msgstr "Hlavní barva"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.firstJob"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.privacy"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.privacy.title"
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
+msgid "Privacy"
+msgstr ""
+
 #: src/dialogs/resume/sections/skill.tsx
 msgid "Proficiency"
 msgstr "Znalost"
@@ -2588,6 +2876,11 @@ msgstr "Profil"
 msgid "Profiles"
 msgstr "Profily"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.professional"
+msgstr ""
+
 #: src/components/level/combobox.tsx
 msgid "Progress Bar"
 msgstr "Ukazatel průběhu"
@@ -2601,10 +2894,6 @@ msgstr "Projekty"
 #: src/routes/builder/$resumeId/-sidebar/right/sections/sharing.tsx
 msgid "Protect your resume from unauthorized access with a password"
 msgstr "Chraňte svůj životopis heslem před neoprávněným přístupem"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Protect your resume with a password, and let only people with the password view it."
-msgstr "Chraňte svůj životopis heslem a umožněte jeho zobrazení jen lidem, kteří heslo znají."
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Provider"
@@ -2624,48 +2913,32 @@ msgstr "Publikace"
 msgid "Publisher"
 msgstr "Vydavatel"
 
-#: src/routes/_home/-sections/header.tsx
-msgid "Reactive Resume - Go to homepage"
-msgstr "Reactive Resume – přejít na domovskou stránku"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.plan.question"
+msgstr ""
 
-#. Import source option for current Reactive Resume JSON format
-#: src/dialogs/resume/import.tsx
-msgid "Reactive Resume (JSON)"
-msgstr "Reaktivní životopis (JSON)"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.import.description"
+msgstr ""
 
-#: src/routes/_home/-sections/prefooter.tsx
-msgid "Reactive Resume continues to grow thanks to its vibrant community. This project owes its progress to numerous individuals who've dedicated their time and skills to make it better. We celebrate the coders who've enhanced its features on GitHub, the linguists whose translations on Crowdin have made it accessible to a broader audience, and the people who've donated to support its continued development."
-msgstr "Reactive Resume dále roste díky své živé komunitě. Tento projekt vděčí za svůj pokrok mnoha lidem, kteří věnovali svůj čas a dovednosti k jeho vylepšení. Oslavujeme vývojáře, kteří rozšířili funkce na GitHubu, lingvisty, jejichž překlady na Crowdin zpřístupnily aplikaci širšímu publiku, a lidi, kteří darovali na podporu dalšího vývoje."
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.writing.description"
+msgstr ""
 
 #: src/routes/_home/-sections/donate.tsx
-msgid "Reactive Resume is a free and open-source project, built with love and maintained by me and a community of contributors. Your donations help keep the lights on and the code flowing."
-msgstr "Reactive Resume je bezplatný open source projekt, vytvořený z lásky a udržovaný mnou a komunitou přispěvatelů. Vaše dary pomáhají udržet projekt v chodu a podporují další vývoj."
-
-#: src/routes/_home/-sections/hero.tsx
-msgid "Reactive Resume is a free and open-source resume builder that simplifies the process of creating, updating, and sharing your resume."
-msgstr "Reactive Resume je bezplatný nástroj pro tvorbu životopisů s otevřeným zdrojovým kódem, který zjednodušuje proces vytváření, aktualizace a sdílení životopisů."
-
-#: src/components/ui/donation-toast.tsx
-msgid "Reactive Resume is free and open source. If it has helped you, please consider donating."
-msgstr "Reactive Resume je zdarma a má otevřený zdrojový kód. Pokud vám pomohl, zvažte prosím dar."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Reactive Resume is open-source, privacy-focused, and completely free. Unlike other resume builders, it doesn't show ads, track your data, or limit your features behind a paywall."
-msgstr "Reactive Resume je open source, zaměřené na soukromí a zcela zdarma. Na rozdíl od jiných nástrojů pro tvorbu životopisů nezobrazuje reklamy, nesleduje vaše data a neomezuje funkce za paywallem."
-
-#. App version label in footer; includes semantic version variable
-#: src/components/ui/copyright.tsx
-msgid "Reactive Resume v{__APP_VERSION__}"
-msgstr "Reaktivní životopis v{__APP_VERSION__}"
-
-#. Import source option for legacy Reactive Resume v4 JSON format
-#: src/dialogs/resume/import.tsx
-msgid "Reactive Resume v4 (JSON)"
-msgstr "Reaktivní životopis v4 (JSON)"
+msgid "Receive help for technical issues, account access, and resume export workflows."
+msgstr ""
 
 #: src/dialogs/resume/sections/cover-letter.tsx
 msgid "Recipient"
 msgstr "Příjemce"
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Recruitment Ecosystem Integration"
+msgstr ""
 
 #: src/components/level/combobox.tsx
 msgid "Rectangle"
@@ -2722,9 +2995,9 @@ msgstr "Změnit pořadí"
 msgid "Report a Bug"
 msgstr "Nahlásit chybu"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "Report an issue"
-msgstr "Nahlásit problém"
+#: src/features/settings/pages/preferences.tsx
+msgid "Request language support on Parvagas"
+msgstr ""
 
 #: src/features/settings/pages/profile.tsx
 msgid "Resend verification email"
@@ -2756,10 +3029,6 @@ msgstr "Obnovte své heslo"
 msgid "Resetting your password..."
 msgstr "Obnovování hesla…"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "Resources"
-msgstr "Zdroje"
-
 #: src/routes/agent/$threadId.tsx
 msgid "Restore"
 msgstr "Obnovit"
@@ -2786,7 +3055,6 @@ msgstr "Obnovit opravu"
 
 #: src/features/command-palette/pages/navigation.tsx
 #: src/features/command-palette/pages/resumes.tsx
-#: src/routes/_home/-sections/statistics.tsx
 #: src/routes/dashboard/-components/sidebar.tsx
 #: src/routes/dashboard/resumes/index.tsx
 msgid "Resumes"
@@ -2796,6 +3064,11 @@ msgstr "Životopisy"
 msgid "Retry"
 msgstr "Zkusit znovu"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step2.description"
+msgstr ""
+
 #: src/routes/agent/$threadId.tsx
 msgid "Review the resume against a job description and ask me questions before changing uncertain sections."
 msgstr "Projděte si životopis s ohledem na popis práce a před změnou nejasných částí se mě zeptejte na otázky."
@@ -2803,6 +3076,14 @@ msgstr "Projděte si životopis s ohledem na popis práce a před změnou nejasn
 #: src/routes/agent/$threadId.tsx
 msgid "Rework the summary so it targets a senior engineering manager role without sounding generic."
 msgstr "Přepracujte shrnutí tak, aby se zaměřovalo na pozici seniorního technického manažera, aniž by znělo genericky."
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Rewrite (server)"
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Rewrite applied and saved."
+msgstr ""
 
 #: src/routes/agent/$threadId.tsx
 msgid "Rewrite this resume for a startup founder-to-product-lead transition with clear business impact."
@@ -2913,6 +3194,11 @@ msgstr "Tajný kód zkopírován do schránky."
 msgid "Section Type"
 msgstr "Typ sekce"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/prefooter.tsx
+msgid "home.prefooter.step3.description"
+msgstr ""
+
 #: src/routes/agent/-components/new-thread-setup.tsx
 msgid "Select a resume"
 msgstr "Vyberte životopis"
@@ -2936,10 +3222,6 @@ msgstr "Vyberte model agenta"
 #: src/components/ui/combobox.tsx
 msgid "Select..."
 msgstr "Vybrat..."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Self-Host with Docker"
-msgstr "Vlastní hosting pomocí Dockeru"
 
 #: src/routes/agent/$threadId.tsx
 msgid "Send message"
@@ -2980,14 +3262,6 @@ msgstr "Nastavit autentizační aplikaci"
 #: src/routes/builder/$resumeId/-sidebar/left/sections/picture.tsx
 msgid "Shadow Width"
 msgstr "Šířka stínu"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Share your resume with a public URL, and let others view it."
-msgstr "Sdílejte svůj životopis pomocí veřejné URL adresy a umožněte ostatním, aby si ho prohlédli."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Shareable Links"
-msgstr "Sdílené odkazy"
 
 #: src/libs/resume/section.tsx
 msgid "Sharing"
@@ -3055,10 +3329,6 @@ msgstr "Přihlaste se nyní"
 msgid "Sign in to your account"
 msgstr "Přihlaste se ke svému účtu"
 
-#: src/routes/_home/-sections/features.tsx
-msgid "Sign in with GitHub, Google or a custom OAuth provider."
-msgstr "Přihlaste se pomocí GitHubu, Googlu nebo vlastního poskytovatele OAuth."
-
 #. Primary action button label on registration form
 #: src/features/auth/pages/register.tsx
 msgid "Sign up"
@@ -3076,6 +3346,36 @@ msgstr "Odhlašování…"
 #: src/features/auth/pages/register.tsx
 msgid "Signing up..."
 msgstr "Registrace…"
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.multiple.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.profile.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.pdf.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/faq.tsx
+msgid "home.faq.edit.answer"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.simple"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.sync.title"
+msgstr ""
 
 #: src/dialogs/resume/template/data.ts
 msgid "Single-column with a magenta left border accent; compact and efficient for entry-level or internship applications."
@@ -3111,9 +3411,10 @@ msgstr "Velikost"
 msgid "Skills"
 msgstr "Dovednosti"
 
+#. js-lingui-explicit-id
 #: src/routes/_home/route.tsx
-msgid "Skip to main content"
-msgstr "Přeskočit na hlavní obsah"
+msgid "home.skipToMain"
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Slovak"
@@ -3140,11 +3441,6 @@ msgstr "Něco se pokazilo. Zkuste to prosím znovu."
 msgid "Sort by"
 msgstr "Seřadit podle"
 
-#: src/routes/_home/-sections/footer.tsx
-#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "Source Code"
-msgstr "Zdrojový kód"
-
 #: src/routes/builder/$resumeId/-sidebar/right/sections/page.tsx
 msgid "Spacing (Horizontal)"
 msgstr "Rozestupy (vodorovné)"
@@ -3156,14 +3452,6 @@ msgstr "Rozestupy (svislé)"
 #: src/libs/locale.ts
 msgid "Spanish"
 msgstr "Španělština"
-
-#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "Sponsors"
-msgstr "Sponzoři"
-
-#: src/routes/_home/-sections/footer.tsx
-msgid "Sponsorships"
-msgstr "Sponzorství"
 
 #. Preset button for setting picture aspect ratio to square
 #: src/components/level/combobox.tsx
@@ -3225,9 +3513,10 @@ msgstr "Silné stránky"
 msgid "Strike"
 msgstr "Přeškrtnutí"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "Subreddit"
-msgstr "Subreddit"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.writing.title"
+msgstr ""
 
 #: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
 msgid "Suggestions"
@@ -3242,13 +3531,19 @@ msgstr "Návrhy"
 msgid "Summary"
 msgstr "Souhrn"
 
-#: src/routes/_home/-sections/donate.tsx
-msgid "Support Reactive Resume"
-msgstr "Podpořte Reactive Resume"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.group.support"
+msgstr ""
 
-#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "Support the app by doing what you can!"
-msgstr "Podpořte aplikaci tím, co můžete!"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.support"
+msgstr ""
+
+#: src/components/ui/copyright.tsx
+msgid "Suporte: <0>suporte@parvagas.pt</0>."
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Swedish"
@@ -3282,6 +3577,11 @@ msgstr "Přizpůsobte tento životopis popisu práce produktového manažera a z
 msgid "Tamil"
 msgstr "Tamilština"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.category.technology"
+msgstr ""
+
 #: src/libs/locale.ts
 msgid "Telugu"
 msgstr "Telugština"
@@ -3294,9 +3594,14 @@ msgstr "Šablona"
 msgid "Template Gallery"
 msgstr "Galerie šablon"
 
-#: src/routes/_home/-sections/templates.tsx
-msgid "Templates"
-msgstr "Šablony"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.terms"
+msgstr ""
+
+#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
+msgid "Terms"
+msgstr ""
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Test"
@@ -3448,8 +3753,8 @@ msgid "This thread is read-only because the working resume or AI provider is una
 msgstr "Toto vlákno je pouze pro čtení, protože funkční životopis nebo poskytovatel umělé inteligence není k dispozici."
 
 #: src/dialogs/api-key/create.tsx
-msgid "This will generate a new API key to access the Reactive Resume API to allow machines to interact with your resume data."
-msgstr "Tímto vygenerujete nový API klíč pro přístup k Reactive Resume API, aby mohly stroje pracovat s vašimi daty z životopisu."
+msgid "This will generate a new API key to access the Parvagas CV Builder API to allow machines to interact with your resume data."
+msgstr ""
 
 #: src/features/settings/authentication/components/passkeys.tsx
 msgid "This will help you identify it later, if you plan to have multiple passkeys."
@@ -3480,10 +3785,6 @@ msgstr "Vlákna"
 #: src/routes/agent/$threadId.tsx
 msgid "Tighten the skills section so it supports the target role instead of reading like a keyword dump."
 msgstr "Upřesněte sekci s dovednostmi tak, aby podporovala cílovou roli, a ne aby se četla jako výčet klíčových slov."
-
-#: src/routes/_home/-sections/hero.tsx
-msgid "Timelapse demonstration of building a resume with Reactive Resume"
-msgstr "Časosběrná ukázka vytváření životopisu v Reactive Resume"
 
 #: src/dialogs/api-key/create.tsx
 msgid "Tip: Give your API key a name, corresponding to the purpose of the key, to help you identify it later."
@@ -3526,14 +3827,18 @@ msgstr "Přepnutí pravého postranního panelu"
 msgid "Toggle threads"
 msgstr "Přepnout vlákna"
 
+#: src/routes/builder/$resumeId/-sidebar/right/sections/resume-analysis.tsx
+msgid "Tone"
+msgstr ""
+
 #: src/routes/builder/$resumeId/-sidebar/right/sections/statistics.tsx
 msgid "Track your resume's views and downloads"
 msgstr "Sledujte zobrazení a stažení svého životopisu"
 
-#: src/routes/_home/-sections/footer.tsx
-#: src/routes/builder/$resumeId/-sidebar/right/sections/information.tsx
-msgid "Translations"
-msgstr "Překlady"
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.description"
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Turkish"
@@ -3620,13 +3925,14 @@ msgstr "Typografie"
 msgid "Ukrainian"
 msgstr "Ukrajinština"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.oneColumn"
+msgstr ""
+
 #: src/components/input/rich-input.tsx
 msgid "Underline"
 msgstr "Podtržení"
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Unlimited Resumes"
-msgstr "Neomezené životopisy"
 
 #: src/features/settings/authentication/components/hooks.tsx
 msgid "Unlinking your {providerName} account..."
@@ -3768,6 +4074,11 @@ msgstr "Nahrávání obrázku…"
 msgid "URL"
 msgstr "URL"
 
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.useTemplate"
+msgstr ""
+
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Use"
 msgstr "Použití"
@@ -3775,6 +4086,15 @@ msgstr "Použití"
 #: src/components/input/color-picker.tsx
 msgid "Use color {color}"
 msgstr "Použijte barvu {color}"
+
+#: src/routes/_home/-sections/donate.tsx
+msgid "Use CV Builder together with Parvagas jobs, candidate profiles, and support channels."
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.profile.description"
+msgstr ""
 
 #. Label for username input on registration form
 #: src/dialogs/resume/sections/profile.tsx
@@ -3784,8 +4104,12 @@ msgid "Username"
 msgstr "Uživatelské jméno"
 
 #: src/routes/_home/-sections/statistics.tsx
-msgid "Users"
-msgstr "Uživatelé"
+msgid "Utilizadores"
+msgstr ""
+
+#: src/routes/_home/-sections/testimonials.tsx
+msgid "Utilizadores da Parvagas partilham regularmente feedback sobre como o CV Builder os ajuda a melhorar o perfil profissional. Se quiser partilhar a sua experiencia, envie um email para <0>{email}</0>."
+msgstr ""
 
 #: src/libs/locale.ts
 msgid "Uzbek"
@@ -3794,6 +4118,21 @@ msgstr "Uzbečtina"
 #: src/components/input/rich-input.tsx
 msgid "Valid URLs must start with http:// or https://."
 msgstr "Platné URL adresy musí začínat http:// nebo https://."
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.multiple.title"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/hero.tsx
+msgid "home.hero.secondaryCta"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/templates.tsx
+msgid "home.templates.viewAll"
+msgstr ""
 
 #: src/features/settings/integrations/components/ai-section.tsx
 msgid "Vercel AI Gateway"
@@ -3842,6 +4181,25 @@ msgstr "Vietnamština"
 msgid "Views"
 msgstr "Zobrazení"
 
+#: src/routes/dashboard/-components/sidebar.tsx
+msgid "Voltar ao Parvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/footer.tsx
+msgid "home.footer.backToParvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/header.tsx
+msgid "home.header.backToParvagas"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: src/routes/_home/-sections/features.tsx
+msgid "home.features.applications.description"
+msgstr ""
+
 #: src/dialogs/resume/sections/custom.tsx
 #: src/libs/resume/section-title.ts
 #: src/libs/resume/section.tsx
@@ -3869,14 +4227,6 @@ msgstr "Co chceš dělat?"
 msgid "What do you want to rename this section to?"
 msgstr "Na jaký název chcete tuto sekci přejmenovat?"
 
-#: src/routes/_home/-sections/faq.tsx
-msgid "What makes Reactive Resume different from other resume builders?"
-msgstr "Čím se Reactive Resume liší od ostatních nástrojů pro tvorbu životopisů?"
-
-#: src/routes/_home/-sections/hero.tsx
-msgid "What's new in the latest version?"
-msgstr "Co je nového v poslední verzi?"
-
 #: src/routes/builder/$resumeId/-components/header.tsx
 #: src/routes/dashboard/resumes/-components/menus/context-menu.tsx
 #: src/routes/dashboard/resumes/-components/menus/dropdown-menu.tsx
@@ -3891,29 +4241,9 @@ msgstr "Práce s OpenAI"
 msgid "Working…"
 msgstr "Funguje…"
 
-#: src/routes/_home/-sections/footer.tsx
-msgid "X (Twitter)"
-msgstr "X (Twitter)"
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Yes, Reactive Resume is available in multiple languages. You can choose your preferred language in the settings page, or using the language switcher in the top right corner. If you don't see your language, or you would like to improve the existing translations, you can <0>contribute to the translations on Crowdin<1> (opens in new tab)</1></0>."
-msgstr "Ano, Reactive Resume je dostupné ve více jazycích. Svůj preferovaný jazyk si můžete vybrat na stránce nastavení nebo pomocí přepínače jazyka v pravém horním rohu. Pokud svůj jazyk nevidíte nebo chcete vylepšit existující překlady, můžete <0>přispět k překladům na Crowdin<1> (otevře se na nové kartě)</1></0>."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Yes! Reactive Resume is completely free to use, with no hidden costs, premium tiers, or subscription fees. It's open-source and will always remain free."
-msgstr "Ano! Reactive Resume je zcela zdarma k použití, bez skrytých poplatků, prémiových úrovní nebo předplatného. Je open source a vždy zdarma zůstane."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "You also have the option to deploy on your own servers using the Docker image."
-msgstr "Máte také možnost nasadit aplikaci na vlastních serverech pomocí Docker image."
-
 #: src/features/auth/pages/login.tsx
 msgid "You can also use your username to login."
 msgstr "K přihlášení můžete také použít své uživatelské jméno."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "You can share your resume via a unique public URL, protect it with a password, or download it as a PDF to share directly. The choice is yours!"
-msgstr "Svůj životopis můžete sdílet pomocí jedinečné veřejné URL adresy, chránit ho heslem nebo si ho stáhnout jako PDF a sdílet přímo. Volba je na vás!"
 
 #: src/hooks/use-form-blocker.tsx
 msgid "You have unsaved changes that will be lost."
@@ -3935,14 +4265,6 @@ msgstr "Váš API klíč byl zkopírován do schránky."
 #: src/routes/builder/$resumeId/-components/preview-page.tsx
 msgid "Your changes are saved automatically."
 msgstr "Vaše změny se ukládají automaticky."
-
-#: src/routes/_home/-sections/features.tsx
-msgid "Your data is secure, and never shared or sold to anyone."
-msgstr "Vaše data jsou v bezpečí a nikdy nejsou s nikým sdílena ani prodávána."
-
-#: src/routes/_home/-sections/faq.tsx
-msgid "Your data is stored securely and is never shared with third parties. You can also self-host Reactive Resume on your own servers for complete control over your data."
-msgstr "Vaše data jsou ukládána bezpečně a nikdy nejsou sdílena s třetími stranami. Reactive Resume si můžete také hostovat sami na vlastních serverech a mít tak nad svými daty plnou kontrolu."
 
 #: src/features/resume/builder/draft.ts
 msgid "Your latest changes could not be saved."
@@ -3986,10 +4308,6 @@ msgstr "Váš životopis byl úspěšně aktualizován."
 msgid "Your resume's public link is currently protected by a password. Share the password only with people you trust."
 msgstr "Veřejný odkaz na váš životopis je aktuálně chráněn heslem. Heslo sdílejte jen s lidmi, kterým důvěřujete."
 
-#: src/routes/_home/-sections/donate.tsx
-msgid "Your support ensures the project remains free and accessible for everyone, now and in the future."
-msgstr "Vaše podpora zajišťuje, že projekt zůstane nyní i v budoucnu zdarma a dostupný pro všechny."
-
 #: src/routes/builder/$resumeId/-components/dock.tsx
 msgid "Zoom in"
 msgstr "Přiblížit"
@@ -4005,4 +4323,3 @@ msgstr "Oddálit"
 #: src/libs/locale.ts
 msgid "Zulu"
 msgstr "Zulu"
-
