@@ -184,8 +184,10 @@ services:
       - until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do echo 'Waiting for MinIO...'; sleep 3; done; mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET; mc anonymous set none local/$$CV_BUILDER_S3_BUCKET; echo 'CV Builder bucket ready';
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/heliotheanalyst/parvagas-backend:prod}
-    pull_policy: always
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+      target: api-service
     restart: unless-stopped
     user: "0:0"
     environment: *backend-env
