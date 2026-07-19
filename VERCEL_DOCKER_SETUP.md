@@ -88,7 +88,7 @@ BACKEND_API_URL=https://api.dev.parvagas.pt
 BACKEND_API_SECRET=<if-needed-for-auth>
 ```
 
-### 3. Production Environment (docker-compose.prod.yml + Vercel Prod)
+### 3. Production Environment (docker-compose.prod.portainer.yml + Vercel Prod)
 
 **Backend (.env.prod)**
 ```env
@@ -246,17 +246,17 @@ pnpm build
 - Verify SSL certificates: `docker logs -f proxy | grep -i cert`
 
 ### 404 on API Endpoints
-- Check backend is running: `docker compose -f docker-compose.prod.yml logs backend-python`
+- Check backend is running: `docker compose -f docker-compose.prod.portainer.yml logs backend-python`
 - Verify Traefik routing: check `deploy/traefik/dynamic/parvagas.yml`
 
 ### S3/Storage Access Issues
 - Verify `S3_ENDPOINT_URL` is publicly accessible
-- Check MinIO is running: `docker compose -f docker-compose.prod.yml logs minio`
+- Check MinIO is running: `docker compose -f docker-compose.prod.portainer.yml logs minio`
 - Verify CORS on MinIO bucket
 
 ## Example: Update Docker Compose for Vercel
 
-In **docker-compose.prod.yml**, update the backend environment:
+In **docker-compose.prod.portainer.yml**, update the backend environment:
 
 ```yaml
 backend-python:
@@ -270,7 +270,7 @@ backend-python:
 
 Then redeploy:
 ```bash
-docker compose -f docker-compose.prod.yml up -d --force-recreate backend-python
+docker compose -f docker-compose.prod.portainer.yml up -d --force-recreate backend-python
 ```
 
 ## Summary

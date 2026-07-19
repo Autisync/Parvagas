@@ -26,7 +26,7 @@ docker ps -a | grep portainer
 
 #### Step 2: Select Compose File
 
-1. Choose **docker-compose.prod.yml** (for production)
+1. Choose **docker-compose.prod.portainer.yml** (for production)
    - Or **docker-compose.dev.yml** (for development)
 2. Click **Load Compose file**
 
@@ -70,7 +70,7 @@ If Git repository is not available:
 
 1. Go to **Portainer** → **Stacks** → **Add Stack**
 2. Select **Docker Compose**
-3. Paste content of `docker-compose.prod.yml` into the editor
+3. Paste content of `docker-compose.prod.portainer.yml` into the editor
 4. Click **Next**
 
 #### Step 2: Set Variables
@@ -214,7 +214,7 @@ DEPLOY_GIT_PUSH=false
 
 Create two separate stacks:
 - **Stack name:** `parvagas-dev` (uses docker-compose.dev.yml)
-- **Stack name:** `parvagas-prod` (uses docker-compose.prod.yml)
+- **Stack name:** `parvagas-prod` (uses docker-compose.prod.portainer.yml)
 
 This prevents accidental prod deployments.
 
@@ -340,8 +340,8 @@ Use **Admin Deploy Panel** in parvagas.pt:
 1. Containers → Select backend-python → Restart
 
 # Via Docker CLI on server
-docker compose -f docker-compose.prod.yml restart backend-python
-docker compose -f docker-compose.prod.yml logs -f backend-python
+docker compose -f docker-compose.prod.portainer.yml restart backend-python
+docker compose -f docker-compose.prod.portainer.yml logs -f backend-python
 ```
 
 ### Check Disk Space
@@ -361,8 +361,8 @@ df -h
 **Fix:**
 ```bash
 # SSH to server
-docker compose -f docker-compose.prod.yml down
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.portainer.yml down
+docker compose -f docker-compose.prod.portainer.yml up -d
 ```
 
 ### Issue: Containers not starting after environment variable change
@@ -378,7 +378,7 @@ docker compose -f docker-compose.prod.yml up -d
 **Fix:**
 1. Check: `docker logs -f proxy`
 2. Verify labels in compose file are correct
-3. Restart Traefik: `docker compose -f docker-compose.prod.yml restart proxy`
+3. Restart Traefik: `docker compose -f docker-compose.prod.portainer.yml restart proxy`
 
 ### Issue: Let's Encrypt certificate not renewing
 
@@ -386,7 +386,7 @@ docker compose -f docker-compose.prod.yml up -d
 ```bash
 # SSH to server
 docker exec proxy certbot renew
-docker compose -f docker-compose.prod.yml restart proxy
+docker compose -f docker-compose.prod.portainer.yml restart proxy
 ```
 
 ---
@@ -410,7 +410,7 @@ docker compose -f docker-compose.prod.yml restart proxy
 1. Go to **Portainer** → **Stacks** → Your Stack
 2. Click **Editor**
 3. Copy compose file content
-4. Save locally as `docker-compose.prod.yml.backup`
+4. Save locally as `docker-compose.prod.portainer.yml.backup`
 
 ### Export Environment Variables
 

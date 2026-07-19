@@ -27,7 +27,10 @@
 - CV Builder -> Parvagas sync env:
   - `PARVAGAS_RESUME_SYNC_ENABLED`
   - `PARVAGAS_API_URL`
-  - `PARVAGAS_API_KEY`
+  - `PARVAGAS_SERVER_SECRET` (`PARVAGAS_API_KEY` remains supported as a compatibility alias)
+  - `PARVAGAS_MAIN_URL`
+  - `PARVAGAS_CANDIDATE_CV_URL`
+  - `PARVAGAS_ALLOWED_RETURN_ORIGINS`
   - `PARVAGAS_RESUME_SYNC_PATH`
   - `PARVAGAS_WEBHOOK_SECRET`
 - Current implementation sends CV lifecycle events and supports server-to-server auth.

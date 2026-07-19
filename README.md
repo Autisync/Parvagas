@@ -419,7 +419,7 @@ docker compose -f docker-compose.dev.yml up -d --build
 Production stack:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.portainer.yml up -d --build
 ```
 
 ### Verificação rápida

@@ -34,6 +34,9 @@ x-backend-env: &backend-env
   WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
   RESUME_BUILDER_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
   RESUME_BUILDER_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
+  CV_BUILDER_URL: ${CV_BUILDER_URL:-http://localhost:3050}
+  CV_BUILDER_SERVER_SECRET: ${CV_BUILDER_SERVER_SECRET:-dev-cv-builder-server-secret}
+  CV_BUILDER_ALLOWED_RETURN_ORIGINS: ${CV_BUILDER_ALLOWED_RETURN_ORIGINS:-http://localhost:3000,http://localhost:3050}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
   OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
   OLLAMA_FREE_TIER_ENABLED: ${OLLAMA_FREE_TIER_ENABLED:-true}
@@ -41,6 +44,7 @@ x-backend-env: &backend-env
 
 x-cv-env: &cv-env
   PORT: "3000"
+  NODE_ENV: production
   APP_URL: ${RESUME_BUILDER_URL:-http://localhost:3050}
   DATABASE_URL: ${CV_BUILDER_DATABASE_URL:-postgresql://parvagas:devpass@postgres:5432/parvagas_cv_builder_local}
   AUTH_SECRET: ${RESUME_BUILDER_SECRET:-dev-cv-builder-secret}
@@ -48,7 +52,7 @@ x-cv-env: &cv-env
   S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_ENDPOINT: http://minio:9000
-  S3_BUCKET: ${CV_BUILDER_S3_BUCKET:-reactive-resume-local}
+  S3_BUCKET: ${CV_BUILDER_S3_BUCKET:-reactive-resume}
   S3_FORCE_PATH_STYLE: "true"
   REDIS_URL: redis://redis:6379
   ENCRYPTION_SECRET: ${CV_BUILDER_ENCRYPTION_SECRET:-dev-cv-builder-encryption-secret-minimum-32-chars}
@@ -63,6 +67,16 @@ x-cv-env: &cv-env
   OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
   OAUTH_DISCOVERY_URL: ${OAUTH_DISCOVERY_URL:-}
   OAUTH_SCOPES: "openid profile email"
+  PARVAGAS_RESUME_SYNC_ENABLED: ${PARVAGAS_RESUME_SYNC_ENABLED:-true}
+  PARVAGAS_API_URL: ${PARVAGAS_API_URL:-http://backend:8000}
+  PARVAGAS_SERVER_SECRET: ${CV_BUILDER_SERVER_SECRET:-dev-cv-builder-server-secret}
+  PARVAGAS_API_KEY: ${PARVAGAS_API_KEY:-}
+  PARVAGAS_MAIN_URL: ${PARVAGAS_MAIN_URL:-http://localhost:3000}
+  PARVAGAS_CANDIDATE_CV_URL: ${PARVAGAS_CANDIDATE_CV_URL:-http://localhost:3000/Portal/Candidato/CV-e-Documentos}
+  PARVAGAS_ALLOWED_RETURN_ORIGINS: ${PARVAGAS_ALLOWED_RETURN_ORIGINS:-http://localhost:3000}
+  PARVAGAS_RESUME_SYNC_PATH: ${PARVAGAS_RESUME_SYNC_PATH:-/api/v1/integrations/cv-builder/resumes/sync}
+  PARVAGAS_AUTH_EXCHANGE_PATH: ${PARVAGAS_AUTH_EXCHANGE_PATH:-/api/v1/cv-builder/exchange}
+  PARVAGAS_AUTH_START_FALLBACK_URL: ${PARVAGAS_AUTH_START_FALLBACK_URL:-http://localhost:3000/Login?role=candidate}
   FLAG_DISABLE_SIGNUPS: ${CV_BUILDER_DISABLE_SIGNUPS:-false}
   FLAG_DISABLE_EMAIL_AUTH: ${CV_BUILDER_DISABLE_EMAIL_AUTH:-false}
   FLAG_DISABLE_API_RATE_LIMIT: "false"
@@ -79,11 +93,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-parvagas} -d $${POSTGRES_DB:-parvagas_local}"]
-      interval: 10s
+      test: ["CMD-SHELL", "PGPASSWORD=$${POSTGRES_PASSWORD:-devpass} psql -h 127.0.0.1 -U $${POSTGRES_USER:-parvagas} -d $${POSTGRES_DB:-parvagas_local} -tAc 'SELECT 1' | grep -q 1"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 30
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -107,24 +121,29 @@ services:
       - minio_data:/data
 
   cv-builder-db-init:
-    profiles: ["cv-builder"]
     image: postgres:16-alpine
     restart: "no"
     environment:
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-parvagas}
       PGPASSWORD: ${POSTGRES_PASSWORD:-devpass}
+      CV_BUILDER_DB: ${CV_BUILDER_DB:-parvagas_cv_builder_local}
     depends_on:
       postgres:
         condition: service_healthy
-    command:
-      [
-        "sh",
-        "-c",
-        "psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='${CV_BUILDER_DB:-parvagas_cv_builder_local}'\" | grep -q 1 || psql -h postgres -U ${POSTGRES_USER:-parvagas} -d postgres -c \"CREATE DATABASE ${CV_BUILDER_DB:-parvagas_cv_builder_local}\""
-      ]
+    entrypoint: >
+      /bin/sh -c "
+      if psql -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='$$CV_BUILDER_DB'\" | grep -q 1; then
+        echo 'CV Builder database already exists';
+      else
+        createdb \"$$CV_BUILDER_DB\";
+        echo 'CV Builder database created';
+      fi
+      "
 
   cv-builder-bucket-init:
-    profiles: ["cv-builder"]
-    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    image: quay.io/minio/mc:latest
     restart: "no"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -133,31 +152,10 @@ services:
     depends_on:
       minio:
         condition: service_started
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do
-        echo 'Waiting for MinIO...';
-        sleep 3;
-      done;
-      mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET;
-      mc anonymous set none local/$$CV_BUILDER_S3_BUCKET;
-      echo 'cv-builder bucket ready';
-      "
-
-  cv-builder-migrate:
-    profiles: ["cv-builder"]
-    build:
-      context: ./reactive-resume
-      dockerfile: Dockerfile
-      target: builder
-    restart: "no"
-    environment: *cv-env
-    command: ["pnpm", "db:migrate"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      cv-builder-db-init:
-        condition: service_completed_successfully
+    entrypoint:
+      - /bin/sh
+      - -c
+      - until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do echo 'Waiting for MinIO...'; sleep 3; done; mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET; mc anonymous set none local/$$CV_BUILDER_S3_BUCKET; echo 'CV Builder bucket ready';
 
   backend:
     build:
@@ -166,6 +164,8 @@ services:
       target: api-service
     restart: unless-stopped
     user: "0:0"
+    ports:
+      - "8000:8000"
     environment: *backend-env
     depends_on:
       postgres:
@@ -229,8 +229,9 @@ services:
 
   frontend:
     image: node:20-alpine
+    profiles: ["frontend"]
     working_dir: /app
-    command: ["sh", "-c", "npm ci ; npm run dev -- --hostname 0.0.0.0 --port 3000"]
+    command: ["sh", "-c", "npm install && npm run dev -- --hostname 0.0.0.0 --port 3000"]
     restart: unless-stopped
     environment:
       NODE_ENV: development
@@ -238,14 +239,22 @@ services:
     depends_on:
       backend:
         condition: service_started
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
 
   cv-builder:
-    profiles: ["cv-builder"]
     build:
       context: ./reactive-resume
       dockerfile: Dockerfile
+      target: runtime
     restart: unless-stopped
     environment: *cv-env
+    volumes:
+      - cv_builder_data:/app/data
+    ports:
+      - "3050:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -254,8 +263,6 @@ services:
       cv-builder-db-init:
         condition: service_completed_successfully
       cv-builder-bucket-init:
-        condition: service_completed_successfully
-      cv-builder-migrate:
         condition: service_completed_successfully
     healthcheck:
       test:
@@ -280,6 +287,7 @@ volumes:
   minio_data:
   backend_media:
   backend_static:
+  cv_builder_data:
 
 networks:
   default: {}

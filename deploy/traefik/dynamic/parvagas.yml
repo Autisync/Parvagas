@@ -11,7 +11,7 @@
 #
 # NAMING (2026-07-10 fix): every service URL below must use the network
 # alias the container actually has on the `proxy` network — declared under
-# `networks.traefik-net.aliases` in docker-compose.prod.yml / .dev.yml.
+# `networks.traefik-net.aliases` in docker-compose.prod.portainer.yml / .dev.yml.
 # A previous version of this file guessed different names
 # (parvagas-backend-python, parvagas-minio, parvagas-websocket-service…),
 # none of which resolve — that was the cause of every api.parvagas.pt 502.

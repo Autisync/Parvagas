@@ -61,7 +61,7 @@ Push-Location $rootDir
 try {
   docker compose config | Out-Null
   docker compose -f docker-compose.dev.yml config | Out-Null
-  docker compose -f docker-compose.prod.yml config | Out-Null
+  docker compose -f docker-compose.prod.portainer.yml config | Out-Null
   Pass "Docker Compose files resolve successfully"
 } finally {
   Pop-Location

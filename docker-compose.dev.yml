@@ -39,7 +39,6 @@ services:
       - /app/.next
 
   cv-builder:
-    profiles: ["cv-builder"]
     ports:
       - "3050:3000"
 

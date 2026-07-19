@@ -251,6 +251,11 @@ type CVSubResponse = {
 
 type CVPlansResponse = { plans: CVPlan[] };
 
+type CVBuilderSessionLaunchResponse = {
+  launch_url: string;
+  expires_in_seconds: number;
+};
+
 function CVBuilderPlanBanner({ token }: { token: string | null }) {
   const [sub, setSub] = useState<CVSubResponse["subscription"] | null>(null);
   const [plans, setPlans] = useState<CVPlan[]>([]);
@@ -437,6 +442,8 @@ export default function CvDocumentosPage() {
   const [proposals, setProposals] = useState<AutoApplyProposal[]>([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [launchingBuilder, setLaunchingBuilder] = useState(false);
+  const [builderLaunchError, setBuilderLaunchError] = useState("");
 
   const loadProposals = useCallback(async () => {
     if (!token) return;
@@ -528,6 +535,42 @@ export default function CvDocumentosPage() {
       setError((err as Error).message || "Erro ao exportar CV.");
     } finally {
       setExporting(null);
+    }
+  };
+
+  const launchCvBuilder = async (openInNewTab = false) => {
+    if (!token) {
+      setBuilderLaunchError("Sessão inválida. Faça login novamente.");
+      return;
+    }
+
+    setLaunchingBuilder(true);
+    setBuilderLaunchError("");
+
+    try {
+      const returnUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/Portal/Candidato/CV-e-Documentos`
+        : "/Portal/Candidato/CV-e-Documentos";
+
+      const response = await authFetch<CVBuilderSessionLaunchResponse>("/cv-builder/session", token, {
+        method: "POST",
+        body: JSON.stringify({ return_url: returnUrl }),
+      });
+
+      if (!response.launch_url) {
+        throw new Error("Não foi possível gerar sessão segura do CV Builder.");
+      }
+
+      if (openInNewTab) {
+        const popup = window.open(response.launch_url, "_blank", "noopener,noreferrer");
+        if (!popup) window.location.href = response.launch_url;
+      } else {
+        window.location.href = response.launch_url;
+      }
+    } catch (err: unknown) {
+      setBuilderLaunchError((err as Error)?.message || "Falha ao iniciar CV Builder de forma segura.");
+    } finally {
+      setLaunchingBuilder(false);
     }
   };
 
@@ -942,17 +985,30 @@ export default function CvDocumentosPage() {
         </div>
         {/* ── CV Builder launch button ── */}
         {RESUME_BUILDER_URL && (
-          <a
-            href={RESUME_BUILDER_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-red-700 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-            </svg>
-            Construtor de CV
-          </a>
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => launchCvBuilder(false)}
+                disabled={launchingBuilder}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                </svg>
+                {launchingBuilder ? "A abrir..." : "Abrir o meu CV Builder"}
+              </button>
+              <button
+                type="button"
+                onClick={() => launchCvBuilder(true)}
+                disabled={launchingBuilder}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Criar novo CV com o meu perfil
+              </button>
+            </div>
+            {builderLaunchError ? <p className="max-w-xs text-right text-xs text-red-600">{builderLaunchError}</p> : null}
+          </div>
         )}
       </div>
 

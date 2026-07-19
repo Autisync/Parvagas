@@ -15,8 +15,53 @@ for f in "${required[@]}"; do
   [[ -f "$f" ]] || { echo "[FAIL] Missing required file: $f"; exit 1; }
 done
 
-if [[ ! -f "reactive-resume/Dockerfile" || ! -f "reactive-resume/package.json" || ! -f "reactive-resume/pnpm-lock.yaml" ]]; then
-  echo "[FAIL] Reactive Resume source is missing. Copy the full CV Builder repository contents directly into ./reactive-resume before running the local stack."
+source_required=(
+  "reactive-resume/Dockerfile"
+  "reactive-resume/package.json"
+  "reactive-resume/pnpm-lock.yaml"
+  "reactive-resume/pnpm-workspace.yaml"
+  "reactive-resume/turbo.json"
+  "reactive-resume/apps/server"
+  "reactive-resume/apps/web"
+  "reactive-resume/migrations"
+)
+
+for f in "${source_required[@]}"; do
+  [[ -e "$f" ]] || {
+    echo "[FAIL] Reactive Resume source is missing from the Portainer Git checkout. The complete customised Reactive Resume v5.2.3 source must be committed directly under ./reactive-resume. Git submodules and empty gitlinks are not supported."
+    exit 1
+  }
+done
+
+if git ls-files --stage reactive-resume | grep -q '^160000 '; then
+  echo "[FAIL] reactive-resume is still tracked as a git submodule/gitlink. Vendor the customised source directly into the repository."
+  exit 1
+fi
+
+if [[ -e "reactive-resume/.git" ]]; then
+  echo "[FAIL] reactive-resume contains nested Git metadata. Remove reactive-resume/.git before deploying."
+  exit 1
+fi
+
+tracked_required=(
+  "reactive-resume/Dockerfile"
+  "reactive-resume/package.json"
+  "reactive-resume/pnpm-lock.yaml"
+)
+for f in "${tracked_required[@]}"; do
+  git ls-files --error-unmatch "$f" >/dev/null 2>&1 || {
+    echo "[FAIL] Missing tracked Reactive Resume file: $f"
+    exit 1
+  }
+done
+
+if ! grep -Eq 'context: \./reactive-resume' docker-compose.yml docker-compose.dev.yml docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
+  echo "[FAIL] Compose files must build the CV Builder from ./reactive-resume."
+  exit 1
+fi
+
+if grep -Eq 'ghcr\.io/heliotheanalyst/parvagas-cv-builder|amruthpillai/reactive-resume' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
+  echo "[FAIL] Portainer compose files must not reference GHCR or the public Reactive Resume image for the CV Builder."
   exit 1
 fi
 
@@ -42,11 +87,6 @@ docker compose --env-file .env.dev.portainer.example -f docker-compose.dev.porta
 
 echo "[CHECK] docker-compose.prod.portainer.yml"
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config >/tmp/compose-prod-portainer.out
-
-if grep -En '^[[:space:]]*build:' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
-  echo "[FAIL] Portainer compose files must be image-only. Remove all build directives."
-  exit 1
-fi
 
 # Detect duplicate published host ports across active files.
 ports="$(grep -hE 'published: "?[0-9]+' /tmp/compose-*.out | sed -E 's/.*published: "?([0-9]+)"?/\1/' || true)"

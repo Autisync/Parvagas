@@ -27,7 +27,7 @@ The system now separates API requests (REST) from real-time updates (WebSocket):
 ### Services in Docker
 
 ```yaml
-# docker-compose.prod.yml
+# docker-compose.prod.portainer.yml
 backend-python:       # REST API
   build: target=api-service
   port: 8000
@@ -496,7 +496,7 @@ await ws.connect();
 - [app/websocket_app.py](backend-python/app/websocket_app.py) — WebSocket server
 - [wsgi_websocket.py](backend-python/wsgi_websocket.py) — Entry point
 - [Dockerfile](backend-python/Dockerfile) — Multi-stage build (api-service + websocket-service)
-- [docker-compose.prod.yml](docker-compose.prod.yml) — Production stack with WebSocket service
+- [docker-compose.prod.portainer.yml](docker-compose.prod.portainer.yml) — Production stack with WebSocket service
 
 **Frontend:**
 - [lib/websocket.ts](src/lib/websocket.ts) — WebSocket client
@@ -508,7 +508,7 @@ await ws.connect();
 ## Deployment Checklist
 
 - [ ] Dockerfile multi-stage build with `api-service` and `websocket-service` targets
-- [ ] docker-compose.prod.yml updated with websocket-service
+- [ ] docker-compose.prod.portainer.yml updated with websocket-service
 - [ ] Traefik labels configured for WebSocket routing (/ws path)
 - [ ] Frontend WebSocket client imported and working
 - [ ] React hooks integrated in components

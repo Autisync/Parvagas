@@ -333,7 +333,7 @@ EXPOSE 8001
 CMD ["python", "-m", "uvicorn", "app.websocket_app:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
-### Step 5: Update docker-compose.prod.yml
+### Step 5: Update docker-compose.prod.portainer.yml
 
 Add WebSocket service alongside API:
 
@@ -606,7 +606,7 @@ traefik.http.routers.parvagas-ws.rule: "Host(`api.parvagas.pt`) && PathPrefix(`/
 - [ ] Create `backend-python/app/websocket_app.py`
 - [ ] Create `backend-python/wsgi_websocket.py`
 - [ ] Update `backend-python/Dockerfile` with multi-stage build
-- [ ] Update `docker-compose.prod.yml` with websocket-service
+- [ ] Update `docker-compose.prod.portainer.yml` with websocket-service
 - [ ] Update Traefik labels for WebSocket routing
 - [ ] Deploy frontend WebSocket client code
 - [ ] Test WebSocket connection: `wss://api.parvagas.pt/ws/your-token`

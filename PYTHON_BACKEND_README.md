@@ -22,7 +22,7 @@ A production-ready Python backend for Parvagas with:
 cp backend-python/.env.example backend-python/.env
 
 # Update docker-compose to include Python backend
-cp docker-compose-updated.yml docker-compose.yml
+cp docker-compose.yml docker-compose.yml
 ```
 
 ### 2. Start Services

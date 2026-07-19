@@ -49,7 +49,7 @@ git push origin main
 docker compose -f docker-compose.dev.yml up -d --force-recreate backend-python
 
 # Production environment (via Portainer or locally)
-docker compose -f docker-compose.prod.yml up -d --force-recreate backend-python
+docker compose -f docker-compose.prod.portainer.yml up -d --force-recreate backend-python
 ```
 
 ### Test CORS
@@ -151,7 +151,7 @@ has been blocked by CORS policy
 
 **Solution:**
 1. Check backend `FRONTEND_URL` and `CORS_ORIGIN` include the Vercel domain
-2. Restart backend: `docker compose -f docker-compose.prod.yml restart backend-python`
+2. Restart backend: `docker compose -f docker-compose.prod.portainer.yml restart backend-python`
 3. Wait 30s for backend to fully start
 4. Retry request
 
@@ -162,7 +162,7 @@ GET https://api.parvagas.pt/api/v1/profiles/me → 404
 ```
 
 **Solution:**
-1. Verify route exists: `docker compose -f docker-compose.prod.yml logs backend-python | grep -i profiles`
+1. Verify route exists: `docker compose -f docker-compose.prod.portainer.yml logs backend-python | grep -i profiles`
 2. Check API docs: `https://api.parvagas.pt/api/docs` (Swagger UI)
 3. Verify backend version in git tag matches expected version
 
@@ -176,7 +176,7 @@ ERR_CONNECTION_REFUSED
 **Solution:**
 1. Check DNS: `nslookup api.parvagas.pt`
 2. Check Traefik: `docker logs -f proxy`
-3. Check backend: `docker compose -f docker-compose.prod.yml ps`
+3. Check backend: `docker compose -f docker-compose.prod.portainer.yml ps`
 4. Verify port 443 is open: `curl -v https://api.parvagas.pt/health`
 
 ### SSL Certificate Issues
@@ -190,7 +190,7 @@ ERR_SSL_VERSION_OR_CIPHER_MISMATCH
 **Solution:**
 1. Check certificate: `echo | openssl s_client -servername api.parvagas.pt -connect api.parvagas.pt:443`
 2. Renew Let's Encrypt: `docker exec proxy certbot renew`
-3. Restart Traefik: `docker compose -f docker-compose.prod.yml restart proxy`
+3. Restart Traefik: `docker compose -f docker-compose.prod.portainer.yml restart proxy`
 
 ## Files to Keep in Sync
 
@@ -199,7 +199,7 @@ When making changes, update these files consistently:
 | File | Purpose | Update when |
 |------|---------|-----------|
 | `docker-compose.dev.yml` | Dev backend config | changing API, adding services, updating domains |
-| `docker-compose.prod.yml` | Prod backend config | same as above |
+| `docker-compose.prod.portainer.yml` | Prod backend config | same as above |
 | `VERCEL_DOCKER_SETUP.md` | Documentation | updating env vars or architecture |
 | `VERCEL_FRONTEND_INTEGRATION.md` | Frontend guide | updating API endpoints or patterns |
 | `.env.example` / `.env.prod` | Backend env template | adding new config options |
@@ -222,7 +222,11 @@ Use these variables for the `cv-builder` container (do not use legacy `STORAGE_*
 | `PARVAGAS_OAUTH_DISCOVERY_URL` | `https://api.parvagas.pt/.well-known/openid-configuration` | OIDC discovery |
 | `PARVAGAS_RESUME_SYNC_ENABLED` | `true` | Enable outbound CV sync |
 | `PARVAGAS_API_URL` | `https://api.parvagas.pt` | Parvagas API base URL |
-| `PARVAGAS_API_KEY` | `***` | Sync API key (server-to-server) |
+| `PARVAGAS_SERVER_SECRET` | `***` | Server-to-server secret for one-time SSO exchange |
+| `PARVAGAS_API_KEY` | `***` | Backward-compatible alias for server-to-server calls |
+| `PARVAGAS_MAIN_URL` | `https://parvagas.pt` | Main Parvagas URL for login redirects |
+| `PARVAGAS_CANDIDATE_CV_URL` | `https://parvagas.pt/Portal/Candidato/CV-e-Documentos` | Candidate CV page used for return navigation |
+| `PARVAGAS_ALLOWED_RETURN_ORIGINS` | `https://parvagas.pt` | Comma-separated origins accepted from Parvagas return URLs |
 | `PARVAGAS_RESUME_SYNC_PATH` | `/api/v1/integrations/cv-builder/resumes/sync` | Sync endpoint path |
 | `PARVAGAS_WEBHOOK_SECRET` | `***` | HMAC secret for integration webhooks |
 

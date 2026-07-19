@@ -52,7 +52,7 @@ fi
 cd "$ROOT_DIR"
 docker compose config >/dev/null
 docker compose -f docker-compose.dev.yml config >/dev/null
-docker compose -f docker-compose.prod.yml config >/dev/null
+docker compose -f docker-compose.prod.portainer.yml config >/dev/null
 pass "Docker Compose files resolve successfully"
 
 if docker compose ps postgres >/dev/null 2>&1; then

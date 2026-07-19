@@ -8,19 +8,49 @@ on:
   workflow_dispatch:
 
 jobs:
-  compose-portainer-guard:
-    name: Compose · Portainer Image-only Guard
+  reactive-resume-source:
+    name: Reactive Resume · Source Integrity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fail if Portainer compose uses build directives
+      - name: Fail if Reactive Resume is not vendored
         run: |
-          if grep -nE '^\s*build:' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
-            echo "Portainer stacks must be image-only. Remove build directives."
+          test -f reactive-resume/Dockerfile
+          test -f reactive-resume/package.json
+          test -f reactive-resume/pnpm-lock.yaml
+          test -d reactive-resume/apps/server
+          test -d reactive-resume/apps/web
+          test -d reactive-resume/migrations
+          if git ls-files --stage reactive-resume | grep -q '^160000 '; then
+            echo "reactive-resume is still a git submodule/gitlink"
             exit 1
           fi
+          if test -e reactive-resume/.git; then
+            echo "reactive-resume contains nested Git metadata"
+            exit 1
+          fi
+          git ls-files --error-unmatch reactive-resume/Dockerfile reactive-resume/package.json reactive-resume/pnpm-lock.yaml >/dev/null
+
+  compose-portainer-config:
+    name: Compose · Portainer Config Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail if Portainer CV Builder references public images
+        run: |
+          if grep -nE 'ghcr\.io/heliotheanalyst/parvagas-cv-builder|amruthpillai/reactive-resume' docker-compose.dev.portainer.yml docker-compose.prod.portainer.yml; then
+            echo "Portainer compose files must build the CV Builder from ./reactive-resume."
+            exit 1
+          fi
+
+      - name: Validate Portainer compose files
+        run: |
+          docker compose -f docker-compose.dev.portainer.yml config
+          docker compose -f docker-compose.prod.portainer.yml config
 
   frontend:
     name: Frontend · Lint · Typecheck · Test · Build
@@ -125,5 +155,6 @@ jobs:
         run: |
           docker compose config
           docker compose -f docker-compose.dev.yml config
-          docker compose -f docker-compose.prod.yml config
+          docker compose -f docker-compose.dev.portainer.yml config
+          docker compose -f docker-compose.prod.portainer.yml config
         working-directory: ..

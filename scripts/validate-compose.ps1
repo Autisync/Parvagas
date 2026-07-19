@@ -15,8 +15,51 @@ foreach ($f in $required) {
   if (-not (Test-Path $f)) { throw "[FAIL] Missing required file: $f" }
 }
 
-if (-not (Test-Path "reactive-resume/Dockerfile") -or -not (Test-Path "reactive-resume/package.json") -or -not (Test-Path "reactive-resume/pnpm-lock.yaml")) {
-  throw "[FAIL] Reactive Resume source is missing. Copy the full CV Builder repository contents directly into ./reactive-resume before running the local stack."
+$sourceRequired = @(
+  "reactive-resume/Dockerfile",
+  "reactive-resume/package.json",
+  "reactive-resume/pnpm-lock.yaml",
+  "reactive-resume/pnpm-workspace.yaml",
+  "reactive-resume/turbo.json",
+  "reactive-resume/apps/server",
+  "reactive-resume/apps/web",
+  "reactive-resume/migrations"
+)
+
+foreach ($f in $sourceRequired) {
+  if (-not (Test-Path $f)) {
+    throw "[FAIL] Reactive Resume source is missing from the Portainer Git checkout. The complete customised Reactive Resume v5.2.3 source must be committed directly under ./reactive-resume. Git submodules and empty gitlinks are not supported."
+  }
+}
+
+if ((git ls-files --stage reactive-resume) -match '^160000\s') {
+  throw "[FAIL] reactive-resume is still tracked as a git submodule/gitlink. Vendor the customised source directly into the repository."
+}
+
+if (Test-Path "reactive-resume/.git") {
+  throw "[FAIL] reactive-resume contains nested Git metadata. Remove reactive-resume/.git before deploying."
+}
+
+$trackedRequired = @(
+  "reactive-resume/Dockerfile",
+  "reactive-resume/package.json",
+  "reactive-resume/pnpm-lock.yaml"
+)
+
+foreach ($f in $trackedRequired) {
+  git ls-files --error-unmatch $f *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "[FAIL] Missing tracked Reactive Resume file: $f"
+  }
+}
+
+$composeFiles = @("docker-compose.yml", "docker-compose.dev.yml", "docker-compose.dev.portainer.yml", "docker-compose.prod.portainer.yml")
+if (-not (Select-String -Path $composeFiles -Pattern 'context: \./reactive-resume')) {
+  throw "[FAIL] Compose files must build the CV Builder from ./reactive-resume."
+}
+
+if (Select-String -Path docker-compose.dev.portainer.yml,docker-compose.prod.portainer.yml -Pattern 'ghcr\.io/heliotheanalyst/parvagas-cv-builder|amruthpillai/reactive-resume') {
+  throw "[FAIL] Portainer compose files must not reference GHCR or the public Reactive Resume image for the CV Builder."
 }
 
 $retired = @("docker-compose-updated.yml", "docker-compose.prod.yml", "docker-compose.portainer.yml")
@@ -43,11 +86,6 @@ if ($LASTEXITCODE -ne 0) { throw "[FAIL] docker-compose.dev.portainer.yml config
 Write-Host "[CHECK] docker-compose.prod.portainer.yml"
 docker compose --env-file .env.prod.portainer.example -f docker-compose.prod.portainer.yml config | Out-File -Encoding utf8 .tmp-compose-prod-portainer.out
 if ($LASTEXITCODE -ne 0) { throw "[FAIL] docker-compose.prod.portainer.yml config failed" }
-
-$portainerBuildHits = Select-String -Path docker-compose.dev.portainer.yml,docker-compose.prod.portainer.yml -Pattern '^\s*build:'
-if ($portainerBuildHits) {
-  throw "[FAIL] Portainer compose files must be image-only. Remove all build directives."
-}
 
 # Duplicate exposed host ports
 $ports = Get-ChildItem .tmp-compose-*.out | ForEach-Object {

@@ -1,0 +1,7 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="96" fill="#FAFAFA"/>
+  <rect x="36" y="36" width="440" height="440" rx="72" stroke="#DC2626" stroke-width="12"/>
+  <path d="M96 128H186C233.496 128 272 166.504 272 214C272 261.496 233.496 300 186 300H157V252H184C205.539 252 223 234.539 223 213C223 191.461 205.539 174 184 174H147V384H96V128Z" fill="#0B0F1A"/>
+  <text x="286" y="286" fill="#0B0F1A" font-family="IBM Plex Sans, Arial, sans-serif" font-size="64" font-weight="700">Parvagas</text>
+  <rect x="96" y="332" width="320" height="12" rx="6" fill="#DC2626"/>
+</svg>

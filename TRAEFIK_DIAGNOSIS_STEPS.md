@@ -106,12 +106,12 @@ this step — Step 4's logs are the more reliable signal anyway.
 ## Step 6 — If Traefik itself isn't running (from Step 1)
 
 ```bash
-docker compose -f docker-compose.prod.yml ps traefik 2>/dev/null
-docker compose -f docker-compose.prod.yml up -d traefik 2>/dev/null
+docker compose -f docker-compose.prod.portainer.yml ps traefik 2>/dev/null
+docker compose -f docker-compose.prod.portainer.yml up -d traefik 2>/dev/null
 ```
 
 Adjust the compose file path/service name to whatever your actual Traefik
-service is called if it's not defined in `docker-compose.prod.yml` (it may
+service is called if it's not defined in `docker-compose.prod.portainer.yml` (it may
 be a separate standalone Traefik deployment outside this repo's compose
 stack — check `docker ps -a` for a stopped/crashed Traefik container and
 `docker logs` on it to see why it exited).
@@ -135,7 +135,7 @@ stack).
 
 If the backend container is missing from this network, the alias
 `parvagas-backend-api` won't resolve inside Traefik even with a perfectly
-loaded router — re-run `docker compose -f docker-compose.prod.yml up -d
+loaded router — re-run `docker compose -f docker-compose.prod.portainer.yml up -d
 backend-python` to reattach it.
 
 ---

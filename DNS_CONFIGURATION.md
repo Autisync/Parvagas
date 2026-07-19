@@ -228,7 +228,7 @@ fetch('https://api.parvagas.pt/api/health')
 
 ### Traefik Configuration (Already Set)
 
-In `docker-compose.prod.yml`:
+In `docker-compose.prod.portainer.yml`:
 
 ```yaml
 traefik:
@@ -278,8 +278,8 @@ If you get CORS errors:
 
 This means:
 1. Traefik can't reach backend service
-2. Check: `docker compose -f docker-compose.prod.yml ps`
-3. Restart: `docker compose -f docker-compose.prod.yml restart backend-python`
+2. Check: `docker compose -f docker-compose.prod.portainer.yml ps`
+3. Restart: `docker compose -f docker-compose.prod.portainer.yml restart backend-python`
 
 ---
 

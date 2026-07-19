@@ -10,11 +10,11 @@ cp backend-python/.env.example backend-python/.env
 
 ### 2. Update docker-compose.yml
 
-Replace the current `docker-compose.yml` with `docker-compose-updated.yml`:
+Replace the current `docker-compose.yml` with `docker-compose.yml`:
 
 ```bash
 mv docker-compose.yml docker-compose-old.yml
-mv docker-compose-updated.yml docker-compose.yml
+mv docker-compose.yml docker-compose.yml
 ```
 
 ### 3. Build and Start Services

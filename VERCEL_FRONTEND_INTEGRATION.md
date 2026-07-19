@@ -105,7 +105,7 @@ export function useProfile() {
 The backend CORS is already configured to accept requests from Vercel:
 
 ```yaml
-# docker-compose.prod.yml
+# docker-compose.prod.portainer.yml
 backend-python:
   environment:
     FRONTEND_URL: https://parvagas.vercel.app
@@ -258,7 +258,7 @@ export function Dashboard() {
 1. Check Vercel domain (e.g., `dev-parvagas.vercel.app`)
 2. Update backend FRONTEND_URL:
    ```yaml
-   # docker-compose.prod.yml
+   # docker-compose.prod.portainer.yml
    FRONTEND_URL: https://dev-parvagas.vercel.app
    ```
 3. Or add to CORS_ORIGIN:
@@ -267,7 +267,7 @@ export function Dashboard() {
    ```
 4. Redeploy backend:
    ```bash
-   docker compose -f docker-compose.prod.yml up -d --force-recreate backend-python
+   docker compose -f docker-compose.prod.portainer.yml up -d --force-recreate backend-python
    ```
 
 ### 401 Unauthorized on API Calls
@@ -295,7 +295,7 @@ export function Dashboard() {
 **Fix:**
 1. Verify DNS: `nslookup api.parvagas.pt`
 2. Check Traefik logs: `docker logs proxy`
-3. Verify backend is running: `docker compose -f docker-compose.prod.yml ps`
+3. Verify backend is running: `docker compose -f docker-compose.prod.portainer.yml ps`
 4. Test direct backend: `curl https://api.parvagas.pt/health` or `/api/health`
 
 ## Example: Complete Frontend Component
@@ -421,5 +421,5 @@ export default function RootLayout({ children }) {
 | 2 | Add env vars in Vercel dashboard (Settings → Environment Variables) |
 | 3 | Use env vars in code: `process.env.NEXT_PUBLIC_API_URL` |
 | 4 | Update backend FRONTEND_URL and CORS_ORIGIN in docker-compose |
-| 5 | Deploy changes: `docker compose -f docker-compose.prod.yml up -d` |
+| 5 | Deploy changes: `docker compose -f docker-compose.prod.portainer.yml up -d` |
 | 6 | Test: `curl -H "Origin: https://parvagas.vercel.app" https://api.parvagas.pt/health` |

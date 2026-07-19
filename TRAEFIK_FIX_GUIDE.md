@@ -6,7 +6,7 @@ The deployed `/home/autisync/infra/traefik/dynamic/parvagas.yml` had:
 
 1. **Three wrong backend hostnames** — it pointed at `parvagas-backend-python`,
    `parvagas-websocket-service` and `parvagas-minio`, but the containers'
-   actual aliases on the `proxy` network (from `docker-compose.prod.yml`) are
+   actual aliases on the `proxy` network (from `docker-compose.prod.portainer.yml`) are
    `parvagas-backend-api`, `parvagas-websocket` and `parvagas-storage`.
    Traefik couldn't resolve the names → 502 on every request.
 2. **A `strip-api-prefix` middleware** that removes `/api` before forwarding.

@@ -10,7 +10,7 @@ services:
         required: true
     environment:
       ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-      ADMIN_SIGNUP_KEY: x
+      ADMIN_SIGNUP_KEY: dev-admin-key
       APP_ENV: development
       BACKEND_URL: https://api-dev.parvagas.pt
       CAPTCHA_REQUIRED: "false"
@@ -22,16 +22,16 @@ services:
       EMAIL_PROVIDER: smtp
       FRONTEND_URL: https://dev.parvagas.pt
       JWT_ALGORITHM: HS256
-      JWT_SECRET: x
+      JWT_SECRET: CHANGE_ME
       MODERATOR_SIGNUP_KEY: dev-mod-key
       REDIS_URL: redis://redis:6379/0
-      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_SECRET: CHANGE_ME
       RESUME_BUILDER_URL: https://cv-dev.parvagas.pt
-      S3_ACCESS_KEY: x
+      S3_ACCESS_KEY: minioadmin
       S3_BUCKET: cvs-dev
       S3_ENDPOINT_URL: https://storage-dev.parvagas.pt
       S3_REGION: us-east-1
-      S3_SECRET_KEY: x
+      S3_SECRET_KEY: minioadmin
       SMTP_FROM: dev@parvagas.pt
       SMTP_HOST: mailhog
       SMTP_PASS: ""
@@ -77,6 +77,10 @@ services:
         target: /app/logs
         volume: {}
   cv-builder:
+    build:
+      context: C:\Users\pizt1\Documents\Business\Parvagas\reactive-resume
+      dockerfile: Dockerfile
+      target: runtime
     depends_on:
       cv-builder-bucket-init:
         condition: service_completed_successfully
@@ -84,7 +88,7 @@ services:
       cv-builder-db-init:
         condition: service_completed_successfully
         required: true
-      cv-builder-migrate:
+      minio-init:
         condition: service_completed_successfully
         required: true
       postgres:
@@ -95,13 +99,14 @@ services:
         required: true
     environment:
       APP_URL: https://cv-dev.parvagas.pt
-      AUTH_SECRET: x
+      AUTH_SECRET: CHANGE_ME
       DATABASE_URL: postgresql://parvagas:CHANGE_ME@postgres:5432/parvagas_cv_builder_dev
       ENCRYPTION_SECRET: CHANGE_ME_MIN_32_CHARS
       FLAG_DISABLE_API_RATE_LIMIT: "false"
       FLAG_DISABLE_EMAIL_AUTH: "false"
       FLAG_DISABLE_SIGNUPS: "false"
       FLAG_SHOW_SPONSORS: "false"
+      NODE_ENV: production
       OAUTH_CLIENT_ID: ""
       OAUTH_CLIENT_SECRET: ""
       OAUTH_DISCOVERY_URL: ""
@@ -109,12 +114,12 @@ services:
       OAUTH_SCOPES: openid profile email
       PORT: "3000"
       REDIS_URL: redis://redis:6379
-      S3_ACCESS_KEY_ID: x
-      S3_BUCKET: reactive-resume-dev
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_BUCKET: reactive-resume
       S3_ENDPOINT: http://minio:9000
       S3_FORCE_PATH_STYLE: "true"
       S3_REGION: us-east-1
-      S3_SECRET_ACCESS_KEY: x
+      S3_SECRET_ACCESS_KEY: minioadmin
       SMTP_FROM: dev@parvagas.pt
       SMTP_HOST: mailhog
       SMTP_PASS: ""
@@ -131,7 +136,6 @@ services:
       interval: 30s
       retries: 5
       start_period: 1m0s
-    image: ghcr.io/heliotheanalyst/parvagas-cv-builder:dev
     labels:
       traefik.docker.network: proxy
       traefik.enable: "true"
@@ -145,8 +149,12 @@ services:
       traefik:
         aliases:
           - parvagas-dev-cv
-    pull_policy: always
     restart: unless-stopped
+    volumes:
+      - type: volume
+        source: cv_builder_data
+        target: /app/data
+        volume: {}
   cv-builder-bucket-init:
     depends_on:
       minio:
@@ -155,74 +163,33 @@ services:
     entrypoint:
       - /bin/sh
       - -c
-      - " until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do\n  echo 'Waiting for MinIO...';\n  sleep 3;\ndone; mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET; mc anonymous set none local/$$CV_BUILDER_S3_BUCKET; echo 'cv-builder bucket ready'; "
+      - until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do echo 'Waiting for MinIO...'; sleep 3; done; mc mb --ignore-existing local/$$CV_BUILDER_S3_BUCKET; mc anonymous set none local/$$CV_BUILDER_S3_BUCKET; echo 'CV Builder bucket ready';
     environment:
-      CV_BUILDER_S3_BUCKET: reactive-resume-dev
-      MINIO_ROOT_PASSWORD: x
-      MINIO_ROOT_USER: x
-    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+      CV_BUILDER_S3_BUCKET: reactive-resume
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minioadmin
+    image: quay.io/minio/mc:latest
     networks:
       default: null
     restart: "no"
   cv-builder-db-init:
-    command:
-      - sh
-      - -c
-      - psql -h postgres -U parvagas -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$CV_BUILDER_DB'" | grep -q 1 || psql -h postgres -U parvagas -d postgres -c "CREATE DATABASE $$CV_BUILDER_DB"
     depends_on:
       postgres:
         condition: service_healthy
         required: true
+    entrypoint:
+      - /bin/sh
+      - -c
+      - " if psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$$CV_BUILDER_DB'\" | grep -q 1; then\n  echo 'CV Builder database already exists';\nelse\n  createdb \"$$CV_BUILDER_DB\";\n  echo 'CV Builder database created';\nfi "
     environment:
       CV_BUILDER_DB: parvagas_cv_builder_dev
-      PGPASSWORD: x
+      PGHOST: postgres
+      PGPASSWORD: devpass
+      PGPORT: "5432"
+      PGUSER: parvagas
     image: postgres:16-alpine
     networks:
       default: null
-    restart: "no"
-  cv-builder-migrate:
-    command:
-      - pnpm
-      - db:migrate
-    depends_on:
-      cv-builder-db-init:
-        condition: service_completed_successfully
-        required: true
-      postgres:
-        condition: service_healthy
-        required: true
-    environment:
-      APP_URL: https://cv-dev.parvagas.pt
-      AUTH_SECRET: x
-      DATABASE_URL: postgresql://parvagas:CHANGE_ME@postgres:5432/parvagas_cv_builder_dev
-      ENCRYPTION_SECRET: CHANGE_ME_MIN_32_CHARS
-      FLAG_DISABLE_API_RATE_LIMIT: "false"
-      FLAG_DISABLE_EMAIL_AUTH: "false"
-      FLAG_DISABLE_SIGNUPS: "false"
-      FLAG_SHOW_SPONSORS: "false"
-      OAUTH_CLIENT_ID: ""
-      OAUTH_CLIENT_SECRET: ""
-      OAUTH_DISCOVERY_URL: ""
-      OAUTH_PROVIDER_NAME: Parvagas
-      OAUTH_SCOPES: openid profile email
-      PORT: "3000"
-      REDIS_URL: redis://redis:6379
-      S3_ACCESS_KEY_ID: x
-      S3_BUCKET: reactive-resume-dev
-      S3_ENDPOINT: http://minio:9000
-      S3_FORCE_PATH_STYLE: "true"
-      S3_REGION: us-east-1
-      S3_SECRET_ACCESS_KEY: x
-      SMTP_FROM: dev@parvagas.pt
-      SMTP_HOST: mailhog
-      SMTP_PASS: ""
-      SMTP_PORT: "1025"
-      SMTP_SECURE: "false"
-      SMTP_USER: ""
-    image: ghcr.io/heliotheanalyst/parvagas-cv-builder-migrate:dev
-    networks:
-      default: null
-    pull_policy: always
     restart: "no"
   mailhog:
     image: mailhog/mailhog:v1.0.1
@@ -236,8 +203,8 @@ services:
       - --console-address
       - :9001
     environment:
-      MINIO_ROOT_PASSWORD: x
-      MINIO_ROOT_USER: x
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minioadmin
     image: minio/minio:RELEASE.2025-01-20T14-49-07Z
     labels:
       traefik.docker.network: proxy
@@ -258,10 +225,27 @@ services:
         source: parvagas_dev_minio_data
         target: /data
         volume: {}
+  minio-init:
+    depends_on:
+      minio:
+        condition: service_started
+        required: true
+    entrypoint:
+      - /bin/sh
+      - -c
+      - " until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD; do\n  echo 'Waiting for MinIO...';\n  sleep 3;\ndone; mc mb --ignore-existing local/$$BACKEND_BUCKET; mc anonymous set none local/$$BACKEND_BUCKET; echo 'backend bucket ready'; "
+    environment:
+      BACKEND_BUCKET: cvs-dev
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: minioadmin
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    networks:
+      default: null
+    restart: "no"
   postgres:
     environment:
       POSTGRES_DB: parvagas_dev
-      POSTGRES_PASSWORD: x
+      POSTGRES_PASSWORD: devpass
       POSTGRES_USER: parvagas
     healthcheck:
       test:
@@ -314,7 +298,7 @@ services:
         required: true
     environment:
       ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-      ADMIN_SIGNUP_KEY: x
+      ADMIN_SIGNUP_KEY: dev-admin-key
       APP_ENV: development
       BACKEND_URL: https://api-dev.parvagas.pt
       CAPTCHA_REQUIRED: "false"
@@ -326,16 +310,16 @@ services:
       EMAIL_PROVIDER: smtp
       FRONTEND_URL: https://dev.parvagas.pt
       JWT_ALGORITHM: HS256
-      JWT_SECRET: x
+      JWT_SECRET: CHANGE_ME
       MODERATOR_SIGNUP_KEY: dev-mod-key
       REDIS_URL: redis://redis:6379/0
-      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_SECRET: CHANGE_ME
       RESUME_BUILDER_URL: https://cv-dev.parvagas.pt
-      S3_ACCESS_KEY: x
+      S3_ACCESS_KEY: minioadmin
       S3_BUCKET: cvs-dev
       S3_ENDPOINT_URL: https://storage-dev.parvagas.pt
       S3_REGION: us-east-1
-      S3_SECRET_KEY: x
+      S3_SECRET_KEY: minioadmin
       SMTP_FROM: dev@parvagas.pt
       SMTP_HOST: mailhog
       SMTP_PASS: ""
@@ -369,7 +353,7 @@ services:
         required: true
     environment:
       ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-      ADMIN_SIGNUP_KEY: x
+      ADMIN_SIGNUP_KEY: dev-admin-key
       APP_ENV: development
       BACKEND_URL: https://api-dev.parvagas.pt
       CAPTCHA_REQUIRED: "false"
@@ -381,16 +365,16 @@ services:
       EMAIL_PROVIDER: smtp
       FRONTEND_URL: https://dev.parvagas.pt
       JWT_ALGORITHM: HS256
-      JWT_SECRET: x
+      JWT_SECRET: CHANGE_ME
       MODERATOR_SIGNUP_KEY: dev-mod-key
       REDIS_URL: redis://redis:6379/0
-      RESUME_BUILDER_SECRET: x
+      RESUME_BUILDER_SECRET: CHANGE_ME
       RESUME_BUILDER_URL: https://cv-dev.parvagas.pt
-      S3_ACCESS_KEY: x
+      S3_ACCESS_KEY: minioadmin
       S3_BUCKET: cvs-dev
       S3_ENDPOINT_URL: https://storage-dev.parvagas.pt
       S3_REGION: us-east-1
-      S3_SECRET_KEY: x
+      S3_SECRET_KEY: minioadmin
       SMTP_FROM: dev@parvagas.pt
       SMTP_HOST: mailhog
       SMTP_PASS: ""
@@ -429,6 +413,8 @@ networks:
     name: proxy
     external: true
 volumes:
+  cv_builder_data:
+    name: parvagas-dev_cv_builder_data
   parvagas_dev_backend_media:
     name: parvagas-dev_parvagas_dev_backend_media
   parvagas_dev_backend_static:
@@ -441,7 +427,7 @@ volumes:
     name: parvagas-dev_parvagas_dev_redis_data
 x-backend-env:
   ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
-  ADMIN_SIGNUP_KEY: x
+  ADMIN_SIGNUP_KEY: dev-admin-key
   APP_ENV: development
   BACKEND_URL: https://api-dev.parvagas.pt
   CAPTCHA_REQUIRED: "false"
@@ -453,16 +439,16 @@ x-backend-env:
   EMAIL_PROVIDER: smtp
   FRONTEND_URL: https://dev.parvagas.pt
   JWT_ALGORITHM: HS256
-  JWT_SECRET: x
+  JWT_SECRET: CHANGE_ME
   MODERATOR_SIGNUP_KEY: dev-mod-key
   REDIS_URL: redis://redis:6379/0
-  RESUME_BUILDER_SECRET: x
+  RESUME_BUILDER_SECRET: CHANGE_ME
   RESUME_BUILDER_URL: https://cv-dev.parvagas.pt
-  S3_ACCESS_KEY: x
+  S3_ACCESS_KEY: minioadmin
   S3_BUCKET: cvs-dev
   S3_ENDPOINT_URL: https://storage-dev.parvagas.pt
   S3_REGION: us-east-1
-  S3_SECRET_KEY: x
+  S3_SECRET_KEY: minioadmin
   SMTP_FROM: dev@parvagas.pt
   SMTP_HOST: mailhog
   SMTP_PASS: ""
@@ -473,13 +459,14 @@ x-backend-env:
   TRUSTED_HOSTS: '*'
 x-cv-env:
   APP_URL: https://cv-dev.parvagas.pt
-  AUTH_SECRET: x
+  AUTH_SECRET: CHANGE_ME
   DATABASE_URL: postgresql://parvagas:CHANGE_ME@postgres:5432/parvagas_cv_builder_dev
   ENCRYPTION_SECRET: CHANGE_ME_MIN_32_CHARS
   FLAG_DISABLE_API_RATE_LIMIT: "false"
   FLAG_DISABLE_EMAIL_AUTH: "false"
   FLAG_DISABLE_SIGNUPS: "false"
   FLAG_SHOW_SPONSORS: "false"
+  NODE_ENV: production
   OAUTH_CLIENT_ID: ""
   OAUTH_CLIENT_SECRET: ""
   OAUTH_DISCOVERY_URL: ""
@@ -487,12 +474,12 @@ x-cv-env:
   OAUTH_SCOPES: openid profile email
   PORT: "3000"
   REDIS_URL: redis://redis:6379
-  S3_ACCESS_KEY_ID: x
-  S3_BUCKET: reactive-resume-dev
+  S3_ACCESS_KEY_ID: minioadmin
+  S3_BUCKET: reactive-resume
   S3_ENDPOINT: http://minio:9000
   S3_FORCE_PATH_STYLE: "true"
   S3_REGION: us-east-1
-  S3_SECRET_ACCESS_KEY: x
+  S3_SECRET_ACCESS_KEY: minioadmin
   SMTP_FROM: dev@parvagas.pt
   SMTP_HOST: mailhog
   SMTP_PASS: ""

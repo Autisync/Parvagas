@@ -176,6 +176,11 @@ class Settings(BaseSettings):
     PARVAGAS_WEBHOOK_TOLERANCE_SECONDS: int = int(os.getenv("PARVAGAS_WEBHOOK_TOLERANCE_SECONDS", "300"))
     # Optional API key for server-to-server calls from CV Builder.
     PARVAGAS_API_KEY: str = os.getenv("PARVAGAS_API_KEY", "")
+    # One-time SSO bridge for launching CV Builder from Parvagas.
+    CV_BUILDER_URL: str = os.getenv("CV_BUILDER_URL", "")
+    CV_BUILDER_SERVER_SECRET: str = os.getenv("CV_BUILDER_SERVER_SECRET", "")
+    CV_BUILDER_CODE_TTL_SECONDS: int = int(os.getenv("CV_BUILDER_CODE_TTL_SECONDS", "90"))
+    CV_BUILDER_ALLOWED_RETURN_ORIGINS: str = os.getenv("CV_BUILDER_ALLOWED_RETURN_ORIGINS", "")
 
     # Ollama — free-tier local AI for CV builder (no subscription required).
     # Runs alongside the stack; paid users fall through to RESUME_AI_* (cloud).

@@ -83,7 +83,7 @@ Allow these examples:
 
 ### Done in-repo (this commit)
 - **`.env.docker` untracked** (`git rm --cached`) and added to `.gitignore` — stops future leaks. The file remains locally for the running stack; `.env.docker.example` is the committed template.
-- **Hardcoded Postgres password removed** from `docker-compose.yml` and `docker-compose-updated.yml` — `DATABASE_URL` now comes from the `env_file` (`.env.docker`), which uses the `postgresql+psycopg://` driver.
+- **Hardcoded Postgres password removed** from `docker-compose.yml` and `docker-compose.yml` — `DATABASE_URL` now comes from the `env_file` (`.env.docker`), which uses the `postgresql+psycopg://` driver.
 - **`JWT_SECRET` rotated** to a fresh 96-char random value (old sessions invalidated). Verified: stack healthy, DB+Redis OK, admin login works.
 
 ### ⚠️ Still required (manual — old values remain in Git history & at providers)
