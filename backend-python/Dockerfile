@@ -58,8 +58,15 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 COPY wsgi_websocket.py ./wsgi_websocket.py
 RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chmod 755 /app/uploads
+# Create writable directories (both are also mounted as named volumes in
+# docker-compose.*.yml — /app/logs previously wasn't created here at all,
+# which is exactly the kind of gap that led to the containers running as
+# root: a Docker-created volume with no image-side directory to inherit
+# ownership from gets created root-owned, which the non-root USER below
+# can't write to. A fresh volume-permissions-init service in compose fixes
+# ownership on the volumes themselves; this fixes it in the image so a
+# brand-new deployment with no pre-existing volume also starts out correct.
+RUN mkdir -p /app/uploads /app/logs && chmod 755 /app/uploads /app/logs
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser

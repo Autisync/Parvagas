@@ -171,19 +171,36 @@ services:
       "
     restart: "no"
 
+  # One-shot: the backend/celery images run as non-root (uid 1000, see
+  # backend-python/Dockerfile) but named volumes are created by the Docker
+  # daemon and only inherit the image directory's ownership the very first
+  # time they're populated — a volume that already has root-owned content
+  # from a prior run under `user: "0:0"` stays root-owned across redeploys.
+  # This fixes ownership unconditionally on every start (idempotent, cheap)
+  # so the app services never need root themselves.
+  volume-permissions-init:
+    image: alpine:3.19
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /data/uploads /data/logs && chown -R 1000:1000 /data/uploads /data/logs"]
+    volumes:
+      - python_uploads:/data/uploads
+      - python_logs:/data/logs
+    restart: "no"
+
   backend-python:
     build:
       context: ./backend-python
       dockerfile: Dockerfile
       target: api-service
     restart: unless-stopped
-    user: "0:0"
     environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      volume-permissions-init:
+        condition: service_completed_successfully
     networks:
       default: {}
       traefik-net:
@@ -216,7 +233,6 @@ services:
       target: websocket-service
     container_name: parvagas-websocket
     restart: unless-stopped
-    user: "0:0"
     environment: *backend-env
     depends_on:
       postgres:
@@ -250,7 +266,6 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 --prefetch-multiplier=1 -Q default,emails,parsing,cleanup
     restart: unless-stopped
-    user: "0:0"
     # Override the image's HTTP healthcheck — workers don't serve :8000.
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping -d celery@$$(hostname) || exit 1"]
@@ -264,6 +279,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      volume-permissions-init:
+        condition: service_completed_successfully
     volumes:
       - python_uploads:/app/uploads
       - python_logs:/app/logs
@@ -277,7 +294,6 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --prefetch-multiplier=1 -Q scraping
     restart: unless-stopped
-    user: "0:0"
     mem_limit: 512m
     cpus: "0.5"
     healthcheck:
@@ -299,7 +315,6 @@ services:
       dockerfile: Dockerfile
     command: celery -A app.workers.celery_app beat --loglevel=info
     restart: unless-stopped
-    user: "0:0"
     # Beat has nothing to ping; disable the image's HTTP healthcheck.
     healthcheck:
       disable: true
