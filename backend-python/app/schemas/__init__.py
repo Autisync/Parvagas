@@ -48,8 +48,7 @@ class UserResponse(BaseModel):
     company_team_role: Optional[str] = None
     is_guest_account: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AuthTokenResponse(BaseModel):
@@ -101,8 +100,7 @@ class CandidateProfileResponse(BaseModel):
     years_of_experience: Optional[int]
     skills: Optional[str]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CandidateProfileUpdateRequest(BaseModel):
@@ -137,8 +135,7 @@ class CompanyProfileResponse(BaseModel):
     logo_url: Optional[str]
     angolanizacao: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CompanyProfileUpdateRequest(BaseModel):
@@ -199,8 +196,7 @@ class ResumeTemplateResponse(BaseModel):
     preview_url: Optional[str] = None
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResumeResponse(BaseModel):
@@ -216,8 +212,7 @@ class ResumeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResumeCreateRequest(BaseModel):
@@ -275,8 +270,7 @@ class ResumeRewriteResponse(BaseModel):
     notes: Optional[str] = None
     source: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ResumeRewriteRequest(BaseModel):
@@ -329,8 +323,7 @@ class CoverLetterResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ATSStageCreateRequest(BaseModel):
@@ -354,8 +347,7 @@ class ATSStageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ATSPipelineItemCreateRequest(BaseModel):
@@ -381,8 +373,7 @@ class ATSPipelineItemResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Generic Responses
