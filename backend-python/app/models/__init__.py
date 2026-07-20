@@ -969,3 +969,84 @@ class OtpCode(Base, TimestampMixin):
     attempts = Column(Integer, nullable=False, default=0)
 
 
+class LegalDocument(Base, TimestampMixin):
+    """A legal/policy document (ToS, Privacy Policy, DPA, Refund Policy, ...).
+
+    Content itself lives in versioned LegalDocumentVersion rows, not on this
+    row — this table is just the stable identity (slug/category/audience) a
+    version belongs to. That split is what lets admins edit and publish new
+    content without a redeploy, and lets user consent (LegalAcceptance,
+    added separately) point at one immutable version forever, even after
+    the document is revised again.
+    """
+    __tablename__ = "legal_documents"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    slug = Column(String(80), unique=True, nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    # privacy|tos|employer_tos|cookies|retention|cv_ai_consent|refund|aup|
+    # msa|dpa|security_policy|admin_policy|dispute_template|dispute_workflow
+    category = Column(String(40), nullable=False, index=True)
+    audience = Column(String(20), nullable=False, default="public", index=True)  # public|employer|internal
+    # Whether accepting this document is a required, tracked user action
+    # (e.g. ToS at signup) vs. an informational policy nobody explicitly
+    # accepts (e.g. Data Retention Policy).
+    requires_acceptance = Column(Boolean, nullable=False, default=False)
+
+    versions = relationship(
+        "LegalDocumentVersion", back_populates="document",
+        order_by="LegalDocumentVersion.created_at.desc()",
+        cascade="all, delete-orphan",
+    )
+
+
+class LegalDocumentVersion(Base, TimestampMixin):
+    """One immutable revision of a LegalDocument's content.
+
+    Never edit body_markdown on a version once it has ever been published —
+    write a new version instead. A LegalAcceptance row (Wave C) stores the
+    version id a user agreed to, and that guarantee (published content never
+    silently changes under an already-recorded acceptance) is the entire
+    point of versioning instead of one mutable page per document.
+
+    At most one version per document should carry status="published" at a
+    time — enforced by the service layer (publish_legal_version), which
+    atomically archives whichever version was previously current.
+    """
+    __tablename__ = "legal_document_versions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    document_id = Column(String(36), ForeignKey("legal_documents.id"), nullable=False, index=True)
+    version_label = Column(String(40), nullable=False)  # e.g. "2026-07"
+    body_markdown = Column(Text, nullable=False)
+    effective_date = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="draft", index=True)  # draft|published|archived
+    published_at = Column(DateTime, nullable=True)
+    published_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    document = relationship("LegalDocument", back_populates="versions")
+
+
+class LegalAcceptance(Base, TimestampMixin):
+    """A durable record that a specific user accepted a specific
+    LegalDocumentVersion at a specific time — the actual proof-of-consent
+    row GDPR/Lei 22/11 accountability depends on. Never updated or deleted;
+    a changed decision is a new row, not a mutation.
+
+    context distinguishes where the acceptance happened (e.g. "signup",
+    "employer_onboarding", "checkout", "cv_ai_consent", "cookie_banner")
+    since the same document can be re-surfaced at multiple gates.
+    """
+    __tablename__ = "legal_acceptances"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    document_version_id = Column(String(36), ForeignKey("legal_document_versions.id"), nullable=False, index=True)
+    context = Column(String(60), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    user_agent = Column(String(400), nullable=True)
+
+    user = relationship("User")
+    document_version = relationship("LegalDocumentVersion")
+
+
