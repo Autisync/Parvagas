@@ -94,3 +94,76 @@ def test_seed_scraper_auto_approve_flag_sets_required_timestamps():
         migration.upgrade()
         count = conn.exec_driver_sql("SELECT count(*) FROM feature_flags").fetchone()[0]
         assert count == 1
+
+
+# ── Regression: legal-document seed reads real content and is idempotent ──
+
+def test_seed_legal_documents_creates_all_14_published():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE users (
+                id VARCHAR(36) PRIMARY KEY
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE legal_documents (
+                id VARCHAR(36) PRIMARY KEY,
+                slug VARCHAR(80) NOT NULL UNIQUE,
+                title VARCHAR(200) NOT NULL,
+                category VARCHAR(40) NOT NULL,
+                audience VARCHAR(20) NOT NULL,
+                requires_acceptance BOOLEAN NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE legal_document_versions (
+                id VARCHAR(36) PRIMARY KEY,
+                document_id VARCHAR(36) NOT NULL,
+                version_label VARCHAR(40) NOT NULL,
+                body_markdown TEXT NOT NULL,
+                effective_date DATETIME,
+                status VARCHAR(20) NOT NULL,
+                published_at DATETIME,
+                published_by_user_id VARCHAR(36),
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        ctx = MigrationContext.configure(conn)
+        _op_proxy._proxy = Operations(ctx)
+
+        migration = _load_migration_module("20260720_0055_seed_legal_documents.py")
+        migration.upgrade()
+
+        docs = conn.exec_driver_sql("SELECT slug, requires_acceptance FROM legal_documents").fetchall()
+        assert len(docs) == 14
+        slugs = {row[0] for row in docs}
+        assert slugs == {
+            "privacidade", "termos", "termos-empregador", "cookies", "politica-retencao",
+            "consentimento-cv-ia", "reembolsos", "utilizacao-aceitavel", "msa", "dpa",
+            "seguranca-incidentes", "acesso-administrativo", "modelo-resposta-disputa",
+            "fluxo-resolucao-disputas",
+        }
+
+        # Every document has exactly one published version with real, non-empty content.
+        versions = conn.exec_driver_sql(
+            "SELECT document_id, status, body_markdown FROM legal_document_versions"
+        ).fetchall()
+        assert len(versions) == 14
+        for _, status, body in versions:
+            assert status == "published"
+            assert len(body) > 200  # not a placeholder/empty stub
+
+        # Re-running upgrade() must not duplicate rows (idempotent seed).
+        migration.upgrade()
+        count = conn.exec_driver_sql("SELECT count(*) FROM legal_documents").fetchone()[0]
+        assert count == 14
