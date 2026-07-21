@@ -121,11 +121,13 @@ services:
       default: {}
       traefik:
         aliases:
+          - parvagas-storage
           - parvagas-prod-storage
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
       - traefik.http.routers.parvagas-prod-storage.rule=Host(`${STORAGE_HOST:-storage.parvagas.pt}`)
+      - traefik.http.routers.parvagas-prod-storage.priority=200
       - traefik.http.routers.parvagas-prod-storage.entrypoints=websecure
       - traefik.http.routers.parvagas-prod-storage.tls=true
       - traefik.http.routers.parvagas-prod-storage.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
@@ -208,11 +210,13 @@ services:
       default: {}
       traefik:
         aliases:
+          - parvagas-backend-api
           - parvagas-prod-api
     labels:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
       - traefik.http.routers.parvagas-prod-api.rule=Host(`${API_HOST:-api.parvagas.pt}`)
+      - traefik.http.routers.parvagas-prod-api.priority=200
       - traefik.http.routers.parvagas-prod-api.entrypoints=websecure
       - traefik.http.routers.parvagas-prod-api.tls=true
       - traefik.http.routers.parvagas-prod-api.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}

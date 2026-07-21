@@ -17,10 +17,10 @@
 # none of which resolve — that was the cause of every api.parvagas.pt 502.
 #
 #   Router host              Service target                         Compose alias source
-#   api.parvagas.pt          http://parvagas-backend-api:8000       backend-python
+#   api.parvagas.pt          http://parvagas-prod-api:8000          backend
 #   api.parvagas.pt /ws      http://parvagas-websocket:8001         websocket-service
-#   cv.parvagas.pt           http://parvagas-cv:3000                cv-builder
-#   storage.parvagas.pt      http://parvagas-storage:9000           minio
+#   cv.parvagas.pt           http://parvagas-prod-cv:3000           cv-builder
+#   storage.parvagas.pt      http://parvagas-prod-storage:9000      minio
 #   dev-api.parvagas.pt      http://dev-parvagas-backend-api:8000   (docker-compose.dev.yml)
 #   dev-cv.parvagas.pt       http://dev-parvagas-cv:3000            (docker-compose.dev.yml)
 #   dev-storage.parvagas.pt  http://dev-parvagas-storage:9000       (docker-compose.dev.yml)
@@ -92,7 +92,7 @@ http:
     parvagas-api:
       loadBalancer:
         servers:
-          - url: "http://parvagas-backend-api:8000"
+          - url: "http://parvagas-prod-api:8000"
 
     parvagas-websocket:
       loadBalancer:
@@ -107,12 +107,12 @@ http:
     parvagas-cv:
       loadBalancer:
         servers:
-          - url: "http://parvagas-cv:3000"
+          - url: "http://parvagas-prod-cv:3000"
 
     parvagas-storage:
       loadBalancer:
         servers:
-          - url: "http://parvagas-storage:9000"
+          - url: "http://parvagas-prod-storage:9000"
 
     # ─────────────────────────── DEVELOPMENT ───────────────────────────
     dev-parvagas-api:
