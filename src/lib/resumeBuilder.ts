@@ -6,3 +6,4 @@ const fallbackResumeBuilderUrl =
     : "https://cv.parvagas.pt";
 
 export const RESUME_BUILDER_URL = configuredResumeBuilderUrl || fallbackResumeBuilderUrl;
+export const RESUME_BUILDER_START_URL = `${RESUME_BUILDER_URL.replace(/\/$/, "")}/auth/parvagas/start`;

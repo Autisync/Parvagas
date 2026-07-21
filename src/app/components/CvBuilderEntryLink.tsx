@@ -2,7 +2,7 @@
 
 import { MouseEvent, ReactNode, useState } from "react";
 import { authFetch, getToken, getUser } from "@/lib/api";
-import { RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
+import { RESUME_BUILDER_START_URL, RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
 
 type CvBuilderLaunchResponse = {
   launch_url: string;
@@ -56,9 +56,9 @@ export default function CvBuilderEntryLink({
       }
     } catch {
       if (shouldOpenInNewTab(event, openInNewTab)) {
-        window.open(RESUME_BUILDER_URL, "_blank", "noopener,noreferrer");
+        window.open(RESUME_BUILDER_START_URL, "_blank", "noopener,noreferrer");
       } else {
-        window.location.assign(RESUME_BUILDER_URL);
+        window.location.assign(RESUME_BUILDER_START_URL);
       }
     } finally {
       setLaunching(false);
@@ -67,7 +67,7 @@ export default function CvBuilderEntryLink({
 
   return (
     <a
-      href={RESUME_BUILDER_URL}
+      href={RESUME_BUILDER_START_URL}
       target={openInNewTab ? "_blank" : undefined}
       rel={openInNewTab ? "noopener noreferrer" : undefined}
       onClick={handleClick}
