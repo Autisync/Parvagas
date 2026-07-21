@@ -177,6 +177,7 @@ def test_new_company_registration_notifies_all_admins(db, monkeypatch):
     payload = UserRegisterRequest(
         email="newco@x.com", password="Password123!", full_name="New Co Owner",
         role="company", company_name="New Co", nif="123456789LA042",
+        accept_terms=True, accept_privacy=True,
     )
     asyncio.run(register(_fake_request(), payload, db=db))
 

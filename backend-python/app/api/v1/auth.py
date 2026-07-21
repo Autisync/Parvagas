@@ -18,6 +18,7 @@ from app.schemas import (
 )
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
+from app.services import legal_service
 from app.workers.tasks import (
     send_verification_email, send_password_reset_email, send_welcome_email
 )
@@ -34,6 +35,36 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # stop someone from hammering a single victim's inbox from different IPs —
 # this closes that gap independent of where the request comes from.
 VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
+
+
+def _record_signup_acceptance(
+    db: Session, *, user: User, role: str, request: Request | None, context: str = "signup",
+) -> None:
+    """Best-effort proof-of-consent: records LegalAcceptance rows against
+    the CURRENT published version of every document required for this
+    role, at this exact moment. Never raises — account creation must
+    never fail because a legal document happens to be unpublished; that's
+    a data-completeness gap to notice via the admin compliance surfaces,
+    not a reason to block someone from creating an account."""
+    required_slugs = ["termos", "privacidade"]
+    if role == "company":
+        required_slugs.append("termos-empregador")
+
+    ip_address = request.client.host if request and request.client else None
+    user_agent = request.headers.get("user-agent") if request else None
+
+    for slug in required_slugs:
+        try:
+            version = legal_service.get_current_version_by_slug(db, slug)
+            if not version:
+                logger.warning("Signup acceptance: no published version for '%s' — not recorded for user %s", slug, user.id)
+                continue
+            legal_service.record_acceptance(
+                db, user_id=user.id, document_version_id=version.id,
+                context=context, ip_address=ip_address, user_agent=user_agent,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to record signup acceptance for '%s' (user %s): %s", slug, user.id, exc)
 
 
 def _verification_resend_wait_seconds(db: Session, user: User, now: datetime | None = None) -> int:
@@ -102,6 +133,11 @@ async def register(
         from app.services.security_service import record_security_event
         record_security_event(db, event_type="captcha_failed", ip_address=_ip, user_agent=request.headers.get("user-agent"), details={"action": "register"})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verificação anti-robô falhou. Tente novamente.")
+    if not payload.accept_terms or not payload.accept_privacy:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="É necessário aceitar os Termos de Uso e a Política de Privacidade para criar uma conta.",
+        )
     try:
         # Register user
         user = AuthService.register_user(
@@ -114,7 +150,8 @@ async def register(
             company_legal_name=payload.company_legal_name,
             nif=payload.nif,
         )
-        
+        _record_signup_acceptance(db, user=user, role=str(payload.role), request=request)
+
         # Create verification token
         raw_token = AuthService.create_verification_token(db, user)
         
@@ -372,7 +409,7 @@ async def reset_password(
 
 
 @router.post("/company-invite/accept", response_model=AuthTokenResponse)
-async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
+async def accept_company_invite(request: Request, payload: dict, db: Session = Depends(get_db)):
     """Accept a company team invite: create/attach the user as a company member."""
     token_raw = str(payload.get("inviteToken", "")).strip()
     if not token_raw:
@@ -390,6 +427,11 @@ async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
         password = str(payload.get("password", "")).strip()
         if len(password) < 8:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password deve ter pelo menos 8 caracteres")
+        if not payload.get("acceptTerms") or not payload.get("acceptPrivacy"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="É necessário aceitar os Termos de Uso e a Política de Privacidade para criar uma conta.",
+            )
         user = User(
             email=invite.email.lower(),
             full_name=str(payload.get("fullName", "")).strip() or invite.email.split("@")[0],
@@ -398,6 +440,7 @@ async def accept_company_invite(payload: dict, db: Session = Depends(get_db)):
         )
         db.add(user)
         db.flush()
+        _record_signup_acceptance(db, user=user, role="company", request=request, context="employer_invite")
 
     existing = (
         db.query(CompanyMember)

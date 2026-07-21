@@ -16,6 +16,13 @@ class UserRegisterRequest(BaseModel):
     company_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("company_name", "companyName"))
     company_legal_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("company_legal_name", "companyLegalName"))
     nif: Optional[str] = None
+    # The frontend has sent these since before this field existed on the
+    # backend — previously silently dropped by Pydantic (extra fields
+    # ignored by default), so acceptance was never actually recorded
+    # despite the Privacy Policy claiming it is. See legal_service /
+    # LegalAcceptance (Wave C1, EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md).
+    accept_terms: bool = Field(default=False, validation_alias=AliasChoices("accept_terms", "acceptTerms"))
+    accept_privacy: bool = Field(default=False, validation_alias=AliasChoices("accept_privacy", "acceptPrivacy"))
 
 
 class UserLoginRequest(BaseModel):

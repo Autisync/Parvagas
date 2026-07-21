@@ -168,8 +168,6 @@ function SignUpContent() {
             acceptTerms: acceptConsent,
             acceptPrivacy: acceptConsent,
             newsletterOptIn,
-            termsVersion: "2026-05-05",
-            privacyVersion: "2026-05-05",
           }),
         });
       } else {
@@ -185,8 +183,6 @@ function SignUpContent() {
             acceptTerms: acceptConsent,
             acceptPrivacy: acceptConsent,
             newsletterOptIn,
-            termsVersion: "2026-05-05",
-            privacyVersion: "2026-05-05",
             ...(selectedRole === "company" && !inviteToken
               ? {
                   companyName: companyName.trim(),
