@@ -290,6 +290,7 @@ services:
       default: {}
       traefik:
         aliases:
+          - parvagas-cv
           - parvagas-prod-cv
     labels:
       - traefik.enable=true
