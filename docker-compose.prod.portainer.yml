@@ -296,6 +296,7 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${TRAEFIK_NETWORK:-proxy}
       - traefik.http.routers.parvagas-prod-cv.rule=Host(`${CV_HOST:-cv.parvagas.pt}`)
+      - traefik.http.routers.parvagas-prod-cv.priority=200
       - traefik.http.routers.parvagas-prod-cv.entrypoints=websecure
       - traefik.http.routers.parvagas-prod-cv.tls=true
       - traefik.http.routers.parvagas-prod-cv.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
