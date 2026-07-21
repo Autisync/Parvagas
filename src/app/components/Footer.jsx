@@ -68,8 +68,12 @@ export default function Footer() {
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-600">
             <Link href="/privacidade/" className="hover:text-red-500">{dict.footer.privacy}</Link>
             <Link href="/termos/" className="hover:text-red-500">{dict.footer.terms}</Link>
+            <Link href="/cookies/" className="hover:text-red-500">{dict.footer.cookies}</Link>
             <Link href="/politica-retencao/" className="hover:text-red-500">{dict.footer.retention}</Link>
+            <Link href="/reembolsos/" className="hover:text-red-500">{dict.footer.refunds}</Link>
             <Link href="/termos-empregador/" className="hover:text-red-500">{dict.footer.employerTerms}</Link>
+            <Link href="/utilizacao-aceitavel/" className="hover:text-red-500">{dict.footer.acceptableUse}</Link>
+            <Link href="/legal/" className="font-semibold hover:text-red-500">{dict.footer.allLegalDocuments}</Link>
           </div>
           <span className="mt-2 inline-flex items-center gap-1 text-xs text-gray-700">
             {dict.footer.designHostedBy}{" "}
