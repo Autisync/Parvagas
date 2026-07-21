@@ -31,15 +31,17 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["payments"])
 
 # Seed catalogue used when no plans exist in the DB yet (Angola pricing, AOA).
+# max_active_jobs mirrors migrations/versions/20260721_0062_plan_max_active_jobs.py's
+# backfill — keep the two in sync (-1 = unlimited).
 _DEFAULT_PLANS = [
     {"code": "free", "name": "Grátis", "price": 0, "interval": "month",
-     "features": ["1 vaga ativa", "Candidaturas ilimitadas"]},
+     "features": ["1 vaga ativa", "Candidaturas ilimitadas"], "max_active_jobs": 1},
     {"code": "starter", "name": "Starter", "price": 25000, "interval": "month",
-     "features": ["5 vagas ativas", "Destaque básico", "Suporte por email"]},
+     "features": ["5 vagas ativas", "Destaque básico", "Suporte por email"], "max_active_jobs": 5},
     {"code": "business", "name": "Business", "price": 75000, "interval": "month",
-     "features": ["Vagas ilimitadas", "Vagas em destaque", "Acesso à base de CVs", "Analytics"]},
+     "features": ["Vagas ilimitadas", "Vagas em destaque", "Acesso à base de CVs", "Analytics"], "max_active_jobs": -1},
     {"code": "featured_post", "name": "Vaga em Destaque", "price": 15000, "interval": "one_time",
-     "features": ["1 vaga destacada por 30 dias"]},
+     "features": ["1 vaga destacada por 30 dias"], "max_active_jobs": -1},
 ]
 
 
@@ -57,7 +59,8 @@ def _ensure_seed_plans(db: Session) -> list[Plan]:
         return plans
     for d in _DEFAULT_PLANS:
         db.add(Plan(code=d["code"], name=d["name"], price=d["price"], currency="AOA",
-                    interval=d["interval"], features=json.dumps(d["features"], ensure_ascii=True), active=True))
+                    interval=d["interval"], features=json.dumps(d["features"], ensure_ascii=True), active=True,
+                    max_active_jobs=d["max_active_jobs"]))
     db.commit()
     return db.query(Plan).filter(Plan.active.is_(True)).all()
 
@@ -512,6 +515,31 @@ async def company_subscription_receipt(db: Session = Depends(get_db), current_us
     )
 
 
+@router.post("/companies/subscription/dispute")
+async def dispute_company_subscription_payment(
+    payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Convenience wrapper around dispute_service.create_dispute for the
+    most recent paid transaction — mirrors .../receipt above. A user with
+    an older transaction to dispute uses the generic POST /account/disputes
+    with an explicit transactionReference instead."""
+    from app.services import dispute_service
+
+    co = _company_for(db, current_user)
+    tx = _latest_paid_transaction(db, company_id=co.id)
+    if not tx:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma transação paga encontrada")
+    reason = str(payload.get("reason", "")).strip()
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reason é obrigatório")
+    category = str(payload.get("category", "other")).strip()
+    try:
+        dispute = dispute_service.create_dispute(db, transaction=tx, filed_by=current_user, category=category, reason=reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"dispute": {"id": dispute.id, "status": dispute.status}}
+
+
 @router.get("/cv-builder/subscription/receipt")
 async def cv_builder_subscription_receipt(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     profile = _candidate_profile_for(db, current_user)
@@ -535,3 +563,30 @@ async def cv_builder_subscription_receipt(db: Session = Depends(get_db), current
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="recibo-{tx.receipt_number}.pdf"'},
     )
+
+
+@router.post("/cv-builder/subscription/dispute")
+async def dispute_cv_builder_subscription_payment(
+    payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    from app.services import dispute_service
+
+    profile = _candidate_profile_for(db, current_user)
+    latest_sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id, CandidateCVSubscription.transaction_reference.isnot(None))
+        .order_by(CandidateCVSubscription.created_at.desc())
+        .first()
+    )
+    tx = _latest_paid_transaction(db, reference=latest_sub.transaction_reference) if latest_sub else None
+    if not tx:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma transação paga encontrada")
+    reason = str(payload.get("reason", "")).strip()
+    if not reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reason é obrigatório")
+    category = str(payload.get("category", "other")).strip()
+    try:
+        dispute = dispute_service.create_dispute(db, transaction=tx, filed_by=current_user, category=category, reason=reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return {"dispute": {"id": dispute.id, "status": dispute.status}}

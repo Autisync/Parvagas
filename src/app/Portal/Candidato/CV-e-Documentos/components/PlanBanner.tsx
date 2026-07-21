@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import RefundDisclosureNotice from "@/app/Portal/components/RefundDisclosureNotice";
+import DisputePaymentForm from "@/app/Portal/components/DisputePaymentForm";
 import type { CVPlan, CVPlansResponse, CVSubResponse } from "./types";
 
 // Subscription banner for the CV Builder — shows the current plan when active,
@@ -130,6 +131,9 @@ export default function PlanBanner({ token }: { token: string | null }) {
         <button type="button" onClick={() => setOpen(true)} className="text-xs text-green-700 underline">
           Gerir plano
         </button>
+        <div className="w-full">
+          <DisputePaymentForm submitPath="/cv-builder/subscription/dispute" />
+        </div>
       </div>
     );
   }

@@ -1263,3 +1263,84 @@ export async function rejectDataSubjectRequest(token: string, requestId: string,
     method: "POST", body: JSON.stringify({ adminNote }), suppressGlobalErrors: true,
   });
 }
+
+// ── Payment disputes (Wave D) ────────────────────────────────────────────────
+
+export type DisputeMessageRecord = {
+  id: string;
+  templateCode: string | null;
+  subject: string | null;
+  body: string;
+  isInternalNote: boolean;
+  createdAt: string | null;
+};
+
+export type DisputeRecord = {
+  id: string;
+  transactionId: string;
+  transactionReference: string | null;
+  amount: number | null;
+  currency: string | null;
+  filedBy: { fullName: string | null; email: string | null } | null;
+  assignedAdmin: { fullName: string | null } | null;
+  category: string;
+  reason: string;
+  status: "open" | "under_review" | "responded" | "resolved" | "refunded" | "rejected";
+  refundAmount: number | null;
+  decisionNote: string | null;
+  infoRequestedAt: string | null;
+  createdAt: string | null;
+  resolvedAt: string | null;
+  messages?: DisputeMessageRecord[];
+};
+
+export async function fetchAdminDisputes(token: string, statusFilter?: string) {
+  const qs = statusFilter ? `?status=${statusFilter}` : "";
+  return authFetch<{ disputes: DisputeRecord[] }>(`/admin/disputes${qs}`, token);
+}
+
+export async function fetchAdminDispute(token: string, disputeId: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}`, token);
+}
+
+export async function assignAdminDispute(token: string, disputeId: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/assign`, token, { method: "POST", suppressGlobalErrors: true });
+}
+
+export async function requestAdminDisputeInfo(token: string, disputeId: string, documentsRequested: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/request-info`, token, {
+    method: "POST", body: JSON.stringify({ documentsRequested }), suppressGlobalErrors: true,
+  });
+}
+
+export async function addAdminDisputeNote(token: string, disputeId: string, note: string) {
+  return authFetch<DisputeMessageRecord>(`/admin/disputes/${disputeId}/note`, token, {
+    method: "POST", body: JSON.stringify({ note }), suppressGlobalErrors: true,
+  });
+}
+
+export async function resolveAdminDispute(token: string, disputeId: string, decisionNote: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/resolve`, token, {
+    method: "POST", body: JSON.stringify({ decisionNote }), suppressGlobalErrors: true,
+  });
+}
+
+export async function refundAdminDispute(
+  token: string, disputeId: string, payload: { refundAmount: number; isPartial: boolean; summary: string },
+) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/refund`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function rejectAdminDispute(token: string, disputeId: string, rejectionReason: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/reject`, token, {
+    method: "POST", body: JSON.stringify({ rejectionReason }), suppressGlobalErrors: true,
+  });
+}
+
+export async function closeAdminDisputeNoResponse(token: string, disputeId: string) {
+  return authFetch<DisputeRecord>(`/admin/disputes/${disputeId}/close-no-response`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}

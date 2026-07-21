@@ -25,7 +25,7 @@ from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, DataSubjectRequest, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
-    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
+    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
@@ -33,7 +33,7 @@ from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
-from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service
+from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -2634,25 +2634,7 @@ async def admin_refund_transaction(
     tx.refunded_at = datetime.utcnow()
     tx.refund_reference = str((payload or {}).get("refundReference", "")).strip() or None
 
-    if tx.company_id and tx.plan_id:
-        sub = (
-            db.query(Subscription)
-            .filter(Subscription.company_id == tx.company_id, Subscription.plan_id == tx.plan_id, Subscription.status == "active")
-            .order_by(Subscription.created_at.desc())
-            .first()
-        )
-        if sub:
-            sub.status = "cancelled"
-            sub.current_period_end = None
-    else:
-        cv_sub = (
-            db.query(CandidateCVSubscription)
-            .filter(CandidateCVSubscription.transaction_reference == tx.reference, CandidateCVSubscription.status == "active")
-            .first()
-        )
-        if cv_sub:
-            cv_sub.status = "cancelled"
-            cv_sub.current_period_end = None
+    receipt_service.revoke_access_for_refunded_transaction(db, tx)
 
     db.commit()
     db.refresh(tx)
@@ -2684,6 +2666,186 @@ async def admin_transaction_receipt(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="recibo-{tx.receipt_number}.pdf"'},
     )
+
+
+# ── Payment disputes (Wave D — fluxo-resolucao-disputas.md) ────────────────
+
+def _to_dispute_record(db: Session, dispute: PaymentDispute) -> dict[str, Any]:
+    filer = db.query(User).filter(User.id == dispute.filed_by_user_id).first()
+    assignee = db.query(User).filter(User.id == dispute.assigned_admin_user_id).first() if dispute.assigned_admin_user_id else None
+    tx = db.query(Transaction).filter(Transaction.id == dispute.transaction_id).first()
+    return {
+        "id": dispute.id,
+        "transactionId": dispute.transaction_id,
+        "transactionReference": tx.reference if tx else None,
+        "amount": tx.amount if tx else None,
+        "currency": tx.currency if tx else None,
+        "filedBy": {"fullName": filer.full_name, "email": filer.email} if filer else None,
+        "assignedAdmin": {"fullName": assignee.full_name} if assignee else None,
+        "category": dispute.category,
+        "reason": dispute.reason,
+        "status": dispute.status,
+        "refundAmount": dispute.refund_amount,
+        "decisionNote": dispute.decision_note,
+        "infoRequestedAt": dispute.info_requested_at.isoformat() if dispute.info_requested_at else None,
+        "createdAt": dispute.created_at.isoformat() if dispute.created_at else None,
+        "resolvedAt": dispute.resolved_at.isoformat() if dispute.resolved_at else None,
+    }
+
+
+def _to_dispute_message_record(message: PaymentDisputeMessage) -> dict[str, Any]:
+    return {
+        "id": message.id,
+        "templateCode": message.template_code,
+        "subject": message.subject,
+        "body": message.body,
+        "isInternalNote": message.is_internal_note,
+        "createdAt": message.created_at.isoformat() if message.created_at else None,
+    }
+
+
+@router.get("/disputes")
+async def admin_list_disputes(
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    disputes = dispute_service.list_disputes(db, status_filter=status_filter)
+    return {"disputes": [_to_dispute_record(db, d) for d in disputes]}
+
+
+@router.get("/disputes/{dispute_id}")
+async def admin_get_dispute(dispute_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    record = _to_dispute_record(db, dispute)
+    record["messages"] = [_to_dispute_message_record(m) for m in dispute_service.list_messages(db, dispute_id)]
+    return record
+
+
+@router.post("/disputes/{dispute_id}/assign")
+async def admin_assign_dispute(dispute_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    admin = _ensure_admin(current_user)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    dispute = dispute_service.assign_to_admin(db, dispute, admin)
+    _record_admin_event(actor=admin, action="dispute.assign", resource_type="payment_dispute", resource_id=dispute.id)
+    return _to_dispute_record(db, dispute)
+
+
+@router.post("/disputes/{dispute_id}/request-info")
+async def admin_request_dispute_info(
+    dispute_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    documents_requested = str(payload.get("documentsRequested", "")).strip()
+    if not documents_requested:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="documentsRequested é obrigatório")
+    dispute = dispute_service.request_info(db, dispute, documents_requested=documents_requested)
+    _record_admin_event(actor=admin, action="dispute.requestInfo", resource_type="payment_dispute", resource_id=dispute.id)
+    return _to_dispute_record(db, dispute)
+
+
+@router.post("/disputes/{dispute_id}/note")
+async def admin_add_dispute_note(
+    dispute_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    note = str(payload.get("note", "")).strip()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="note é obrigatório")
+    message = dispute_service.add_internal_note(db, dispute, admin=admin, note=note)
+    return _to_dispute_message_record(message)
+
+
+@router.post("/disputes/{dispute_id}/resolve")
+async def admin_resolve_dispute(
+    dispute_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """No-refund resolution (e.g. a clarification the user accepted) —
+    decision endpoints are super-admin-only per fluxo-resolucao-disputas.md
+    Section 4 ("A decisão é tomada exclusivamente por um Super-Admin")."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    decision_note = str(payload.get("decisionNote", "")).strip()
+    if not decision_note:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="decisionNote é obrigatório")
+    dispute = dispute_service.resolve_no_refund(db, dispute, admin=admin, decision_note=decision_note)
+    _record_admin_event(actor=admin, action="dispute.resolve", resource_type="payment_dispute", resource_id=dispute.id)
+    return _to_dispute_record(db, dispute)
+
+
+@router.post("/disputes/{dispute_id}/refund")
+async def admin_refund_dispute(
+    dispute_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    try:
+        refund_amount = float(payload.get("refundAmount"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="refundAmount é obrigatório e deve ser numérico")
+    if refund_amount <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="refundAmount deve ser positivo")
+    is_partial = bool(payload.get("isPartial", False))
+    summary = str(payload.get("summary", "")).strip()
+    if not summary:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="summary é obrigatório")
+    dispute = dispute_service.refund(db, dispute, admin=admin, refund_amount=refund_amount, is_partial=is_partial, summary=summary)
+    _record_admin_event(
+        actor=admin, action="dispute.refund", resource_type="payment_dispute", resource_id=dispute.id,
+        details={"refundAmount": refund_amount, "isPartial": is_partial},
+    )
+    return _to_dispute_record(db, dispute)
+
+
+@router.post("/disputes/{dispute_id}/reject")
+async def admin_reject_dispute(
+    dispute_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    rejection_reason = str(payload.get("rejectionReason", "")).strip()
+    if not rejection_reason:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="rejectionReason é obrigatório")
+    dispute = dispute_service.reject(db, dispute, admin=admin, rejection_reason=rejection_reason)
+    _record_admin_event(actor=admin, action="dispute.reject", resource_type="payment_dispute", resource_id=dispute.id)
+    return _to_dispute_record(db, dispute)
+
+
+@router.post("/disputes/{dispute_id}/close-no-response")
+async def admin_close_dispute_no_response(
+    dispute_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    dispute = dispute_service.get_dispute(db, dispute_id)
+    if not dispute:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disputa não encontrada")
+    if dispute.status != "responded":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Só é possível encerrar por falta de resposta uma disputa a aguardar informação")
+    dispute = dispute_service.close_no_response(db, dispute, admin=admin)
+    _record_admin_event(actor=admin, action="dispute.closeNoResponse", resource_type="payment_dispute", resource_id=dispute.id)
+    return _to_dispute_record(db, dispute)
 
 
 def _to_user_subscription_summary(db: Session, target: User) -> dict[str, Any]:

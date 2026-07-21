@@ -642,6 +642,19 @@ class EmailService:
         )
 
     @staticmethod
+    def send_dispute_message_email(email: str, subject: str, title: str, body_html: str, portal_path: str) -> bool:
+        """Generic passthrough for the canned dispute-response templates
+        (Modelo A-F, modelo-resposta-disputa.md) — the PT copy itself lives
+        in app.services.dispute_service since it's tightly coupled to the
+        dispute state machine, not a fixed brand template like the rest of
+        this file's methods."""
+        return EmailService._compose_and_send(
+            email, subject, title, body_html,
+            "Ver disputa", f"{EmailService._base_url()}{portal_path}",
+            preheader=title,
+        )
+
+    @staticmethod
     def send_subscription_expired_email(email: str, party_name: str, plan_name: str, portal_path: str) -> bool:
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>

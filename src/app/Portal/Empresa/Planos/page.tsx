@@ -8,6 +8,7 @@ import { CheckIcon } from "@heroicons/react/24/outline";
 import { SuccessCheck } from "@/app/components/motion";
 import { track } from "@/lib/analytics";
 import RefundDisclosureNotice from "@/app/Portal/components/RefundDisclosureNotice";
+import DisputePaymentForm from "@/app/Portal/components/DisputePaymentForm";
 
 type Plan = {
   _id: string;
@@ -196,6 +197,11 @@ export default function EmpresaPlanosPage() {
                     Cancelar subscrição
                   </button>
                 )
+              )}
+              {subscription.plan?.code !== "free" && (
+                <div className="w-full">
+                  <DisputePaymentForm submitPath="/companies/subscription/dispute" />
+                </div>
               )}
             </div>
           )}

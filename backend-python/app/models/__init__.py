@@ -1126,3 +1126,49 @@ class DataSubjectRequest(Base, TimestampMixin):
     reviewed_at = Column(DateTime, nullable=True)
 
 
+class PaymentDispute(Base, TimestampMixin):
+    """A user-filed complaint about a transaction — Wave D, EXECUTION_PLAN_
+    LEGAL_AND_PAYMENTS.md. Implements the exact state machine and SLA clock
+    defined in fluxo-resolucao-disputas.md (internal SOP): local payment
+    rails (Multicaixa Express, Unitel Money, bank transfer) have no
+    bank-initiated chargeback, so every dispute is opened and resolved
+    directly through this flow rather than an external card-network
+    process.
+
+    created_at (via TimestampMixin) is the SLA clock start — the SOP's
+    "receção" timestamp.
+    """
+    __tablename__ = "payment_disputes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    transaction_id = Column(String(36), ForeignKey("transactions.id"), nullable=False, index=True)
+    filed_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    # billing_error | service_unavailable | refund_request | unrecognized_charge | dissatisfaction | other
+    category = Column(String(30), nullable=False, default="other")
+    reason = Column(Text, nullable=False)
+    # open | under_review | responded | resolved | refunded | rejected
+    status = Column(String(20), nullable=False, default="open", index=True)
+    assigned_admin_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    decision_note = Column(Text, nullable=True)
+    refund_amount = Column(Float, nullable=True)
+    info_requested_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+
+class PaymentDisputeMessage(Base, TimestampMixin):
+    """One message in a dispute's thread — either a canned template
+    (Modelo A-F, modelo-resposta-disputa.md) sent to the user, or an
+    internal note. `sent_by_user_id` null means system-automated (e.g. the
+    Modelo A acknowledgment fired the moment the dispute was filed)."""
+    __tablename__ = "payment_dispute_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    dispute_id = Column(String(36), ForeignKey("payment_disputes.id"), nullable=False, index=True)
+    template_code = Column(String(20), nullable=True)  # A|B|C|D|E|F|None (internal note)
+    subject = Column(String(255), nullable=True)
+    body = Column(Text, nullable=False)
+    is_internal_note = Column(Boolean, nullable=False, default=False)
+    sent_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+

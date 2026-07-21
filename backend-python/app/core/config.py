@@ -220,6 +220,17 @@ class Settings(BaseSettings):
     SECURITY_FAILED_LOGIN_BURST_WINDOW_MINUTES: int = int(os.getenv("SECURITY_FAILED_LOGIN_BURST_WINDOW_MINUTES", 10))
     SECURITY_ALERT_COOLDOWN_MINUTES: int = int(os.getenv("SECURITY_ALERT_COOLDOWN_MINUTES", 30))
 
+    # Payment-dispute rate monitoring (app.services.dispute_service, Wave D,
+    # EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md / fluxo-resolucao-disputas.md
+    # Section 7). When resolved disputes as a share of paid transactions in
+    # the trailing window exceed this threshold, a high-severity security
+    # alert fires via the same SecurityEvent/cooldown machinery as the
+    # login-burst check above — an abnormal dispute rate is treated as a
+    # possible fraud/security incident, not just a support-volume metric.
+    DISPUTE_RATE_ALERT_THRESHOLD: float = float(os.getenv("DISPUTE_RATE_ALERT_THRESHOLD", 0.1))
+    DISPUTE_RATE_WINDOW_DAYS: int = int(os.getenv("DISPUTE_RATE_WINDOW_DAYS", 30))
+    DISPUTE_RATE_MIN_TRANSACTIONS: int = int(os.getenv("DISPUTE_RATE_MIN_TRANSACTIONS", 10))
+
     # Outbound email rate limit — hard hourly cap across ALL sends from this
     # backend. Legit traffic is far below this; a compromised credential or a
     # runaway loop trips it, blocks further sends for the rest of the hour,

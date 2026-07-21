@@ -13,6 +13,7 @@ import {
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
   DocumentTextIcon, ClockIcon, ChevronDownIcon, ScaleIcon, ClipboardDocumentCheckIcon, ArchiveBoxArrowDownIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -57,6 +58,7 @@ const GROUPS: Group[] = [
     label: "Negócio",
     items: [
       { href: "/Portal/Admin/subscriptions", label: "Subscrições",     hint: "Planos e pagamentos", levels: ["super-admin"], icon: <CreditCardIcon className="h-5 w-5" /> },
+      { href: "/Portal/Admin/disputes",      label: "Disputas de Pagamento", hint: "Reclamações e reembolsos", levels: ["super-admin", "moderator"], icon: <ExclamationTriangleIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/exports",       label: "Exportações CSV", hint: "Dados operacionais",  levels: ["super-admin"], icon: <CloudArrowDownIcon className="h-5 w-5" /> },
     ],
   },

@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import Transaction
+from app.models import CandidateCVSubscription, Subscription, Transaction
 
 _ENTITY_NAME = "Usolu Tech Ltd"
 _ENTITY_NIF = "NIF 5001246658"
@@ -41,6 +41,35 @@ def assign_receipt_number(db: Session, tx: Transaction) -> Transaction:
     db.commit()
     db.refresh(tx)
     return tx
+
+
+def revoke_access_for_refunded_transaction(db: Session, tx: Transaction) -> None:
+    """Cascades a full refund into immediate access revocation — per
+    reembolsos.md Section 3, a refund (unlike self-service cancellation)
+    revokes access right away rather than waiting for the current period
+    to end. Shared between the standalone admin refund endpoint
+    (app.api.v1.admin.admin_refund_transaction) and a dispute resolved as
+    a full refund (app.services.dispute_service.refund) so both paths
+    apply the exact same cascade."""
+    if tx.company_id and tx.plan_id:
+        sub = (
+            db.query(Subscription)
+            .filter(Subscription.company_id == tx.company_id, Subscription.plan_id == tx.plan_id, Subscription.status == "active")
+            .order_by(Subscription.created_at.desc())
+            .first()
+        )
+        if sub:
+            sub.status = "cancelled"
+            sub.current_period_end = None
+    else:
+        cv_sub = (
+            db.query(CandidateCVSubscription)
+            .filter(CandidateCVSubscription.transaction_reference == tx.reference, CandidateCVSubscription.status == "active")
+            .first()
+        )
+        if cv_sub:
+            cv_sub.status = "cancelled"
+            cv_sub.current_period_end = None
 
 
 def generate_receipt_pdf(
