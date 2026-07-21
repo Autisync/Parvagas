@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 const Logo = "/icon2.png";
 import Reset from "../components/RestorePass";
-import { apiFetchRaw, setToken, setUser } from "@/lib/api";
+import { apiFetchRaw, getToken, getUser, isSessionValid, setToken, setUser } from "@/lib/api";
 import { resolvePostLoginDestination } from "@/lib/authRedirect";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import GoogleSignInButton from "@/app/components/GoogleSignInButton";
@@ -115,6 +115,22 @@ function LoginContent() {
   useEffect(() => {
     if (rawRole === "admin") router.replace("/Admin/Login");
   }, [rawRole, router]);
+
+  useEffect(() => {
+    if (modeReset) return;
+    if (!isSessionValid()) return;
+
+    const user = getUser() as { role?: string } | null;
+    const token = getToken();
+    if (!token || !user?.role) return;
+
+    const destination = resolvePostLoginDestination(user.role, returnTo);
+    if (destination.startsWith("/")) {
+      router.replace(destination);
+    } else {
+      window.location.assign(destination);
+    }
+  }, [modeReset, returnTo, router]);
 
   useEffect(() => {
     setIsHydrated(true);

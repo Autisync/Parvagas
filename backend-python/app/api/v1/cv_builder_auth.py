@@ -63,6 +63,37 @@ def _parse_origin_allowlist(csv: str) -> set[str]:
     return values
 
 
+def _origin_variants(value: str) -> set[str]:
+    parsed = urlparse((value or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return set()
+
+    variants = {f"{parsed.scheme}://{parsed.netloc}".lower()}
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return variants
+
+    port = f":{parsed.port}" if parsed.port else ""
+    if hostname.startswith("www."):
+        apex = hostname[4:]
+        if apex:
+            variants.add(f"{parsed.scheme}://{apex}{port}".lower())
+    else:
+        variants.add(f"{parsed.scheme}://www.{hostname}{port}".lower())
+
+    return variants
+
+
+def _allowed_candidate_return_origins() -> set[str]:
+    allowed = set()
+    allowed.update(_origin_variants(settings.FRONTEND_URL))
+
+    for origin in _parse_origin_allowlist(settings.CORS_ORIGIN):
+        allowed.update(_origin_variants(origin))
+
+    return allowed
+
+
 def _ensure_allowed_cv_builder_origin() -> str:
     cv_builder_url = (settings.CV_BUILDER_URL or "").strip() or (settings.RESUME_BUILDER_URL or "").strip()
     if not cv_builder_url:
@@ -102,12 +133,7 @@ def _validate_candidate_return_url(value: str | None) -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid return_url")
 
-    frontend_url = (settings.FRONTEND_URL or "").strip()
-    allowed = set()
-    if frontend_url:
-        parsed_frontend = urlparse(frontend_url)
-        if parsed_frontend.scheme in {"http", "https"} and parsed_frontend.netloc:
-            allowed.add(f"{parsed_frontend.scheme}://{parsed_frontend.netloc}".lower())
+    allowed = _allowed_candidate_return_origins()
 
     if allowed:
         req_origin = f"{parsed.scheme}://{parsed.netloc}".lower()
