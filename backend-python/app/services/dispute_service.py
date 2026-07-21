@@ -330,6 +330,33 @@ def list_messages(db: Session, dispute_id: str) -> list[PaymentDisputeMessage]:
     )
 
 
+def compute_dispute_rate(db: Session) -> dict[str, Any]:
+    """Resolved disputes as a share of paid transactions in the trailing
+    DISPUTE_RATE_WINDOW_DAYS window — the same metric the Section 7
+    threshold alert watches, exposed for display (admin compliance
+    dashboard, Wave X4) independent of whether it's actually crossed the
+    alert threshold."""
+    window_start = datetime.utcnow() - timedelta(days=settings.DISPUTE_RATE_WINDOW_DAYS)
+    paid_count = (
+        db.query(Transaction)
+        .filter(Transaction.status.in_(["paid", "refunded"]), Transaction.created_at >= window_start)
+        .count()
+    )
+    resolved_disputes = (
+        db.query(PaymentDispute)
+        .filter(PaymentDispute.resolved_at.isnot(None), PaymentDispute.resolved_at >= window_start)
+        .count()
+    )
+    rate = (resolved_disputes / paid_count) if paid_count else 0.0
+    return {
+        "rate": rate,
+        "resolvedDisputes": resolved_disputes,
+        "paidTransactions": paid_count,
+        "windowDays": settings.DISPUTE_RATE_WINDOW_DAYS,
+        "aboveThreshold": paid_count >= settings.DISPUTE_RATE_MIN_TRANSACTIONS and rate >= settings.DISPUTE_RATE_ALERT_THRESHOLD,
+    }
+
+
 def _check_dispute_rate_threshold(db: Session) -> None:
     """fluxo-resolucao-disputas.md Section 7: an abnormally high dispute
     rate is a possible fraud/security incident, escalated the same way as a
@@ -337,20 +364,12 @@ def _check_dispute_rate_threshold(db: Session) -> None:
     dispute-rate alerts land in the same admin inbox/tab as other security
     alerts, deduplicated the same way."""
     try:
-        window_start = datetime.utcnow() - timedelta(days=settings.DISPUTE_RATE_WINDOW_DAYS)
-        paid_count = (
-            db.query(Transaction)
-            .filter(Transaction.status.in_(["paid", "refunded"]), Transaction.created_at >= window_start)
-            .count()
-        )
+        summary = compute_dispute_rate(db)
+        paid_count = summary["paidTransactions"]
+        resolved_disputes = summary["resolvedDisputes"]
+        rate = summary["rate"]
         if paid_count < settings.DISPUTE_RATE_MIN_TRANSACTIONS:
             return
-        resolved_disputes = (
-            db.query(PaymentDispute)
-            .filter(PaymentDispute.resolved_at.isnot(None), PaymentDispute.resolved_at >= window_start)
-            .count()
-        )
-        rate = resolved_disputes / paid_count if paid_count else 0
         if rate < settings.DISPUTE_RATE_ALERT_THRESHOLD:
             return
 

@@ -3386,6 +3386,90 @@ async def admin_note_security_incident(
     return _to_incident_log_record(entry)
 
 
+# ── Compliance dashboard (Wave X4) ──────────────────────────────────────────
+#
+# Aggregates the four legal/compliance surfaces built across this plan
+# (compliance-analyzer, DSAR queue, dispute queue, security incidents) plus
+# legal-document coverage into one at-a-glance view — each of those already
+# has its own full admin page; this only summarizes and links out, it
+# doesn't duplicate any of their CRUD.
+
+@router.get("/compliance-dashboard")
+async def admin_compliance_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+
+    values, ok = _count_block(
+        db,
+        {
+            "complianceOpenTotal": lambda: db.query(ComplianceCheck).filter(ComplianceCheck.status == "open").count(),
+            "complianceOpenHigh": lambda: db.query(ComplianceCheck).filter(
+                ComplianceCheck.status == "open", ComplianceCheck.severity_summary == "high"
+            ).count(),
+            "complianceOpenMedium": lambda: db.query(ComplianceCheck).filter(
+                ComplianceCheck.status == "open", ComplianceCheck.severity_summary == "medium"
+            ).count(),
+            "dsarPendingExport": lambda: db.query(DataSubjectRequest).filter(
+                DataSubjectRequest.request_type == "export", DataSubjectRequest.status == "pending"
+            ).count(),
+            "dsarPendingErasure": lambda: db.query(DataSubjectRequest).filter(
+                DataSubjectRequest.request_type == "erasure", DataSubjectRequest.status == "pending"
+            ).count(),
+            "disputesOpen": lambda: db.query(PaymentDispute).filter(
+                PaymentDispute.status.in_(["open", "under_review", "responded"])
+            ).count(),
+            "incidentsOpen": lambda: db.query(SecurityIncident).filter(SecurityIncident.closed_at.is_(None)).count(),
+            "legalDocumentsTotal": lambda: db.query(LegalDocument).count(),
+            "legalDocumentsRequiringAcceptance": lambda: db.query(LegalDocument).filter(
+                LegalDocument.requires_acceptance.is_(True)
+            ).count(),
+        },
+        "compliance-dashboard",
+    )
+
+    dispute_rate = None
+    try:
+        dispute_rate = dispute_service.compute_dispute_rate(db)
+    except Exception:  # noqa: BLE001 — dashboard degrades gracefully, never 500s over one metric
+        pass
+
+    breach_incidents_awaiting_notification = []
+    try:
+        for incident in incident_service.list_incidents(db, open_only=True):
+            if incident.is_personal_data_breach and not incident.authority_notified_at:
+                breach_incidents_awaiting_notification.append({
+                    "id": incident.id,
+                    "title": incident.title,
+                    "hoursRemaining": incident_service.hours_remaining(incident),
+                })
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "ok": ok,
+        "complianceChecks": {
+            "openTotal": values.get("complianceOpenTotal"),
+            "openHigh": values.get("complianceOpenHigh"),
+            "openMedium": values.get("complianceOpenMedium"),
+        },
+        "dsar": {
+            "pendingExport": values.get("dsarPendingExport"),
+            "pendingErasure": values.get("dsarPendingErasure"),
+        },
+        "disputes": {
+            "open": values.get("disputesOpen"),
+            "rate": dispute_rate,
+        },
+        "incidents": {
+            "open": values.get("incidentsOpen"),
+            "breachesAwaitingNotification": breach_incidents_awaiting_notification,
+        },
+        "legalDocuments": {
+            "total": values.get("legalDocumentsTotal"),
+            "requiringAcceptance": values.get("legalDocumentsRequiringAcceptance"),
+        },
+    }
+
+
 @router.get("/audit-logs/export.csv")
 async def admin_audit_logs_csv(
     keyword: str | None = None,

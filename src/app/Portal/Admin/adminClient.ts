@@ -1447,3 +1447,24 @@ export async function noteAdminSecurityIncident(token: string, incidentId: strin
     method: "POST", body: JSON.stringify({ note }), suppressGlobalErrors: true,
   });
 }
+
+// ── Compliance dashboard (Wave X4) ──────────────────────────────────────────
+
+export type ComplianceDashboard = {
+  ok: boolean;
+  complianceChecks: { openTotal: number | null; openHigh: number | null; openMedium: number | null };
+  dsar: { pendingExport: number | null; pendingErasure: number | null };
+  disputes: {
+    open: number | null;
+    rate: { rate: number; resolvedDisputes: number; paidTransactions: number; windowDays: number; aboveThreshold: boolean } | null;
+  };
+  incidents: {
+    open: number | null;
+    breachesAwaitingNotification: { id: string; title: string; hoursRemaining: number | null }[];
+  };
+  legalDocuments: { total: number | null; requiringAcceptance: number | null };
+};
+
+export async function fetchComplianceDashboard(token: string) {
+  return authFetch<ComplianceDashboard>(`/admin/compliance-dashboard`, token);
+}

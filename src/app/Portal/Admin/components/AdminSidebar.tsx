@@ -13,7 +13,7 @@ import {
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
   DocumentTextIcon, ClockIcon, ChevronDownIcon, ScaleIcon, ClipboardDocumentCheckIcon, ArchiveBoxArrowDownIcon,
-  ExclamationTriangleIcon, BellAlertIcon,
+  ExclamationTriangleIcon, BellAlertIcon, Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -76,6 +76,7 @@ const GROUPS: Group[] = [
     key: "legal",
     label: "Legal & Conformidade",
     items: [
+      { href: "/Portal/Admin/compliance-dashboard", label: "Painel de Conformidade", hint: "Visão agregada", levels: ["super-admin"], icon: <Squares2X2Icon className="h-5 w-5" /> },
       { href: "/Portal/Admin/legal-documents",     label: "Documentos Legais",       hint: "Editar e publicar políticas", levels: ["super-admin"], icon: <ScaleIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/compliance-analyzer", label: "Analisador de Conformidade", hint: "Verificar novas funcionalidades", levels: ["super-admin"], icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/data-requests",       label: "Pedidos de Dados (DSAR)", hint: "Exportação e eliminação", levels: ["super-admin"], icon: <ArchiveBoxArrowDownIcon className="h-5 w-5" /> },
