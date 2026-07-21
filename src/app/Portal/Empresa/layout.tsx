@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import PortalTopBar from "@/app/Portal/components/PortalTopBar";
+import LegalReconsentGate from "@/app/Portal/components/LegalReconsentGate";
 
 // Owns the fixed left dock AND the matching content offset (see the
 // component for why those must live together). SSR-loading fallback
@@ -14,7 +15,9 @@ export default function EmpresaLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
       <PortalTopBar role="company" />
-      <CompanyPortalShell>{children}</CompanyPortalShell>
+      <LegalReconsentGate>
+        <CompanyPortalShell>{children}</CompanyPortalShell>
+      </LegalReconsentGate>
     </div>
   );
 }

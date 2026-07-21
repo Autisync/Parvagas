@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import OnboardingGuard from "./components/OnboardingGuard";
 import Footer from "@/app/components/Footer";
 import PortalTopBar from "@/app/Portal/components/PortalTopBar";
+import LegalReconsentGate from "@/app/Portal/components/LegalReconsentGate";
 
 // Owns the fixed left dock AND the matching content offset (see the
 // component for why those must live together). SSR-loading fallback
@@ -17,14 +18,16 @@ export default function CandidatoLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white">
       <PortalTopBar role="candidate" />
-      <OnboardingGuard>
-        <CandidatePortalShell>
-          <main className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:pb-16">
-            <section>{children}</section>
-          </main>
-          <Footer />
-        </CandidatePortalShell>
-      </OnboardingGuard>
+      <LegalReconsentGate>
+        <OnboardingGuard>
+          <CandidatePortalShell>
+            <main className="mx-auto max-w-7xl px-6 pb-24 pt-8 lg:pb-16">
+              <section>{children}</section>
+            </main>
+            <Footer />
+          </CandidatePortalShell>
+        </OnboardingGuard>
+      </LegalReconsentGate>
     </div>
   );
 }
