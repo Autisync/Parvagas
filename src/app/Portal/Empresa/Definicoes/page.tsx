@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import PageHeader from "@/app/components/PageHeader";
 import { AcademicCapIcon, BellIcon } from "@heroicons/react/24/outline";
 import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
+import LegalAcceptanceHistory from "@/app/Portal/components/LegalAcceptanceHistory";
 
 export default function EmpresaDefinicoesPage() {
   const { loading } = useAuth("company");
@@ -74,6 +75,7 @@ export default function EmpresaDefinicoesPage() {
             </div>
           </section>
 
+          <LegalAcceptanceHistory />
           <PrivacyDataCard />
         </div>
       </main>

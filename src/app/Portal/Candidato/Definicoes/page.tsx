@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { RocketLaunchIcon, AcademicCapIcon, AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
 import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
+import LegalAcceptanceHistory from "@/app/Portal/components/LegalAcceptanceHistory";
 
 type Prefs = {
   emailJobAlerts?: boolean;
@@ -163,7 +164,8 @@ export default function DefinicoesPage() {
           </button>
         </form>
 
-      <div className="mt-8">
+      <div className="mt-8 space-y-4">
+        <LegalAcceptanceHistory />
         <PrivacyDataCard />
       </div>
     </div>

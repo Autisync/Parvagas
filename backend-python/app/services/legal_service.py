@@ -222,3 +222,36 @@ def has_accepted_current_version(db: Session, *, user_id: str, slug: str) -> boo
         .first()
         is not None
     )
+
+
+def list_acceptances_for_user(db: Session, user_id: str) -> list[dict]:
+    """Every acceptance this user has ever recorded, newest first, enriched
+    with the document/version it refers to — the data behind "Os meus
+    documentos" (Wave X2). Internal-audience documents are never filtered
+    out here (unlike the public API) since this is the user's own record
+    of what THEY accepted, not a document-discovery surface; in practice a
+    non-admin user never has an acceptance against an internal doc anyway.
+    """
+    from app.models import LegalAcceptance, LegalDocument, LegalDocumentVersion
+
+    rows = (
+        db.query(LegalAcceptance, LegalDocumentVersion, LegalDocument)
+        .join(LegalDocumentVersion, LegalAcceptance.document_version_id == LegalDocumentVersion.id)
+        .join(LegalDocument, LegalDocumentVersion.document_id == LegalDocument.id)
+        .filter(LegalAcceptance.user_id == user_id)
+        .order_by(LegalAcceptance.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": acceptance.id,
+            "slug": document.slug,
+            "title": document.title,
+            "category": document.category,
+            "versionLabel": version.version_label,
+            "isCurrentVersion": version.status == "published",
+            "context": acceptance.context,
+            "acceptedAt": acceptance.created_at.isoformat() if acceptance.created_at else None,
+        }
+        for acceptance, version, document in rows
+    ]

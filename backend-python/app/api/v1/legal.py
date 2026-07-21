@@ -113,6 +113,13 @@ async def my_pending_legal_acceptances(
     return {"pendingAcceptances": pending}
 
 
+@router.get("/my-acceptances")
+async def my_legal_acceptances(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Self-service "Os meus documentos" (Wave X2) — every acceptance this
+    user has ever recorded, newest first."""
+    return {"acceptances": legal_service.list_acceptances_for_user(db, current_user.id)}
+
+
 @router.post("/acceptances")
 async def record_my_legal_acceptance(
     payload: dict[str, Any],
