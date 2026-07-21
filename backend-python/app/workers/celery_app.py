@@ -78,6 +78,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
     'app.workers.tasks.process_lapsed_subscriptions': {'queue': 'cleanup'},
+    'app.workers.tasks.check_breach_notification_deadlines': {'queue': 'cleanup'},
     # Slow by design (rate-limit sleeps between HIBP API calls, up to ~35 min
     # per run) — cleanup queue keeps it away from web-facing email/parsing work.
     'app.workers.tasks.run_hibp_breach_scan': {'queue': 'cleanup'},
@@ -145,5 +146,12 @@ celery.conf.beat_schedule = {
     'process-lapsed-subscriptions-daily': {
         'task': 'app.workers.tasks.process_lapsed_subscriptions',
         'schedule': crontab(hour=8, minute=30),
+    },
+    # GDPR Art. 33 72-hour notification clock (Wave X1) — every 6h, not
+    # daily, since a legal deadline this tight needs finer-grained
+    # monitoring than everything else on this schedule.
+    'check-breach-notification-deadlines': {
+        'task': 'app.workers.tasks.check_breach_notification_deadlines',
+        'schedule': crontab(minute=0, hour='*/6'),
     },
 }

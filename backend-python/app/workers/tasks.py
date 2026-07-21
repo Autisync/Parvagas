@@ -1142,6 +1142,25 @@ def process_lapsed_subscriptions() -> dict:
         db.close()
 
 
+@celery.task(name='app.workers.tasks.check_breach_notification_deadlines')
+@track_task_run('check_breach_notification_deadlines')
+def check_breach_notification_deadlines() -> dict:
+    """Runs every 6h (not daily — a 72h legal deadline needs finer-grained
+    monitoring than the once-a-day cadence used elsewhere in this file).
+    See app.services.incident_service.check_notification_deadlines."""
+    from app.services.incident_service import check_notification_deadlines
+
+    db = SessionLocal()
+    try:
+        return check_notification_deadlines(db)
+    except Exception as e:
+        logger.error(f"Failed to check breach notification deadlines: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 @celery.task(name='app.workers.tasks.generate_auto_apply_proposals')
 @track_task_run('generate_auto_apply_proposals')
 def generate_auto_apply_proposals() -> dict:

@@ -1344,3 +1344,106 @@ export async function closeAdminDisputeNoResponse(token: string, disputeId: stri
     method: "POST", suppressGlobalErrors: true,
   });
 }
+
+// ── Security incidents (Wave X1) ────────────────────────────────────────────
+
+export type IncidentLogRecord = {
+  id: string;
+  entryType: "containment" | "note" | "status_change";
+  body: string;
+  createdAt: string | null;
+};
+
+export type SecurityIncidentRecord = {
+  id: string;
+  title: string;
+  description: string;
+  severity: "critica" | "alta" | "media" | "baixa";
+  createdBy: string | null;
+  assignedTo: string | null;
+  containedAt: string | null;
+  impactAssessedAt: string | null;
+  isPersonalDataBreach: boolean | null;
+  riskLevel: "none" | "low" | "high" | null;
+  affectedDataCategories: string | null;
+  affectedSubjectCountEstimate: number | null;
+  notificationDeadline: string | null;
+  hoursRemaining: number | null;
+  authorityNotifiedAt: string | null;
+  subjectsNotifiedAt: string | null;
+  clientNotifiedAt: string | null;
+  remediatedAt: string | null;
+  remediationNotes: string | null;
+  closedAt: string | null;
+  postIncidentReviewNotes: string | null;
+  postIncidentReviewDueAt: string | null;
+  createdAt: string | null;
+  log?: IncidentLogRecord[];
+};
+
+export async function fetchAdminSecurityIncidents(token: string, openOnly = false) {
+  return authFetch<{ incidents: SecurityIncidentRecord[] }>(`/admin/security-incidents${openOnly ? "?openOnly=true" : ""}`, token);
+}
+
+export async function fetchAdminSecurityIncident(token: string, incidentId: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}`, token);
+}
+
+export async function createAdminSecurityIncident(
+  token: string, payload: { title: string; description: string; severity: string },
+) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function containAdminSecurityIncident(token: string, incidentId: string, action: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/contain`, token, {
+    method: "POST", body: JSON.stringify({ action }), suppressGlobalErrors: true,
+  });
+}
+
+export async function assessAdminSecurityIncident(
+  token: string, incidentId: string,
+  payload: { isPersonalDataBreach: boolean; riskLevel?: string; affectedDataCategories: string; affectedSubjectCountEstimate?: number },
+) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/assess`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function notifyAuthorityAdminSecurityIncident(token: string, incidentId: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/notify-authority`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}
+
+export async function notifySubjectsAdminSecurityIncident(token: string, incidentId: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/notify-subjects`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}
+
+export async function notifyClientAdminSecurityIncident(token: string, incidentId: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/notify-client`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}
+
+export async function remediateAdminSecurityIncident(token: string, incidentId: string, notes: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/remediate`, token, {
+    method: "POST", body: JSON.stringify({ notes }), suppressGlobalErrors: true,
+  });
+}
+
+export async function closeAdminSecurityIncident(token: string, incidentId: string, reviewNotes: string) {
+  return authFetch<SecurityIncidentRecord>(`/admin/security-incidents/${incidentId}/close`, token, {
+    method: "POST", body: JSON.stringify({ reviewNotes }), suppressGlobalErrors: true,
+  });
+}
+
+export async function noteAdminSecurityIncident(token: string, incidentId: string, note: string) {
+  return authFetch<IncidentLogRecord>(`/admin/security-incidents/${incidentId}/note`, token, {
+    method: "POST", body: JSON.stringify({ note }), suppressGlobalErrors: true,
+  });
+}

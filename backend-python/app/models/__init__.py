@@ -1173,3 +1173,67 @@ class PaymentDisputeMessage(Base, TimestampMixin):
     sent_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
 
+class SecurityIncident(Base, TimestampMixin):
+    """A tracked security incident — Wave X1, EXECUTION_PLAN_LEGAL_AND_
+    PAYMENTS.md. Operationalizes the runbook in seguranca-incidentes.md
+    (internal doc): severity classification (Section 2), the 7-step
+    response procedure (Section 3), and — the part that actually needs a
+    clock, not just policy text — the GDPR Art. 33 72-hour notification
+    deadline once an incident is confirmed a personal-data breach.
+
+    created_at (via TimestampMixin) is "Passo 1 — Deteção" and also the
+    72h clock start ("o momento em que a Parvagas tomou conhecimento da
+    violação"); see incident_service.notification_deadline().
+    """
+    __tablename__ = "security_incidents"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    # critica | alta | media | baixa (seguranca-incidentes.md Section 2)
+    severity = Column(String(10), nullable=False, default="baixa", index=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    # Passo 2 — Contenção
+    contained_at = Column(DateTime, nullable=True)
+
+    # Passo 3 — Avaliação do Impacto
+    impact_assessed_at = Column(DateTime, nullable=True)
+    is_personal_data_breach = Column(Boolean, nullable=True)  # null = not yet assessed
+    risk_level = Column(String(10), nullable=True)  # none | low | high (Art. 34 trigger)
+    affected_data_categories = Column(Text, nullable=True)
+    affected_subject_count_estimate = Column(Integer, nullable=True)
+
+    # Passo 5 — Notificação
+    authority_notified_at = Column(DateTime, nullable=True)  # Art. 33 (APD/CNPD)
+    subjects_notified_at = Column(DateTime, nullable=True)  # Art. 34, only if risk_level == "high"
+    client_notified_at = Column(DateTime, nullable=True)  # DPA Section 5, 48h clock, B2B data only
+
+    # Passo 6 — Remediação
+    remediated_at = Column(DateTime, nullable=True)
+    remediation_notes = Column(Text, nullable=True)
+
+    # Passo 7 — Revisão Pós-Incidente
+    closed_at = Column(DateTime, nullable=True)
+    post_incident_review_notes = Column(Text, nullable=True)
+
+    # Set once, the moment an approaching-deadline alert has fired, so the
+    # periodic check (Wave X1) doesn't re-alert every run.
+    deadline_alert_sent_at = Column(DateTime, nullable=True)
+
+
+class SecurityIncidentLogEntry(Base, TimestampMixin):
+    """One timeline entry on a SecurityIncident — a containment action
+    ("Cada ação de contenção é registada com hora e responsável", Passo 2),
+    a free-form note, or an automated status-change record. `created_by_
+    user_id` null means system-generated."""
+    __tablename__ = "security_incident_log_entries"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    incident_id = Column(String(36), ForeignKey("security_incidents.id"), nullable=False, index=True)
+    entry_type = Column(String(30), nullable=False, default="note")  # containment | note | status_change
+    body = Column(Text, nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+

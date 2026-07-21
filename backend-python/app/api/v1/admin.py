@@ -26,14 +26,14 @@ from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, DataSubjectRequest, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
     LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, ResumeTemplate, SavedJob, ScrapedJob,
-    ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
+    ScraperSettings, ScraperSource, SecurityEvent, SecurityIncident, SecurityIncidentLogEntry, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
 from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
-from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service
+from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service, incident_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -3175,6 +3175,215 @@ async def admin_security_events(
         "security-summary",
     )
     return {"securityEvents": events, "summary": summary, "pagination": _pagination(page, limit, total)}
+
+
+# ── Security incidents (Wave X1 — seguranca-incidentes.md runbook) ─────────
+
+def _to_incident_record(db: Session, incident: SecurityIncident) -> dict[str, Any]:
+    creator = db.query(User).filter(User.id == incident.created_by_user_id).first() if incident.created_by_user_id else None
+    assignee = db.query(User).filter(User.id == incident.assigned_to_user_id).first() if incident.assigned_to_user_id else None
+    deadline = incident_service.notification_deadline(incident)
+    return {
+        "id": incident.id,
+        "title": incident.title,
+        "description": incident.description,
+        "severity": incident.severity,
+        "createdBy": creator.full_name if creator else None,
+        "assignedTo": assignee.full_name if assignee else None,
+        "containedAt": incident.contained_at.isoformat() if incident.contained_at else None,
+        "impactAssessedAt": incident.impact_assessed_at.isoformat() if incident.impact_assessed_at else None,
+        "isPersonalDataBreach": incident.is_personal_data_breach,
+        "riskLevel": incident.risk_level,
+        "affectedDataCategories": incident.affected_data_categories,
+        "affectedSubjectCountEstimate": incident.affected_subject_count_estimate,
+        "notificationDeadline": deadline.isoformat() if deadline else None,
+        "hoursRemaining": incident_service.hours_remaining(incident),
+        "authorityNotifiedAt": incident.authority_notified_at.isoformat() if incident.authority_notified_at else None,
+        "subjectsNotifiedAt": incident.subjects_notified_at.isoformat() if incident.subjects_notified_at else None,
+        "clientNotifiedAt": incident.client_notified_at.isoformat() if incident.client_notified_at else None,
+        "remediatedAt": incident.remediated_at.isoformat() if incident.remediated_at else None,
+        "remediationNotes": incident.remediation_notes,
+        "closedAt": incident.closed_at.isoformat() if incident.closed_at else None,
+        "postIncidentReviewNotes": incident.post_incident_review_notes,
+        "postIncidentReviewDueAt": (
+            incident_service.post_incident_review_due_at(incident).isoformat()
+            if incident_service.post_incident_review_due_at(incident) else None
+        ),
+        "createdAt": incident.created_at.isoformat() if incident.created_at else None,
+    }
+
+
+def _to_incident_log_record(entry: SecurityIncidentLogEntry) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "entryType": entry.entry_type,
+        "body": entry.body,
+        "createdAt": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+@router.get("/security-incidents")
+async def admin_list_security_incidents(
+    openOnly: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    incidents = incident_service.list_incidents(db, open_only=openOnly)
+    return {"incidents": [_to_incident_record(db, i) for i in incidents]}
+
+
+@router.get("/security-incidents/{incident_id}")
+async def admin_get_security_incident(
+    incident_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    record = _to_incident_record(db, incident)
+    record["log"] = [_to_incident_log_record(e) for e in incident_service.list_log_entries(db, incident_id)]
+    return record
+
+
+@router.post("/security-incidents")
+async def admin_create_security_incident(
+    payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    title = str(payload.get("title", "")).strip()
+    description = str(payload.get("description", "")).strip()
+    if not title or not description:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="title e description são obrigatórios")
+    severity = str(payload.get("severity", "baixa")).strip()
+    incident = incident_service.create_incident(db, title=title, description=description, severity=severity, created_by=admin)
+    _record_admin_event(actor=admin, action="securityIncident.create", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/contain")
+async def admin_contain_security_incident(
+    incident_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    action = str(payload.get("action", "")).strip()
+    if not action:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="action é obrigatório")
+    incident = incident_service.record_containment(db, incident, action=action, user=admin)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/assess")
+async def admin_assess_security_incident(
+    incident_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    if "isPersonalDataBreach" not in payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="isPersonalDataBreach é obrigatório")
+    incident = incident_service.assess_impact(
+        db, incident,
+        is_personal_data_breach=bool(payload.get("isPersonalDataBreach")),
+        risk_level=payload.get("riskLevel"),
+        affected_data_categories=str(payload.get("affectedDataCategories", "")),
+        affected_subject_count_estimate=payload.get("affectedSubjectCountEstimate"),
+        user=admin,
+    )
+    _record_admin_event(actor=admin, action="securityIncident.assess", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/notify-authority")
+async def admin_notify_authority_security_incident(
+    incident_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    incident = incident_service.mark_authority_notified(db, incident, user=admin)
+    _record_admin_event(actor=admin, action="securityIncident.notifyAuthority", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/notify-subjects")
+async def admin_notify_subjects_security_incident(
+    incident_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    incident = incident_service.mark_subjects_notified(db, incident, user=admin)
+    _record_admin_event(actor=admin, action="securityIncident.notifySubjects", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/notify-client")
+async def admin_notify_client_security_incident(
+    incident_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    incident = incident_service.mark_client_notified(db, incident, user=admin)
+    _record_admin_event(actor=admin, action="securityIncident.notifyClient", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/remediate")
+async def admin_remediate_security_incident(
+    incident_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    notes = str(payload.get("notes", "")).strip()
+    if not notes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="notes é obrigatório")
+    incident = incident_service.remediate(db, incident, notes=notes, user=admin)
+    _record_admin_event(actor=admin, action="securityIncident.remediate", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/close")
+async def admin_close_security_incident(
+    incident_id: str, payload: dict[str, Any] | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    review_notes = str((payload or {}).get("reviewNotes", ""))
+    incident = incident_service.close_incident(db, incident, review_notes=review_notes, user=admin)
+    _record_admin_event(actor=admin, action="securityIncident.close", resource_type="security_incident", resource_id=incident.id)
+    return _to_incident_record(db, incident)
+
+
+@router.post("/security-incidents/{incident_id}/note")
+async def admin_note_security_incident(
+    incident_id: str, payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    incident = incident_service.get_incident(db, incident_id)
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incidente não encontrado")
+    note = str(payload.get("note", "")).strip()
+    if not note:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="note é obrigatório")
+    entry = incident_service.add_note(db, incident, note=note, user=admin)
+    return _to_incident_log_record(entry)
 
 
 @router.get("/audit-logs/export.csv")

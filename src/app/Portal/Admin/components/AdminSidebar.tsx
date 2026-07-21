@@ -13,7 +13,7 @@ import {
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
   DocumentTextIcon, ClockIcon, ChevronDownIcon, ScaleIcon, ClipboardDocumentCheckIcon, ArchiveBoxArrowDownIcon,
-  ExclamationTriangleIcon,
+  ExclamationTriangleIcon, BellAlertIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -67,6 +67,7 @@ const GROUPS: Group[] = [
     label: "Segurança & Acesso",
     items: [
       { href: "/Portal/Admin/security",     label: "Segurança",   hint: "Logins falhados e alertas", levels: ["super-admin"], icon: <ShieldExclamationIcon className="h-5 w-5" /> },
+      { href: "/Portal/Admin/security-incidents", label: "Incidentes de Segurança", hint: "Runbook e prazo de notificação (72h)", levels: ["super-admin"], icon: <BellAlertIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/audit",        label: "Auditoria",   hint: "Ações privilegiadas",       levels: ["super-admin"], icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/admin-levels", label: "Super-admin", hint: "Admins e moderadores",      levels: ["super-admin"], icon: <ShieldCheckIcon className="h-5 w-5" /> },
     ],
