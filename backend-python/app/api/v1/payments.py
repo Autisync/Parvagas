@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -24,6 +24,7 @@ from app.models import (
 from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
 from app.services.candidate_billing_service import get_cv_builder_plans
+from app.services import receipt_service
 
 logger = get_logger(__name__)
 
@@ -196,6 +197,8 @@ def _payment_instructions(provider: str, reference: str, plan: Plan) -> dict[str
 
 def _activate(db: Session, tx: Transaction) -> dict[str, Any]:
     tx.status = "paid"
+    db.commit()
+    receipt_service.assign_receipt_number(db, tx)
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == tx.company_id, Subscription.plan_id == tx.plan_id, Subscription.status == "pending")
@@ -470,4 +473,65 @@ async def confirm_cv_builder_payment(
         tx.status = "paid"
 
     db.commit()
+    if tx:
+        receipt_service.assign_receipt_number(db, tx)
     return {"activated": True, "tier": sub.plan_tier, "reference": reference}
+
+
+# ── Self-service receipts (Wave P3) ─────────────────────────────────────────
+#
+# Scoped to "latest paid transaction" rather than a full billing-history
+# list — there is no billing-history UI yet (a future candidate), and this
+# covers the real, immediate need: a downloadable receipt for what you just
+# paid. Admins can pull any historical transaction's receipt via the
+# /admin/transactions surface regardless of this scoping.
+
+def _latest_paid_transaction(db: Session, *, company_id: str | None = None, reference: str | None = None) -> Transaction | None:
+    query = db.query(Transaction).filter(Transaction.status.in_(["paid", "refunded"]))
+    if company_id:
+        query = query.filter(Transaction.company_id == company_id)
+    if reference:
+        query = query.filter(Transaction.reference == reference)
+    return query.order_by(Transaction.created_at.desc()).first()
+
+
+@router.get("/companies/subscription/receipt")
+async def company_subscription_receipt(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    co = _company_for(db, current_user)
+    tx = _latest_paid_transaction(db, company_id=co.id)
+    if not tx or not tx.receipt_number:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhum recibo disponível")
+    plan = db.query(Plan).filter(Plan.id == tx.plan_id).first()
+    pdf = receipt_service.generate_receipt_pdf(
+        tx, party_name=co.name, party_email=current_user.email,
+        description=f"Plano {plan.name if plan else ''} — Parvagas",
+    )
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="recibo-{tx.receipt_number}.pdf"'},
+    )
+
+
+@router.get("/cv-builder/subscription/receipt")
+async def cv_builder_subscription_receipt(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    profile = _candidate_profile_for(db, current_user)
+    latest_sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id, CandidateCVSubscription.transaction_reference.isnot(None))
+        .order_by(CandidateCVSubscription.created_at.desc())
+        .first()
+    )
+    if not latest_sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhum recibo disponível")
+    tx = _latest_paid_transaction(db, reference=latest_sub.transaction_reference)
+    if not tx or not tx.receipt_number:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhum recibo disponível")
+    plan_info = next((p for p in get_cv_builder_plans(db) if p["tier"] == latest_sub.plan_tier), None)
+    pdf = receipt_service.generate_receipt_pdf(
+        tx, party_name=current_user.full_name, party_email=current_user.email,
+        description=f"Plano {plan_info['name'] if plan_info else latest_sub.plan_tier} — CV Builder Parvagas",
+    )
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="recibo-{tx.receipt_number}.pdf"'},
+    )

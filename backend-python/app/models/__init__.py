@@ -943,8 +943,15 @@ class Transaction(Base, TimestampMixin):
     currency = Column(String(8), nullable=False, default="AOA")
     provider = Column(String(40), nullable=False, default="manual")  # manual|multicaixa|unitel_money|bank
     reference = Column(String(64), nullable=True, index=True)
-    status = Column(String(20), nullable=False, default="pending")  # pending|paid|failed|cancelled
+    status = Column(String(20), nullable=False, default="pending")  # pending|paid|failed|cancelled|refunded
     kind = Column(String(30), nullable=False, default="subscription")  # subscription|featured|post
+    # Assigned once, the moment a transaction is confirmed paid (Wave P3,
+    # EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md) — never reassigned or reused, so
+    # it doubles as a fiscal receipt number. Zero-amount (free-plan) rows
+    # never get one; see receipt_service.assign_receipt_number.
+    receipt_number = Column(String(30), nullable=True, unique=True, index=True)
+    refunded_at = Column(DateTime, nullable=True)
+    refund_reference = Column(String(64), nullable=True)
 
 
 class CandidateCVSubscription(Base, TimestampMixin):

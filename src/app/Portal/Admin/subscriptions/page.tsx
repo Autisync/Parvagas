@@ -9,6 +9,7 @@ import {
   confirmCompanyPayment,
   createAdminPlan,
   deleteAdminPlan,
+  downloadAdminTransactionReceipt,
   fetchAdminCandidateCvPlans,
   fetchAdminMe,
   fetchAdminPlans,
@@ -16,6 +17,7 @@ import {
   fetchAnalytics,
   fetchExpiringSubscriptions,
   hasPermission,
+  refundAdminTransaction,
   rejectAdminTransaction,
   toDateLabel,
   updateAdminCandidateCvPlan,
@@ -176,6 +178,33 @@ export default function AdminSubscriptionsPage() {
       notify(getErrorMessage(err, "Erro ao rejeitar a transação."), "error");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refundPayment = async (tx: TransactionRecord) => {
+    if (!token || !canManage) return;
+    const refundReference = window.prompt(
+      `Reembolsar a transação ${tx.reference} (${tx.amount.toLocaleString("pt-PT")} ${tx.currency})? O acesso do cliente é revogado de imediato.\n\nReferência do reembolso (opcional, ex.: referência da transferência de devolução):`
+    );
+    if (refundReference === null) return;
+    setBusy(true);
+    try {
+      await refundAdminTransaction(token, tx._id, refundReference.trim() || undefined);
+      notify("Transação reembolsada — o acesso foi revogado.", "success");
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao reembolsar a transação."), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadReceipt = async (tx: TransactionRecord) => {
+    if (!token || !tx.receiptNumber) return;
+    try {
+      await downloadAdminTransactionReceipt(token, tx._id, tx.receiptNumber);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao obter o recibo."), "error");
     }
   };
 
@@ -364,6 +393,7 @@ export default function AdminSubscriptionsPage() {
           <select value={txStatusFilter} onChange={(e) => setTxStatusFilter(e.target.value)} className={adminFieldClass}>
             <option value="pending">Pendentes</option>
             <option value="paid">Pagas</option>
+            <option value="refunded">Reembolsadas</option>
             <option value="failed">Falhadas</option>
             <option value="cancelled">Canceladas</option>
             <option value="all">Todas</option>
@@ -381,12 +411,24 @@ export default function AdminSubscriptionsPage() {
                   <p className="font-semibold text-slate-900">{tx.partyName || "—"} <span className="text-xs font-normal text-slate-400">({tx.partyType})</span></p>
                   <p className="text-xs text-slate-500">
                     {tx.reference} · {tx.amount.toLocaleString("pt-PT")} {tx.currency} · {tx.provider} · {tx.kind}
+                    {tx.receiptNumber ? ` · recibo ${tx.receiptNumber}` : ""}
                   </p>
+                  {tx.status === "refunded" && tx.refundedAt && (
+                    <p className="text-xs text-rose-600">
+                      Reembolsado em {new Date(tx.refundedAt).toLocaleDateString("pt-PT")}
+                      {tx.refundReference ? ` · ref. ${tx.refundReference}` : ""}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tx.status === "paid" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : tx.status === "pending" ? "border border-amber-200 bg-amber-50 text-amber-800" : "border border-slate-200 bg-slate-100 text-slate-600"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tx.status === "paid" ? "border border-emerald-200 bg-emerald-50 text-emerald-800" : tx.status === "pending" ? "border border-amber-200 bg-amber-50 text-amber-800" : tx.status === "refunded" ? "border border-rose-200 bg-rose-50 text-rose-800" : "border border-slate-200 bg-slate-100 text-slate-600"}`}>
                     {tx.status}
                   </span>
+                  {tx.receiptNumber && (
+                    <button type="button" onClick={() => downloadReceipt(tx)} className={adminSecondaryButtonClass}>
+                      Recibo
+                    </button>
+                  )}
                   {canManage && tx.status === "pending" && tx.partyType !== "unknown" && (
                     <button type="button" onClick={() => confirmPayment(tx)} disabled={busy} className={adminSecondaryButtonClass}>
                       Confirmar pagamento
@@ -400,6 +442,16 @@ export default function AdminSubscriptionsPage() {
                       className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Rejeitar
+                    </button>
+                  )}
+                  {me?.adminLevel === "super-admin" && tx.status === "paid" && (
+                    <button
+                      type="button"
+                      onClick={() => refundPayment(tx)}
+                      disabled={busy}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Reembolsar
                     </button>
                   )}
                 </div>

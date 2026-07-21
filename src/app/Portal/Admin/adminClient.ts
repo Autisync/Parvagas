@@ -946,6 +946,9 @@ export type TransactionRecord = {
   partyType: "company" | "candidate" | "unknown";
   partyName?: string | null;
   createdAt?: string | null;
+  receiptNumber?: string | null;
+  refundedAt?: string | null;
+  refundReference?: string | null;
 };
 
 export type UserSubscriptionSummary = {
@@ -1025,6 +1028,28 @@ export async function rejectAdminTransaction(token: string, id: string, status: 
     body: JSON.stringify({ status }),
     suppressGlobalErrors: true,
   });
+}
+
+export async function refundAdminTransaction(token: string, id: string, refundReference?: string) {
+  return authFetch<TransactionRecord>(`/admin/transactions/${id}/refund`, token, {
+    method: "POST",
+    body: JSON.stringify({ refundReference }),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function downloadAdminTransactionReceipt(token: string, id: string, receiptNumber: string) {
+  const res = await authFetchRaw(`/admin/transactions/${id}/receipt`, token, { suppressGlobalErrors: true });
+  if (!res.ok) throw new Error("Não foi possível obter o recibo.");
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = `recibo-${receiptNumber}.pdf`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(href);
 }
 
 export async function fetchUserSubscription(token: string, userId: string) {

@@ -14,7 +14,7 @@ import uuid
 
 from pathlib import Path as _Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
@@ -33,7 +33,7 @@ from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
-from app.services import legal_service, compliance_analyzer_service, dsar_service
+from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -2342,6 +2342,9 @@ def _to_transaction_record(tx: Transaction, party_type: str, party_name: str | N
         "reference": tx.reference, "status": tx.status, "kind": tx.kind,
         "partyType": party_type, "partyName": party_name,
         "createdAt": tx.created_at.isoformat() if tx.created_at else None,
+        "receiptNumber": tx.receipt_number,
+        "refundedAt": tx.refunded_at.isoformat() if tx.refunded_at else None,
+        "refundReference": tx.refund_reference,
     }
 
 
@@ -2588,6 +2591,99 @@ async def admin_update_transaction_status(
         resource_id=tx.id, details={"status": next_status, "reference": tx.reference},
     )
     return _to_transaction_record(tx, "company" if tx.company_id else "unknown", None)
+
+
+def _resolve_transaction_party(db: Session, tx: Transaction) -> tuple[str, str]:
+    """(name, email) for the receipt — company owner for a company
+    transaction, or the candidate resolved via CandidateCVSubscription.
+    transaction_reference for a CV Builder one."""
+    if tx.company_id:
+        company = db.query(Company).filter(Company.id == tx.company_id).first()
+        owner = db.query(User).filter(User.id == company.owner_user_id).first() if company and company.owner_user_id else None
+        return (company.name if company else ""), (owner.email if owner else "")
+    sub = db.query(CandidateCVSubscription).filter(CandidateCVSubscription.transaction_reference == tx.reference).first()
+    if sub:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.id == sub.candidate_profile_id).first()
+        user = db.query(User).filter(User.id == profile.user_id).first() if profile else None
+        return (user.full_name if user else ""), (user.email if user else "")
+    return "", ""
+
+
+@router.post("/transactions/{transaction_id}/refund")
+async def admin_refund_transaction(
+    transaction_id: str,
+    payload: dict[str, Any] | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Refunds a PAID transaction — distinct from admin_update_transaction_
+    status, which only rejects still-pending ones. Per reembolsos.md Section
+    3, a refund revokes access immediately (unlike self-service cancellation,
+    which keeps access until period end): the associated Subscription /
+    CandidateCVSubscription is set to "cancelled" with its period end
+    cleared, right here rather than left to the next renewal check."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transação não encontrada")
+    if tx.status != "paid":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Só é possível reembolsar uma transação paga")
+
+    tx.status = "refunded"
+    tx.refunded_at = datetime.utcnow()
+    tx.refund_reference = str((payload or {}).get("refundReference", "")).strip() or None
+
+    if tx.company_id and tx.plan_id:
+        sub = (
+            db.query(Subscription)
+            .filter(Subscription.company_id == tx.company_id, Subscription.plan_id == tx.plan_id, Subscription.status == "active")
+            .order_by(Subscription.created_at.desc())
+            .first()
+        )
+        if sub:
+            sub.status = "cancelled"
+            sub.current_period_end = None
+    else:
+        cv_sub = (
+            db.query(CandidateCVSubscription)
+            .filter(CandidateCVSubscription.transaction_reference == tx.reference, CandidateCVSubscription.status == "active")
+            .first()
+        )
+        if cv_sub:
+            cv_sub.status = "cancelled"
+            cv_sub.current_period_end = None
+
+    db.commit()
+    db.refresh(tx)
+    _record_admin_event(
+        actor=admin, action="transaction.refund", resource_type="transaction",
+        resource_id=tx.id, details={"reference": tx.reference, "amount": tx.amount, "refundReference": tx.refund_reference},
+    )
+    return _to_transaction_record(tx, "company" if tx.company_id else "unknown", None)
+
+
+@router.get("/transactions/{transaction_id}/receipt")
+async def admin_transaction_receipt(
+    transaction_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx or not tx.receipt_number:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recibo não disponível")
+    party_name, party_email = _resolve_transaction_party(db, tx)
+    plan_name = ""
+    if tx.plan_id:
+        plan = db.query(Plan).filter(Plan.id == tx.plan_id).first()
+        plan_name = plan.name if plan else ""
+    pdf = receipt_service.generate_receipt_pdf(
+        tx, party_name=party_name, party_email=party_email,
+        description=f"Plano {plan_name} — Parvagas" if plan_name else "Parvagas",
+    )
+    return Response(
+        content=pdf, media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="recibo-{tx.receipt_number}.pdf"'},
+    )
 
 
 def _to_user_subscription_summary(db: Session, target: User) -> dict[str, Any]:

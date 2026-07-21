@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { authFetch, apiFetch, getErrorMessage } from "@/lib/api";
+import { authFetch, authFetchRaw, apiFetch, getErrorMessage } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { SuccessCheck } from "@/app/components/motion";
@@ -115,6 +115,25 @@ export default function EmpresaPlanosPage() {
     }
   };
 
+  const handleDownloadReceipt = async () => {
+    if (!token) return;
+    try {
+      const res = await authFetchRaw("/companies/subscription/receipt", token, { suppressGlobalErrors: true });
+      if (!res.ok) throw new Error("Nenhum recibo disponível.");
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "recibo-parvagas.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      notify(getErrorMessage(err, "Não foi possível obter o recibo."), "error");
+    }
+  };
+
   const handleResume = async () => {
     if (!token) return;
     setCancelling(true);
@@ -148,6 +167,15 @@ export default function EmpresaPlanosPage() {
                 {subscription.currentPeriodEnd ? ` · ${subscription.cancelRequestedAt ? "acesso até" : "renova em"} ${new Date(subscription.currentPeriodEnd).toLocaleDateString("pt-PT")}` : ""}
                 {subscription.cancelRequestedAt ? " · cancelamento agendado" : ""}
               </p>
+              {subscription.plan?.code !== "free" && (
+                <button
+                  type="button"
+                  onClick={handleDownloadReceipt}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Descarregar recibo
+                </button>
+              )}
               {subscription.plan?.code !== "free" && (
                 subscription.cancelRequestedAt ? (
                   <button

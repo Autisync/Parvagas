@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
-import { authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import RefundDisclosureNotice from "@/app/Portal/components/RefundDisclosureNotice";
 import type { CVPlan, CVPlansResponse, CVSubResponse } from "./types";
 
@@ -52,6 +52,25 @@ export default function PlanBanner({ token }: { token: string | null }) {
     }
   };
 
+  const handleDownloadReceipt = async () => {
+    if (!token) return;
+    try {
+      const res = await authFetchRaw("/cv-builder/subscription/receipt", token, { suppressGlobalErrors: true });
+      if (!res.ok) throw new Error("Nenhum recibo disponível.");
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "recibo-parvagas.pdf";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(href);
+    } catch {
+      /* handled by global notifier */
+    }
+  };
+
   const handleCancel = async () => {
     if (!token) return;
     if (!window.confirm(
@@ -96,6 +115,9 @@ export default function PlanBanner({ token }: { token: string | null }) {
             </p>
           )}
         </div>
+        <button type="button" onClick={handleDownloadReceipt} className="text-xs font-semibold text-slate-600 underline">
+          Recibo
+        </button>
         {sub.cancelRequestedAt ? (
           <button type="button" onClick={handleResume} disabled={cancelling} className="text-xs font-semibold text-green-700 underline disabled:opacity-60">
             Reativar plano
