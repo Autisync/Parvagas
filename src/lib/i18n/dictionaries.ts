@@ -126,6 +126,7 @@ export type Dictionary = {
     refunds: string;
     acceptableUse: string;
     allLegalDocuments: string;
+    manageCookies: string;
     designHostedBy: string;
   };
   access: {
@@ -465,6 +466,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       refunds: "Reembolsos",
       acceptableUse: "Utilização Aceitável",
       allLegalDocuments: "Todos os documentos legais",
+      manageCookies: "Gerir cookies",
       designHostedBy: "Design e hospedagem por",
     },
     access: {
@@ -798,6 +800,7 @@ export const dictionaries: Record<AppLocale, Dictionary> = {
       refunds: "Refunds",
       acceptableUse: "Acceptable Use",
       allLegalDocuments: "All legal documents",
+      manageCookies: "Manage cookies",
       designHostedBy: "Design and hosted by",
     },
     access: {

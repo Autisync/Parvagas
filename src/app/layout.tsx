@@ -13,9 +13,9 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import CTA from "./components/CTA";
 import CookieConsent from "./components/CookieConsent";
+import AnalyticsScripts from "./components/AnalyticsScripts";
 import { Providers } from "./Providers";
 // import { SpeedInsights } from "@vercel/speed-insights/next"
-import { Analytics } from "@vercel/analytics/react";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import { toJsonLdString } from "@/lib/jsonLd";
 
@@ -82,13 +82,6 @@ export default function RootLayout({
           type="image/png"
           sizes="57x57"
         /> */}
-        {process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN ? (
-          <script
-            defer
-            data-domain={process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN}
-            src={`${process.env.NEXT_PUBLIC_PLAUSIBLE_SRC || "https://plausible.io"}/js/script.tagged-events.js`}
-          />
-        ) : null}
         {recaptchaSiteKey ? (
           <script
             async
@@ -120,7 +113,7 @@ export default function RootLayout({
           <CookieConsent />
           {/* <Footer /> */}
         </Providers>
-        <Analytics />
+        <AnalyticsScripts />
         <ServiceWorkerRegister />
       </body>
     </html>

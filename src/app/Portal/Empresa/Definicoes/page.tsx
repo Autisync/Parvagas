@@ -6,6 +6,7 @@ import PageHeader from "@/app/components/PageHeader";
 import { AcademicCapIcon, BellIcon } from "@heroicons/react/24/outline";
 import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
 import LegalAcceptanceHistory from "@/app/Portal/components/LegalAcceptanceHistory";
+import CookiePreferencesCard from "@/app/Portal/components/CookiePreferencesCard";
 
 export default function EmpresaDefinicoesPage() {
   const { loading } = useAuth("company");
@@ -76,6 +77,7 @@ export default function EmpresaDefinicoesPage() {
           </section>
 
           <LegalAcceptanceHistory />
+          <CookiePreferencesCard />
           <PrivacyDataCard />
         </div>
       </main>

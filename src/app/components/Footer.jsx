@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useClientLocale } from "@/lib/i18n/client";
 import NewsletterSignup from "@/app/components/NewsletterSignup";
+import { openCookiePreferences } from "@/lib/cookieConsent";
 
 const navigation = [
   {
@@ -69,6 +70,7 @@ export default function Footer() {
             <Link href="/privacidade/" className="hover:text-red-500">{dict.footer.privacy}</Link>
             <Link href="/termos/" className="hover:text-red-500">{dict.footer.terms}</Link>
             <Link href="/cookies/" className="hover:text-red-500">{dict.footer.cookies}</Link>
+            <button type="button" onClick={openCookiePreferences} className="hover:text-red-500">{dict.footer.manageCookies}</button>
             <Link href="/politica-retencao/" className="hover:text-red-500">{dict.footer.retention}</Link>
             <Link href="/reembolsos/" className="hover:text-red-500">{dict.footer.refunds}</Link>
             <Link href="/termos-empregador/" className="hover:text-red-500">{dict.footer.employerTerms}</Link>
