@@ -12,6 +12,7 @@ from app.models import (
     CompanyDeletionRequest,
 )
 from app.services.storage_service import StorageService
+from app.services.company_billing_service import assert_job_quota
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
 from app.api.v1.jobs import serialize_job
@@ -468,6 +469,7 @@ async def create_company_job(
 ):
     """Create a job posting (enters the moderation queue)."""
     company = _require_company(db, current_user)
+    assert_job_quota(db, company)
     if not str(payload.get("title", "")).strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Job title is required")
 

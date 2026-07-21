@@ -865,6 +865,7 @@ class Plan(Base, TimestampMixin):
     interval = Column(String(20), nullable=False, default="month")  # month | one_time
     features = Column(Text, nullable=True)  # JSON array
     active = Column(Boolean, nullable=False, default=True)
+    max_active_jobs = Column(Integer, nullable=False, default=1)  # -1 = unlimited
 
 
 class Subscription(Base, TimestampMixin):
