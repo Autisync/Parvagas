@@ -12,7 +12,7 @@ import {
   CloudArrowDownIcon, MegaphoneIcon, UsersIcon, ShieldCheckIcon,
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
-  DocumentTextIcon, ClockIcon, ChevronDownIcon,
+  DocumentTextIcon, ClockIcon, ChevronDownIcon, ScaleIcon, ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -67,6 +67,14 @@ const GROUPS: Group[] = [
       { href: "/Portal/Admin/security",     label: "Segurança",   hint: "Logins falhados e alertas", levels: ["super-admin"], icon: <ShieldExclamationIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/audit",        label: "Auditoria",   hint: "Ações privilegiadas",       levels: ["super-admin"], icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/admin-levels", label: "Super-admin", hint: "Admins e moderadores",      levels: ["super-admin"], icon: <ShieldCheckIcon className="h-5 w-5" /> },
+    ],
+  },
+  {
+    key: "legal",
+    label: "Legal & Conformidade",
+    items: [
+      { href: "/Portal/Admin/legal-documents",     label: "Documentos Legais",       hint: "Editar e publicar políticas", levels: ["super-admin"], icon: <ScaleIcon className="h-5 w-5" /> },
+      { href: "/Portal/Admin/compliance-analyzer", label: "Analisador de Conformidade", hint: "Verificar novas funcionalidades", levels: ["super-admin"], icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
     ],
   },
   {

@@ -1056,3 +1056,154 @@ export async function confirmCandidateCvPayment(token: string, reference: string
     `/cv-builder/confirm/${reference}`, token, { method: "POST", suppressGlobalErrors: true },
   );
 }
+
+// ── Legal documents (Wave L3) ───────────────────────────────────────────
+
+export type LegalDocumentAudience = "public" | "employer" | "internal";
+
+export type LegalDocumentVersionRecord = {
+  _id: string;
+  documentId: string;
+  versionLabel: string;
+  bodyMarkdown: string;
+  status: "draft" | "published" | "archived";
+  effectiveDate: string | null;
+  publishedAt: string | null;
+  createdAt: string | null;
+};
+
+export type LegalDocumentRecord = {
+  _id: string;
+  slug: string;
+  title: string;
+  category: string;
+  audience: LegalDocumentAudience;
+  requiresAcceptance: boolean;
+  versionCount: number;
+  currentVersion: LegalDocumentVersionRecord | null;
+};
+
+export type LegalDocumentDetail = LegalDocumentRecord & { versions: LegalDocumentVersionRecord[] };
+
+export async function fetchAdminLegalDocuments(token: string, audience?: LegalDocumentAudience) {
+  const qs = audience ? `?audience=${audience}` : "";
+  return authFetch<{ legalDocuments: LegalDocumentRecord[] }>(`/admin/legal-documents${qs}`, token);
+}
+
+export async function fetchAdminLegalDocument(token: string, documentId: string) {
+  return authFetch<LegalDocumentDetail>(`/admin/legal-documents/${documentId}`, token);
+}
+
+export async function createAdminLegalDocument(
+  token: string,
+  payload: { slug: string; title: string; category: string; audience: LegalDocumentAudience; requiresAcceptance?: boolean },
+) {
+  return authFetch<LegalDocumentRecord>(`/admin/legal-documents`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function updateAdminLegalDocument(
+  token: string,
+  documentId: string,
+  payload: { title?: string; audience?: LegalDocumentAudience; requiresAcceptance?: boolean },
+) {
+  return authFetch<LegalDocumentRecord>(`/admin/legal-documents/${documentId}`, token, {
+    method: "PATCH", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function createAdminLegalDocumentVersion(
+  token: string,
+  documentId: string,
+  payload: { versionLabel: string; bodyMarkdown: string; effectiveDate?: string },
+) {
+  return authFetch<LegalDocumentVersionRecord>(`/admin/legal-documents/${documentId}/versions`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function updateAdminLegalDocumentVersion(
+  token: string,
+  documentId: string,
+  versionId: string,
+  payload: { versionLabel?: string; bodyMarkdown?: string; effectiveDate?: string },
+) {
+  return authFetch<LegalDocumentVersionRecord>(`/admin/legal-documents/${documentId}/versions/${versionId}`, token, {
+    method: "PATCH", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function publishAdminLegalDocumentVersion(token: string, documentId: string, versionId: string) {
+  return authFetch<LegalDocumentVersionRecord>(
+    `/admin/legal-documents/${documentId}/versions/${versionId}/publish`, token,
+    { method: "POST", suppressGlobalErrors: true },
+  );
+}
+
+export async function fetchAdminLegalDocumentAcceptanceSummary(token: string, documentId: string) {
+  return authFetch<{ currentVersionId: string | null; acceptedCount: number }>(
+    `/admin/legal-documents/${documentId}/acceptances/summary`, token,
+  );
+}
+
+// ── Compliance analyzer (Wave L3b) ──────────────────────────────────────
+
+export type ComplianceCategory = { key: string; question: string };
+
+export type ComplianceFindingDocument = { slug: string; title: string | null; status: "published" | "unpublished" | "missing"; versionLabel?: string | null };
+
+export type ComplianceFinding = {
+  category: string;
+  question: string;
+  severity: "low" | "medium" | "high";
+  guidance: string;
+  documents: ComplianceFindingDocument[];
+};
+
+export type ComplianceCheckRecord = {
+  _id: string;
+  featureName: string;
+  featureDescription: string;
+  intake: Record<string, boolean>;
+  findings: ComplianceFinding[];
+  aiNotes: string | null;
+  severitySummary: "none" | "low" | "medium" | "high";
+  status: "open" | "resolved" | "dismissed";
+  resolvedAt: string | null;
+  createdAt: string | null;
+};
+
+export async function fetchComplianceCategories(token: string) {
+  return authFetch<{ categories: ComplianceCategory[] }>(`/admin/compliance-checks/categories`, token);
+}
+
+export async function fetchComplianceChecks(token: string, statusFilter?: string) {
+  const qs = statusFilter ? `?status=${statusFilter}` : "";
+  return authFetch<{ complianceChecks: ComplianceCheckRecord[] }>(`/admin/compliance-checks${qs}`, token);
+}
+
+export async function fetchComplianceCheck(token: string, checkId: string) {
+  return authFetch<ComplianceCheckRecord>(`/admin/compliance-checks/${checkId}`, token);
+}
+
+export async function createComplianceCheck(
+  token: string,
+  payload: { featureName: string; featureDescription: string; intake: Record<string, boolean> },
+) {
+  return authFetch<ComplianceCheckRecord>(`/admin/compliance-checks`, token, {
+    method: "POST", body: JSON.stringify(payload), suppressGlobalErrors: true,
+  });
+}
+
+export async function resolveComplianceCheck(token: string, checkId: string) {
+  return authFetch<ComplianceCheckRecord>(`/admin/compliance-checks/${checkId}/resolve`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}
+
+export async function dismissComplianceCheck(token: string, checkId: string) {
+  return authFetch<ComplianceCheckRecord>(`/admin/compliance-checks/${checkId}/dismiss`, token, {
+    method: "POST", suppressGlobalErrors: true,
+  });
+}
