@@ -7,44 +7,39 @@ type LegalShellProps = {
   title: string;
   subtitle: string;
   effectiveDate: string;
+  /** Version label of the currently published version (e.g. "2026-07"),
+   * shown next to the effective date when the document is DB-backed. */
+  versionLabel?: string;
   children: ReactNode;
 };
 
-const RELATED = [
-  { href: "/privacidade", label: "Privacidade" },
-  { href: "/termos", label: "Termos" },
-  { href: "/politica-retencao", label: "Retenção de Dados" },
-  { href: "/termos-empregador", label: "Termos do Empregador" },
-];
-
 /**
  * Shared presentation shell for the legal pages. Keeps a consistent, readable
- * document layout (title, effective date, prose typography, cross-links) so the
- * four policies stay visually and structurally aligned.
+ * document layout (title, effective date, prose typography) across every
+ * document in the /legal registry.
  */
-export default function LegalShell({ title, subtitle, effectiveDate, children }: LegalShellProps) {
+export default function LegalShell({ title, subtitle, effectiveDate, versionLabel, children }: LegalShellProps) {
   return (
     <div className="min-h-screen bg-white">
       <Header />
       <main className="mx-auto max-w-3xl px-6 py-12 lg:py-16">
-        <p className="text-sm font-semibold uppercase tracking-widest text-red-600">Parvagas · Documentos Legais</p>
+        <Link
+          href="/legal"
+          className="text-sm font-semibold uppercase tracking-widest text-red-600 hover:text-red-700"
+        >
+          ← Parvagas · Documentos Legais
+        </Link>
         <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">{title}</h1>
         <p className="mt-3 text-base leading-7 text-slate-600">{subtitle}</p>
         <p className="mt-4 text-sm text-slate-500">
           Em vigor desde: <strong className="font-semibold text-slate-700">{effectiveDate}</strong>
+          {versionLabel ? (
+            <>
+              {" "}
+              · Versão <strong className="font-semibold text-slate-700">{versionLabel}</strong>
+            </>
+          ) : null}
         </p>
-
-        <nav className="mt-6 flex flex-wrap gap-2" aria-label="Outros documentos legais">
-          {RELATED.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-red-200 hover:text-red-700"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
 
         <div className="legal-prose mt-10 space-y-8">{children}</div>
 
