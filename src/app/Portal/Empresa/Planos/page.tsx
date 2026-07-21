@@ -7,6 +7,7 @@ import { useAppNotifier } from "@/app/components/AppNotifier";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { SuccessCheck } from "@/app/components/motion";
 import { track } from "@/lib/analytics";
+import RefundDisclosureNotice from "@/app/Portal/components/RefundDisclosureNotice";
 
 type Plan = {
   _id: string;
@@ -46,6 +47,7 @@ export default function EmpresaPlanosPage() {
   const [provider, setProvider] = useState("multicaixa");
   const [subscribing, setSubscribing] = useState("");
   const [instructions, setInstructions] = useState<Instructions | null>(null);
+  const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +69,7 @@ export default function EmpresaPlanosPage() {
 
   const subscribe = async (plan: Plan) => {
     if (!token) return;
+    if (plan.price > 0 && !acceptedRefundPolicy) return;
     setSubscribing(plan.code);
     track("subscribe_start", { plan: plan.code });
     setInstructions(null);
@@ -131,6 +134,8 @@ export default function EmpresaPlanosPage() {
             </select>
           </div>
 
+          <RefundDisclosureNotice audience="company" checked={acceptedRefundPolicy} onChange={setAcceptedRefundPolicy} />
+
           {loading ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="app-skeleton h-72 rounded-2xl" />)}
@@ -158,7 +163,7 @@ export default function EmpresaPlanosPage() {
                     </ul>
                     <button
                       onClick={() => subscribe(plan)}
-                      disabled={isActive || subscribing === plan.code}
+                      disabled={isActive || subscribing === plan.code || (plan.price > 0 && !acceptedRefundPolicy)}
                       className={`mt-5 w-full px-4 py-2.5 text-sm ${featured ? "app-btn-primary" : "app-btn-secondary"} disabled:opacity-60`}
                     >
                       {isActive ? "Plano atual" : subscribing === plan.code ? "A processar..." : plan.price === 0 ? "Selecionar" : "Subscrever"}

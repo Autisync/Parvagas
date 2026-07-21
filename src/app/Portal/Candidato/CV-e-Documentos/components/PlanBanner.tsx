@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LockClosedIcon } from "@heroicons/react/24/outline";
 import { authFetch } from "@/lib/api";
+import RefundDisclosureNotice from "@/app/Portal/components/RefundDisclosureNotice";
 import type { CVPlan, CVPlansResponse, CVSubResponse } from "./types";
 
 // Subscription banner for the CV Builder — shows the current plan when active,
@@ -14,6 +15,7 @@ export default function PlanBanner({ token }: { token: string | null }) {
   const [subscribing, setSubscribing] = useState("");
   const [provider, setProvider] = useState("multicaixa");
   const [instructions, setInstructions] = useState<{ message: string; reference: string } | null>(null);
+  const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
 
   useEffect(() => {
     authFetch<CVPlansResponse>("/cv-builder/plans", "").catch(() => null).then((r) => setPlans(r?.plans || []));
@@ -25,8 +27,9 @@ export default function PlanBanner({ token }: { token: string | null }) {
 
   const currentTier = sub?.tier ?? "free";
 
-  const handleSubscribe = async (tier: string) => {
+  const handleSubscribe = async (tier: string, price: number) => {
     if (!token) return;
+    if (price > 0 && !acceptedRefundPolicy) return;
     setSubscribing(tier);
     setInstructions(null);
     try {
@@ -116,6 +119,9 @@ export default function PlanBanner({ token }: { token: string | null }) {
                     <option value="manual">Manual</option>
                   </select>
                 </div>
+                <div className="mb-4">
+                  <RefundDisclosureNotice audience="candidate" checked={acceptedRefundPolicy} onChange={setAcceptedRefundPolicy} />
+                </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   {plans.map((plan) => (
                     <div
@@ -138,8 +144,8 @@ export default function PlanBanner({ token }: { token: string | null }) {
                       </ul>
                       <button
                         type="button"
-                        disabled={plan.tier === currentTier || subscribing === plan.tier}
-                        onClick={() => handleSubscribe(plan.tier)}
+                        disabled={plan.tier === currentTier || subscribing === plan.tier || (plan.price > 0 && !acceptedRefundPolicy)}
+                        onClick={() => handleSubscribe(plan.tier, plan.price)}
                         className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
                           plan.tier === currentTier
                             ? "bg-slate-100 text-slate-400 cursor-default"
