@@ -2,6 +2,7 @@ import { isAbsolute, join } from "node:path";
 import { createEnv } from "@t3-oss/env-core";
 import { config } from "dotenv";
 import { z } from "zod";
+import { aiProviderSchema } from "@reactive-resume/ai/types";
 import { findWorkspaceRoot } from "@reactive-resume/utils/monorepo.node";
 
 const workspaceRoot = findWorkspaceRoot();
@@ -102,6 +103,12 @@ export const env = createEnv({
 		FLAG_SHOW_SPONSORS: z.stringbool().default(true),
 		FLAG_ALLOW_UNSAFE_AI_BASE_URL: z.stringbool().default(false),
 		FLAG_ALLOW_UNSAFE_OAUTH_REDIRECT_URI: z.stringbool().default(false),
+
+		// Optional default AI provider used when no saved/tested provider exists.
+		DEFAULT_AI_PROVIDER: aiProviderSchema.optional(),
+		DEFAULT_AI_MODEL: z.string().min(1).optional(),
+		DEFAULT_AI_BASE_URL: z.string().min(1).optional(),
+		DEFAULT_AI_API_KEY: z.string().optional(),
 
 		// Crowdin (optional, for translation tooling)
 		CROWDIN_PROJECT_ID: z.string().optional(),

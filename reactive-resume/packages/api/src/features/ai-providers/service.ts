@@ -3,6 +3,7 @@ import { ORPCError } from "@orpc/client";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { aiProviderSchema } from "@reactive-resume/ai/types";
 import { db } from "@reactive-resume/db/client";
+import { env } from "@reactive-resume/env/server";
 import * as schema from "@reactive-resume/db/schema";
 import {
 	assertCredentialEncryptionConfigured,
@@ -14,6 +15,7 @@ import { testConnection } from "../ai/service";
 import { resolveAiBaseUrl } from "../ai/url-policy";
 
 type AiProviderRecord = typeof schema.aiProvider.$inferSelect;
+const ENV_DEFAULT_PROVIDER_ID = "__env_default_ai_provider__";
 
 export type AiProviderResponse = {
 	id: string;
@@ -90,6 +92,34 @@ function orderByLastUsedAtDescNullsLast() {
 	return desc(sql<Date>`coalesce(${schema.aiProvider.lastUsedAt}, '1970-01-01T00:00:00.000Z'::timestamptz)`);
 }
 
+function getEnvDefaultProvider() {
+	const provider = env.DEFAULT_AI_PROVIDER;
+	const model = env.DEFAULT_AI_MODEL?.trim();
+	if (!provider || !model) return null;
+
+	const baseURL = normalizeBaseUrl({ provider, baseURL: env.DEFAULT_AI_BASE_URL ?? "" }) ?? "";
+	const apiKey = env.DEFAULT_AI_API_KEY?.trim() ?? "";
+	const now = new Date(0);
+
+	return {
+		id: ENV_DEFAULT_PROVIDER_ID,
+		label: `Default ${provider}`,
+		provider,
+		model,
+		baseURL,
+		enabled: true,
+		testStatus: "success",
+		testError: null,
+		apiKeyPreview: apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : "local",
+		apiKeyFingerprint: ENV_DEFAULT_PROVIDER_ID,
+		lastTestedAt: now,
+		lastUsedAt: null,
+		createdAt: now,
+		updatedAt: now,
+		apiKey,
+	};
+}
+
 async function getOwnedProvider(input: { id: string; userId: string }) {
 	const [provider] = await db
 		.select()
@@ -112,7 +142,28 @@ export const aiProvidersService = {
 			.where(eq(schema.aiProvider.userId, input.userId))
 			.orderBy(orderByLastUsedAtDescNullsLast(), asc(schema.aiProvider.createdAt));
 
-		return providers.map(toResponse);
+		const responses = providers.map(toResponse);
+		const envDefault = getEnvDefaultProvider();
+		if (envDefault && !responses.some((provider) => provider.enabled && provider.testStatus === "success")) {
+			responses.unshift({
+				id: envDefault.id,
+				label: envDefault.label,
+				provider: envDefault.provider,
+				model: envDefault.model,
+				baseURL: envDefault.baseURL,
+				enabled: envDefault.enabled,
+				testStatus: envDefault.testStatus,
+				testError: envDefault.testError,
+				apiKeyPreview: envDefault.apiKeyPreview,
+				apiKeyFingerprint: envDefault.apiKeyFingerprint,
+				lastTestedAt: envDefault.lastTestedAt,
+				lastUsedAt: envDefault.lastUsedAt,
+				createdAt: envDefault.createdAt,
+				updatedAt: envDefault.updatedAt,
+			});
+		}
+
+		return responses;
 	},
 
 	getRunnableById: async (input: { id: string; userId: string }) => {
@@ -146,12 +197,19 @@ export const aiProvidersService = {
 			.orderBy(orderByLastUsedAtDescNullsLast(), asc(schema.aiProvider.createdAt))
 			.limit(1);
 
-		return provider
+		if (provider) {
+			return {
+				...toResponse(provider),
+				apiKey: decryptCredential(provider.encryptedApiKey),
+				baseURL: provider.baseUrl ?? "",
+			};
+		}
+
+		const envDefault = getEnvDefaultProvider();
+		return envDefault
 			? {
-					...toResponse(provider),
-					apiKey: decryptCredential(provider.encryptedApiKey),
-					baseURL: provider.baseUrl ?? "",
-				}
+				...envDefault,
+			}
 			: null;
 	},
 
@@ -267,6 +325,8 @@ export const aiProvidersService = {
 	},
 
 	markUsed: async (input: { id: string; userId: string }) => {
+		if (input.id === ENV_DEFAULT_PROVIDER_ID) return;
+
 		await db
 			.update(schema.aiProvider)
 			.set({ lastUsedAt: new Date() })
