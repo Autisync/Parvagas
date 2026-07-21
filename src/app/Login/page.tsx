@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const Logo = "/icon2.png";
 import Reset from "../components/RestorePass";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
+import { resolvePostLoginDestination } from "@/lib/authRedirect";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import GoogleSignInButton from "@/app/components/GoogleSignInButton";
 import { useClientLocale } from "@/lib/i18n/client";
@@ -77,11 +78,6 @@ function normalizeRole(value: string | null): AuthRole {
   return "candidate";
 }
 
-function portalRoute(role: string): string {
-  if (role === "company") return "/Portal/Empresa/Perfil";
-  return "/Portal/Candidato";
-}
-
 function isConnectionError(message: string) {
   const m = message.toLowerCase();
   return m.includes("servidor") || m.includes("ligacao") || m.includes("internet") || m.includes("network");
@@ -91,6 +87,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawRole = searchParams.get("role");
+  const returnTo = useMemo(() => searchParams.get("returnTo") || "", [searchParams]);
   const queryResetToken = useMemo(() => searchParams.get("resetToken") || "", [searchParams]);
   const queryFirstLoginToken = useMemo(() => searchParams.get("firstLoginToken") || "", [searchParams]);
   const selectedRole = useMemo(() => normalizeRole(rawRole), [rawRole]);
@@ -312,7 +309,12 @@ function LoginContent() {
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
         companyStatus: data.user.companyStatus || data.user.company_status,
       });
-      router.replace(portalRoute(data.user.role));
+      const destination = resolvePostLoginDestination(data.user.role, returnTo);
+      if (destination.startsWith("/")) {
+        router.replace(destination);
+      } else {
+        window.location.assign(destination);
+      }
       return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Não foi possível iniciar sessão.";
@@ -392,7 +394,12 @@ function LoginContent() {
         hasSeenEmpresaTutorial: data.user.hasSeenEmpresaTutorial ?? data.user.has_seen_empresa_tutorial ?? false,
         companyStatus: data.user.companyStatus || data.user.company_status,
       });
-      router.replace(portalRoute(data.user.role));
+      const destination = resolvePostLoginDestination(data.user.role, returnTo);
+      if (destination.startsWith("/")) {
+        router.replace(destination);
+      } else {
+        window.location.assign(destination);
+      }
       return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Não foi possível redefinir password.";
@@ -674,6 +681,7 @@ function LoginContent() {
                   </div>
                   <GoogleSignInButton
                     text="signin_with"
+                    returnTo={returnTo}
                     onError={(message) => showFeedback({ variant: "error", message })}
                   />
                 </>

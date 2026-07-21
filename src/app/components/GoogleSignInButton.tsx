@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { track } from "@/lib/analytics";
+import { resolvePostLoginDestination } from "@/lib/authRedirect";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -23,11 +24,6 @@ declare global {
   interface Window {
     google?: { accounts: { id: GoogleAccountsId } };
   }
-}
-
-function portalRoute(role: string): string {
-  if (role === "company") return "/Portal/Empresa/Perfil";
-  return "/Portal/Candidato";
 }
 
 function loadGis(): Promise<void> {
@@ -61,10 +57,12 @@ function loadGis(): Promise<void> {
 export default function GoogleSignInButton({
   text = "signin_with",
   onError,
+  returnTo,
 }: {
   /** Google button label: signin_with | signup_with | continue_with */
   text?: "signin_with" | "signup_with" | "continue_with";
   onError?: (message: string) => void;
+  returnTo?: string | null;
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,13 +114,18 @@ export default function GoogleSignInButton({
           hasSeenEmpresaTutorial: u.hasSeenEmpresaTutorial ?? u.has_seen_empresa_tutorial ?? false,
           companyStatus: u.companyStatus ?? u.company_status,
         });
-        router.replace(portalRoute(u.role));
+        const destination = resolvePostLoginDestination(u.role, returnTo);
+        if (destination.startsWith("/")) {
+          router.replace(destination);
+        } else {
+          window.location.assign(destination);
+        }
       } catch (err) {
         setSigningIn(false);
         onError?.(err instanceof Error ? err.message : "Falha ao iniciar sessão com Google.");
       }
     },
-    [router, onError],
+    [router, onError, returnTo],
   );
 
   useEffect(() => {

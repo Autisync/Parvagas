@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import { RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
+import CvBuilderEntryLink from "@/app/components/CvBuilderEntryLink";
 import { ENABLE_I18N } from "@/config/appConfig";
 
 const Logo = "/icon2.png";
@@ -44,6 +45,13 @@ export default function Header() {
     }`;
 
     if (isExternalHref(item.href)) {
+      if (item.href === RESUME_BUILDER_URL) {
+        return (
+          <CvBuilderEntryLink key={item.name} className={className}>
+            {item.name}
+          </CvBuilderEntryLink>
+        );
+      }
       return (
         <a
           key={item.name}
@@ -73,6 +81,13 @@ export default function Header() {
     }`;
 
     if (isExternalHref(item.href)) {
+      if (item.href === RESUME_BUILDER_URL) {
+        return (
+          <CvBuilderEntryLink key={item.name} className={className}>
+            {item.name}
+          </CvBuilderEntryLink>
+        );
+      }
       return (
         <a
           key={item.name}

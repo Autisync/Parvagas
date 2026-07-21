@@ -3,10 +3,10 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import SponsoredAdSlot from "./components/SponsoredAdSlot";
 import HomeCarousel, { CarouselSlide } from "./components/HomeCarousel";
+import CvBuilderEntryLink from "./components/CvBuilderEntryLink";
 import Link from "next/link";
 import { getServerDictionary } from "@/lib/i18n/server";
 import { serverGetJson } from "@/lib/dataClient";
-import { RESUME_BUILDER_URL } from "@/lib/resumeBuilder";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -127,14 +127,12 @@ export default async function Home() {
             slideLabels={heroSlides.map((_, i) => dict.home.carouselSlideLabel(i + 1))}
           />
           <div className="mt-6 flex justify-center md:justify-start">
-            <Link
-              href={RESUME_BUILDER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <CvBuilderEntryLink
+              openInNewTab
               className="inline-flex items-center rounded-full border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 shadow-sm transition hover:border-red-300 hover:bg-red-50"
             >
               {dict.home.ctaCvBuilder}
-            </Link>
+            </CvBuilderEntryLink>
           </div>
         </div>
       </section>
