@@ -876,6 +876,13 @@ class Subscription(Base, TimestampMixin):
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False)
     status = Column(String(20), nullable=False, default="pending")  # pending|active|expired|cancelled
     current_period_end = Column(DateTime, nullable=True)
+    # Set when the owner requests cancellation (Wave P2, EXECUTION_PLAN_LEGAL_
+    # AND_PAYMENTS.md) — status stays "active" so access continues until
+    # current_period_end (reembolsos.md Section 3: no mid-period revocation,
+    # no refund for the period in progress). The renewal job (Wave P4) will
+    # check this flag to skip charging for the next period instead of
+    # flipping status early.
+    cancel_requested_at = Column(DateTime, nullable=True)
 
 
 class CandidateCvPlan(Base, TimestampMixin):
@@ -952,6 +959,8 @@ class CandidateCVSubscription(Base, TimestampMixin):
     current_period_end = Column(DateTime, nullable=True)
     # Payment tracking (reuses Transaction.reference)
     transaction_reference = Column(String(64), nullable=True, index=True)
+    # Same cancel-at-period-end semantics as Subscription.cancel_requested_at above.
+    cancel_requested_at = Column(DateTime, nullable=True)
 
     candidate_profile = relationship("CandidateProfile")
 

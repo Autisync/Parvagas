@@ -16,6 +16,7 @@ export default function PlanBanner({ token }: { token: string | null }) {
   const [provider, setProvider] = useState("multicaixa");
   const [instructions, setInstructions] = useState<{ message: string; reference: string } | null>(null);
   const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     authFetch<CVPlansResponse>("/cv-builder/plans", "").catch(() => null).then((r) => setPlans(r?.plans || []));
@@ -51,17 +52,60 @@ export default function PlanBanner({ token }: { token: string | null }) {
     }
   };
 
+  const handleCancel = async () => {
+    if (!token) return;
+    if (!window.confirm(
+      "Cancelar a renovação do plano? O acesso mantém-se até ao final do período já pago, sem reembolso do período em curso."
+    )) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await authFetch<CVSubResponse>("/cv-builder/subscription/cancel", token, { method: "POST" });
+      setSub(res.subscription);
+    } catch {
+      /* handled by global notifier */
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!token) return;
+    setCancelling(true);
+    try {
+      const res = await authFetch<CVSubResponse>("/cv-builder/subscription/resume", token, { method: "POST" });
+      setSub(res.subscription);
+    } catch {
+      /* handled by global notifier */
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (currentTier !== "free" && sub?.status === "active") {
     return (
-      <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
         <span className="text-green-700 text-lg">✓</span>
-        <div>
+        <div className="flex-1">
           <p className="text-sm font-semibold text-green-800">Plano {sub.plan?.name ?? currentTier} ativo</p>
           {sub.currentPeriodEnd && (
-            <p className="text-xs text-green-600">Válido até {new Date(sub.currentPeriodEnd).toLocaleDateString("pt-PT")}</p>
+            <p className="text-xs text-green-600">
+              {sub.cancelRequestedAt ? "Acesso até" : "Válido até"} {new Date(sub.currentPeriodEnd).toLocaleDateString("pt-PT")}
+              {sub.cancelRequestedAt ? " · cancelamento agendado" : ""}
+            </p>
           )}
         </div>
-        <button type="button" onClick={() => setOpen(true)} className="ml-auto text-xs text-green-700 underline">
+        {sub.cancelRequestedAt ? (
+          <button type="button" onClick={handleResume} disabled={cancelling} className="text-xs font-semibold text-green-700 underline disabled:opacity-60">
+            Reativar plano
+          </button>
+        ) : (
+          <button type="button" onClick={handleCancel} disabled={cancelling} className="text-xs font-semibold text-rose-700 underline disabled:opacity-60">
+            Cancelar plano
+          </button>
+        )}
+        <button type="button" onClick={() => setOpen(true)} className="text-xs text-green-700 underline">
           Gerir plano
         </button>
       </div>

@@ -24,6 +24,7 @@ type Subscription = {
   status: string;
   plan?: { code?: string; name?: string } | null;
   currentPeriodEnd?: string | null;
+  cancelRequestedAt?: string | null;
 };
 
 type Instructions = { reference: string; amount: number; currency: string; message: string };
@@ -48,6 +49,7 @@ export default function EmpresaPlanosPage() {
   const [subscribing, setSubscribing] = useState("");
   const [instructions, setInstructions] = useState<Instructions | null>(null);
   const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,6 +96,39 @@ export default function EmpresaPlanosPage() {
 
   const activeCode = subscription?.status === "active" ? subscription.plan?.code : null;
 
+  const handleCancel = async () => {
+    if (!token) return;
+    if (!window.confirm(
+      "Cancelar a renovação da subscrição? O acesso mantém-se até ao final do período já pago, sem reembolso do período em curso."
+    )) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      await authFetch("/companies/subscription/cancel", token, { method: "POST", suppressGlobalErrors: true });
+      notify("Cancelamento agendado — o acesso mantém-se até ao final do período atual.", "success");
+      await load();
+    } catch (err) {
+      notify(getErrorMessage(err, "Não foi possível cancelar a subscrição."), "error");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!token) return;
+    setCancelling(true);
+    try {
+      await authFetch("/companies/subscription/resume", token, { method: "POST", suppressGlobalErrors: true });
+      notify("Subscrição reativada — a renovação automática continua.", "success");
+      await load();
+    } catch (err) {
+      notify(getErrorMessage(err, "Não foi possível reativar a subscrição."), "error");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white">
       <main className="mx-auto max-w-7xl px-6 pb-24 lg:pb-16 pt-8">
@@ -106,12 +141,34 @@ export default function EmpresaPlanosPage() {
           </header>
 
           {subscription?.status === "active" && (
-            <div className="app-card flex items-center gap-3 border-emerald-200 bg-[var(--success-50)] p-4">
+            <div className="app-card flex flex-wrap items-center gap-3 border-emerald-200 bg-[var(--success-50)] p-4">
               <SuccessCheck size={28} tone="success" />
-              <p className="text-sm font-medium text-[var(--success-700)]">
+              <p className="flex-1 text-sm font-medium text-[var(--success-700)]">
                 Plano ativo: <strong>{subscription.plan?.name}</strong>
-                {subscription.currentPeriodEnd ? ` · renova em ${new Date(subscription.currentPeriodEnd).toLocaleDateString("pt-PT")}` : ""}
+                {subscription.currentPeriodEnd ? ` · ${subscription.cancelRequestedAt ? "acesso até" : "renova em"} ${new Date(subscription.currentPeriodEnd).toLocaleDateString("pt-PT")}` : ""}
+                {subscription.cancelRequestedAt ? " · cancelamento agendado" : ""}
               </p>
+              {subscription.plan?.code !== "free" && (
+                subscription.cancelRequestedAt ? (
+                  <button
+                    type="button"
+                    onClick={handleResume}
+                    disabled={cancelling}
+                    className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    Reativar subscrição
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                  >
+                    Cancelar subscrição
+                  </button>
+                )
+              )}
             </div>
           )}
 

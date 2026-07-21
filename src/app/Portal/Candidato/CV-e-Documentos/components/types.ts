@@ -125,6 +125,7 @@ export type CVSubResponse = {
     status: string;
     plan: CVPlan;
     currentPeriodEnd?: string | null;
+    cancelRequestedAt?: string | null;
   };
 };
 

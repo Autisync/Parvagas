@@ -90,7 +90,52 @@ async def my_subscription(db: Session = Depends(get_db), current_user: User = De
         "_id": sub.id, "status": sub.status,
         "plan": _serialize_plan(plan) if plan else None,
         "currentPeriodEnd": sub.current_period_end.isoformat() if sub.current_period_end else None,
+        "cancelRequestedAt": sub.cancel_requested_at.isoformat() if sub.cancel_requested_at else None,
     }}
+
+
+@router.post("/companies/subscription/cancel")
+async def cancel_subscription(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Cancels future renewal only — access continues until current_period_end
+    and nothing is refunded for the period already in progress
+    (reembolsos.md Section 3). Idempotent."""
+    co = _company_for(db, current_user)
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.company_id == co.id, Subscription.status == "active")
+        .order_by(Subscription.created_at.desc())
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma subscrição ativa encontrada")
+    if not sub.cancel_requested_at:
+        sub.cancel_requested_at = datetime.utcnow()
+        db.commit()
+        db.refresh(sub)
+    return {
+        "subscription": {
+            "_id": sub.id, "status": sub.status,
+            "currentPeriodEnd": sub.current_period_end.isoformat() if sub.current_period_end else None,
+            "cancelRequestedAt": sub.cancel_requested_at.isoformat(),
+        }
+    }
+
+
+@router.post("/companies/subscription/resume")
+async def resume_subscription(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Undoes a pending cancellation while the current period hasn't ended yet."""
+    co = _company_for(db, current_user)
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.company_id == co.id, Subscription.status == "active")
+        .order_by(Subscription.created_at.desc())
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma subscrição ativa encontrada")
+    sub.cancel_requested_at = None
+    db.commit()
+    return {"subscription": {"_id": sub.id, "status": sub.status, "cancelRequestedAt": None}}
 
 
 @router.post("/companies/subscribe")
@@ -244,8 +289,62 @@ async def my_cv_builder_subscription(
             "tier": tier,
             "plan": plan_info,
             "currentPeriodEnd": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
+            "cancelRequestedAt": sub.cancel_requested_at.isoformat() if sub and sub.cancel_requested_at else None,
         }
     }
+
+
+def _candidate_profile_for(db: Session, user: User) -> CandidateProfile:
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de candidato não encontrado")
+    return profile
+
+
+@router.post("/cv-builder/subscription/cancel")
+async def cancel_cv_builder_subscription(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Same cancel-at-period-end semantics as /companies/subscription/cancel
+    — the free tier has nothing to cancel."""
+    profile = _candidate_profile_for(db, current_user)
+    sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id, CandidateCVSubscription.status == "active")
+        .order_by(CandidateCVSubscription.created_at.desc())
+        .first()
+    )
+    if not sub or sub.plan_tier == "free":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma subscrição paga ativa encontrada")
+    if not sub.cancel_requested_at:
+        sub.cancel_requested_at = datetime.utcnow()
+        db.commit()
+        db.refresh(sub)
+    return {
+        "subscription": {
+            "_id": sub.id, "tier": sub.plan_tier, "status": sub.status,
+            "currentPeriodEnd": sub.current_period_end.isoformat() if sub.current_period_end else None,
+            "cancelRequestedAt": sub.cancel_requested_at.isoformat(),
+        }
+    }
+
+
+@router.post("/cv-builder/subscription/resume")
+async def resume_cv_builder_subscription(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    profile = _candidate_profile_for(db, current_user)
+    sub = (
+        db.query(CandidateCVSubscription)
+        .filter(CandidateCVSubscription.candidate_profile_id == profile.id, CandidateCVSubscription.status == "active")
+        .order_by(CandidateCVSubscription.created_at.desc())
+        .first()
+    )
+    if not sub:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma subscrição ativa encontrada")
+    sub.cancel_requested_at = None
+    db.commit()
+    return {"subscription": {"_id": sub.id, "tier": sub.plan_tier, "status": sub.status, "cancelRequestedAt": None}}
 
 
 @router.post("/cv-builder/subscribe")
