@@ -24,7 +24,7 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, DataSubjectRequest, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
     LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
@@ -33,7 +33,7 @@ from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
-from app.services import legal_service, compliance_analyzer_service
+from app.services import legal_service, compliance_analyzer_service, dsar_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -4451,3 +4451,86 @@ async def admin_dismiss_compliance_check(
         actor=admin, action="complianceCheck.dismiss", resource_type="compliance_check", resource_id=check.id,
     )
     return _to_compliance_check_record(check)
+
+
+# ── Data-subject requests (Wave C3) ─────────────────────────────────────────
+
+def _to_dsar_record(db: Session, request: DataSubjectRequest) -> dict[str, Any]:
+    requester = db.query(User).filter(User.id == request.user_id).first()
+    return {
+        "id": request.id,
+        "userId": request.user_id,
+        "requester": {
+            "fullName": requester.full_name if requester else None,
+            "email": requester.email if requester else None,
+        } if requester else None,
+        "requestType": request.request_type,
+        "status": request.status,
+        "note": request.note,
+        "adminNote": request.admin_note,
+        "createdAt": request.created_at.isoformat() if request.created_at else None,
+        "reviewedAt": request.reviewed_at.isoformat() if request.reviewed_at else None,
+    }
+
+
+@router.get("/data-subject-requests")
+async def admin_list_dsar_requests(
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    requests = dsar_service.list_requests(db, status_filter=status_filter)
+    return {"requests": [_to_dsar_record(db, r) for r in requests]}
+
+
+@router.post("/data-subject-requests/{request_id}/approve")
+async def admin_approve_dsar_request(
+    request_id: str,
+    payload: dict[str, Any] | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Erasure only — export requests are self-service and never land here
+    pending. Runs dsar_service.anonymize_user, which scrubs PII in place
+    rather than deleting rows (see that function's docstring for exactly
+    what is and isn't touched, and why)."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    request = dsar_service.get_request(db, request_id)
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+    admin_note = str((payload or {}).get("adminNote", "")).strip() or None
+    try:
+        request = dsar_service.approve_erasure(db, request, reviewed_by_user_id=admin.id, admin_note=admin_note)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    _record_admin_event(
+        actor=admin, action="dsar.approveErasure", resource_type="data_subject_request", resource_id=request.id,
+    )
+    return _to_dsar_record(db, request)
+
+
+@router.post("/data-subject-requests/{request_id}/reject")
+async def admin_reject_dsar_request(
+    request_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    request = dsar_service.get_request(db, request_id)
+    if not request:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+    admin_note = str(payload.get("adminNote", "")).strip()
+    if not admin_note:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="É necessário indicar o motivo da rejeição")
+    try:
+        request = dsar_service.reject_erasure(db, request, reviewed_by_user_id=admin.id, admin_note=admin_note)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    _record_admin_event(
+        actor=admin, action="dsar.rejectErasure", resource_type="data_subject_request", resource_id=request.id,
+    )
+    return _to_dsar_record(db, request)

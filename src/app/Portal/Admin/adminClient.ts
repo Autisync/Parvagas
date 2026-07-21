@@ -1207,3 +1207,34 @@ export async function dismissComplianceCheck(token: string, checkId: string) {
     method: "POST", suppressGlobalErrors: true,
   });
 }
+
+// ── Data-subject requests (Wave C3) ─────────────────────────────────────────
+
+export type DataSubjectRequestRecord = {
+  id: string;
+  userId: string;
+  requester: { fullName: string | null; email: string | null } | null;
+  requestType: "export" | "erasure";
+  status: "pending" | "completed" | "rejected";
+  note: string | null;
+  adminNote: string | null;
+  createdAt: string | null;
+  reviewedAt: string | null;
+};
+
+export async function fetchDataSubjectRequests(token: string, statusFilter?: string) {
+  const qs = statusFilter ? `?status=${statusFilter}` : "";
+  return authFetch<{ requests: DataSubjectRequestRecord[] }>(`/admin/data-subject-requests${qs}`, token);
+}
+
+export async function approveDataSubjectRequest(token: string, requestId: string, adminNote?: string) {
+  return authFetch<DataSubjectRequestRecord>(`/admin/data-subject-requests/${requestId}/approve`, token, {
+    method: "POST", body: JSON.stringify({ adminNote }), suppressGlobalErrors: true,
+  });
+}
+
+export async function rejectDataSubjectRequest(token: string, requestId: string, adminNote: string) {
+  return authFetch<DataSubjectRequestRecord>(`/admin/data-subject-requests/${requestId}/reject`, token, {
+    method: "POST", body: JSON.stringify({ adminNote }), suppressGlobalErrors: true,
+  });
+}

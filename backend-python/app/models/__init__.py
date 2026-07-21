@@ -1076,3 +1076,29 @@ class ComplianceCheck(Base, TimestampMixin):
     created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
 
+class DataSubjectRequest(Base, TimestampMixin):
+    """A GDPR/Lei n.º 22/11 data-subject request — export or erasure (Wave
+    C3, EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md; see privacidade.md Section 7
+    and politica-retencao.md Section 1 for the underlying policy).
+
+    Export is non-destructive and self-service: the API builds and returns
+    the JSON immediately, and this row exists only as an audit trail
+    (status is "completed" the moment it's created). Erasure is NOT
+    self-service — it always lands as "pending" and requires an admin to
+    approve (running dsar_service.anonymize_user, which scrubs PII but
+    deliberately preserves rows needed for legal/financial retention — see
+    that function's docstring) or reject (e.g. an open payment dispute or
+    outstanding fiscal obligation, per politica-retencao.md Section 2.4).
+    """
+    __tablename__ = "data_subject_requests"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    request_type = Column(String(20), nullable=False)  # export | erasure
+    status = Column(String(20), nullable=False, default="pending", index=True)  # pending|completed|rejected
+    note = Column(Text, nullable=True)  # user-provided reason, erasure only
+    admin_note = Column(Text, nullable=True)
+    reviewed_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+

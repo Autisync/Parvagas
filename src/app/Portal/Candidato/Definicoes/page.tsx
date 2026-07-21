@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import { RocketLaunchIcon, AcademicCapIcon, AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
+import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
 
 type Prefs = {
   emailJobAlerts?: boolean;
@@ -161,6 +162,10 @@ export default function DefinicoesPage() {
             {saving ? "A guardar..." : "Guardar preferências"}
           </button>
         </form>
+
+      <div className="mt-8">
+        <PrivacyDataCard />
+      </div>
     </div>
   );
 }

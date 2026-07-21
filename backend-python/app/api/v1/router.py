@@ -1,6 +1,6 @@
 """API v1 routes."""
 from fastapi import APIRouter
-from app.api.v1 import admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, legal, newsletter, notifications, payments, resumes
+from app.api.v1 import account, admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, legal, newsletter, notifications, payments, resumes
 
 router = APIRouter(prefix="/api/v1")
 
@@ -52,3 +52,6 @@ router.include_router(payments.router)
 
 # Public legal-document hub (/legal)
 router.include_router(legal.router)
+
+# Self-service data-subject requests (/account)
+router.include_router(account.router)

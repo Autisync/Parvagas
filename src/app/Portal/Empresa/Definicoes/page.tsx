@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import PageHeader from "@/app/components/PageHeader";
 import { AcademicCapIcon, BellIcon } from "@heroicons/react/24/outline";
+import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
 
 export default function EmpresaDefinicoesPage() {
   const { loading } = useAuth("company");
@@ -72,6 +73,8 @@ export default function EmpresaDefinicoesPage() {
               </div>
             </div>
           </section>
+
+          <PrivacyDataCard />
         </div>
       </main>
     </div>
