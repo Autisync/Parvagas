@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from datetime import datetime, timedelta
 from io import StringIO
@@ -23,8 +24,8 @@ from app.api.v1.jobs import serialize_job
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
-    CareerPost, ClientErrorLog, Company, CompanyInvite, CompanyMember, CVUpload, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
-    LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
+    CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
+    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
@@ -32,6 +33,7 @@ from app.workers.tasks import send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
+from app.services import legal_service, compliance_analyzer_service
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -4062,3 +4064,390 @@ async def deploy_history(
             for e in events
         ]
     }
+
+
+# ── Legal Documents — versioned CMS (public + internal) ──────────────────
+#
+# Wave L3, EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md. Every write here is
+# restricted to super-admin: a change to a public legal document (or an
+# internal security/dispute policy) is a higher-stakes action than most
+# other admin content, and there's no reason a moderator needs it.
+#
+# Editing rule enforced by legal_service, not re-checked here: a version
+# can only be edited while status == "draft". Once published it's
+# immutable — a LegalAcceptance row may already point at it, and that
+# record must keep meaning exactly what the user agreed to.
+
+_SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+
+def _to_legal_document_record(db: Session, document: LegalDocument) -> dict[str, Any]:
+    current = legal_service.get_current_version(db, document.id)
+    version_count = db.query(LegalDocumentVersion).filter(LegalDocumentVersion.document_id == document.id).count()
+    return {
+        "_id": document.id,
+        "slug": document.slug,
+        "title": document.title,
+        "category": document.category,
+        "audience": document.audience,
+        "requiresAcceptance": bool(document.requires_acceptance),
+        "versionCount": version_count,
+        "currentVersion": _to_legal_version_record(current) if current else None,
+    }
+
+
+def _to_legal_version_record(version: LegalDocumentVersion) -> dict[str, Any]:
+    return {
+        "_id": version.id,
+        "documentId": version.document_id,
+        "versionLabel": version.version_label,
+        "bodyMarkdown": version.body_markdown,
+        "status": version.status,
+        "effectiveDate": version.effective_date.isoformat() if version.effective_date else None,
+        "publishedAt": version.published_at.isoformat() if version.published_at else None,
+        "createdAt": version.created_at.isoformat() if version.created_at else None,
+    }
+
+
+@router.get("/legal-documents")
+async def admin_list_legal_documents(
+    audience: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    documents = legal_service.list_documents(db, audience=audience)
+    return {"legalDocuments": [_to_legal_document_record(db, d) for d in documents]}
+
+
+@router.get("/legal-documents/{document_id}")
+async def admin_get_legal_document(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    document = legal_service.get_document(db, document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    versions = legal_service.list_versions(db, document.id)
+    record = _to_legal_document_record(db, document)
+    record["versions"] = [_to_legal_version_record(v) for v in versions]
+    return record
+
+
+@router.post("/legal-documents")
+async def admin_create_legal_document(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Creating a brand-new document type is rare (the 14 standard ones are
+    seeded by migration) — mainly here for when the compliance analyzer
+    flags that an entirely new policy is needed and an admin acts on it."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+
+    slug = str(payload.get("slug", "")).strip().lower()
+    title = str(payload.get("title", "")).strip()
+    category = str(payload.get("category", "")).strip()
+    audience = str(payload.get("audience", "public")).strip().lower()
+    if not slug or not title or not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slug, title e category são obrigatórios")
+    if not _SLUG_RE.match(slug):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="slug inválido — use apenas letras minúsculas, números e hífens")
+    if audience not in ("public", "employer", "internal"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="audience deve ser public, employer ou internal")
+    if legal_service.get_document_by_slug(db, slug):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um documento com este slug")
+
+    document = legal_service.create_document(
+        db, slug=slug, title=title, category=category, audience=audience,
+        requires_acceptance=bool(payload.get("requiresAcceptance", False)),
+    )
+    _record_admin_event(
+        actor=admin, action="legalDocument.create", resource_type="legal_document",
+        resource_id=document.id, details={"slug": slug, "audience": audience},
+    )
+    return _to_legal_document_record(db, document)
+
+
+@router.patch("/legal-documents/{document_id}")
+async def admin_update_legal_document(
+    document_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Metadata only (title/audience/requiresAcceptance) — slug and
+    category are the stable identity of the document and aren't editable
+    here; delete and recreate if a document type was genuinely set up
+    wrong, rather than silently repurposing an existing one that may
+    already have recorded acceptances against it."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    document = legal_service.get_document(db, document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+
+    if "title" in payload:
+        title = str(payload.get("title", "")).strip()
+        if not title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="title não pode ficar vazio")
+        document.title = title
+    if "audience" in payload:
+        audience = str(payload.get("audience", "")).strip().lower()
+        if audience not in ("public", "employer", "internal"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="audience deve ser public, employer ou internal")
+        document.audience = audience
+    if "requiresAcceptance" in payload:
+        document.requires_acceptance = bool(payload.get("requiresAcceptance"))
+
+    db.commit()
+    db.refresh(document)
+    _record_admin_event(
+        actor=admin, action="legalDocument.update", resource_type="legal_document",
+        resource_id=document.id, details={"changes": list(payload.keys())},
+    )
+    return _to_legal_document_record(db, document)
+
+
+@router.post("/legal-documents/{document_id}/versions")
+async def admin_create_legal_document_version(
+    document_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    document = legal_service.get_document(db, document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+
+    version_label = str(payload.get("versionLabel", "")).strip()
+    body_markdown = str(payload.get("bodyMarkdown", "")).strip()
+    if not version_label or not body_markdown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="versionLabel e bodyMarkdown são obrigatórios")
+
+    effective_date = None
+    if payload.get("effectiveDate"):
+        try:
+            effective_date = datetime.fromisoformat(str(payload["effectiveDate"]).replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="effectiveDate inválida")
+
+    version = legal_service.create_draft_version(
+        db, document_id=document.id, version_label=version_label,
+        body_markdown=body_markdown, effective_date=effective_date,
+    )
+    _record_admin_event(
+        actor=admin, action="legalDocument.versionCreate", resource_type="legal_document_version",
+        resource_id=version.id, details={"documentSlug": document.slug, "versionLabel": version_label},
+    )
+    return _to_legal_version_record(version)
+
+
+@router.patch("/legal-documents/{document_id}/versions/{version_id}")
+async def admin_update_legal_document_version(
+    document_id: str,
+    version_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    version = legal_service.get_version(db, version_id)
+    if not version or version.document_id != document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Versão não encontrada")
+
+    effective_date = None
+    if "effectiveDate" in payload and payload.get("effectiveDate"):
+        try:
+            effective_date = datetime.fromisoformat(str(payload["effectiveDate"]).replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="effectiveDate inválida")
+
+    try:
+        version = legal_service.update_draft_version(
+            db, version,
+            version_label=str(payload["versionLabel"]).strip() if "versionLabel" in payload else None,
+            body_markdown=str(payload["bodyMarkdown"]) if "bodyMarkdown" in payload else None,
+            effective_date=effective_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    _record_admin_event(
+        actor=admin, action="legalDocument.versionUpdate", resource_type="legal_document_version",
+        resource_id=version.id, details={"changes": list(payload.keys())},
+    )
+    return _to_legal_version_record(version)
+
+
+@router.post("/legal-documents/{document_id}/versions/{version_id}/publish")
+async def admin_publish_legal_document_version(
+    document_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    version = legal_service.get_version(db, version_id)
+    if not version or version.document_id != document_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Versão não encontrada")
+    if version.status == "published":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta versão já está publicada")
+
+    document = legal_service.get_document(db, document_id)
+    published = legal_service.publish_legal_version(db, version, published_by_user_id=admin.id)
+    _record_admin_event(
+        actor=admin, action="legalDocument.versionPublish", resource_type="legal_document_version",
+        resource_id=published.id,
+        details={"documentSlug": document.slug if document else None, "versionLabel": published.version_label},
+    )
+    return _to_legal_version_record(published)
+
+
+@router.get("/legal-documents/{document_id}/acceptances/summary")
+async def admin_legal_document_acceptance_summary(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """How many distinct users have accepted the CURRENT published version
+    — a quick read on rollout of a re-consent requirement (Wave C2), not a
+    full audit log (that's a separate, paginated endpoint if ever needed)."""
+    _ensure_admin(current_user)
+    document = legal_service.get_document(db, document_id)
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento não encontrado")
+    current = legal_service.get_current_version(db, document.id)
+    if not current:
+        return {"currentVersionId": None, "acceptedCount": 0}
+    accepted_count = (
+        db.query(LegalAcceptance.user_id)
+        .filter(LegalAcceptance.document_version_id == current.id)
+        .distinct()
+        .count()
+    )
+    return {"currentVersionId": current.id, "acceptedCount": accepted_count}
+
+
+# ── Compliance Analyzer ────────────────────────────────────────────────
+#
+# Wave L3b. A deterministic checklist, NOT an AI opinion — see
+# app/services/compliance_analyzer_service.py's module docstring for why.
+# Read access (viewing past checks) is available to any admin; running a
+# new analysis and resolving/dismissing findings is super-admin only,
+# consistent with every other legal-document write in this file.
+
+def _to_compliance_check_record(check: "ComplianceCheck") -> dict[str, Any]:
+    return {
+        "_id": check.id,
+        "featureName": check.feature_name,
+        "featureDescription": check.feature_description,
+        "intake": json.loads(check.intake),
+        "findings": json.loads(check.findings),
+        "aiNotes": check.ai_notes,
+        "severitySummary": check.severity_summary,
+        "status": check.status,
+        "resolvedAt": check.resolved_at.isoformat() if check.resolved_at else None,
+        "createdAt": check.created_at.isoformat() if check.created_at else None,
+    }
+
+
+@router.get("/compliance-checks/categories")
+async def admin_list_compliance_categories(current_user: User = Depends(get_current_user)):
+    _ensure_admin(current_user)
+    return {"categories": compliance_analyzer_service.list_categories()}
+
+
+@router.get("/compliance-checks")
+async def admin_list_compliance_checks(
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    checks = compliance_analyzer_service.list_checks(db, status_filter=status_filter)
+    return {"complianceChecks": [_to_compliance_check_record(c) for c in checks]}
+
+
+@router.get("/compliance-checks/{check_id}")
+async def admin_get_compliance_check(
+    check_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    check = compliance_analyzer_service.get_check(db, check_id)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Análise não encontrada")
+    return _to_compliance_check_record(check)
+
+
+@router.post("/compliance-checks")
+async def admin_create_compliance_check(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+
+    feature_name = str(payload.get("featureName", "")).strip()
+    feature_description = str(payload.get("featureDescription", "")).strip()
+    intake = payload.get("intake") or {}
+    if not feature_name or not feature_description:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="featureName e featureDescription são obrigatórios")
+    if not isinstance(intake, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="intake deve ser um objeto {categoria: boolean}")
+
+    check = compliance_analyzer_service.analyze_feature(
+        db, feature_name=feature_name, feature_description=feature_description,
+        intake=intake, created_by_user_id=admin.id,
+    )
+    _record_admin_event(
+        actor=admin, action="complianceCheck.create", resource_type="compliance_check",
+        resource_id=check.id, details={"featureName": feature_name, "severity": check.severity_summary},
+    )
+    return _to_compliance_check_record(check)
+
+
+@router.post("/compliance-checks/{check_id}/resolve")
+async def admin_resolve_compliance_check(
+    check_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    check = compliance_analyzer_service.get_check(db, check_id)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Análise não encontrada")
+    check = compliance_analyzer_service.resolve_check(db, check, resolved_by_user_id=admin.id, dismissed=False)
+    _record_admin_event(
+        actor=admin, action="complianceCheck.resolve", resource_type="compliance_check", resource_id=check.id,
+    )
+    return _to_compliance_check_record(check)
+
+
+@router.post("/compliance-checks/{check_id}/dismiss")
+async def admin_dismiss_compliance_check(
+    check_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    check = compliance_analyzer_service.get_check(db, check_id)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Análise não encontrada")
+    check = compliance_analyzer_service.resolve_check(db, check, resolved_by_user_id=admin.id, dismissed=True)
+    _record_admin_event(
+        actor=admin, action="complianceCheck.dismiss", resource_type="compliance_check", resource_id=check.id,
+    )
+    return _to_compliance_check_record(check)

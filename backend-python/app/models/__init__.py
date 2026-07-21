@@ -1050,3 +1050,29 @@ class LegalAcceptance(Base, TimestampMixin):
     document_version = relationship("LegalDocumentVersion")
 
 
+class ComplianceCheck(Base, TimestampMixin):
+    """A record of one compliance-analyzer run against a described feature
+    (app.services.compliance_analyzer_service) — the admin-portal tool that
+    cross-references a new/changed feature against the current legal
+    document set (Wave L3b, EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md).
+
+    `intake` and `findings` are JSON-encoded (not normalized into their own
+    tables) since they're a snapshot of one analysis run, not queried by
+    field — read back and parsed by the API layer, same convention as
+    SecurityEvent.details / AuditLog.details elsewhere in this schema.
+    """
+    __tablename__ = "compliance_checks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    feature_name = Column(String(200), nullable=False)
+    feature_description = Column(Text, nullable=False)
+    intake = Column(Text, nullable=False)  # JSON: {categoryKey: bool}
+    findings = Column(Text, nullable=False)  # JSON: list of finding dicts
+    ai_notes = Column(Text, nullable=True)  # optional supplementary LLM narrative, best-effort only
+    severity_summary = Column(String(10), nullable=False, default="none", index=True)  # none|low|medium|high
+    status = Column(String(20), nullable=False, default="open", index=True)  # open|resolved|dismissed
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+
