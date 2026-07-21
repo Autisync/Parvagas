@@ -21,6 +21,31 @@ celery.conf.update(
     task_track_started=True,
     task_time_limit=30 * 60,  # 30 minutes
     task_soft_time_limit=25 * 60,  # 25 minutes
+    # Without these, a `.delay()` call issued from inside a request handler
+    # (there are many — payments.py, admin.py, auth.py, ...) blocks the
+    # request indefinitely if the broker (Redis) is unreachable: kombu's
+    # default connection retry has no bounded timeout, and Celery's default
+    # publish-retry policy keeps retrying on top of that. Bounding both
+    # means a broker outage degrades those request handlers to "email send
+    # failed, logged and swallowed" within a few seconds instead of hanging
+    # the worker/request forever.
+    broker_connection_timeout=5,
+    broker_transport_options={'socket_connect_timeout': 5, 'socket_timeout': 5},
+    task_publish_retry=True,
+    task_publish_retry_policy={
+        'max_retries': 2,
+        'interval_start': 0.2,
+        'interval_step': 0.5,
+        'interval_max': 1,
+    },
+    # Same bounding for the result backend (also Redis) — nothing in this
+    # codebase ever reads a task result (no AsyncResult/.get() calls
+    # anywhere; task state is tracked separately via the TaskRun model /
+    # track_task_run), but `.delay()` still touches the backend and was
+    # observed retrying its own reconnect loop for ~19s before giving up
+    # when Redis is unreachable, on top of the broker-side wait.
+    result_backend_transport_options={'retry_policy': {'timeout': 5}},
+    result_backend_max_retries=2,
 )
 
 # Define default queue
