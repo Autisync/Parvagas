@@ -52,6 +52,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.send_templated_email': {'queue': 'emails'},
     'app.workers.tasks.parse_cv': {'queue': 'parsing'},
     'app.workers.tasks.cleanup_expired_tokens': {'queue': 'cleanup'},
+    'app.workers.tasks.process_lapsed_subscriptions': {'queue': 'cleanup'},
     # Slow by design (rate-limit sleeps between HIBP API calls, up to ~35 min
     # per run) — cleanup queue keeps it away from web-facing email/parsing work.
     'app.workers.tasks.run_hibp_breach_scan': {'queue': 'cleanup'},
@@ -111,5 +112,13 @@ celery.conf.beat_schedule = {
     'cleanup-expired-tokens-daily': {
         'task': 'app.workers.tasks.cleanup_expired_tokens',
         'schedule': crontab(hour=4, minute=0),  # 04:00 UTC daily
+    },
+    # Grace period + expiry for lapsed subscriptions (Wave P4,
+    # EXECUTION_PLAN_LEGAL_AND_PAYMENTS.md) — 08:30 UTC, right after the
+    # expiry-reminder task above so a plan that lapses today gets its grace
+    # notice the same run cycle rather than a day later.
+    'process-lapsed-subscriptions-daily': {
+        'task': 'app.workers.tasks.process_lapsed_subscriptions',
+        'schedule': crontab(hour=8, minute=30),
     },
 }

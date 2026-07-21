@@ -621,6 +621,40 @@ class EmailService:
             preheader=f"O plano {plan_name} expira em {days_left} dia(s).",
         )
 
+    @staticmethod
+    def send_subscription_lapsed_grace_email(
+        email: str, party_name: str, plan_name: str, grace_days_left: int, portal_path: str,
+    ) -> bool:
+        """Sent once, the day a plan's period ends without renewal — the
+        manual-payment-rail equivalent of a dunning notice (there is no
+        automatic card charge to retry; this asks the user to complete a
+        manual payment before access is actually cut)."""
+        body = f"""
+        <p style="margin:0 0 14px;">Olá,</p>
+        <p style="margin:0 0 14px;">O plano <strong>{escape(plan_name)}</strong> de <strong>{escape(party_name)}</strong> terminou sem renovação.</p>
+        <p style="margin:0 0 14px;">Tem <strong>{grace_days_left} dia(s)</strong> para renovar antes de perder o acesso às funcionalidades do plano.</p>
+        """
+        return EmailService._compose_and_send(
+            email, f"{settings.BRAND_NAME} — O seu plano terminou",
+            "O seu plano terminou", body,
+            "Renovar agora", f"{EmailService._base_url()}{portal_path}",
+            preheader=f"Tem {grace_days_left} dia(s) para renovar o plano {plan_name}.",
+        )
+
+    @staticmethod
+    def send_subscription_expired_email(email: str, party_name: str, plan_name: str, portal_path: str) -> bool:
+        body = f"""
+        <p style="margin:0 0 14px;">Olá,</p>
+        <p style="margin:0 0 14px;">O plano <strong>{escape(plan_name)}</strong> de <strong>{escape(party_name)}</strong> foi desativado por falta de renovação dentro do período de tolerância.</p>
+        <p style="margin:0 0 14px;">Pode subscrever novamente a qualquer momento para recuperar o acesso.</p>
+        """
+        return EmailService._compose_and_send(
+            email, f"{settings.BRAND_NAME} — Plano desativado",
+            "Plano desativado", body,
+            "Ver planos", f"{EmailService._base_url()}{portal_path}",
+            preheader=f"O plano {plan_name} foi desativado.",
+        )
+
     # ============================== ADMINS ============================== #
 
     @staticmethod

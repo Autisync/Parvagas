@@ -1051,26 +1051,33 @@ def dispatch_instant_alerts_for_job(job_id: str) -> dict:
 @celery.task(name='app.workers.tasks.dispatch_subscription_expiry_reminders')
 @track_task_run('dispatch_subscription_expiry_reminders')
 def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
-    """Daily: remind companies whose plan expires within `days_ahead` days."""
+    """Daily: remind companies AND candidates whose plan expires within
+    `days_ahead` days. Skips anything with cancel_requested_at set (Wave
+    P2) — no point nagging someone to renew a plan they already asked to
+    cancel; subscription_lifecycle_service finalizes those at period end
+    instead."""
     from datetime import timedelta
-    from app.models import Subscription, Company, Plan, User
+    from app.models import CandidateCVSubscription, CandidateProfile, Company, Plan, Subscription, User
+    from app.services.candidate_billing_service import get_cv_builder_plans
 
     db = SessionLocal()
     sent = 0
     try:
         now = datetime.utcnow()
         horizon = now + timedelta(days=days_ahead)
-        subs = (
+
+        company_subs = (
             db.query(Subscription)
             .filter(
                 Subscription.status == "active",
+                Subscription.cancel_requested_at.is_(None),
                 Subscription.current_period_end.isnot(None),
                 Subscription.current_period_end >= now,
                 Subscription.current_period_end <= horizon,
             )
             .all()
         )
-        for sub in subs:
+        for sub in company_subs:
             company = db.query(Company).filter(Company.id == sub.company_id).first()
             if not company or not company.owner_user_id:
                 continue
@@ -1083,9 +1090,53 @@ def dispatch_subscription_expiry_reminders(days_ahead: int = 3) -> dict:
                 owner.email, company.name, plan.name if plan else "", days_left,
             )
             sent += 1
+
+        candidate_subs = (
+            db.query(CandidateCVSubscription)
+            .filter(
+                CandidateCVSubscription.status == "active",
+                CandidateCVSubscription.plan_tier != "free",
+                CandidateCVSubscription.cancel_requested_at.is_(None),
+                CandidateCVSubscription.current_period_end.isnot(None),
+                CandidateCVSubscription.current_period_end >= now,
+                CandidateCVSubscription.current_period_end <= horizon,
+            )
+            .all()
+        )
+        plans_by_tier = {p["tier"]: p for p in get_cv_builder_plans(db)}
+        for sub in candidate_subs:
+            profile = db.query(CandidateProfile).filter(CandidateProfile.id == sub.candidate_profile_id).first()
+            user = db.query(User).filter(User.id == profile.user_id).first() if profile else None
+            if not user or not user.email:
+                continue
+            plan_name = plans_by_tier.get(sub.plan_tier, {}).get("name", sub.plan_tier)
+            days_left = max(0, (sub.current_period_end - now).days)
+            EmailService.send_subscription_expiring_email(user.email, user.full_name or "", plan_name, days_left)
+            sent += 1
+
         return {"reminders_sent": sent}
     except Exception as e:
         logger.error(f"Failed to dispatch expiry reminders: {str(e)}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+@celery.task(name='app.workers.tasks.process_lapsed_subscriptions')
+@track_task_run('process_lapsed_subscriptions')
+def process_lapsed_subscriptions() -> dict:
+    """Daily: finalize subscriptions whose current_period_end has passed —
+    grace-period notice on day 0, expiry after GRACE_PERIOD_DAYS. See
+    app.services.subscription_lifecycle_service module docstring for why
+    there's no auto-charge retry step on this platform."""
+    from app.services.subscription_lifecycle_service import process_lapsed_subscriptions as _process
+
+    db = SessionLocal()
+    try:
+        return _process(db)
+    except Exception as e:
+        logger.error(f"Failed to process lapsed subscriptions: {str(e)}")
+        db.rollback()
         return {"success": False, "error": str(e)}
     finally:
         db.close()

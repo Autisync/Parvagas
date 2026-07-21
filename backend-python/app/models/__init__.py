@@ -879,10 +879,16 @@ class Subscription(Base, TimestampMixin):
     # Set when the owner requests cancellation (Wave P2, EXECUTION_PLAN_LEGAL_
     # AND_PAYMENTS.md) — status stays "active" so access continues until
     # current_period_end (reembolsos.md Section 3: no mid-period revocation,
-    # no refund for the period in progress). The renewal job (Wave P4) will
-    # check this flag to skip charging for the next period instead of
-    # flipping status early.
+    # no refund for the period in progress). subscription_lifecycle_service
+    # (Wave P4) checks this flag to finalize the cancellation at period end
+    # instead of prompting for renewal.
     cancel_requested_at = Column(DateTime, nullable=True)
+    # Set once, when the "your plan lapsed, you have N days to renew before
+    # losing access" grace-period email goes out (Wave P4) — prevents
+    # resending it every day of the grace window. Only meaningful for a
+    # subscription that simply wasn't renewed (cancel_requested_at is null);
+    # a self-service cancellation skips grace entirely.
+    grace_notified_at = Column(DateTime, nullable=True)
 
 
 class CandidateCvPlan(Base, TimestampMixin):
@@ -968,6 +974,8 @@ class CandidateCVSubscription(Base, TimestampMixin):
     transaction_reference = Column(String(64), nullable=True, index=True)
     # Same cancel-at-period-end semantics as Subscription.cancel_requested_at above.
     cancel_requested_at = Column(DateTime, nullable=True)
+    # Same grace-period-notification semantics as Subscription.grace_notified_at above.
+    grace_notified_at = Column(DateTime, nullable=True)
 
     candidate_profile = relationship("CandidateProfile")
 

@@ -11,6 +11,7 @@ EXPECTED_SCHEDULED_TASKS = {
     "app.workers.tasks.dispatch_job_alert_digests",
     "app.workers.tasks.dispatch_scraped_jobs_digest",
     "app.workers.tasks.dispatch_subscription_expiry_reminders",
+    "app.workers.tasks.process_lapsed_subscriptions",
     "app.workers.tasks.scrape_external_jobs",
     "app.workers.tasks.expire_stale_aggregated_jobs",
     "app.workers.tasks.publish_scheduled_scraped_jobs",
