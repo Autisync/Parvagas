@@ -22,7 +22,7 @@ from app.models import CandidateProfile, CVUpload, Job, Company, CareerPost, Use
 from app.content import career_posts
 from app.services.auth_service import AuthService
 from app.services.storage_service import StorageService
-from app.workers.tasks import parse_cv, send_verification_email
+from app.workers.tasks import parse_cv
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -411,19 +411,20 @@ async def submit_spontaneous_cv(
     email: str = Form(""),
     cellphoneContact: str = Form(""),
     city: str = Form(""),
-    residencialAddress: str = Form(""),
-    qualification: str = Form(""),
-    profession: str = Form(""),
     personalStatement: str = Form(""),
     cv: UploadFile = File(...),
-    extraDocument: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    """Public "Criar Perfil por CV" entry point (homepage → /Submission).
+    """Public "express interest" entry point (homepage / /Submission —
+    "Manifestação de interesse", not tied to any specific job).
 
     Guest, no-login CV drop: finds or creates a candidate account, upserts the
     base profile, stores the CV and kicks off the existing async parser so the
     profile gets auto-filled the same way an authenticated /cv/upload does.
+    Deliberately asks for only what the parser can't infer from the file
+    itself (name/email to create the account, phone/city, and an optional
+    free-text note on what they're looking for) — everything else a fuller
+    profile needs comes from parse_cv or the candidate filling it in later.
     """
     full_name = fullName.strip()
     email_norm = email.strip().lower()
@@ -443,7 +444,6 @@ async def submit_spontaneous_cv(
         )
 
     user = db.query(User).filter(User.email == email_norm).first()
-    is_new_user = user is None
     if user and user.role != UserRole.candidate:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este email já está associado a outro tipo de conta.")
 
@@ -464,8 +464,7 @@ async def submit_spontaneous_cv(
     profile.first_name = first_name
     profile.last_name = last_name
     profile.phone = cellphoneContact.strip() or profile.phone
-    profile.location = (city or residencialAddress).strip() or profile.location
-    profile.job_title = profession.strip() or profile.job_title
+    profile.location = city.strip() or profile.location
     profile.professional_summary = personalStatement.strip() or profile.professional_summary
     db.flush()
 
@@ -480,31 +479,18 @@ async def submit_spontaneous_cv(
         is_primary=True,
     )
     db.add(cv_upload)
-
-    if extraDocument is not None and extraDocument.filename:
-        extra_bytes = await extraDocument.read()
-        if extra_bytes and len(extra_bytes) <= max_bytes:
-            extra_path = _store_upload(extra_bytes, extraDocument.filename)
-            db.add(CVUpload(
-                candidate_id=profile.id,
-                file_name=extraDocument.filename,
-                file_path=extra_path,
-                file_size=len(extra_bytes),
-                mime_type=extraDocument.content_type or "application/octet-stream",
-                parse_status="not_applicable",
-                is_primary=False,
-            ))
-
     db.commit()
     db.refresh(cv_upload)
 
     parse_cv.delay(str(cv_upload.id))
 
-    if is_new_user:
-        raw_token = AuthService.create_verification_token(db, user)
-        send_verification_email.delay(str(user.id), raw_token)
+    # Not gated on is_new_user: a still-unclaimed guest resubmitting later
+    # should also get this if they somehow never got/used the first one —
+    # the helper's own guest_claim_email_sent_at check makes this a no-op
+    # for anyone already claimed or already emailed once.
+    AuthService.maybe_send_guest_claim_email(db, user)
 
     return {
         "success": True,
-        "message": "CV submetido com sucesso. A equipa Parvagas irá analisar a informação.",
+        "message": "Recebemos o seu CV e entraremos em contacto sobre oportunidades relevantes. Verifique o seu email para definir uma password e acompanhar o seu perfil.",
     }

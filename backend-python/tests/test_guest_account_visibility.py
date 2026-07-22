@@ -74,6 +74,42 @@ def test_reset_password_sets_guest_converted_at(db):
     assert updated.guest_converted_at is not None
 
 
+def test_reset_password_verifies_email_so_claiming_unblocks_login(db):
+    """A guest who claims via the password-reset link never separately
+    clicked a verify-email link — without this, authenticate_user's
+    email_verified check would strand them right after claiming."""
+    guest = _make_guest(db)
+    assert guest.email_verified is False
+    raw_token = "raw-reset-token-verify"
+    db.add(PasswordResetToken(user_id=guest.id, token_hash=hash_token(raw_token), expires_at=datetime.utcnow() + timedelta(hours=1)))
+    db.commit()
+
+    updated = AuthService.reset_password(db, raw_token, "NewPassw0rd!23")
+
+    assert updated.email_verified is True
+    assert updated.email_verified_at is not None
+    authenticated = AuthService.authenticate_user(db, updated.email, "NewPassw0rd!23")
+    assert authenticated.id == updated.id
+
+
+def test_reset_password_does_not_touch_already_verified_email(db):
+    user = User(
+        email="verified@x.com", full_name="Verified", password_hash=hash_password("x"),
+        role=UserRole.candidate, is_guest_account=False, email_verified=True,
+        email_verified_at=datetime(2020, 1, 1),
+    )
+    db.add(user)
+    db.commit()
+    raw_token = "raw-reset-token-already-verified"
+    db.add(PasswordResetToken(user_id=user.id, token_hash=hash_token(raw_token), expires_at=datetime.utcnow() + timedelta(hours=1)))
+    db.commit()
+
+    updated = AuthService.reset_password(db, raw_token, "NewPassw0rd!23")
+
+    assert updated.email_verified is True
+    assert updated.email_verified_at == datetime(2020, 1, 1)
+
+
 def test_reset_password_does_not_set_guest_converted_at_for_non_guest(db):
     user = User(email="normal@x.com", full_name="Normal", password_hash=hash_password("x"), role=UserRole.candidate, is_guest_account=False)
     db.add(user)

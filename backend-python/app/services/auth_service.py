@@ -272,11 +272,38 @@ class AuthService:
         if user.is_guest_account:
             user.guest_converted_at = datetime.utcnow()
         user.is_guest_account = False
+        # Successfully using a token that arrived at this email address is at
+        # least as strong proof of ownership as clicking a separate "verify
+        # email" link — without this, a guest who claims their account via
+        # this exact flow still can't log in afterward (authenticate_user
+        # requires email_verified), since claim emails never went through
+        # the unrelated verify-email path in the first place.
+        if not user.email_verified:
+            user.email_verified = True
+            user.email_verified_at = datetime.utcnow()
 
         db.commit()
         db.refresh(user)
-        
+
         return user
+
+    @staticmethod
+    def maybe_send_guest_claim_email(db: Session, user: User) -> None:
+        """One-time "claim your account" nudge for a guest-created account —
+        issues a password-reset token and emails it so the same click both
+        verifies the email (see reset_password above) and sets a real
+        password. Rate-limited to once-ever via guest_claim_email_sent_at,
+        not a rolling window. Shared by every guest-account entry point
+        (CV builder export, spontaneous CV-drop submission) so the one-shot
+        gate is honored across all of them, not per-flow."""
+        if not user.is_guest_account or user.guest_claim_email_sent_at:
+            return
+        from app.workers.tasks import send_guest_cv_claim_email
+
+        raw_token = AuthService.create_password_reset_token(db, user)
+        user.guest_claim_email_sent_at = datetime.utcnow()
+        db.commit()
+        send_guest_cv_claim_email.delay(str(user.id), raw_token)
     
     @staticmethod
     def build_user_response(db: Session, user: User) -> dict:

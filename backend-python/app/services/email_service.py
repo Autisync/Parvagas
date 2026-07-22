@@ -163,29 +163,31 @@ class EmailService:
 
     @staticmethod
     def send_guest_cv_claim_email(email: str, full_name: str, claim_link: str) -> bool:
-        """C5 (EXECUTION_PLAN_NATIVE_CV_BUILDER.md): sent once, after a
-        guest-created account's first CV export, nudging them to set a
-        real password so they can log back in later. Reuses the password-
-        reset token mechanism — clicking the link both claims the account
-        AND lets them set that password in one step."""
+        """Sent once, the first time a guest-created account has a CV on
+        file (via the CV builder's first export, or a spontaneous CV-drop
+        submission), nudging them to set a real password so they can log
+        back in later. Reuses the password-reset token mechanism —
+        clicking the link both verifies the email and claims the account
+        AND lets them set that password in one step (see
+        AuthService.reset_password)."""
         try:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
                 return False
 
-            subject = f"{settings.BRAND_NAME} — O seu CV está guardado"
+            subject = f"{settings.BRAND_NAME} — O seu CV foi recebido"
             body_html = f"""
             <p style="margin:0 0 14px;">Olá {escape(full_name)},</p>
-            <p style="margin:0 0 14px;">O CV que criou no {escape(settings.BRAND_NAME)} está guardado e pronto a usar. Defina uma palavra-passe para poder voltar a entrar e continuar a editá-lo sempre que quiser.</p>
+            <p style="margin:0 0 14px;">O seu CV foi recebido e fica guardado no seu perfil em {escape(settings.BRAND_NAME)}. Defina uma palavra-passe para poder entrar, acompanhar o estado do seu perfil e ser contactado sobre vagas relevantes.</p>
             <p style="margin:0 0 14px;">Este link expira em 1 hora. Se não pretende guardar uma conta, pode ignorar esta mensagem.</p>
             """
 
             html_content = EmailService._build_email_html(
-                title="O seu CV está guardado",
+                title="O seu CV foi recebido",
                 body_html=body_html,
                 action_text="Definir palavra-passe",
                 action_url=claim_link,
-                preheader="Defina uma palavra-passe para guardar o acesso ao seu CV.",
+                preheader="Defina uma palavra-passe para guardar o acesso ao seu perfil.",
             )
 
             return EmailService._send_email(email, subject, html_content)

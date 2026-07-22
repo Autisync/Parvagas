@@ -402,7 +402,10 @@ def test_export_empty_data_does_not_crash(db):
 
 def test_guest_export_sends_claim_email_once(db, monkeypatch):
     sent = []
-    monkeypatch.setattr(resumes_module, "send_guest_cv_claim_email", type("T", (), {"delay": staticmethod(lambda *a: sent.append(a))}))
+    # AuthService.maybe_send_guest_claim_email (shared with the spontaneous
+    # CV-drop endpoint) imports the task lazily from app.workers.tasks, so
+    # that's the module to patch, not resumes_module.
+    monkeypatch.setattr("app.workers.tasks.send_guest_cv_claim_email.delay", lambda *a: sent.append(a))
     user = User(email="guest@example.com", full_name="Guest", password_hash="x", role=UserRole.candidate, is_guest_account=True)
     db.add(user)
     db.commit()
@@ -423,7 +426,7 @@ def test_guest_export_sends_claim_email_once(db, monkeypatch):
 
 def test_non_guest_export_never_sends_claim_email(db, monkeypatch):
     sent = []
-    monkeypatch.setattr(resumes_module, "send_guest_cv_claim_email", type("T", (), {"delay": staticmethod(lambda *a: sent.append(a))}))
+    monkeypatch.setattr("app.workers.tasks.send_guest_cv_claim_email.delay", lambda *a: sent.append(a))
     user = _make_candidate(db)  # is_guest_account defaults False
     created = asyncio.run(_create_resume(
         payload=ResumeCreateRequest(title="CV", data=_EXPORTABLE_DATA), db=db, current_user=user,

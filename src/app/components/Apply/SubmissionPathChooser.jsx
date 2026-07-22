@@ -7,16 +7,18 @@ import { getToken, getUser } from "@/lib/api";
 
 /**
  * Entry point for /Submission: lets a visitor self-select between the two
- * very different flows on this page (build a CV from scratch vs. upload an
- * existing one) instead of landing directly on a 20-field form with no
- * framing.
+ * very different flows on this page (build a CV from scratch vs. leave an
+ * existing one as a general expression of interest) instead of landing
+ * directly on a form with no framing.
  *
  * The "no CV yet" card is the complete CV-builder entry point itself (not
  * just a link to one) — there's no form to fill in anymore since building a
  * CV requires an account, so a separate hero section below repeating the
  * same choice would be redundant. #criar-cv stays on this card since it's
  * the direct link Header's "Construtor de CV" CTA sends anonymous visitors
- * to. The "already have a CV" card still anchors down to the upload form.
+ * to. The "already have a CV" card anchors down to the interest-registration
+ * form (CVForm.jsx) — a lightweight, no-login lead capture, not tied to any
+ * specific job.
  */
 export default function SubmissionPathChooser() {
   const router = useRouter();
@@ -85,10 +87,10 @@ export default function SubmissionPathChooser() {
             </span>
             <h2 className="mt-4 text-lg font-bold text-slate-950">Já tenho um CV</h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
-              Submeta o seu CV existente (PDF ou DOCX) junto com os seus dados profissionais.
+              Ainda sem vaga certa? Deixe o seu CV (PDF ou DOCX) e entraremos em contacto quando surgir uma oportunidade.
             </p>
             <span className="mt-4 text-sm font-semibold text-slate-700 group-hover:text-slate-900">
-              Submeter CV →
+              Registar interesse →
             </span>
           </a>
         </div>

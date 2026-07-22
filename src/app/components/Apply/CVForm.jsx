@@ -1,6 +1,6 @@
 "use client";
 
-import { DocumentArrowUpIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, DocumentArrowUpIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { useClientLocale } from "@/lib/i18n/client";
 import FormFieldError from "@/app/components/errors/FormFieldError";
@@ -8,22 +8,27 @@ import { apiFetchRaw } from "@/lib/api";
 
 const initialFormData = {
   fullName: "",
-  dateOfBirth: "",
   email: "",
   cellphoneContact: "",
-  gender: "",
-  qualification: "",
-  profession: "",
-  expirienceInOilGas: "",
-  yearsOfExperience: "",
-  residencialAddress: "",
   city: "",
-  currentEmployer: "",
-  nationality: "",
   personalStatement: "",
   "file-upload": "",
-  "extrafile-upload": "",
 };
+
+const ACCEPTED_EXTENSIONS = [".pdf", ".doc", ".docx"];
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+function formatFileSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function validateFile(file, t) {
+  const lowerName = file.name.toLowerCase();
+  if (!ACCEPTED_EXTENSIONS.some((ext) => lowerName.endsWith(ext))) return t.invalidFileType;
+  if (file.size > MAX_FILE_BYTES) return t.fileTooLarge;
+  return "";
+}
 
 const fieldClass =
   "mt-2 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-red-300 focus:ring-4 focus:ring-red-100";
@@ -43,24 +48,76 @@ function FormSection({ eyebrow, title, description, children }) {
   );
 }
 
-function UploadBox({ id, name, title, description, onChange, chooseFileLabel, dragDropLabel }) {
+function UploadBox({ id, name, title, description, file, onFileSelected, onFileCleared, chooseFileLabel, dragDropLabel, removeLabel }) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const boxClass = file
+    ? "mt-2 rounded-2xl border border-emerald-300 bg-emerald-50/60 px-6 py-8 text-center transition"
+    : isDragging
+    ? "mt-2 rounded-2xl border border-red-300 bg-red-50/60 px-6 py-8 text-center transition"
+    : "mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-red-300 hover:bg-red-50/40";
+
   return (
     <div className="col-span-full">
       <label htmlFor={id} className={labelClass}>
         {title}
       </label>
-      <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-red-300 hover:bg-red-50/40">
-        <DocumentArrowUpIcon className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-1 text-sm text-slate-600">
-          <label
-            htmlFor={id}
-            className="cursor-pointer rounded-lg bg-white px-3 py-2 font-semibold text-red-600 shadow-sm ring-1 ring-slate-200 transition hover:text-red-700"
-          >
-            {chooseFileLabel}
-          </label>
-          <span>{dragDropLabel}</span>
-          <input id={id} name={name} type="file" onChange={onChange} className="sr-only" />
-        </div>
+      <div
+        className={boxClass}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          const dropped = event.dataTransfer.files?.[0];
+          if (dropped) onFileSelected(dropped);
+        }}
+      >
+        {file ? (
+          <>
+            <CheckCircleIcon className="mx-auto h-10 w-10 text-emerald-500" aria-hidden="true" />
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-800">
+              <span className="max-w-xs truncate font-semibold">{file.name}</span>
+              <span className="text-slate-500">({formatFileSize(file.size)})</span>
+              <button
+                type="button"
+                onClick={onFileCleared}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-white hover:text-red-600"
+                aria-label={removeLabel}
+              >
+                <XMarkIcon className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <DocumentArrowUpIcon className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-1 text-sm text-slate-600">
+              <label
+                htmlFor={id}
+                className="cursor-pointer rounded-lg bg-white px-3 py-2 font-semibold text-red-600 shadow-sm ring-1 ring-slate-200 transition hover:text-red-700"
+              >
+                {chooseFileLabel}
+              </label>
+              <span>{dragDropLabel}</span>
+            </div>
+          </>
+        )}
+        <input
+          id={id}
+          name={name}
+          type="file"
+          onChange={(event) => {
+            const picked = event.target.files?.[0];
+            if (picked) onFileSelected(picked);
+            // Reset so re-choosing the same filename after "Remover" still fires onChange.
+            event.target.value = "";
+          }}
+          className="sr-only"
+        />
         <p className="mt-2 text-xs text-slate-500">{description}</p>
       </div>
     </div>
@@ -70,11 +127,11 @@ function UploadBox({ id, name, title, description, onChange, chooseFileLabel, dr
 export default function CVForm() {
   const [formData, setFormData] = useState(initialFormData);
   const [primaryCvFile, setPrimaryCvFile] = useState(null);
-  const [extraAttachment, setExtraAttachment] = useState(null);
+  const [legalConsent, setLegalConsent] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({ file: "" });
+  const [fieldErrors, setFieldErrors] = useState({ file: "", consent: "" });
   const { locale } = useClientLocale();
   const t =
     locale === "en"
@@ -82,151 +139,116 @@ export default function CVForm() {
           chooseFile: "Choose file",
           dragDrop: "or drag and drop",
           submitCv: "Submit CV",
-          heroEyebrow: "Submit CV",
-          heroTitle: "Share your professional profile.",
-          heroDescription: "Complete key details so the Parvagas team can consider your profile for relevant opportunities.",
-          heroPoint1: "Personal details and professional experience.",
-          heroPoint2: "CV and documents in PDF or DOCX.",
+          heroEyebrow: "Express interest",
+          heroTitle: "Get on our radar for future openings.",
+          heroDescription: "Leave your CV with us — we'll keep it on file and reach out when a relevant opportunity comes up, even if nothing fits today.",
+          heroPoint1: "Takes under a minute.",
+          heroPoint2: "CV in PDF or DOCX.",
           heroPoint3: "Consent for secure processing.",
-          formEyebrow: "Spontaneous application",
-          formTitle: "Send your CV today",
-          formDescription: "Use updated information and valid contacts to help us follow up your application.",
-          successMessage: "CV submitted successfully. The Parvagas team will review your information.",
+          formEyebrow: "Expression of interest",
+          formTitle: "Leave your CV with us",
+          formDescription: "Just the essentials — we'll parse your CV for the rest. We'll email you a link to set a password so you can log back in and track your profile later.",
+          successMessage: "Thanks! We received your CV and will reach out about relevant openings. Check your email to set a password and access your profile.",
           submitError: "Could not submit CV.",
           personalEyebrow: "Personal information",
-          personalTitle: "Candidate details",
-          personalDescription: "Use full name and permanent contacts for follow-up.",
+          personalTitle: "Your details",
+          personalDescription: "So we can create your profile and reach you.",
           fullName: "Full name",
-          dateOfBirth: "Date of birth",
           email: "Email",
-          phone: "Phone contact",
-          gender: "Gender",
-          genderChoose: "Choose",
-          genderMale: "Male",
-          genderFemale: "Female",
-          genderNonBinary: "Non-binary",
-          genderPreferNot: "Prefer not to say",
-          nationality: "Nationality",
-          expEyebrow: "Experience",
-          expTitle: "Professional profile",
-          expDescription: "Help us understand your area, seniority, and availability.",
-          qualification: "Academic qualification",
-          qualificationSecondary: "High School",
-          qualificationCertificate: "Certificate",
-          qualificationTechnical: "Technical Course",
-          qualificationAssociate: "Associate Degree",
-          qualificationBachelor: "Bachelor",
-          qualificationLicentiate: "Licentiate",
-          qualificationMasters: "Master",
-          qualificationDoctorate: "Doctorate",
-          profession: "Profession",
-          oilGasExperience: "Oil & Gas experience?",
-          yes: "Yes",
-          no: "No",
-          yearsExperience: "Years of experience",
-          currentEmployer: "Current employer",
+          phone: "Phone contact (optional)",
           city: "City",
-          address: "Address",
-          statement: "Professional summary",
-          statementPlaceholder: "Briefly explain why we should consider your profile.",
+          statement: "What kind of opportunities are you looking for?",
+          statementPlaceholder: "E.g. engineering roles, sales, available immediately… (optional)",
           docsEyebrow: "Documents",
-          docsTitle: "CV and attachments",
-          docsDescription: "Attach your main CV and, if needed, supporting documents.",
+          docsTitle: "Your CV",
+          docsDescription: "Attach your CV — we'll extract the rest automatically.",
           cvTitle: "Curriculum Vitae",
           cvDescription: "PDF or DOCX up to 10MB.",
-          otherDocsTitle: "Other documents",
-          otherDocsDescription: "Certificates, cover letter, or relevant files.",
           legalTitle: "Legal authorization",
           legalBody: "I agree and authorize Parvagas to securely process the information provided, declaring it is true.",
+          legalCheckboxLabel: "I have read and agree to the statement above.",
+          requiredConsent: "You must confirm the legal authorization before submitting.",
           clear: "Clear",
           submitting: "Submitting...",
           requiredAttachment: "Attach your CV before submitting.",
+          removeFile: "Remove file",
+          invalidFileType: "Invalid file type. Use PDF, DOC, or DOCX.",
+          fileTooLarge: "File is too large. Maximum size: 10MB.",
         }
       : {
           chooseFile: "Escolher ficheiro",
           dragDrop: "ou arraste e solte",
           submitCv: "Submeter CV",
-          heroEyebrow: "Submeter CV",
-          heroTitle: "Partilhe o seu perfil profissional.",
-          heroDescription: "Complete os dados essenciais para que a equipa Parvagas possa considerar o seu perfil em oportunidades relevantes.",
-          heroPoint1: "Dados pessoais e experiência profissional.",
-          heroPoint2: "CV e documentos em PDF ou DOCX.",
+          heroEyebrow: "Manifestação de interesse",
+          heroTitle: "Fique no nosso radar para futuras oportunidades.",
+          heroDescription: "Deixe o seu CV connosco — mantemos o seu perfil em análise e entramos em contacto quando surgir uma oportunidade relevante, mesmo que agora não haja nenhuma vaga certa.",
+          heroPoint1: "Leva menos de um minuto.",
+          heroPoint2: "CV em PDF ou DOCX.",
           heroPoint3: "Consentimento para processamento seguro.",
-          formEyebrow: "Candidatura espontânea",
-          formTitle: "Envie o seu CV hoje",
-          formDescription: "Use informação atualizada e contactos válidos para facilitar o acompanhamento da candidatura.",
-          successMessage: "CV submetido com sucesso. A equipa Parvagas irá analisar a informação.",
+          formEyebrow: "Manifestação de interesse",
+          formTitle: "Deixe o seu CV connosco",
+          formDescription: "Só o essencial — o resto extraímos automaticamente do seu CV. Enviaremos um email com um link para definir uma password e poder acompanhar o seu perfil mais tarde.",
+          successMessage: "Obrigado! Recebemos o seu CV e entraremos em contacto sobre oportunidades relevantes. Verifique o seu email para definir uma password e aceder ao seu perfil.",
           submitError: "Não foi possível submeter o CV.",
           personalEyebrow: "Informação pessoal",
-          personalTitle: "Dados do candidato",
-          personalDescription: "Use o nome completo e contactos permanentes para acompanhamento.",
+          personalTitle: "Os seus dados",
+          personalDescription: "Para criarmos o seu perfil e podermos contactá-lo.",
           fullName: "Nome completo",
-          dateOfBirth: "Data de nascimento",
           email: "Email",
-          phone: "Contacto telefónico",
-          gender: "Sexo",
-          genderChoose: "Escolha",
-          genderMale: "Masculino",
-          genderFemale: "Feminino",
-          genderNonBinary: "Binário",
-          genderPreferNot: "Prefiro não especificar",
-          nationality: "Nacionalidade",
-          expEyebrow: "Experiência",
-          expTitle: "Perfil profissional",
-          expDescription: "Ajude-nos a entender a sua área, senioridade e disponibilidade.",
-          qualification: "Habilitação académica",
-          qualificationSecondary: "Ensino Médio",
-          qualificationCertificate: "Certificado",
-          qualificationTechnical: "Curso Técnico",
-          qualificationAssociate: "Grau de Associado",
-          qualificationBachelor: "Bacharelado",
-          qualificationLicentiate: "Licenciatura",
-          qualificationMasters: "Mestrado",
-          qualificationDoctorate: "Doutorado",
-          profession: "Profissão",
-          oilGasExperience: "Experiência em Oil & Gas?",
-          yes: "Sim",
-          no: "Não",
-          yearsExperience: "Anos de experiência",
-          currentEmployer: "Empregador atual",
+          phone: "Contacto telefónico (opcional)",
           city: "Cidade",
-          address: "Endereço físico",
-          statement: "Resumo profissional",
-          statementPlaceholder: "Explique brevemente por que devemos considerar o seu perfil.",
-          docsEyebrow: "Documentos",
-          docsTitle: "CV e anexos",
-          docsDescription: "Anexe o CV principal e, se necessário, documentos de apoio.",
+          statement: "Que tipo de oportunidades procura?",
+          statementPlaceholder: "Ex: vagas de engenharia, área comercial, disponibilidade imediata… (opcional)",
+          docsEyebrow: "Documento",
+          docsTitle: "O seu CV",
+          docsDescription: "Anexe o seu CV — extraímos o resto automaticamente.",
           cvTitle: "Curriculum Vitae",
           cvDescription: "PDF ou DOCX até 10MB.",
-          otherDocsTitle: "Outros documentos",
-          otherDocsDescription: "Certificados, carta de apresentação ou anexos relevantes.",
           legalTitle: "Autorização legal",
           legalBody: "Concordo e garanto à Parvagas a segurança e o processamento das informações fornecidas, declarando que são verdadeiras.",
+          legalCheckboxLabel: "Li e concordo com a declaração acima.",
+          requiredConsent: "Tem de confirmar a autorização legal antes de submeter.",
           clear: "Limpar",
           submitting: "A submeter...",
           requiredAttachment: "Anexe o seu CV antes de submeter.",
+          removeFile: "Remover ficheiro",
+          invalidFileType: "Formato inválido. Use PDF, DOC ou DOCX.",
+          fileTooLarge: "Ficheiro demasiado grande. Tamanho máximo: 10MB.",
         };
 
   const handleInputChange = (e) => {
-    const { name, value, files } = e.target;
-    if (files?.[0]) {
-      if (name === "file-upload") setPrimaryCvFile(files[0]);
-      if (name === "extrafile-upload") setExtraAttachment(files[0]);
+    const { name, value } = e.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
+
+  const handlePrimaryFileSelected = (file) => {
+    const error = validateFile(file, t);
+    if (error) {
+      setFieldErrors((current) => ({ ...current, file: error }));
+      return;
     }
-    setFormData((current) => ({
-      ...current,
-      [name]: files?.[0]?.name ?? value,
-    }));
+    setPrimaryCvFile(file);
+    setFieldErrors((current) => ({ ...current, file: "" }));
+    setFormData((current) => ({ ...current, "file-upload": file.name }));
+  };
+
+  const handlePrimaryFileCleared = () => {
+    setPrimaryCvFile(null);
+    setFormData((current) => ({ ...current, "file-upload": "" }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitted(true);
     setStatus({ type: "", message: "" });
-    setFieldErrors({ file: "" });
+    setFieldErrors({ file: "", consent: "" });
 
     if (!formData["file-upload"]) {
-      setFieldErrors({ file: t.requiredAttachment });
+      setFieldErrors((current) => ({ ...current, file: t.requiredAttachment }));
+      return;
+    }
+    if (!legalConsent) {
+      setFieldErrors((current) => ({ ...current, consent: t.requiredConsent }));
       return;
     }
 
@@ -235,11 +257,10 @@ export default function CVForm() {
     try {
       const payload = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
-        if (["file-upload", "extrafile-upload"].includes(key)) return;
+        if (key === "file-upload") return;
         payload.append(key, String(value || ""));
       });
       if (primaryCvFile) payload.append("cv", primaryCvFile);
-      if (extraAttachment) payload.append("extraDocument", extraAttachment);
 
       const response = await apiFetchRaw("/public/cv-submissions", {
         method: "POST",
@@ -254,7 +275,8 @@ export default function CVForm() {
       setStatus({ type: "success", message: t.successMessage });
       setFormData(initialFormData);
       setPrimaryCvFile(null);
-      setExtraAttachment(null);
+      setLegalConsent(false);
+      setSubmitted(false);
     } catch (error) {
       setStatus({
         type: "error",
@@ -314,11 +336,6 @@ export default function CVForm() {
               </div>
 
               <div className="sm:col-span-3">
-                <label htmlFor="dateOfBirth" className={labelClass}>{t.dateOfBirth}</label>
-                <input id="dateOfBirth" name="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleInputChange} className={fieldClass} />
-              </div>
-
-              <div className="sm:col-span-3">
                 <label htmlFor="email" className={labelClass}>{t.email}</label>
                 <input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} autoComplete="email" className={fieldClass} required />
               </div>
@@ -329,74 +346,8 @@ export default function CVForm() {
               </div>
 
               <div className="sm:col-span-3">
-                <label htmlFor="gender" className={labelClass}>{t.gender}</label>
-                <select id="gender" name="gender" value={formData.gender} onChange={handleInputChange} className={fieldClass}>
-                  <option value="">{t.genderChoose}</option>
-                  <option value="Masculino">{t.genderMale}</option>
-                  <option value="Feminino">{t.genderFemale}</option>
-                  <option value="Binario">{t.genderNonBinary}</option>
-                  <option value="Prefiro nao Especificar">{t.genderPreferNot}</option>
-                </select>
-              </div>
-
-              <div className="sm:col-span-3">
-                <label htmlFor="nationality" className={labelClass}>{t.nationality}</label>
-                <input id="nationality" name="nationality" type="text" value={formData.nationality} onChange={handleInputChange} className={fieldClass} />
-              </div>
-            </FormSection>
-
-            <FormSection
-              eyebrow={t.expEyebrow}
-              title={t.expTitle}
-              description={t.expDescription}
-            >
-              <div className="sm:col-span-3">
-                <label htmlFor="qualification" className={labelClass}>{t.qualification}</label>
-                <select id="qualification" name="qualification" value={formData.qualification} onChange={handleInputChange} className={fieldClass}>
-                  <option value="">{t.genderChoose}</option>
-                  <option value="Ensino Médio">{t.qualificationSecondary}</option>
-                  <option value="Certificado">{t.qualificationCertificate}</option>
-                  <option value="Curso Técnico">{t.qualificationTechnical}</option>
-                  <option value="Grau de Associado">{t.qualificationAssociate}</option>
-                  <option value="Bacharelado">{t.qualificationBachelor}</option>
-                  <option value="Licenciatura">{t.qualificationLicentiate}</option>
-                  <option value="Mestrado">{t.qualificationMasters}</option>
-                  <option value="Doutorado">{t.qualificationDoctorate}</option>
-                </select>
-              </div>
-
-              <div className="sm:col-span-3">
-                <label htmlFor="profession" className={labelClass}>{t.profession}</label>
-                <input id="profession" name="profession" type="text" value={formData.profession} onChange={handleInputChange} autoComplete="organization-title" className={fieldClass} />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label htmlFor="expirienceInOilGas" className={labelClass}>{t.oilGasExperience}</label>
-                <select id="expirienceInOilGas" name="expirienceInOilGas" value={formData.expirienceInOilGas} onChange={handleInputChange} className={fieldClass}>
-                  <option value="">{t.genderChoose}</option>
-                  <option value="true">{t.yes}</option>
-                  <option value="false">{t.no}</option>
-                </select>
-              </div>
-
-              <div className="sm:col-span-2">
-                <label htmlFor="yearsOfExperience" className={labelClass}>{t.yearsExperience}</label>
-                <input id="yearsOfExperience" name="yearsOfExperience" type="number" min="0" value={formData.yearsOfExperience} onChange={handleInputChange} className={fieldClass} />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label htmlFor="currentEmployer" className={labelClass}>{t.currentEmployer}</label>
-                <input id="currentEmployer" name="currentEmployer" type="text" value={formData.currentEmployer} onChange={handleInputChange} className={fieldClass} />
-              </div>
-
-              <div className="sm:col-span-3">
                 <label htmlFor="city" className={labelClass}>{t.city}</label>
                 <input id="city" name="city" type="text" value={formData.city} onChange={handleInputChange} autoComplete="address-level2" className={fieldClass} />
-              </div>
-
-              <div className="sm:col-span-3">
-                <label htmlFor="residencialAddress" className={labelClass}>{t.address}</label>
-                <input id="residencialAddress" name="residencialAddress" type="text" value={formData.residencialAddress} onChange={handleInputChange} autoComplete="street-address" className={fieldClass} />
               </div>
 
               <div className="col-span-full">
@@ -404,7 +355,7 @@ export default function CVForm() {
                 <textarea
                   id="personalStatement"
                   name="personalStatement"
-                  rows={4}
+                  rows={3}
                   value={formData.personalStatement}
                   onChange={handleInputChange}
                   className={fieldClass}
@@ -419,23 +370,14 @@ export default function CVForm() {
                 name="file-upload"
                 title={t.cvTitle}
                 description={t.cvDescription}
-                onChange={(event) => {
-                  handleInputChange(event);
-                  setFieldErrors((current) => ({ ...current, file: "" }));
-                }}
+                file={primaryCvFile}
+                onFileSelected={handlePrimaryFileSelected}
+                onFileCleared={handlePrimaryFileCleared}
                 chooseFileLabel={t.chooseFile}
                 dragDropLabel={t.dragDrop}
+                removeLabel={t.removeFile}
               />
               <FormFieldError id="file-upload-error" message={submitted ? fieldErrors.file : ""} />
-              <UploadBox
-                id="extrafile-upload"
-                name="extrafile-upload"
-                title={t.otherDocsTitle}
-                description={t.otherDocsDescription}
-                onChange={handleInputChange}
-                chooseFileLabel={t.chooseFile}
-                dragDropLabel={t.dragDrop}
-              />
             </FormSection>
 
             <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -443,6 +385,21 @@ export default function CVForm() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 {t.legalBody}
               </p>
+              <label htmlFor="legalConsent" className="mt-4 flex items-start gap-3 text-sm text-slate-800">
+                <input
+                  id="legalConsent"
+                  name="legalConsent"
+                  type="checkbox"
+                  checked={legalConsent}
+                  onChange={(e) => {
+                    setLegalConsent(e.target.checked);
+                    setFieldErrors((current) => ({ ...current, consent: "" }));
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                />
+                <span className="font-medium">{t.legalCheckboxLabel}</span>
+              </label>
+              <FormFieldError id="legal-consent-error" message={submitted ? fieldErrors.consent : ""} />
             </section>
 
             <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-end">
@@ -450,6 +407,10 @@ export default function CVForm() {
                 type="reset"
                 onClick={() => {
                   setFormData(initialFormData);
+                  setPrimaryCvFile(null);
+                  setLegalConsent(false);
+                  setFieldErrors({ file: "", consent: "" });
+                  setSubmitted(false);
                   setStatus({ type: "", message: "" });
                 }}
                 className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
