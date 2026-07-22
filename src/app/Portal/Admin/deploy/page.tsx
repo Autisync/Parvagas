@@ -220,7 +220,7 @@ export default function AdminDeployPage() {
                 A lançar…
               </span>
             ) : diff?.ready_to_deploy ? (
-              `🚀 Deploy ${diff.commits_ahead} commit(s) → Produção`
+              `Deploy ${diff.commits_ahead} commit(s) → Produção`
             ) : diff?.commits_ahead === 0 ? (
               "Produção já actualizada"
             ) : (

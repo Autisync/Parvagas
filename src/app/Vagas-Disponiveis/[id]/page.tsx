@@ -169,7 +169,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                     )}
                     {!job.externalCompanyName && company?.angolanizacao && (
                       <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200" title="Empresa que cumpre a regra de 70% de mão-de-obra nacional">
-                        🇦🇴 Angolanização 70%
+                        Angolanização 70%
                       </span>
                     )}
                   </p>
@@ -177,7 +177,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {job.location && <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-700">📍 {job.location}</span>}
+                {job.location && <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-700">{job.location}</span>}
                 {mode && <span className="text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">{mode}</span>}
                 {job.category && <span className="text-xs px-3 py-1 rounded-full bg-red-50 text-red-700 font-medium">{job.category}</span>}
                 {(job.contractType || job.jobType) && <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-700">{job.contractType || job.jobType}</span>}

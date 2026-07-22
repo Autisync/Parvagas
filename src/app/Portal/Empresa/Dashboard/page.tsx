@@ -259,7 +259,7 @@ export default function EmpresaDashboard() {
                 ) : reach.topJobs.map((j) => (
                   <li key={j._id} className="flex items-center justify-between gap-3 text-sm">
                     <span className="truncate text-[var(--text-muted)]">{j.title}</span>
-                    <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} 👁</span>
+                    <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} visualizações</span>
                   </li>
                 ))}
               </ul>

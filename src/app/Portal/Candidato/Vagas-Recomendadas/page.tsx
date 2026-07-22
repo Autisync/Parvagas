@@ -293,9 +293,9 @@ export default function VagasRecomendadasPage() {
                 {job.matchExplanation ? <span className="text-xs text-gray-500">{job.matchExplanation}</span> : null}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {job.location && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">📍 {job.location}</span>}
+                {job.location && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{job.location}</span>}
                 {job.category && <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-50 text-red-700">{job.category}</span>}
-                {job.salaryRange && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">💰 {job.salaryRange}</span>}
+                {job.salaryRange && <span className="text-xs px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">{job.salaryRange}</span>}
               </div>
               {job.requiredSkills && job.requiredSkills.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">

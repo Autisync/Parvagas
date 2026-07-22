@@ -282,7 +282,7 @@ export class WebSocketClient {
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
     
     console.log(
-      `📡 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts}) ` +
+      `Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts}) ` +
       `in ${delay}ms`
     );
 

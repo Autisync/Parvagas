@@ -324,7 +324,7 @@ export default function AdminBlogPage() {
                         {post.published ? "Publicado" : "Rascunho"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">{post.featuredOnHome ? "⭐" : "—"}</td>
+                    <td className="px-4 py-3">{post.featuredOnHome ? "✓" : "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <button type="button" onClick={() => setPreviewPost(post)} className={adminSecondaryButtonClass}>
