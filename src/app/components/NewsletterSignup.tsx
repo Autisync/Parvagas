@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
-import LottieBlock from "@/app/components/LottieBlock";
+import { SuccessCheck } from "@/app/components/motion";
 
 export default function NewsletterSignup() {
   const [email, setEmail] = useState("");
@@ -37,8 +37,8 @@ export default function NewsletterSignup() {
     <div className="border-b border-gray-100 py-8">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {status === "done" ? (
-          <div className="flex justify-center md:justify-start">
-            <LottieBlock name="success-check" caption={message} size={96} />
+          <div className="pv-animate-pop flex justify-center md:justify-start">
+            <SuccessCheck size={64} tone="brand" label={message} />
           </div>
         ) : (
           <>
