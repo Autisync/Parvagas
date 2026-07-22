@@ -8,7 +8,7 @@ from urllib.parse import quote
 from celery.exceptions import SoftTimeLimitExceeded
 from app.workers.celery_app import celery
 from app.db.session import SessionLocal
-from app.models import User, UserRole, EmailVerificationToken, PasswordResetToken, CVUpload
+from app.models import User, UserRole, EmailVerificationToken, PasswordResetToken, CVUpload, NewsletterIssue, NewsletterSubscriber
 from app.services.email_service import EmailService
 from app.services.cv_parser_service import CVParserService
 from app.services.task_heartbeat import track_task_run
@@ -218,6 +218,56 @@ def send_newsletter_confirmation_email(self, email: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to send newsletter confirmation email: {str(e)}")
         raise
+
+
+@celery.task(name='app.workers.tasks.send_newsletter_issue')
+@track_task_run('send_newsletter_issue')
+def send_newsletter_issue(issue_id: str, jobs_html: str = "") -> dict:
+    """Fan-out a composed newsletter to every active subscriber. Each
+    recipient goes through the generic send_templated_email dispatcher (not
+    a dedicated task) so every send gets EmailLog coverage in the admin
+    deliverability panel. No autoretry here — this task only issues cheap
+    in-process .delay() calls; retrying it would risk double-queuing
+    already-dispatched per-subscriber sends."""
+    db = SessionLocal()
+    try:
+        issue = db.query(NewsletterIssue).filter(NewsletterIssue.id == issue_id).first()
+        if not issue:
+            logger.error(f"send_newsletter_issue: issue {issue_id} not found")
+            return {"success": False, "error": "issue not found"}
+
+        subscribers = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.unsubscribed_at.is_(None)).all()
+        paragraphs = json.loads(issue.intro_paragraphs or "[]")
+        frontend_url = (settings.FRONTEND_URL or "https://parvagas.pt").rstrip("/")
+
+        for subscriber in subscribers:
+            send_templated_email.delay("send_newsletter_issue_email", {
+                "email": subscriber.email,
+                "subject": issue.subject,
+                "intro_paragraphs": paragraphs,
+                "jobs_html": jobs_html,
+                "unsubscribe_url": f"{frontend_url}/newsletter/cancelar?token={subscriber.unsubscribe_token}",
+            })
+
+        issue.status = "sent"
+        issue.sent_at = datetime.utcnow()
+        issue.queued_count = len(subscribers)
+        db.commit()
+
+        return {"success": True, "queuedCount": len(subscribers)}
+    except Exception as e:
+        logger.error(f"Failed to send newsletter issue {issue_id}: {str(e)}")
+        db.rollback()
+        try:
+            issue = db.query(NewsletterIssue).filter(NewsletterIssue.id == issue_id).first()
+            if issue:
+                issue.status = "failed"
+                db.commit()
+        except Exception:  # noqa: BLE001 — best-effort status update
+            pass
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
 
 
 def _log_email_attempt(template: str, payload: dict, success: bool, error: str | None) -> None:

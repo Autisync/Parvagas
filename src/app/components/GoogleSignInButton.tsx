@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { track } from "@/lib/analytics";
+import { getPortalHomeForRole } from "@/lib/portalRouting";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -27,7 +28,7 @@ declare global {
 
 function portalRoute(role: string): string {
   if (role === "company") return "/Portal/Empresa/Perfil";
-  return "/Portal/Candidato";
+  return getPortalHomeForRole(role) ?? "/Portal/Candidato";
 }
 
 function loadGis(): Promise<void> {

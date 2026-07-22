@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.security import has_leading_formula_char, is_valid_email_format
 from app.db.base import Base
 from app.models import NewsletterSubscriber
-from app.api.v1.newsletter import subscribe_newsletter, NewsletterSubscribeRequest
+from app.api.v1.newsletter import subscribe_newsletter, unsubscribe_newsletter, NewsletterSubscribeRequest, NewsletterUnsubscribeRequest
 
 
 def test_email_regex_accepts_valid_addresses():
@@ -96,3 +96,58 @@ def test_subscribe_accepts_legitimate_signup(db):
     row = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == "real@x.com").first()
     assert row is not None
     assert row.source == "footer"
+
+
+def test_subscribe_assigns_a_unique_unsubscribe_token(db):
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="one@x.com"), _FakeRequest(), db=db))
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="two@x.com"), _FakeRequest(), db=db))
+    rows = db.query(NewsletterSubscriber).all()
+    tokens = {r.unsubscribe_token for r in rows}
+    assert len(tokens) == 2
+    assert all(t and len(t) > 10 for t in tokens)
+
+
+# ── POST /newsletter/unsubscribe ───────────────────────────────────────────
+
+def test_unsubscribe_with_valid_token_sets_unsubscribed_at(db):
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="leaving@x.com"), _FakeRequest(), db=db))
+    subscriber = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == "leaving@x.com").first()
+    assert subscriber.unsubscribed_at is None
+
+    result = asyncio.run(unsubscribe_newsletter(NewsletterUnsubscribeRequest(token=subscriber.unsubscribe_token), db=db))
+    assert result["message"]
+    db.refresh(subscriber)
+    assert subscriber.unsubscribed_at is not None
+
+
+def test_unsubscribe_is_idempotent(db):
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="twice@x.com"), _FakeRequest(), db=db))
+    subscriber = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == "twice@x.com").first()
+
+    asyncio.run(unsubscribe_newsletter(NewsletterUnsubscribeRequest(token=subscriber.unsubscribe_token), db=db))
+    db.refresh(subscriber)
+    first_timestamp = subscriber.unsubscribed_at
+
+    asyncio.run(unsubscribe_newsletter(NewsletterUnsubscribeRequest(token=subscriber.unsubscribe_token), db=db))
+    db.refresh(subscriber)
+    assert subscriber.unsubscribed_at == first_timestamp
+
+
+def test_unsubscribe_rejects_unknown_token(db):
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(unsubscribe_newsletter(NewsletterUnsubscribeRequest(token="not-a-real-token"), db=db))
+    assert exc.value.status_code == 404
+
+
+def test_resubscribing_clears_unsubscribed_at(db):
+    """Confirms the existing re-subscribe flow (subscribe_newsletter's
+    'existing' branch) still works alongside the new unsubscribe token."""
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="backagain@x.com"), _FakeRequest(), db=db))
+    subscriber = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.email == "backagain@x.com").first()
+    asyncio.run(unsubscribe_newsletter(NewsletterUnsubscribeRequest(token=subscriber.unsubscribe_token), db=db))
+    db.refresh(subscriber)
+    assert subscriber.unsubscribed_at is not None
+
+    asyncio.run(subscribe_newsletter(NewsletterSubscribeRequest(email="backagain@x.com"), _FakeRequest(), db=db))
+    db.refresh(subscriber)
+    assert subscriber.unsubscribed_at is None

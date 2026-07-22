@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DocumentArrowUpIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import { getToken, getUser } from "@/lib/api";
+import { getPortalHomeForRole } from "@/lib/portalRouting";
 
 /**
  * Entry point for /Submission: lets a visitor self-select between the two
@@ -23,10 +24,20 @@ import { getToken, getUser } from "@/lib/api";
 export default function SubmissionPathChooser() {
   const router = useRouter();
   const [isCandidate, setIsCandidate] = useState(false);
+  // Portal home for an already-authenticated NON-candidate (admin, company,
+  // ...) — offering "Criar conta"/"Entrar" to someone already logged in as
+  // something else is nonsensical, so that case gets its own branch below.
+  const [otherRolePortalHome, setOtherRolePortalHome] = useState(null);
 
   useEffect(() => {
     const user = getUser();
-    setIsCandidate(Boolean(getToken() && user && user.role === "candidate"));
+    const role = typeof user?.role === "string" ? user.role : null;
+    if (!getToken() || !role) return;
+    if (role === "candidate") {
+      setIsCandidate(true);
+      return;
+    }
+    setOtherRolePortalHome(getPortalHomeForRole(role));
   }, []);
 
   return (
@@ -49,6 +60,8 @@ export default function SubmissionPathChooser() {
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
               {isCandidate
                 ? "Já tem sessão iniciada — abra o construtor e comece a editar."
+                : otherRolePortalHome
+                ? "Esta opção é para candidatos. A sua conta já tem sessão iniciada noutra área."
                 : "Crie uma conta gratuita e construa um currículo do zero, directamente na plataforma."}
             </p>
 
@@ -59,6 +72,14 @@ export default function SubmissionPathChooser() {
                 className="mt-4 w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
               >
                 Abrir o Construtor de CV
+              </button>
+            ) : otherRolePortalHome ? (
+              <button
+                type="button"
+                onClick={() => router.push(otherRolePortalHome)}
+                className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Ir para a minha área
               </button>
             ) : (
               <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row">

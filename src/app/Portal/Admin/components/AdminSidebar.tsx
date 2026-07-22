@@ -13,7 +13,7 @@ import {
   ShieldExclamationIcon, ClipboardDocumentListIcon, ArrowRightOnRectangleIcon, NewspaperIcon,
   RocketLaunchIcon, AdjustmentsHorizontalIcon, CheckBadgeIcon, CreditCardIcon, Cog6ToothIcon,
   DocumentTextIcon, ClockIcon, ChevronDownIcon, ScaleIcon, ClipboardDocumentCheckIcon, ArchiveBoxArrowDownIcon,
-  ExclamationTriangleIcon, BellAlertIcon, Squares2X2Icon,
+  ExclamationTriangleIcon, BellAlertIcon, Squares2X2Icon, EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 
 type Item = MobileNavItem & {
@@ -49,6 +49,7 @@ const GROUPS: Group[] = [
     label: "Conteúdo & Marketing",
     items: [
       { href: "/Portal/Admin/blog",             label: "Conteúdo",     hint: "Dicas de Carreira / Blog", levels: ["super-admin", "moderator"], icon: <NewspaperIcon className="h-5 w-5" /> },
+      { href: "/Portal/Admin/newsletter",       label: "Newsletter",   hint: "Compor e enviar",          levels: ["super-admin", "moderator"], icon: <EnvelopeIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/ads",              label: "Campanhas",    hint: "Ads e placements",         levels: ["super-admin"],              icon: <MegaphoneIcon className="h-5 w-5" /> },
       { href: "/Portal/Admin/resume-templates", label: "Templates CV", hint: "Modelos de currículo",     levels: ["super-admin"],              icon: <DocumentTextIcon className="h-5 w-5" /> },
     ],

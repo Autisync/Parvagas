@@ -2,6 +2,7 @@
 from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, ForeignKey, Enum, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import secrets
 import uuid
 import enum
 
@@ -720,6 +721,26 @@ class NewsletterSubscriber(Base, TimestampMixin):
     email = Column(String(255), nullable=False, unique=True, index=True)
     source = Column(String(50), nullable=True)  # e.g. "footer", "signup"
     unsubscribed_at = Column(DateTime, nullable=True)
+    # One-click unsubscribe link target — generated once per subscriber,
+    # never rotated. Distinct from the EmailVerificationToken/
+    # PasswordResetToken pattern (those expire; this is a durable per-row
+    # secret, closer to how a share-slug works).
+    unsubscribe_token = Column(String(64), nullable=False, unique=True, index=True, default=lambda: secrets.token_urlsafe(32))
+
+
+class NewsletterIssue(Base, TimestampMixin):
+    """A composed newsletter, sent once to every active subscriber."""
+    __tablename__ = "newsletter_issues"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    subject = Column(String(255), nullable=False)
+    intro_paragraphs = Column(Text, nullable=False)  # JSON array of strings, same pattern as CareerPost.body
+    include_recent_jobs = Column(Boolean, nullable=False, default=False)
+    recent_jobs_count = Column(Integer, nullable=False, default=5)
+    status = Column(String(20), nullable=False, default="draft")  # draft | sending | sent | failed
+    queued_count = Column(Integer, nullable=True)  # subscribers fanned out to, not a delivery guarantee
+    sent_at = Column(DateTime, nullable=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
 
 class ScrapedJob(Base, TimestampMixin):

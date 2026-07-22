@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { getToken, getUser, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import { ENABLE_I18N } from "@/config/appConfig";
+import { getCvBuilderDestination } from "@/lib/portalRouting";
 
 const Logo = "/icon2.png";
 
@@ -34,7 +35,7 @@ export default function Header() {
   ];
 
   const openCvBuilder = () => {
-    router.push(authUser ? "/Portal/Candidato/Construtor-CV" : "/Submission#criar-cv");
+    router.push(getCvBuilderDestination(authUser?.role ?? null));
   };
 
   const renderNavigationItem = (item: { name: string; href: string }) => {

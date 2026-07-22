@@ -252,6 +252,26 @@ export type CareerPostRecord = {
   createdAt?: string | null;
 };
 
+export type NewsletterSubscriberRecord = {
+  _id: string;
+  email: string;
+  source?: string | null;
+  unsubscribedAt?: string | null;
+  createdAt?: string | null;
+};
+
+export type NewsletterIssueRecord = {
+  _id: string;
+  subject: string;
+  introParagraphs: string[];
+  includeRecentJobs: boolean;
+  recentJobsCount: number;
+  status: "draft" | "sending" | "sent" | "failed";
+  queuedCount?: number | null;
+  sentAt?: string | null;
+  createdAt?: string | null;
+};
+
 export type AuditLogRecord = {
   _id: string;
   actorUserId?: string | null;
@@ -860,6 +880,38 @@ export async function updateAdminCareerPost(token: string, id: string, payload: 
 export async function deleteAdminCareerPost(token: string, id: string) {
   return authFetch<{ deleted: boolean }>(`/admin/career-posts/${id}`, token, {
     method: "DELETE",
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function fetchNewsletterSubscribers(token: string, page = 1, limit = 25) {
+  return authFetch<Paginated<"subscribers", NewsletterSubscriberRecord> & { activeCount: number; unsubscribedCount: number }>(
+    `/admin/newsletter/subscribers?page=${page}&limit=${limit}`,
+    token
+  );
+}
+
+export async function fetchNewsletterIssues(token: string, page = 1, limit = 25) {
+  return authFetch<Paginated<"issues", NewsletterIssueRecord>>(
+    `/admin/newsletter/issues?page=${page}&limit=${limit}`,
+    token
+  );
+}
+
+export async function createNewsletterIssue(
+  token: string,
+  payload: { subject: string; introParagraphs: string[]; includeRecentJobs: boolean; recentJobsCount: number }
+) {
+  return authFetch<NewsletterIssueRecord>("/admin/newsletter/issues", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function sendNewsletterIssue(token: string, id: string) {
+  return authFetch<{ status: string }>(`/admin/newsletter/issues/${id}/send`, token, {
+    method: "POST",
     suppressGlobalErrors: true,
   });
 }

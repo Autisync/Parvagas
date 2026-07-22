@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetchRaw, setToken, setUser } from "@/lib/api";
 import { getRecaptchaToken } from "@/lib/recaptcha";
 import FeedbackAlert from "@/app/components/errors/FeedbackAlert";
+import { getPortalHomeForRole } from "@/lib/portalRouting";
 
 type OtpRequestResponse = { sent?: boolean; devCode?: string };
 
@@ -25,7 +26,7 @@ type OtpVerifyResponse = {
 
 function portalRoute(role: string): string {
   if (role === "company") return "/Portal/Empresa/Perfil";
-  return "/Portal/Candidato";
+  return getPortalHomeForRole(role) ?? "/Portal/Candidato";
 }
 
 /** Phone/OTP login tab — the backend flow is complete (rate-limited,

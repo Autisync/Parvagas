@@ -57,3 +57,26 @@ async def subscribe_newsletter(
     send_newsletter_confirmation_email.delay(email)
 
     return {"message": "Subscrição confirmada."}
+
+
+class NewsletterUnsubscribeRequest(BaseModel):
+    token: str
+
+
+@router.post("/newsletter/unsubscribe")
+async def unsubscribe_newsletter(payload: NewsletterUnsubscribeRequest, db: Session = Depends(get_db)):
+    token = (payload.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token em falta.")
+
+    subscriber = db.query(NewsletterSubscriber).filter(NewsletterSubscriber.unsubscribe_token == token).first()
+    if not subscriber:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscrição não encontrada.")
+
+    if subscriber.unsubscribed_at is None:
+        from datetime import datetime
+
+        subscriber.unsubscribed_at = datetime.utcnow()
+        db.commit()
+
+    return {"message": "Subscrição cancelada."}

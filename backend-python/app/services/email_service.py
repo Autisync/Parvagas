@@ -258,6 +258,47 @@ class EmailService:
             return False
 
     @staticmethod
+    def send_newsletter_issue_email(
+        email: str,
+        subject: str,
+        intro_paragraphs: list[str],
+        jobs_html: str,
+        unsubscribe_url: str,
+    ) -> bool:
+        """A compiled newsletter issue, sent to one subscriber. Dispatched via
+        the generic send_templated_email task so every send gets EmailLog
+        coverage. Always carries a working one-click unsubscribe link — the
+        confirmation email sent on signup already promises this exists."""
+        try:
+            if not EmailService._email_enabled():
+                logger.warning(f"Email not configured, skipping email to {email}")
+                return False
+
+            paragraphs_html = "".join(
+                f'<p style="margin:0 0 14px;">{escape(p)}</p>' for p in intro_paragraphs if p and p.strip()
+            )
+            body_html = paragraphs_html + jobs_html + f"""
+            <p style="margin:20px 0 0; font-size:12px; color:#a1a1aa;">
+              Já não quer receber estes emails?
+              <a href="{unsubscribe_url}" style="color:#a1a1aa; text-decoration:underline;">Cancelar subscrição</a>.
+            </p>
+            """
+
+            html_content = EmailService._build_email_html(
+                title=subject,
+                body_html=body_html,
+                action_text="Ver todas as vagas",
+                action_url=f"{settings.FRONTEND_URL}/Vagas-Disponiveis",
+                preheader=subject,
+            )
+
+            return EmailService._send_email(email, f"{settings.BRAND_NAME} — {subject}", html_content)
+
+        except Exception as e:
+            logger.error(f"Failed to send newsletter issue email: {str(e)}")
+            return False
+
+    @staticmethod
     def send_application_received_email(email: str, full_name: str, job_id: str, tracking_url: str = "") -> bool:
         """Send acknowledgement after a job application is submitted.
 

@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 from datetime import datetime, timedelta
+from html import escape
 from io import StringIO
 from math import ceil
 from typing import Any
@@ -20,16 +21,16 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
-from app.api.v1.jobs import serialize_job
+from app.api.v1.jobs import serialize_job, PUBLIC_JOB_STATUSES
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, DataSubjectRequest, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
-    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, ResumeTemplate, SavedJob, ScrapedJob,
+    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterIssue, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, SecurityIncident, SecurityIncidentLogEntry, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
-from app.workers.tasks import send_templated_email
+from app.workers.tasks import send_newsletter_issue, send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
@@ -5085,3 +5086,158 @@ async def admin_reject_dsar_request(
         actor=admin, action="dsar.rejectErasure", resource_type="data_subject_request", resource_id=request.id,
     )
     return _to_dsar_record(db, request)
+
+
+# ──────────────────────────── Newsletter (admin) ──────────────────────────── #
+
+def _to_newsletter_subscriber_record(row: NewsletterSubscriber) -> dict[str, Any]:
+    return {
+        "_id": row.id,
+        "email": row.email,
+        "source": row.source,
+        "unsubscribedAt": row.unsubscribed_at.isoformat() if row.unsubscribed_at else None,
+        "createdAt": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _to_newsletter_issue_record(row: NewsletterIssue) -> dict[str, Any]:
+    return {
+        "_id": row.id,
+        "subject": row.subject,
+        "introParagraphs": json.loads(row.intro_paragraphs or "[]"),
+        "includeRecentJobs": row.include_recent_jobs,
+        "recentJobsCount": row.recent_jobs_count,
+        "status": row.status,
+        "queuedCount": row.queued_count,
+        "sentAt": row.sent_at.isoformat() if row.sent_at else None,
+        "createdAt": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+@router.get("/newsletter/subscribers")
+async def admin_newsletter_subscribers(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    query = db.query(NewsletterSubscriber)
+    total = query.count()
+    active_count = query.filter(NewsletterSubscriber.unsubscribed_at.is_(None)).count()
+    rows = query.order_by(NewsletterSubscriber.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "subscribers": [_to_newsletter_subscriber_record(r) for r in rows],
+        "pagination": _pagination(page, limit, total),
+        "activeCount": active_count,
+        "unsubscribedCount": total - active_count,
+    }
+
+
+@router.get("/newsletter/issues")
+async def admin_newsletter_issues(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    query = db.query(NewsletterIssue)
+    total = query.count()
+    rows = query.order_by(NewsletterIssue.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+    return {
+        "issues": [_to_newsletter_issue_record(r) for r in rows],
+        "pagination": _pagination(page, limit, total),
+    }
+
+
+@router.post("/newsletter/issues")
+async def admin_create_newsletter_issue(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    admin = _ensure_admin(current_user)
+
+    subject = str(payload.get("subject", "")).strip()
+    paragraphs = [str(p).strip() for p in (payload.get("introParagraphs") or []) if str(p).strip()]
+    if not subject or not paragraphs:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assunto e pelo menos um parágrafo são obrigatórios.")
+
+    include_recent_jobs = bool(payload.get("includeRecentJobs", False))
+    recent_jobs_count = max(1, min(int(payload.get("recentJobsCount") or 5), 20))
+
+    issue = NewsletterIssue(
+        subject=subject,
+        intro_paragraphs=json.dumps(paragraphs),
+        include_recent_jobs=include_recent_jobs,
+        recent_jobs_count=recent_jobs_count,
+        created_by_user_id=admin.id,
+    )
+    db.add(issue)
+    db.commit()
+    db.refresh(issue)
+    _record_admin_event(actor=admin, action="newsletter.createIssue", resource_type="newsletter_issue", resource_id=issue.id)
+    return _to_newsletter_issue_record(issue)
+
+
+def _render_newsletter_jobs_html(db: Session, count: int) -> str:
+    """"Vagas em destaque" section for a newsletter issue — same
+    PUBLIC_JOB_STATUSES + visibility filter the public job listing uses, so
+    this always matches what's actually live on the site."""
+    rows = (
+        db.query(Job)
+        .filter(Job.status.in_(PUBLIC_JOB_STATUSES), Job.visibility == "public")
+        .order_by(Job.published_at.desc())
+        .limit(count)
+        .all()
+    )
+    if not rows:
+        return ""
+
+    frontend_url = (os.getenv("FRONTEND_URL") or "https://parvagas.pt").rstrip("/")
+    cards = ""
+    for job in rows:
+        company = db.query(Company).filter(Company.id == job.company_id).first()
+        location_suffix = f" — {escape(job.location)}" if job.location else ""
+        company_name = escape(company.name) if company else ""
+        cards += f"""
+        <tr>
+          <td style="padding:10px 0; border-top:1px solid #f0f0f0;">
+            <a href="{frontend_url}/Vagas-Disponiveis/{job.id}" style="font-weight:600; color:#18181b; text-decoration:none; font-size:14px;">{escape(job.title)}</a>
+            <div style="font-size:12px; color:#71717a; margin-top:2px;">{company_name}{location_suffix}</div>
+          </td>
+        </tr>
+        """
+    return f"""
+    <p style="margin:20px 0 8px; font-weight:700; font-size:15px; color:#18181b;">Vagas em destaque</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">{cards}</table>
+    """
+
+
+@router.post("/newsletter/issues/{issue_id}/send")
+async def admin_send_newsletter_issue(
+    issue_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Sending to the whole subscriber list is high-blast-radius and
+    # effectively irreversible — same bar as other destructive actions in
+    # this file, hence super-admin only.
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+
+    issue = db.query(NewsletterIssue).filter(NewsletterIssue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Newsletter não encontrada")
+    if issue.status != "draft":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Esta newsletter já foi enviada.")
+
+    jobs_html = _render_newsletter_jobs_html(db, issue.recent_jobs_count) if issue.include_recent_jobs else ""
+    issue.status = "sending"
+    db.commit()
+
+    send_newsletter_issue.delay(issue.id, jobs_html)
+
+    _record_admin_event(actor=admin, action="newsletter.sendIssue", resource_type="newsletter_issue", resource_id=issue.id)
+    return {"status": "sending"}
