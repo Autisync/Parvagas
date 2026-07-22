@@ -127,6 +127,10 @@ async def add_request_id(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # This host is an API, not a page — Search Console (domain-level property)
+    # still occasionally probes it and logs a "not found" against the root.
+    # Explicit noindex stops crawlers from bothering with any path here.
+    response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
     if settings.is_production:
         response.headers.setdefault(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
