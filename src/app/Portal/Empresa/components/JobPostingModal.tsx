@@ -42,6 +42,34 @@ const initialForm: JobForm = {
   requiredSkills: [],
 };
 
+// Starter content for a first-time poster facing a blank form — pre-fills
+// title/category/responsibilities/requirements/skills for a common role
+// shape; everything stays fully editable afterwards, nothing is submitted
+// as-is.
+const JOB_TEMPLATES: Record<string, Partial<JobForm>> = {
+  vendas: {
+    title: "Comercial / Representante de Vendas",
+    category: "Vendas",
+    responsibilities: "Prospecção e angariação de novos clientes\nApresentação de produtos/serviços a potenciais clientes\nNegociação e fecho de vendas\nAcompanhamento pós-venda e fidelização de clientes\nElaboração de relatórios de vendas periódicos",
+    requirements: "Experiência mínima de 2 anos em vendas\nBoa capacidade de comunicação e negociação\nOrientação para resultados e cumprimento de metas\nCarta de condução (vantagem)",
+    requiredSkills: ["Negociação", "Atendimento ao cliente", "Prospecção"],
+  },
+  administrativo: {
+    title: "Assistente Administrativo/a",
+    category: "Administrativo",
+    responsibilities: "Gestão de correspondência e arquivo de documentos\nApoio à organização de reuniões e agendas\nProcessamento de dados e elaboração de relatórios\nAtendimento telefónico e presencial\nSuporte geral às diferentes áreas da empresa",
+    requirements: "Formação mínima ao nível do 12º ano\nDomínio de Microsoft Office (Word, Excel)\nOrganização, rigor e atenção ao detalhe\nBoa capacidade de comunicação",
+    requiredSkills: ["Microsoft Office", "Organização", "Atendimento ao cliente"],
+  },
+  tecnico: {
+    title: "Técnico/a de Manutenção",
+    category: "Técnico / Operações",
+    responsibilities: "Manutenção preventiva e corretiva de equipamentos\nDiagnóstico e resolução de avarias\nElaboração de relatórios técnicos\nGarantia do cumprimento das normas de segurança\nApoio a outras equipas técnicas quando necessário",
+    requirements: "Formação técnica na área relevante\nExperiência mínima de 2 anos em função similar\nConhecimentos de normas de segurança no trabalho\nDisponibilidade para trabalho por turnos (se aplicável)",
+    requiredSkills: ["Manutenção", "Segurança no trabalho", "Diagnóstico técnico"],
+  },
+};
+
 export default function JobPostingModal({ token, open, onClose, onCreated }: Props) {
   const [form, setForm] = useState<JobForm>(initialForm);
   const [saving, setSaving] = useState(false);
@@ -66,6 +94,11 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
   };
 
   const setField = (k: keyof JobForm, v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+  const applyTemplate = (key: string) => {
+    const template = JOB_TEMPLATES[key];
+    if (!template) return;
+    setForm((prev) => ({ ...prev, ...template }));
+  };
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }));
   const showFieldError = (field: string) => submitted || touched[field];
   const titleError = !form.title.trim() ? "Informe o título da vaga." : "";
@@ -190,6 +223,14 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
               <path fillRule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 01-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clipRule="evenodd" />
             </svg>
           </button>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <span className="text-xs font-semibold text-slate-600">Começar a partir de um modelo:</span>
+          <button type="button" onClick={() => applyTemplate("vendas")} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">Vendas</button>
+          <button type="button" onClick={() => applyTemplate("administrativo")} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">Administrativo</button>
+          <button type="button" onClick={() => applyTemplate("tecnico")} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">Técnico</button>
+          <span className="text-xs text-slate-500">— pré-preenche os campos abaixo; edite livremente antes de submeter.</span>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
