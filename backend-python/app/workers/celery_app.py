@@ -84,6 +84,7 @@ celery.conf.task_routes = {
     'app.workers.tasks.run_hibp_breach_scan': {'queue': 'cleanup'},
     'app.workers.tasks.scrape_external_jobs': {'queue': 'scraping'},
     'app.workers.tasks.expire_stale_aggregated_jobs': {'queue': 'scraping'},
+    'app.workers.tasks.expire_stale_company_jobs': {'queue': 'cleanup'},
     'app.workers.tasks.publish_scheduled_scraped_jobs': {'queue': 'scraping'},
 }
 
@@ -112,6 +113,10 @@ celery.conf.beat_schedule = {
     'expire-stale-aggregated-jobs': {
         'task': 'app.workers.tasks.expire_stale_aggregated_jobs',
         'schedule': crontab(hour=4, minute=30),  # 04:30 UTC daily
+    },
+    'expire-stale-company-jobs': {
+        'task': 'app.workers.tasks.expire_stale_company_jobs',
+        'schedule': crontab(hour=4, minute=45),  # 04:45 UTC daily
     },
     # Sweep for admin-scheduled scraped jobs whose publish time has arrived.
     'publish-scheduled-scraped-jobs': {

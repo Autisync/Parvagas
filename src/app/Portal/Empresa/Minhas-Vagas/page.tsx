@@ -50,6 +50,7 @@ const statusLabel: Record<string, string> = {
   draft: "Rascunho",
   archived: "Arquivada",
   suspended: "Suspensa",
+  expired: "Expirada",
 };
 const statusColor: Record<string, string> = {
   pending: "bg-orange-100 text-orange-700",
@@ -63,6 +64,7 @@ const statusColor: Record<string, string> = {
   draft: "bg-gray-100 text-gray-500",
   archived: "bg-gray-100 text-gray-500",
   suspended: "bg-red-100 text-red-700",
+  expired: "bg-amber-100 text-amber-700",
 };
 const ITEMS_PER_PAGE = 5;
 
@@ -77,6 +79,11 @@ export default function MinhasVagasPage() {
   const [activePreset, setActivePreset] = useState("overview");
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
   const [exportingJobId, setExportingJobId] = useState<string | null>(null);
+  const [renewingJobId, setRenewingJobId] = useState<string | null>(null);
+  // Snapshot "now" once per mount rather than calling Date.now() inline
+  // during render (React purity rule) — a shelf-life countdown doesn't
+  // need to tick live, just be accurate as of page load.
+  const [nowMs] = useState<number>(() => Date.now());
   const [duplicatingJobId, setDuplicatingJobId] = useState<string | null>(null);
   const { pushToast } = useToasts();
 
@@ -135,6 +142,20 @@ export default function MinhasVagasPage() {
       pushToast("error", getErrorMessage(err, "Erro ao exportar candidaturas."));
     } finally {
       setExportingJobId(null);
+    }
+  };
+
+  const renewJob = async (job: Job) => {
+    if (!token) return;
+    setRenewingJobId(job._id);
+    try {
+      await authFetch(`/companies/jobs/${job._id}/renew`, token, { method: "POST" });
+      pushToast("success", "Vaga renovada por mais 45 dias.");
+      refetch();
+    } catch (err: unknown) {
+      pushToast("error", getErrorMessage(err, "Erro ao renovar a vaga."));
+    } finally {
+      setRenewingJobId(null);
     }
   };
 
@@ -310,6 +331,18 @@ export default function MinhasVagasPage() {
                   </div>
                   <p className="text-sm text-gray-500 mt-1">{[job.location, job.workMode, job.category].filter(Boolean).join(" · ")}</p>
                   {job.createdAt && <p className="text-xs text-gray-500 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}
+                  {job.status === "expired" && (
+                    <p className="text-xs font-semibold text-amber-700 mt-1">Vaga expirada — renove para voltar a receber candidaturas.</p>
+                  )}
+                  {job.status !== "expired" && job.expiresAt && (() => {
+                    const daysLeft = Math.ceil((new Date(job.expiresAt).getTime() - nowMs) / 86400000);
+                    if (daysLeft > 7) return null;
+                    return (
+                      <p className="text-xs font-semibold text-amber-700 mt-1">
+                        {daysLeft <= 0 ? "Expira hoje" : `Expira em ${daysLeft} dia${daysLeft === 1 ? "" : "s"}`}
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div className="flex flex-wrap gap-2 sm:shrink-0">
                   <button
@@ -336,6 +369,15 @@ export default function MinhasVagasPage() {
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       {closingJobId === job._id ? "A fechar..." : "Fechar vaga"}
+                    </button>
+                  )}
+                  {(job.status === "expired" || (_ACTIVE_STATUSES.includes(job.status ?? "") && job.expiresAt && (new Date(job.expiresAt).getTime() - nowMs) / 86400000 <= 7)) && (
+                    <button
+                      onClick={() => renewJob(job as Job)}
+                      disabled={renewingJobId === job._id}
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {renewingJobId === job._id ? "A renovar..." : "Renovar"}
                     </button>
                   )}
                   {(job.applicationCount ?? 0) > 0 && (

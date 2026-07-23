@@ -892,6 +892,44 @@ def expire_stale_aggregated_jobs() -> dict:
         db.close()
 
 
+@celery.task(name='app.workers.tasks.expire_stale_company_jobs')
+@track_task_run('expire_stale_company_jobs')
+def expire_stale_company_jobs() -> dict:
+    """Expire company-posted jobs whose 45-day shelf life has passed
+    (overnight-audit W-extra) — only scraped/aggregated jobs used to
+    auto-expire; a company's own posting stayed "published" indefinitely
+    unless someone manually archived it. `source IS NULL` is what
+    distinguishes a company-posted (or admin-authored, unregistered-
+    company) row from a scraped one here — every scraped Job always sets
+    `source` to the originating adapter/feed name, even though both kinds
+    can share the synthetic aggregator `company_id`."""
+    from app.models import Job
+
+    db = SessionLocal()
+    expired = 0
+    try:
+        now = datetime.utcnow()
+        stale = (
+            db.query(Job)
+            .filter(
+                Job.source.is_(None), Job.expires_at.isnot(None), Job.expires_at < now,
+                Job.status.in_(("approved", "published", "active")),
+            )
+            .all()
+        )
+        for job in stale:
+            job.status = "expired"
+            expired += 1
+        db.commit()
+        return {"expired": expired}
+    except Exception as e:
+        logger.error(f"expire_stale_company_jobs failed: {str(e)}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 @celery.task(name='app.workers.tasks.publish_scheduled_scraped_jobs')
 @track_task_run('publish_scheduled_scraped_jobs')
 def publish_scheduled_scraped_jobs() -> dict:

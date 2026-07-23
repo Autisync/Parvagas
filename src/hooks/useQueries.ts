@@ -128,6 +128,7 @@ export type CompanyJob = {
   createdAt?: string;
   applicationCount?: number;
   views?: number;
+  expiresAt?: string;
 };
 
 export type CompanyJobsResponse = {

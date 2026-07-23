@@ -15,6 +15,7 @@ EXPECTED_SCHEDULED_TASKS = {
     "app.workers.tasks.check_breach_notification_deadlines",
     "app.workers.tasks.scrape_external_jobs",
     "app.workers.tasks.expire_stale_aggregated_jobs",
+    "app.workers.tasks.expire_stale_company_jobs",
     "app.workers.tasks.publish_scheduled_scraped_jobs",
     "app.workers.tasks.generate_auto_apply_proposals",
     "app.workers.tasks.run_hibp_breach_scan",

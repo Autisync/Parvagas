@@ -28,6 +28,13 @@ from app.workers.tasks import send_templated_email
 from app.services.notification_service import admin_emails, create_notification, notify_admins
 from app.api.deps import get_current_user
 
+# Only scraped/aggregated jobs used to auto-expire (see
+# admin.py's _resolve_scraped_job_expiry, same 45-day default) — a
+# company's own posting stayed "published" indefinitely unless manually
+# archived. Applied at creation/duplication time, and reset by the
+# one-click "Renovar" action below.
+_JOB_SHELF_LIFE_DAYS = 45
+
 # Heuristic spam/scam signals for job postings (regional fraud patterns).
 _SCAM_PATTERNS = [
     (r"whatsapp|telegram|\+?\d{9,}", "contacto direto fora da plataforma"),
@@ -583,6 +590,7 @@ async def create_company_job(
 
     job = Job(company_id=company.id, status="pending_platform_review", visibility="public")
     _apply_job_payload(job, payload)
+    job.expires_at = datetime.utcnow() + timedelta(days=_JOB_SHELF_LIFE_DAYS)
     # Scam/spam screening — feeds the admin moderation queue.
     score, flags = _spam_assessment(
         " ".join(str(payload.get(k, "")) for k in ("title", "description", "responsibilities", "requirements"))
@@ -636,6 +644,7 @@ async def duplicate_company_job(
 
     job = Job(company_id=company.id, status="pending_platform_review", visibility="public")
     _apply_job_payload(job, payload)
+    job.expires_at = datetime.utcnow() + timedelta(days=_JOB_SHELF_LIFE_DAYS)
     score, flags = _spam_assessment(
         " ".join(str(payload.get(k, "")) for k in ("title", "description", "responsibilities", "requirements"))
     )
@@ -646,6 +655,34 @@ async def duplicate_company_job(
     db.refresh(job)
 
     return {"job": serialize_job(job, detail=True), "spamScore": score, "spamFlags": flags}
+
+
+@router.post("/jobs/{job_id}/renew")
+async def renew_company_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """One-click renewal: pushes the shelf life another 45 days out from
+    today. If the job had already auto-expired, restores it to "approved"
+    rather than sending it back through moderation — the content hasn't
+    changed since it was last reviewed. Owner/recruiter only."""
+    from app.services.company_billing_service import _ACTIVE_JOB_STATUSES
+
+    company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job.status not in (*_ACTIVE_JOB_STATUSES, "expired"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta vaga não pode ser renovada no estado atual")
+
+    if job.status == "expired":
+        job.status = "approved"
+    job.expires_at = datetime.utcnow() + timedelta(days=_JOB_SHELF_LIFE_DAYS)
+    db.commit()
+    db.refresh(job)
+    return {"job": serialize_job(job, detail=True)}
 
 
 @router.patch("/jobs/{job_id}")
