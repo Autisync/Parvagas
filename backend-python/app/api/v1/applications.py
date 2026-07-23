@@ -5,7 +5,7 @@ from pathlib import Path
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -76,7 +76,7 @@ from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.services.email_service import EmailService
 from app.services.notification_service import create_notification
-from app.services.company_access_service import resolve_company_for_user_or_none
+from app.services.company_access_service import resolve_company_for_user_or_none, require_role
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -172,7 +172,7 @@ def _pagination(page: int, limit: int, total: int) -> dict:
     }
 
 
-def _serialize_application(item: JobApplication) -> dict:
+def _serialize_application(item: JobApplication, job_title: str | None = None, skills: list | None = None) -> dict:
     return {
         "_id": item.id,
         "status": item.status,
@@ -182,13 +182,40 @@ def _serialize_application(item: JobApplication) -> dict:
         "profileSnapshot": {
             "fullName": item.applicant_full_name,
             "email": item.applicant_email,
+            "phone": item.applicant_phone,
+            "skills": skills or [],
         },
         "jobId": {
+            # Falls back to the placeholder only when the caller couldn't
+            # resolve the real job (e.g. it was deleted) — every list
+            # endpoint below now batch-fetches real titles.
             "_id": item.job_id,
-            "title": f"Vaga {item.job_id}",
+            "title": job_title or f"Vaga {item.job_id}",
         },
         "createdAt": item.created_at.isoformat() if item.created_at else None,
     }
+
+
+def _job_titles_for(db: Session, job_ids: list[str]) -> dict[str, str]:
+    """Batch title lookup — avoids an N+1 query per application row.
+    _serialize_application previously never looked this up at all and
+    fabricated "Vaga {job_id}" as the title for every application."""
+    if not job_ids:
+        return {}
+    return {j.id: j.title for j in db.query(Job.id, Job.title).filter(Job.id.in_(job_ids)).all()}
+
+
+def _skills_for_candidates(db: Session, candidate_user_ids: list[str]) -> dict[str, list]:
+    """Batch skills lookup by candidate_user_id, for applications whose
+    profileSnapshot should show the candidate's declared skills."""
+    if not candidate_user_ids:
+        return {}
+    profiles = (
+        db.query(CandidateProfile.user_id, CandidateProfile.skills)
+        .filter(CandidateProfile.user_id.in_(candidate_user_ids))
+        .all()
+    )
+    return {user_id: _json_list_safe(skills) for user_id, skills in profiles}
 
 
 def _validate_upload(file: UploadFile) -> None:
@@ -463,10 +490,11 @@ async def list_candidate_applications(
         .limit(limit)
         .all()
     )
+    titles = _job_titles_for(db, [item.job_id for item in items])
 
     pagination = _pagination(page, limit, total)
     return {
-        "applications": [_serialize_application(item) for item in items],
+        "applications": [_serialize_application(item, job_title=titles.get(item.job_id)) for item in items],
         **pagination,
         "pagination": pagination,
     }
@@ -475,10 +503,16 @@ async def list_candidate_applications(
 async def list_company_applications(
     page: int = 1,
     limit: int = 20,
+    job_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List applications mapped to the authenticated company owner."""
+    """List applications mapped to the authenticated company owner (or
+    invited team member — see resolve_company_for_user_or_none). Optionally
+    scoped to a single job via `job_id` — previously every call returned
+    every application across every job, and the frontend's search/filter
+    box only ever filtered the one already-loaded page of 20, not the
+    company's full applicant pool."""
     if current_user.role != UserRole.company:
         return {"applications": [], **_pagination(page, limit, 0)}
 
@@ -490,6 +524,8 @@ async def list_company_applications(
     limit = max(1, min(limit, 100))
 
     query = db.query(JobApplication).filter(JobApplication.company_id == company.id)
+    if job_id:
+        query = query.filter(JobApplication.job_id == job_id)
     total = query.count()
     items = (
         query.order_by(JobApplication.created_at.desc())
@@ -497,10 +533,15 @@ async def list_company_applications(
         .limit(limit)
         .all()
     )
+    titles = _job_titles_for(db, [item.job_id for item in items])
+    skills = _skills_for_candidates(db, [item.candidate_user_id for item in items if item.candidate_user_id])
 
     pagination = _pagination(page, limit, total)
     return {
-        "applications": [_serialize_application(item) for item in items],
+        "applications": [
+            _serialize_application(item, job_title=titles.get(item.job_id), skills=skills.get(item.candidate_user_id))
+            for item in items
+        ],
         **pagination,
         "pagination": pagination,
     }
@@ -510,6 +551,7 @@ async def list_company_applications(
 async def list_applications(
     page: int = 1,
     limit: int = 20,
+    jobId: str | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -517,7 +559,7 @@ async def list_applications(
     if current_user.role == UserRole.candidate:
         return await list_candidate_applications(page=page, limit=limit, db=db, current_user=current_user)
     if current_user.role == UserRole.company:
-        return await list_company_applications(page=page, limit=limit, db=db, current_user=current_user)
+        return await list_company_applications(page=page, limit=limit, job_id=jobId, db=db, current_user=current_user)
 
     # Admin listing remains scoped to dedicated admin endpoints.
     page = max(1, page)
@@ -540,7 +582,7 @@ async def update_application_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Move an application along the hiring pipeline (company owner or admin)."""
+    """Move an application along the hiring pipeline (company owner/recruiter or admin)."""
     app_row = db.query(JobApplication).filter(JobApplication.id == application_id).first()
     if not app_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
@@ -548,6 +590,7 @@ async def update_application_status(
         co = resolve_company_for_user_or_none(db, current_user)
         if not co or app_row.company_id != co.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+        require_role(db, current_user, co, {"owner", "recruiter"})
     new_status = str(payload.get("status", "")).strip().lower()
     if new_status not in _HIRING_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
@@ -603,6 +646,7 @@ async def application_candidate_cv(
     candidate = {
         "fullName": app_row.applicant_full_name,
         "email": app_row.applicant_email,
+        "phone": app_row.applicant_phone,
         "location": app_row.applicant_location,
         "professionalTitle": None,
         "summary": app_row.cover_letter,

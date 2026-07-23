@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useApplications } from "@/hooks/useQueries";
+import { useApplications, useCompanyJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
@@ -16,7 +17,7 @@ type Application = {
   _id: string;
   status: string;
   candidateUserId?: string;
-  profileSnapshot?: { fullName?: string; email?: string; skills?: string[] };
+  profileSnapshot?: { fullName?: string; email?: string; phone?: string; skills?: string[] };
   jobId?: { title?: string } | null;
   createdAt?: string;
 };
@@ -25,6 +26,7 @@ type CandidateCvPayload = {
   candidate: {
     fullName?: string;
     email?: string;
+    phone?: string;
     location?: string;
     professionalTitle?: string;
     summary?: string;
@@ -49,9 +51,15 @@ const statusLabel: Record<string, string> = {
 
 export default function EmpresaCandidaturasPage() {
   const { token, loading } = useAuth("company");
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  // Notification links (e.g. "new applicant" alerts) point here with
+  // ?jobId=... — previously ignored entirely, so following one just landed
+  // on the unfiltered, cross-job list.
+  const [jobFilter, setJobFilter] = useState(searchParams.get("jobId") || "");
+  const { data: companyJobsData } = useCompanyJobs(token, 1, 100);
   const [activePreset, setActivePreset] = useState("overview");
   const [view, setView] = useState<"list" | "kanban">("list");
   const [updating, setUpdating] = useState<string | null>(null);
@@ -96,7 +104,7 @@ export default function EmpresaCandidaturasPage() {
   const debouncedQuery = useDebounce(query, 400);
 
   // Fetch applications with pagination using TanStack Query
-  const { data: applicationsData, isLoading, error, refetch } = useApplications(token, page, 20);
+  const { data: applicationsData, isLoading, error, refetch } = useApplications(token, page, 20, jobFilter || undefined);
   
   const applications = useMemo(() => applicationsData?.applications || [], [applicationsData]);
   const totalRecords = applicationsData?.total || 0;
@@ -146,7 +154,7 @@ export default function EmpresaCandidaturasPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, statusFilter]);
+  }, [debouncedQuery, statusFilter, jobFilter]);
 
   if (loading || isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" /></div>;
 
@@ -246,6 +254,21 @@ export default function EmpresaCandidaturasPage() {
             ]}
           />
 
+          <div className="mb-3 flex items-center gap-2">
+            <label htmlFor="job-filter" className="text-xs font-semibold text-gray-600">Filtrar por vaga</label>
+            <select
+              id="job-filter"
+              value={jobFilter}
+              onChange={(e) => setJobFilter(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-sm text-slate-900"
+            >
+              <option value="">Todas as vagas</option>
+              {(companyJobsData?.jobs || []).map((j) => (
+                <option key={j._id} value={j._id}>{j.title}</option>
+              ))}
+            </select>
+          </div>
+
           <InsightsToolbar
             query={query}
             onQueryChange={(next) => {
@@ -302,6 +325,7 @@ export default function EmpresaCandidaturasPage() {
             {filteredApplications.map(a => {
               const name = a.profileSnapshot?.fullName ?? "Candidato";
               const email = a.profileSnapshot?.email ?? "";
+              const phone = a.profileSnapshot?.phone ?? "";
               const jobTitle = a.jobId && typeof a.jobId === "object" ? a.jobId.title : "";
               return (
                 <div key={a._id} className="border border-gray-100 rounded-2xl p-5">
@@ -311,7 +335,7 @@ export default function EmpresaCandidaturasPage() {
                         <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-sm shrink-0">{name.slice(0, 2).toUpperCase()}</div>
                         <div>
                           <p className="font-bold">{name}</p>
-                          <p className="text-xs text-gray-500">{email}</p>
+                          <p className="text-xs text-gray-500">{[email, phone].filter(Boolean).join(" · ")}</p>
                         </div>
                       </div>
                       {jobTitle && <p className="text-sm text-gray-500 mt-2">Para: <strong>{jobTitle}</strong></p>}
@@ -422,7 +446,10 @@ export default function EmpresaCandidaturasPage() {
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">CV do candidato</h3>
-                    <p className="text-sm text-slate-600">{selectedCv.candidate?.fullName || "Candidato"} · {selectedCv.candidate?.email || "sem email"}</p>
+                    <p className="text-sm text-slate-600">
+                      {selectedCv.candidate?.fullName || "Candidato"} · {selectedCv.candidate?.email || "sem email"}
+                      {selectedCv.candidate?.phone ? ` · ${selectedCv.candidate.phone}` : ""}
+                    </p>
                   </div>
                   <button type="button" onClick={() => { setSelectedCv(null); setSelectedApplicationId(null); }} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">Fechar</button>
                 </div>
