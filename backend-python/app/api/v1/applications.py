@@ -609,6 +609,23 @@ async def application_candidate_cv(
         "skills": [],
     }
     documents = []
+    # The file actually attached to THIS application — covers guest/
+    # quick-apply candidates (no account, so no CandidateProfile/CVUpload
+    # row exists at all) and logged-in candidates who chose to upload a
+    # one-off CV for this specific job instead of their saved profile CV.
+    # Neither path ever creates a CVUpload row, so without this the
+    # "Ver CV" modal showed "Sem CV disponível" despite a real file sitting
+    # in storage — already handled correctly by the unauthenticated
+    # external-employer view of the same data (view_external_job_applications
+    # above); this mirrors that same check.
+    if app_row.cv_file_path:
+        documents.append({
+            "_id": f"{app_row.id}-application-cv",
+            "fileName": "CV enviado com a candidatura",
+            "mimeType": None,
+            "createdAt": app_row.created_at.isoformat() if app_row.created_at else None,
+            "signedUrl": StorageService.signed_url(app_row.cv_file_path),
+        })
     if app_row.candidate_user_id:
         profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == app_row.candidate_user_id).first()
         if profile:
