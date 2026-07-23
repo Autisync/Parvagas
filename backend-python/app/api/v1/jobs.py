@@ -59,8 +59,15 @@ def _company_payload(company: Optional[Company]) -> Optional[dict[str, Any]]:
     }
 
 
-def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
-    """Serialize a Job to the frontend shape. ``detail`` adds heavy fields."""
+def serialize_job(job: Job, *, detail: bool = False, admin: bool = False) -> dict[str, Any]:
+    """Serialize a Job to the frontend shape. ``detail`` adds heavy fields.
+
+    ``admin`` additionally adds fields that must never reach a public or
+    company-scoped response (e.g. the unregistered external employer's
+    private contact inbox) — callers must pass it explicitly, never infer
+    it from ``detail`` alone, since ``detail=True`` is also used by the
+    public single-job endpoint (jobs.py get_public_job).
+    """
     payload: dict[str, Any] = {
         "_id": job.id,
         "title": job.title,
@@ -103,6 +110,8 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
                 "spamFlags": _json_list(job.spam_flags),
             }
         )
+    if admin:
+        payload["externalContactEmail"] = getattr(job, "external_contact_email", None)
     return payload
 
 

@@ -162,6 +162,8 @@ export type JobRecord = {
   preferredSkills?: string[];
   createdAt?: string;
   companyId?: { _id?: string; name?: string } | string;
+  externalCompanyName?: string | null;
+  externalContactEmail?: string | null;
 };
 
 export type ApplicationRecord = {
@@ -446,6 +448,28 @@ export async function setJobFeatured(token: string, jobId: string, featured: boo
     method: "PATCH",
     body: JSON.stringify({ featured }),
     suppressGlobalErrors: true,
+  });
+}
+
+export type AdminJobCreatePayload = {
+  title: string;
+  description?: string;
+  location?: string;
+  category?: string;
+  workMode?: string;
+  contractType?: string;
+  jobType?: string;
+  salaryRange?: string;
+  experienceLevel?: string;
+  companyId?: string;
+  externalCompanyName?: string;
+  externalContactEmail?: string;
+};
+
+export async function createAdminJob(token: string, payload: AdminJobCreatePayload) {
+  return authFetch<{ job: JobRecord }>(`/admin/jobs`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

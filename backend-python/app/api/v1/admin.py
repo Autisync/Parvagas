@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.api.v1.jobs import serialize_job, PUBLIC_JOB_STATUSES
+from app.api.v1.companies import _apply_job_payload
+from app.core.security import is_valid_email_format
 from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
@@ -854,7 +856,7 @@ async def admin_jobs(
         .all()
     )
     return {
-        "jobs": [serialize_job(j, detail=True) for j in rows],
+        "jobs": [serialize_job(j, detail=True, admin=True) for j in rows],
         "pagination": _pagination(page, limit, total),
     }
 
@@ -931,7 +933,92 @@ async def admin_moderate_job(
         except Exception as e:
             logger.warning(f"Could not enqueue instant job alerts: {e}")
 
-    return {"job": serialize_job(job, detail=True)}
+    return {"job": serialize_job(job, detail=True, admin=True)}
+
+
+@router.post("/jobs")
+async def admin_create_job(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin-authored job posting — the direct alternative to scraping.
+
+    Business development gets companies to agree to have their vacancy
+    posted before those companies ever create a Parvagas account. Two
+    attribution modes:
+      - `companyId`: an existing, already-registered company (rare here,
+        but supported for completeness — e.g. an admin posting on behalf
+        of a company that asked for help via support).
+      - `externalCompanyName` + `externalContactEmail`: the normal case.
+        The job is attributed to the same synthetic "Parvagas Aggregator"
+        company the scraper pipeline uses, so the real employer's name has
+        somewhere to live without requiring an account. From here on the
+        flow is identical to a published scraped job: every new applicant
+        triggers send_external_employer_new_applicant_email to that inbox,
+        with a no-login "view applications" link and an invite to claim a
+        real company account (see applications._notify_company_new_applicant).
+
+    Published immediately (status=approved, visibility=public) — an admin
+    typing this in has already made the call a self-serve company posting
+    would otherwise need moderation for.
+    """
+    admin = _ensure_admin(current_user)
+    title = str(payload.get("title", "")).strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Job title is required")
+
+    company_id = payload.get("companyId")
+    external_name = str(payload.get("externalCompanyName", "")).strip()
+    external_email = str(payload.get("externalContactEmail", "")).strip()
+
+    if company_id:
+        company = db.query(Company).filter(Company.id == company_id).first()
+        if not company:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        resolved_company_id = company.id
+        external_name = external_email = external_logo = None
+    elif external_name and external_email:
+        if not is_valid_email_format(external_email):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email de contacto inválido")
+        resolved_company_id = _aggregator_company(db, admin).id
+        external_logo = safe_http_url(payload.get("externalCompanyLogoUrl"))
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Indique companyId (empresa registada) ou externalCompanyName + externalContactEmail (empresa não registada)",
+        )
+
+    job = Job(
+        company_id=resolved_company_id,
+        status=str(payload.get("status") or "approved"),
+        visibility=str(payload.get("visibility") or "public"),
+        published_at=datetime.utcnow(),
+        external_company_name=external_name or None,
+        external_contact_email=external_email or None,
+        external_company_logo_url=external_logo if not company_id else None,
+    )
+    _apply_job_payload(job, payload)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    _record_admin_event(
+        actor=admin,
+        action="job.create",
+        resource_type="job",
+        resource_id=job.id,
+        details={"title": job.title, "externalCompanyName": external_name or None, "companyId": company_id or None},
+    )
+
+    if job.status in PUBLIC_JOB_STATUSES:
+        try:
+            from app.workers.tasks import dispatch_instant_alerts_for_job
+            dispatch_instant_alerts_for_job.delay(job.id)
+        except Exception as e:
+            logger.warning(f"Could not enqueue instant job alerts: {e}")
+
+    return {"job": serialize_job(job, detail=True, admin=True)}
 
 
 @router.patch("/jobs/{job_id}/featured")
@@ -956,7 +1043,7 @@ async def admin_set_job_featured(
         actor=admin, action="job.featured", resource_type="job",
         resource_id=job_id, details={"featured": job.featured},
     )
-    return {"job": serialize_job(job, detail=True)}
+    return {"job": serialize_job(job, detail=True, admin=True)}
 
 
 @router.get("/applications")

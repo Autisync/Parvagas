@@ -5,13 +5,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch, getErrorMessage } from "@/lib/api";
 import {
   AdminPermissions,
+  createAdminJob,
   fetchAdminMe,
+  fetchCompanies,
   fetchJobs,
   hasPermission,
   setJobFeatured,
   statusBadgeClass,
   toDateLabel,
+  type AdminJobCreatePayload,
   type AdminMe,
+  type CompanyRecord,
   type JobRecord,
   type Pagination,
 } from "../adminClient";
@@ -72,6 +76,27 @@ export default function AdminJobsPage() {
   const [bulkReason, setBulkReason] = useState("");
   const [featuredBusy, setFeaturedBusy] = useState(false);
   const { notify } = useAppNotifier();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [attribution, setAttribution] = useState<"external" | "registered">("external");
+  const [createForm, setCreateForm] = useState({
+    title: "",
+    description: "",
+    location: "",
+    category: "",
+    workMode: "",
+    contractType: "",
+    salaryRange: "",
+    experienceLevel: "",
+    externalCompanyName: "",
+    externalContactEmail: "",
+  });
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [companyResults, setCompanyResults] = useState<CompanyRecord[]>([]);
+  const [companySearching, setCompanySearching] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyRecord | null>(null);
 
   const {
     selectedIds,
@@ -206,6 +231,90 @@ export default function AdminJobsPage() {
     }
   };
 
+  const resetCreateForm = () => {
+    setCreateForm({
+      title: "",
+      description: "",
+      location: "",
+      category: "",
+      workMode: "",
+      contractType: "",
+      salaryRange: "",
+      experienceLevel: "",
+      externalCompanyName: "",
+      externalContactEmail: "",
+    });
+    setAttribution("external");
+    setCompanyQuery("");
+    setCompanyResults([]);
+    setSelectedCompany(null);
+    setCreateError("");
+  };
+
+  const openCreateModal = () => {
+    resetCreateForm();
+    setCreateOpen(true);
+  };
+
+  const searchCompaniesForAttribution = async () => {
+    if (!token || !companyQuery.trim()) return;
+    setCompanySearching(true);
+    try {
+      const res = await fetchCompanies(token, { keyword: companyQuery.trim(), limit: 8 });
+      setCompanyResults(res.companies || []);
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao procurar empresas."), "error");
+    } finally {
+      setCompanySearching(false);
+    }
+  };
+
+  const submitCreateJob = async () => {
+    if (!token) return;
+    if (!createForm.title.trim()) {
+      setCreateError("O título da vaga é obrigatório.");
+      return;
+    }
+    if (attribution === "registered" && !selectedCompany) {
+      setCreateError("Selecione uma empresa registada.");
+      return;
+    }
+    if (attribution === "external" && (!createForm.externalCompanyName.trim() || !createForm.externalContactEmail.trim())) {
+      setCreateError("Indique o nome da empresa e o email de contacto.");
+      return;
+    }
+
+    setCreateBusy(true);
+    setCreateError("");
+    try {
+      const payload: AdminJobCreatePayload = {
+        title: createForm.title.trim(),
+        description: createForm.description.trim() || undefined,
+        location: createForm.location.trim() || undefined,
+        category: createForm.category.trim() || undefined,
+        workMode: createForm.workMode.trim() || undefined,
+        contractType: createForm.contractType.trim() || undefined,
+        salaryRange: createForm.salaryRange.trim() || undefined,
+        experienceLevel: createForm.experienceLevel.trim() || undefined,
+      };
+      if (attribution === "registered" && selectedCompany) {
+        payload.companyId = selectedCompany._id;
+      } else {
+        payload.externalCompanyName = createForm.externalCompanyName.trim();
+        payload.externalContactEmail = createForm.externalContactEmail.trim();
+      }
+      await createAdminJob(token, payload);
+      notify("Vaga criada e publicada com sucesso.", "success");
+      setCreateOpen(false);
+      resetCreateForm();
+      await load();
+    } catch (err: unknown) {
+      setCreateError(getErrorMessage(err, "Erro ao criar a vaga."));
+    } finally {
+      setCreateBusy(false);
+    }
+  };
+
   const selectAllAcrossPages = async () => {
     if (!token) return;
     setBusy("all-jobs");
@@ -234,6 +343,17 @@ export default function AdminJobsPage() {
         eyebrow="Moderação"
         title="Moderação de Vagas"
         description="Aprove, rejeite e arquive vagas com rastreabilidade operacional."
+        action={
+          canPublishJobs ? (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+            >
+              + Adicionar Vaga
+            </button>
+          ) : undefined
+        }
       />
 
       {error ? <div className="mt-5"><InlineErrorState message={error} onAction={load} /></div> : null}
@@ -427,6 +547,159 @@ export default function AdminJobsPage() {
             ) : null}
           </div>
         )}
+      </AdminModal>
+
+      <AdminModal
+        open={createOpen}
+        title="Adicionar Vaga"
+        onClose={() => {
+          setCreateOpen(false);
+          resetCreateForm();
+        }}
+        footer={
+          <div className="grid gap-2">
+            {createError ? <p className="text-sm font-semibold text-rose-600">{createError}</p> : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateOpen(false);
+                  resetCreateForm();
+                }}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={createBusy}
+                onClick={submitCreateJob}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {createBusy ? "A criar..." : "Criar e publicar vaga"}
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <div className="grid gap-4 text-sm text-slate-700">
+          <p className="text-xs text-slate-500">
+            Publica imediatamente (sem passar pela fila de moderação — já é uma decisão de administrador). Use isto para
+            vagas obtidas por desenvolvimento de negócio, cuja empresa ainda não tem conta na Parvagas.
+          </p>
+
+          <label className="grid gap-1">
+            <span className="font-semibold text-slate-900">Título da vaga *</span>
+            <input value={createForm.title} onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))} className={adminFieldClass} placeholder="Ex: Engenheiro de Processos" />
+          </label>
+
+          <label className="grid gap-1">
+            <span className="font-semibold text-slate-900">Descrição</span>
+            <textarea value={createForm.description} onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))} rows={4} className={`${adminFieldClass} resize-y`} />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Localização</span>
+              <input value={createForm.location} onChange={(e) => setCreateForm((f) => ({ ...f, location: e.target.value }))} className={adminFieldClass} placeholder="Luanda" />
+            </label>
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Categoria</span>
+              <input value={createForm.category} onChange={(e) => setCreateForm((f) => ({ ...f, category: e.target.value }))} className={adminFieldClass} />
+            </label>
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Modalidade</span>
+              <select value={createForm.workMode} onChange={(e) => setCreateForm((f) => ({ ...f, workMode: e.target.value }))} className={adminFieldClass}>
+                <option value="">—</option>
+                <option value="Presencial">Presencial</option>
+                <option value="Remoto">Remoto</option>
+                <option value="Híbrido">Híbrido</option>
+                <option value="Rotativo">Rotativo</option>
+              </select>
+            </label>
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Tipo de contrato</span>
+              <input value={createForm.contractType} onChange={(e) => setCreateForm((f) => ({ ...f, contractType: e.target.value }))} className={adminFieldClass} />
+            </label>
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Faixa salarial</span>
+              <input value={createForm.salaryRange} onChange={(e) => setCreateForm((f) => ({ ...f, salaryRange: e.target.value }))} className={adminFieldClass} placeholder="A combinar" />
+            </label>
+            <label className="grid gap-1">
+              <span className="font-semibold text-slate-900">Experiência</span>
+              <input value={createForm.experienceLevel} onChange={(e) => setCreateForm((f) => ({ ...f, experienceLevel: e.target.value }))} className={adminFieldClass} />
+            </label>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <p className="font-semibold text-slate-900">Empresa</p>
+            <div className="mt-2 flex gap-4 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" checked={attribution === "external"} onChange={() => setAttribution("external")} />
+                Empresa não registada
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" checked={attribution === "registered"} onChange={() => setAttribution("registered")} />
+                Empresa já registada
+              </label>
+            </div>
+
+            {attribution === "external" ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-slate-700">Nome da empresa *</span>
+                  <input value={createForm.externalCompanyName} onChange={(e) => setCreateForm((f) => ({ ...f, externalCompanyName: e.target.value }))} className={adminFieldClass} />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-semibold text-slate-700">Email de contacto *</span>
+                  <input
+                    type="email"
+                    value={createForm.externalContactEmail}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, externalContactEmail: e.target.value }))}
+                    className={adminFieldClass}
+                    placeholder="rh@empresa.co.ao"
+                  />
+                </label>
+                <p className="sm:col-span-2 text-xs text-slate-500">
+                  As candidaturas recebidas são enviadas para este email, que também recebe um convite para criar conta
+                  gratuita na Parvagas e gerir as candidaturas num painel completo.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-3 grid gap-2">
+                <div className="flex gap-2">
+                  <input
+                    value={companyQuery}
+                    onChange={(e) => setCompanyQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); searchCompaniesForAttribution(); } }}
+                    placeholder="Procurar empresa registada"
+                    className={adminFieldClass}
+                  />
+                  <button type="button" onClick={searchCompaniesForAttribution} disabled={companySearching} className="shrink-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">
+                    {companySearching ? "A procurar..." : "Procurar"}
+                  </button>
+                </div>
+                {selectedCompany ? (
+                  <p className="text-xs font-semibold text-emerald-700">Selecionada: {selectedCompany.name}</p>
+                ) : companyResults.length > 0 ? (
+                  <ul className="grid gap-1">
+                    {companyResults.map((c) => (
+                      <li key={c._id}>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedCompany(c); setCompanyResults([]); }}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          {c.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
       </AdminModal>
 
       <PaginationControls
