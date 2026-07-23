@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { authFetch } from "@/lib/api";
+import Link from "next/link";
+import { authFetch, ApiError } from "@/lib/api";
 import FormFieldError from "@/app/components/errors/FormFieldError";
 import { SuccessCheck, MilestoneCelebration } from "@/app/components/motion";
 import { track } from "@/lib/analytics";
@@ -45,6 +46,7 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
   const [form, setForm] = useState<JobForm>(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [skillsInput, setSkillsInput] = useState("");
@@ -101,6 +103,7 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setQuotaExceeded(false);
     setSubmitted(true);
 
     if (!form.title.trim() || !form.description.trim() || !form.responsibilities.trim() || !form.requirements.trim()) {
@@ -142,6 +145,7 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
       track("company_job_posted");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao submeter vaga.");
+      setQuotaExceeded(err instanceof ApiError && err.status === 402);
     } finally {
       setSaving(false);
     }
@@ -304,7 +308,19 @@ export default function JobPostingModal({ token, open, onClose, onCreated }: Pro
             </div>
           </section>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-600">{error}</p>
+              {quotaExceeded && (
+                <Link
+                  href="/Portal/Empresa/Planos"
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  Fazer upgrade do plano
+                </Link>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="app-btn-secondary px-4 py-2 text-sm">
