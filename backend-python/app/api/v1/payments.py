@@ -25,7 +25,7 @@ from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
 from app.services.candidate_billing_service import get_cv_builder_plans
 from app.services import receipt_service
-from app.services.company_access_service import resolve_company_for_user
+from app.services.company_access_service import resolve_company_for_user, require_role
 
 logger = get_logger(__name__)
 
@@ -104,8 +104,9 @@ async def my_subscription(db: Session = Depends(get_db), current_user: User = De
 async def cancel_subscription(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Cancels future renewal only — access continues until current_period_end
     and nothing is refunded for the period already in progress
-    (reembolsos.md Section 3). Idempotent."""
+    (reembolsos.md Section 3). Idempotent. Owner only."""
     co = _company_for(db, current_user)
+    require_role(db, current_user, co, {"owner"})
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == co.id, Subscription.status == "active")
@@ -129,8 +130,10 @@ async def cancel_subscription(db: Session = Depends(get_db), current_user: User 
 
 @router.post("/companies/subscription/resume")
 async def resume_subscription(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Undoes a pending cancellation while the current period hasn't ended yet."""
+    """Undoes a pending cancellation while the current period hasn't ended yet.
+    Owner only."""
     co = _company_for(db, current_user)
+    require_role(db, current_user, co, {"owner"})
     sub = (
         db.query(Subscription)
         .filter(Subscription.company_id == co.id, Subscription.status == "active")
@@ -146,8 +149,10 @@ async def resume_subscription(db: Session = Depends(get_db), current_user: User 
 
 @router.post("/companies/subscribe")
 async def subscribe(payload: dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Create a pending subscription + a payment reference for a local rail."""
+    """Create a pending subscription + a payment reference for a local rail.
+    Owner only."""
     co = _company_for(db, current_user)
+    require_role(db, current_user, co, {"owner"})
     _ensure_seed_plans(db)
     plan = db.query(Plan).filter(Plan.code == str(payload.get("planCode", "")).strip()).first()
     if not plan:
@@ -524,10 +529,11 @@ async def dispute_company_subscription_payment(
     """Convenience wrapper around dispute_service.create_dispute for the
     most recent paid transaction — mirrors .../receipt above. A user with
     an older transaction to dispute uses the generic POST /account/disputes
-    with an explicit transactionReference instead."""
+    with an explicit transactionReference instead. Owner only."""
     from app.services import dispute_service
 
     co = _company_for(db, current_user)
+    require_role(db, current_user, co, {"owner"})
     tx = _latest_paid_transaction(db, company_id=co.id)
     if not tx:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma transação paga encontrada")
