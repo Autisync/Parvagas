@@ -37,6 +37,7 @@ from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
 from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service, incident_service
+from app.services.slug_service import slugify as _slugify, generate_unique_slug
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -1639,7 +1640,8 @@ def _aggregator_company(db: Session, admin: User | None = None) -> Company:
     if not co:
         owner = admin or db.query(User).filter(User.role == UserRole.admin).first()
         co = Company(owner_user_id=owner.id if owner else None, name="Parvagas Aggregator", status="active",
-                     description="Vagas agregadas de fontes externas.")
+                     description="Vagas agregadas de fontes externas.",
+                     slug=generate_unique_slug(db, Company, "Parvagas Aggregator"))
         db.add(co)
         db.flush()
     return co
@@ -4105,15 +4107,6 @@ async def admin_delete_ad(
 # ─────────────────────────────────────────────────────────────────────────────
 # Career posts / blog — admin CRUD
 # ─────────────────────────────────────────────────────────────────────────────
-def _slugify(value: str) -> str:
-    import re
-    import unicodedata
-
-    text = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
-    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return text or uuid.uuid4().hex[:8]
-
-
 def _to_career_record(post: CareerPost) -> dict[str, Any]:
     return {
         "_id": post.id,

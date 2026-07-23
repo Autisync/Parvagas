@@ -5,6 +5,7 @@ import secrets
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from app.models import CandidateProfile, Company, CompanyMember, RefreshToken, User, UserRole, EmailVerificationToken, PasswordResetToken
+from app.services.slug_service import generate_unique_slug
 from app.core.config import get_settings
 from app.core.security import (
     hash_password, verify_password, create_access_token,
@@ -68,13 +69,15 @@ class AuthService:
         db.flush()
 
         if normalized_role == UserRole.company:
+            company_name_stripped = (company_name or "").strip()
             company = Company(
                 owner_user_id=user.id,
-                name=(company_name or "").strip(),
+                name=company_name_stripped,
                 legal_name=(company_legal_name or "").strip() or None,
                 nif=normalized_nif,
                 email=user.email,
                 status="pending_verification",
+                slug=generate_unique_slug(db, Company, company_name_stripped or user.email),
             )
             db.add(company)
 

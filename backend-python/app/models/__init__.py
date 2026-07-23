@@ -157,11 +157,18 @@ class Company(Base, TimestampMixin):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     owner_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    
+
     # Basic info
     name = Column(String(255), nullable=False)
     legal_name = Column(String(255), nullable=True)
     nif = Column(String(50), nullable=True, unique=True)
+
+    # Public shareable page identifier (W5.3) — real signup/aggregator
+    # call sites set this explicitly via app.services.slug_service
+    # (name-derived, collision-safe); the random fallback default below
+    # only fires for call sites (mostly test fixtures) that don't care
+    # about a human-readable slug. Immutable in v1.
+    slug = Column(String(255), nullable=False, unique=True, index=True, default=lambda: f"empresa-{uuid.uuid4().hex[:10]}")
     
     # Contact
     phone = Column(String(20), nullable=True)
