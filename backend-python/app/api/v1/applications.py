@@ -953,26 +953,9 @@ async def add_application_note(
     return {"note": {"_id": note.id, "body": note.body, "rating": note.rating,
                      "createdAt": note.created_at.isoformat() if note.created_at else None}}
 
-
-@router.get("/public/candidates/{user_id}")
-async def public_candidate_profile(user_id: str, db: Session = Depends(get_db)):
-    """Public, read-only candidate profile (shareable)."""
-    user = db.query(User).filter(User.id == user_id, User.role == UserRole.candidate).first()
-    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
-    if not user or not profile:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
-    return {"profile": {
-        "id": user.id,
-        "fullName": user.full_name,
-        "jobTitle": profile.job_title,
-        "location": profile.location,
-        "professionalSummary": profile.professional_summary,
-        "yearsOfExperience": profile.years_of_experience,
-        "skills": _json_list_safe(profile.skills),
-        "languages": _json_list_safe(profile.languages),
-        "experience": _json_list_safe(profile.work_experience),
-        "education": _json_list_safe(profile.education),
-        "linkedinUrl": profile.linkedin_url,
-        "portfolioUrl": profile.portfolio_url,
-        "githubUrl": profile.github_url,
-    }}
+# GET /public/candidates/{user_id} (unauthenticated, unfiltered candidate
+# profile lookup) was removed here — W5.2 found it live with zero frontend
+# callers and no ownership/visibility check at all. Replaced by
+# app.api.v1.candidate_search.view_candidate_profile, which requires
+# company auth, the Business-plan gate, and the candidate's
+# discoverable_opt_in flag.
