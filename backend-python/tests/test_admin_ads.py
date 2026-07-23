@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models import AdCampaign, User, UserRole
+from app.models import AdCampaign, AdminLevel, User, UserRole
 from app.api.v1.admin import admin_ad_flag, admin_ad_unflag
 
 
@@ -25,7 +25,13 @@ def db():
 
 
 def _make_admin(db):
-    admin = User(id=str(uuid.uuid4()), email=f"admin-{uuid.uuid4()}@parvagas.pt", full_name="Admin", password_hash="x", role=UserRole.admin)
+    # Ad routes are super-admin-gated (see test_ads_super_admin_gate.py for
+    # the permission check itself) — this file exercises the flag/unflag
+    # behavior, so the actor needs to actually pass the gate.
+    admin = User(
+        id=str(uuid.uuid4()), email=f"admin-{uuid.uuid4()}@parvagas.pt", full_name="Admin",
+        password_hash="x", role=UserRole.admin, admin_level=AdminLevel.super_admin.value,
+    )
     db.add(admin)
     db.commit()
     return admin

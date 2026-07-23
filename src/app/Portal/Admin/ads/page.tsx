@@ -282,6 +282,7 @@ export default function AdminAdsPage() {
   const [ads, setAds] = useState<AdCampaignRecord[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formErrors, setFormErrors] = useState<AdFormErrors>({});
   const [selectedAd, setSelectedAd] = useState<AdCampaignRecord | null>(null);
@@ -318,6 +319,8 @@ export default function AdminAdsPage() {
       setAds(adList.ads || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao carregar campanhas.");
+    } finally {
+      setLoading(false);
     }
   }, [token]);
 
@@ -508,6 +511,21 @@ export default function AdminAdsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="h-8 w-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (error && !canViewAds) {
+    // Distinguishes "we couldn't confirm your permissions" (retry-able)
+    // from "we confirmed you genuinely don't have access" below — a failed
+    // /admin/me call must never be presented as the latter.
+    return <div className="mt-4"><InlineErrorState message={error} onAction={load} /></div>;
+  }
+
   if (!canViewAds) {
     return <AdminRestricted title="Campanhas restritas">Apenas super-admin pode criar e gerir campanhas publicitárias.</AdminRestricted>;
   }
@@ -655,9 +673,14 @@ export default function AdminAdsPage() {
                   <p className="text-xs text-slate-500">Segmentação: {[ad.targetCategory, ad.targetLocation].filter(Boolean).join(" · ")}</p>
                 ) : null}
               </div>
-              <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(ad.active ? "active" : "archived")}`}>
-                {ad.active ? "active" : "inactive"}
-              </span>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(ad.active ? "active" : "archived")}`}>
+                  {ad.active ? "active" : "inactive"}
+                </span>
+                {ad.flagged ? (
+                  <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">Sinalizado</span>
+                ) : null}
+              </div>
             </div>
             <div className="mt-3 flex gap-2">
               <button onClick={() => setPreviewAd(ad)} disabled={busy} className={adminSecondaryButtonClass}>
@@ -676,9 +699,14 @@ export default function AdminAdsPage() {
                   Pausar
                 </button>
               ) : null}
-              {canFlag ? (
+              {canFlag && !ad.flagged ? (
                 <button onClick={() => flag(ad)} disabled={busy} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60">
                   Sinalizar
+                </button>
+              ) : null}
+              {canFlag && ad.flagged ? (
+                <button onClick={() => unflag(ad)} disabled={busy} className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
+                  Remover sinalização
                 </button>
               ) : null}
               <button onClick={() => remove(ad)} disabled={busy || !canManage} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60">

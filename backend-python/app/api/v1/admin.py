@@ -3823,7 +3823,8 @@ async def admin_ads(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _ensure_admin(current_user)
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     rows = db.query(AdCampaign).order_by(AdCampaign.created_at.desc()).all()
     return {"ads": [_to_ad_record(row) for row in rows]}
 
@@ -3841,7 +3842,8 @@ async def admin_upload_ad_image(
     """Upload an ad creative to durable storage and return its stored ref +
     a resolved preview URL. The stored ref (not the preview URL) is what
     should be sent back in the imageUrl field when creating/updating the ad."""
-    _ensure_admin(current_user)
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ext = _Path(image.filename or "").suffix.lower() or ".png"
     if ext not in _AD_IMAGE_EXTENSIONS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de imagem não suportado")
@@ -3859,6 +3861,7 @@ async def admin_create_ad(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     title = str(payload.get("title", "")).strip()
     placement = str(payload.get("placement", "")).strip()
     if not title or not placement:
@@ -3904,6 +3907,7 @@ async def admin_update_ad(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
@@ -3966,6 +3970,7 @@ async def admin_ad_status(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
@@ -3991,6 +3996,7 @@ async def admin_ad_pause(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
@@ -4017,6 +4023,7 @@ async def admin_ad_flag(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
@@ -4042,6 +4049,7 @@ async def admin_ad_unflag(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
@@ -4066,6 +4074,7 @@ async def admin_delete_ad(
     current_user: User = Depends(get_current_user),
 ):
     admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
     ad = db.query(AdCampaign).filter(AdCampaign.id == ad_id).first()
     if not ad:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found")
