@@ -35,6 +35,7 @@ type Job = {
   createdAt?: string;
   expiresAt?: string;
   applicationCount?: number;
+  views?: number;
 };
 
 const statusLabel: Record<string, string> = {
@@ -275,6 +276,11 @@ export default function MinhasVagasPage() {
                     <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
                       {job.applicationCount ?? 0} candidatura{(job.applicationCount ?? 0) === 1 ? "" : "s"}
                     </span>
+                    {(job.views ?? 0) > 0 && (
+                      <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600">
+                        {job.views} visualizaç{job.views === 1 ? "ão" : "ões"} · {Math.round(((job.applicationCount ?? 0) / (job.views ?? 1)) * 1000) / 10}% conversão
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-500 mt-1">{[job.location, job.workMode, job.category].filter(Boolean).join(" · ")}</p>
                   {job.createdAt && <p className="text-xs text-gray-500 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}

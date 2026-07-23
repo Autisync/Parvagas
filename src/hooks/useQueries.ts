@@ -126,6 +126,7 @@ export type CompanyJob = {
   visibility?: string;
   createdAt?: string;
   applicationCount?: number;
+  views?: number;
 };
 
 export type CompanyJobsResponse = {

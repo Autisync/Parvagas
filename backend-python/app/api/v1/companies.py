@@ -695,13 +695,35 @@ async def company_analytics(
             apps_by_status[str(s)] = int(c)
             total_apps += int(c)
 
+    # Per-job applicant counts, batched — the only company-wide analytics that
+    # used to exist here was a single summed total, so a company running
+    # several live postings had no way to see which ones were converting.
+    apps_by_job: dict[str, int] = {}
+    if job_ids:
+        for jid, c in (
+            db.query(JobApplication.job_id, func.count(JobApplication.id))
+            .filter(JobApplication.job_id.in_(job_ids))
+            .group_by(JobApplication.job_id)
+            .all()
+        ):
+            apps_by_job[jid] = int(c)
+
     top_jobs = sorted(jobs, key=lambda j: (j.views or 0), reverse=True)[:5]
     apply_rate = round((total_apps / total_views) * 100, 1) if total_views else 0.0
+
+    def _job_breakdown(j: Job) -> dict[str, Any]:
+        j_views = j.views or 0
+        j_apps = apps_by_job.get(j.id, 0)
+        return {
+            "_id": j.id, "title": j.title, "views": j_views, "applications": j_apps,
+            "conversionPct": round((j_apps / j_views) * 100, 1) if j_views else 0.0,
+        }
+
     return {
         "totals": {"jobs": len(jobs), "liveJobs": live, "views": total_views, "applications": total_apps},
         "applyRatePct": apply_rate,
         "applicationsByStatus": [{"label": k, "value": v} for k, v in apps_by_status.items()],
-        "topJobs": [{"_id": j.id, "title": j.title, "views": j.views or 0} for j in top_jobs],
+        "topJobs": [_job_breakdown(j) for j in top_jobs],
     }
 
 
