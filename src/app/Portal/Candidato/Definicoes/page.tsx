@@ -8,6 +8,7 @@ import { RocketLaunchIcon, AcademicCapIcon, AdjustmentsHorizontalIcon } from "@h
 import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
 import LegalAcceptanceHistory from "@/app/Portal/components/LegalAcceptanceHistory";
 import CookiePreferencesCard from "@/app/Portal/components/CookiePreferencesCard";
+import CandidateDirectoryOptInCard from "@/app/Portal/components/CandidateDirectoryOptInCard";
 
 type Prefs = {
   emailJobAlerts?: boolean;
@@ -166,6 +167,7 @@ export default function DefinicoesPage() {
         </form>
 
       <div className="mt-8 space-y-4">
+        <CandidateDirectoryOptInCard />
         <LegalAcceptanceHistory />
         <CookiePreferencesCard />
         <PrivacyDataCard />

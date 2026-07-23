@@ -18,7 +18,7 @@ import {
 import {
   HomeIcon, BriefcaseIcon, ClipboardDocumentListIcon, BuildingOfficeIcon,
   UserGroupIcon, PlusCircleIcon, Cog6ToothIcon, CreditCardIcon, ChevronLeftIcon,
-  ChevronDownIcon,
+  ChevronDownIcon, MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 
@@ -62,6 +62,7 @@ export default function CompanyPortalShell({ children }: { children: ReactNode }
       label: "Candidaturas",
       items: [
         { href: "/Portal/Empresa/Candidaturas", label: dict.portal.company.applications, icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
+        { href: "/Portal/Empresa/Candidatos", label: "Candidatos", icon: <MagnifyingGlassIcon className="h-5 w-5" /> },
         ...(isApprover ? [{ href: "/Portal/Empresa/Aprovacoes", label: dict.portal.company.approvals, icon: <ClipboardDocumentListIcon className="h-5 w-5" /> }] : []),
       ],
     },
