@@ -56,6 +56,24 @@ def rate_limit_key_by_user(request: Request) -> str:
     return get_remote_address(request)
 
 
+def rate_limit_key_by_api_key(request: Request) -> str:
+    """Rate-limit key for the company-api applications feed (W5.4) — keyed
+    per API key, not per network, so one integration's polling can't
+    throttle another company sharing the same egress IP. Unlike
+    rate_limit_key_by_user, there's no middleware-populated request.state
+    to read here (API keys aren't JWTs), so this reads the X-API-Key
+    header directly — same slowapi constraint documented on
+    rate_limit_key_by_user: key_func only ever receives the raw Request.
+    Keys by a hash prefix, never the raw secret, since rate-limit storage
+    keys can end up in Redis/logs."""
+    from app.core.api_key_auth import API_KEY_HEADER, hash_api_key
+
+    raw_key = request.headers.get(API_KEY_HEADER)
+    if raw_key:
+        return f"apikey:{hash_api_key(raw_key)[:16]}"
+    return get_remote_address(request)
+
+
 def init_sentry() -> bool:
     """Initialise Sentry if a DSN is configured. Returns True when enabled."""
     # Defensive: a Portainer/.env paste mistake can leave a trailing newline or
