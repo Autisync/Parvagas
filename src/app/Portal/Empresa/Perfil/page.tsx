@@ -6,7 +6,7 @@ import { CheckBadgeIcon, ClockIcon, ExclamationTriangleIcon, NoSymbolIcon } from
 import dynamic from "next/dynamic";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { authFetch } from "@/lib/api";
+import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import { useToasts } from "../components/useToasts";
 import { resolveLogoUrl } from "../components/logoUrl";
@@ -18,6 +18,8 @@ const JobPostingModal = dynamic(() => import("../components/JobPostingModal"), {
 const LogoUploadModal = dynamic(() => import("../components/LogoUploadModal"), {
   ssr: false,
 });
+
+type SocialLinks = { linkedin?: string; facebook?: string; instagram?: string; twitter?: string };
 
 type CompanyProfile = {
   name?: string;
@@ -31,6 +33,9 @@ type CompanyProfile = {
   contactPhone?: string;
   logo?: string;
   ownerUserId?: string;
+  benefits?: string[];
+  socialLinks?: SocialLinks;
+  galleryPhotos?: string[];
 };
 
 type TeamMember = {
@@ -103,6 +108,8 @@ function EmpresaPerfilContent() {
   const [logoModalOpen, setLogoModalOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [logoMsg, setLogoMsg] = useState("");
+  const [benefitInput, setBenefitInput] = useState("");
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamInvites, setTeamInvites] = useState<TeamInvite[]>([]);
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
@@ -204,7 +211,55 @@ function EmpresaPerfilContent() {
     }
   };
 
+  const addBenefit = (raw: string) => {
+    const normalized = raw.trim().replace(/\s+/g, " ");
+    if (!normalized) return;
+    setProfile((prev) => {
+      const current = prev.benefits ?? [];
+      if (current.some((item) => item.toLowerCase() === normalized.toLowerCase())) return prev;
+      return { ...prev, benefits: [...current, normalized] };
+    });
+    setBenefitInput("");
+  };
 
+  const removeBenefit = (benefit: string) => {
+    setProfile((prev) => ({ ...prev, benefits: (prev.benefits ?? []).filter((item) => item !== benefit) }));
+  };
+
+  const setSocialLink = (key: keyof SocialLinks, value: string) => {
+    setProfile((prev) => ({ ...prev, socialLinks: { ...prev.socialLinks, [key]: value } }));
+  };
+
+  const uploadGalleryPhoto = async (file: File) => {
+    if (!token) return;
+    setGalleryUploading(true);
+    try {
+      const form = new FormData();
+      form.append("photo", file);
+      const res = await authFetchRaw("/companies/profile/gallery", token, { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setProfile((prev) => ({ ...prev, galleryPhotos: data.galleryPhotos ?? prev.galleryPhotos }));
+      pushToast("success", "Foto adicionada à galeria.");
+    } catch (err: unknown) {
+      pushToast("error", (err as Error).message || "Erro ao carregar foto.");
+    } finally {
+      setGalleryUploading(false);
+    }
+  };
+
+  const deleteGalleryPhoto = async (index: number) => {
+    if (!token) return;
+    try {
+      const data = await authFetch<{ galleryPhotos: string[] }>(`/companies/profile/gallery/${index}`, token, { method: "DELETE" });
+      setProfile((prev) => ({ ...prev, galleryPhotos: data.galleryPhotos }));
+    } catch (err: unknown) {
+      pushToast("error", (err as Error).message || "Erro ao remover foto.");
+    }
+  };
 
   const currentUserId = String(
     (user as { id?: string; _id?: string } | null)?.id ||
@@ -329,6 +384,52 @@ function EmpresaPerfilContent() {
           </section>
 
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Galeria de fotos</h2>
+                <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                  Fotos do escritório, da equipa ou de eventos — ajudam um candidato a imaginar-se a trabalhar convosco.
+                </p>
+              </div>
+              <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                {(profile.galleryPhotos ?? []).length}/6 fotos
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {(profile.galleryPhotos ?? []).map((url, index) => (
+                <div key={url + index} className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <Image src={url} alt={`Foto ${index + 1} da empresa`} fill unoptimized className="object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => deleteGalleryPhoto(index)}
+                    className="absolute right-1 top-1 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100"
+                    aria-label="Remover foto"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+              {(profile.galleryPhotos ?? []).length < 6 && (
+                <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center text-xs font-semibold text-slate-500 hover:bg-slate-100">
+                  {galleryUploading ? "A carregar..." : "+ Adicionar foto"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={galleryUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) uploadGalleryPhoto(file);
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </section>
+
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
             <h2 className="text-lg font-bold text-slate-900">Membros da equipa</h2>
             <p className="mt-1 text-sm text-slate-600">A gestão detalhada da equipa agora fica centralizada numa área dedicada para evitar duplicação operacional.</p>
 
@@ -378,6 +479,68 @@ function EmpresaPerfilContent() {
                 onChange={(e) => set("description", e.target.value)}
               />
             </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Benefícios e regalias</label>
+              <input
+                value={benefitInput}
+                onChange={(e) => setBenefitInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addBenefit(benefitInput);
+                  }
+                }}
+                onBlur={() => addBenefit(benefitInput)}
+                placeholder="Ex: Seguro de saúde (Enter ou vírgula para adicionar)"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(profile.benefits ?? []).map((benefit) => (
+                  <button
+                    key={benefit}
+                    type="button"
+                    onClick={() => removeBenefit(benefit)}
+                    className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700"
+                  >
+                    <span>{benefit}</span>
+                    <span aria-hidden="true">x</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Aparecem no perfil público da empresa para ajudar candidatos a decidir.</p>
+            </div>
+
+            <div>
+              <p className="mb-1 text-sm font-medium text-gray-700">Redes sociais</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={profile.socialLinks?.linkedin ?? ""}
+                  onChange={(e) => setSocialLink("linkedin", e.target.value)}
+                  placeholder="LinkedIn — https://linkedin.com/company/…"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+                <input
+                  value={profile.socialLinks?.facebook ?? ""}
+                  onChange={(e) => setSocialLink("facebook", e.target.value)}
+                  placeholder="Facebook — https://facebook.com/…"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+                <input
+                  value={profile.socialLinks?.instagram ?? ""}
+                  onChange={(e) => setSocialLink("instagram", e.target.value)}
+                  placeholder="Instagram — https://instagram.com/…"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+                <input
+                  value={profile.socialLinks?.twitter ?? ""}
+                  onChange={(e) => setSocialLink("twitter", e.target.value)}
+                  placeholder="X / Twitter — https://x.com/…"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+            </div>
+
             {msg && <p className={msg.includes("sucesso") ? "text-green-600" : "text-red-600"}>{msg}</p>}
             <button type="submit" disabled={saving} className="rounded-xl bg-red-600 px-6 py-2.5 font-semibold text-white hover:bg-red-700 disabled:opacity-60">
               {saving ? "A guardar…" : "Guardar alterações"}

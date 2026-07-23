@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 import json
 import re
+import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
@@ -16,7 +17,7 @@ from app.services.company_billing_service import assert_job_quota
 from app.services.company_access_service import resolve_company_for_user, resolve_company_for_user_or_none, require_role
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
-from app.api.v1.jobs import serialize_job
+from app.api.v1.jobs import serialize_job, _json_list
 from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
 from app.core.config import get_settings
@@ -170,6 +171,9 @@ def _serialize_company_profile(company: Company) -> dict[str, Any]:
         "industry": company.industry,
         "size": company.size,
         "location": company.location,
+        "benefits": _json_list(company.benefits),
+        "socialLinks": json.loads(company.social_links) if company.social_links else {},
+        "galleryPhotos": [StorageService.resolve_public_url(p) for p in _json_list(company.gallery_photos)],
     }
 
 
@@ -194,10 +198,23 @@ _COMPANY_PROFILE_FIELD_MAP = {
 }
 
 
+_ALLOWED_SOCIAL_LINK_KEYS = {"linkedin", "facebook", "instagram", "twitter"}
+
+
 def _apply_company_profile_payload(company: Company, payload: dict[str, Any]) -> None:
     for key, attr in _COMPANY_PROFILE_FIELD_MAP.items():
         if key in payload and payload[key] is not None:
             setattr(company, attr, payload[key])
+
+    if "benefits" in payload:
+        company.benefits = _to_text_list(payload["benefits"])
+
+    if "socialLinks" in payload and isinstance(payload["socialLinks"], dict):
+        links = {
+            k: str(v).strip() for k, v in payload["socialLinks"].items()
+            if k in _ALLOWED_SOCIAL_LINK_KEYS and str(v or "").strip()
+        }
+        company.social_links = json.dumps(links, ensure_ascii=True) if links else None
 
 
 @router.get("/profile")
@@ -924,6 +941,51 @@ async def upload_company_logo(
     company.logo_url = path
     db.commit()
     return {"company": {"_id": company.id, "logoUrl": company.logo_url}, "logoUrl": company.logo_url}
+
+
+_MAX_GALLERY_PHOTOS = 6
+
+
+@router.post("/profile/gallery")
+async def upload_company_gallery_photo(
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Add a photo to the company's public profile gallery (W4.4) — a
+    candidate deciding whether to apply previously had nothing beyond a
+    logo and a paragraph of text to go on."""
+    company = _require_company(db, current_user)
+    ext = _Path(photo.filename or "").suffix.lower() or ".jpg"
+    if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato de imagem não suportado")
+
+    photos = _json_list(company.gallery_photos)
+    if len(photos) >= _MAX_GALLERY_PHOTOS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Limite de {_MAX_GALLERY_PHOTOS} fotos na galeria")
+
+    data = await photo.read()
+    path = StorageService.save_file(data, f"company-gallery-{company.id}-{uuid.uuid4().hex[:8]}{ext}")
+    photos.append(path)
+    company.gallery_photos = json.dumps(photos, ensure_ascii=True)
+    db.commit()
+    return {"galleryPhotos": [StorageService.resolve_public_url(p) for p in photos]}
+
+
+@router.delete("/profile/gallery/{index}")
+async def delete_company_gallery_photo(
+    index: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    company = _require_company(db, current_user)
+    photos = _json_list(company.gallery_photos)
+    if index < 0 or index >= len(photos):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada")
+    photos.pop(index)
+    company.gallery_photos = json.dumps(photos, ensure_ascii=True) if photos else None
+    db.commit()
+    return {"galleryPhotos": [StorageService.resolve_public_url(p) for p in photos]}
 
 
 @router.get("/job-approvals")

@@ -164,6 +164,13 @@ class Company(Base, TimestampMixin):
     size = Column(String(100), nullable=True)
     location = Column(String(255), nullable=True)
 
+    # Employer-branding content (W4.4) — the profile used to be name + logo +
+    # one free-text paragraph, giving a candidate deciding whether to apply
+    # almost nothing to go on.
+    benefits = Column(Text, nullable=True)  # JSON array of strings
+    social_links = Column(Text, nullable=True)  # JSON object {linkedin, facebook, instagram, twitter}
+    gallery_photos = Column(Text, nullable=True)  # JSON array of storage refs, most-recent-last
+
     # Status
     status = Column(String(50), nullable=False, default="pending_verification")
     
