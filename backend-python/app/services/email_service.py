@@ -698,6 +698,19 @@ class EmailService:
         )
 
     @staticmethod
+    def send_company_verification_email(email: str, subject: str, body: str) -> bool:
+        """Admin-composed company-verification-workflow email (approval,
+        request for more info, rejection, deactivation). The admin UI's
+        preview-then-send flow lets the subject/body be freely edited before
+        sending, so — like send_dispute_message_email — this is a generic
+        passthrough rather than one of the fixed per-status templates
+        elsewhere in this file."""
+        body_html = "".join(
+            f'<p style="margin:0 0 14px;">{escape(line)}</p>' for line in (body or "").split("\n") if line.strip()
+        )
+        return EmailService._compose_and_send(email, subject, subject, body_html, preheader=subject)
+
+    @staticmethod
     def send_subscription_expired_email(email: str, party_name: str, plan_name: str, portal_path: str) -> bool:
         body = f"""
         <p style="margin:0 0 14px;">Olá,</p>

@@ -42,7 +42,6 @@ export default function AdminLevelsPage() {
     fullName: "",
     email: "",
     adminLevel: "moderator" as AdminLevel,
-    credentialDeliveryMode: "set_password_link" as "set_password_link" | "temporary_password",
   });
 
   const load = useCallback(async () => {
@@ -107,8 +106,8 @@ export default function AdminLevelsPage() {
         method: "POST",
         body: JSON.stringify(newAdmin),
       });
-      setCreatedMsg("Admin criado e email de onboarding enviado. O utilizador terá de redefinir password no primeiro acesso.");
-      setNewAdmin({ fullName: "", email: "", adminLevel: "moderator", credentialDeliveryMode: "set_password_link" });
+      setCreatedMsg("Admin criado — foi enviado um link de definição de password para o email indicado.");
+      setNewAdmin({ fullName: "", email: "", adminLevel: "moderator" });
       setPage(1);
       await load();
     } catch (err: unknown) {
@@ -178,18 +177,8 @@ export default function AdminLevelsPage() {
               <option value="super-admin">Super-admin</option>
             </select>
           </label>
-          <label className="grid gap-1 text-xs text-slate-600">
-            <span>Como entregar as credenciais</span>
-            <select
-              value={newAdmin.credentialDeliveryMode}
-              onChange={(e) => setNewAdmin((prev) => ({ ...prev, credentialDeliveryMode: e.target.value as "set_password_link" | "temporary_password" }))}
-              className={adminFieldClass}
-            >
-              <option value="set_password_link">Link único para definir password (recomendado)</option>
-              <option value="temporary_password">Enviar password temporária por email</option>
-            </select>
-          </label>
         </div>
+        <p className="mt-2 text-xs text-slate-500">Será enviado por email um link único para o novo admin definir a sua própria password.</p>
 
         <button
           type="submit"

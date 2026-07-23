@@ -450,17 +450,31 @@ async def send_verification_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Accept send-email request from admin UI (placeholder success response)."""
+    """Send the admin-edited verification-workflow email (approval, more
+    info, rejection, deactivation) to the company's contact address. The
+    admin UI's preview-then-send flow lets subject/body be freely edited
+    before this is called, so both are sent verbatim rather than re-derived
+    from `type`."""
     _ensure_admin(current_user)
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
 
+    to_email = (company.email or "").strip()
+    if not to_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A empresa não tem um email de contacto definido")
+    subject = str(payload.get("subject", "")).strip() or "Atualização de verificação"
+    body = str(payload.get("body", "")).strip()
+
+    send_templated_email.delay("send_company_verification_email", {
+        "email": to_email, "subject": subject, "body": body,
+    })
+
     return {
         "queued": True,
         "companyId": company.id,
-        "toEmail": company.email or "",
-        "subject": str(payload.get("subject", "")),
+        "toEmail": to_email,
+        "subject": subject,
         "sentAt": datetime.utcnow().isoformat(),
     }
 

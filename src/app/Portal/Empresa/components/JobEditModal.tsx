@@ -125,7 +125,7 @@ export default function JobEditModal({ token, open, job, onClose, onSaved }: Pro
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Editar vaga</h2>
-            <p className="mt-1 text-sm text-slate-600">Actualize os dados da vaga. O status continua sob revisão de moderação.</p>
+            <p className="mt-1 text-sm text-slate-600">Actualize os dados da vaga. As alterações ficam visíveis imediatamente, sem nova revisão da moderação.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <span className="sr-only">Fechar modal</span>

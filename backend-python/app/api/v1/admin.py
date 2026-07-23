@@ -821,6 +821,18 @@ async def admin_create_admin(
     db.add(created)
     db.commit()
     db.refresh(created)
+
+    # TEMP_RESET_REQUIRED is not a usable password hash — the new admin has
+    # no way to ever log in until they set a real one. Reuses the same
+    # password-reset token + email task as the "forgot password" flow
+    # (AuthService.create_password_reset_token / send_password_reset_email)
+    # rather than a temporary-password-by-email scheme, which was never
+    # implemented despite the (now-removed) frontend selector offering it.
+    from app.services.auth_service import AuthService
+    from app.workers.tasks import send_password_reset_email
+    raw_token = AuthService.create_password_reset_token(db, created)
+    send_password_reset_email.delay(str(created.id), raw_token)
+
     _record_admin_event(
         actor=actor,
         action="admin.create",
