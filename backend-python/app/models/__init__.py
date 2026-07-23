@@ -685,6 +685,26 @@ class ApplicationNote(Base, TimestampMixin):
     rating = Column(Integer, nullable=True)  # 1..5
 
 
+class ApplicationMessage(Base, TimestampMixin):
+    """Two-way message between a company and a candidate, scoped to one
+    JobApplication (W5.1) — previously a company's only way to ask a
+    candidate a clarifying question was emailing them manually outside the
+    platform. Only usable once the candidate has a portal account
+    (candidate_user_id set on the application) — guest/quick-apply
+    applicants have no thread to receive it in. The company must send
+    first: enforced at the endpoint layer, not here, but note that ordering
+    is a deliberate product choice (see app.api.v1.messages), not an
+    incidental one."""
+    __tablename__ = "application_messages"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    application_id = Column(String(36), ForeignKey("applications.id"), nullable=False, index=True)
+    sender_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    sender_role = Column(String(20), nullable=False)  # "company" | "candidate"
+    body = Column(Text, nullable=False)
+    read_at = Column(DateTime, nullable=True)  # set when the OTHER party opens the thread
+
+
 class AuditLog(Base, TimestampMixin):
     """Durable record of privileged/admin actions."""
     __tablename__ = "audit_logs"

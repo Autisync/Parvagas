@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.core.security import has_leading_formula_char, is_valid_email_format
 from app.db.session import get_db
 from app.models import (
-    CandidateProfile, Company, Job, JobApplication, ApplicationNote, CVUpload, Resume, User, UserRole,
+    CandidateProfile, Company, Job, JobApplication, ApplicationNote, ApplicationMessage, CVUpload, Resume, User, UserRole,
 )
 from app.services.cv_export_service import to_pdf
 
@@ -173,7 +173,11 @@ def _pagination(page: int, limit: int, total: int) -> dict:
     }
 
 
-def _serialize_application(item: JobApplication, job_title: str | None = None, skills: list | None = None) -> dict:
+def _serialize_application(
+    item: JobApplication, job_title: str | None = None, skills: list | None = None,
+    message_meta: dict | None = None,
+) -> dict:
+    meta = message_meta or {}
     return {
         "_id": item.id,
         "status": item.status,
@@ -199,6 +203,47 @@ def _serialize_application(item: JobApplication, job_title: str | None = None, s
             "location": item.interview_location,
             "meetingLink": item.interview_meeting_link,
         } if item.interview_scheduled_at or item.interview_location or item.interview_meeting_link else None,
+        "unreadMessageCount": meta.get("unreadCount", 0),
+        # Candidate-side gate: the "Mensagens" button only shows once the
+        # company has actually said something (see app.api.v1.messages —
+        # the company must initiate every thread).
+        "hasCompanyMessage": meta.get("hasCompanyMessage", False),
+    }
+
+
+def _message_meta_for(db: Session, application_ids: list[str], viewer_role: str) -> dict[str, dict]:
+    """Batched per-application message metadata for a list endpoint — one
+    unread-count query + one has-company-message query total, not N+1.
+    `viewer_role` is whose inbox this is ("company" or "candidate"): unread
+    counts only the OTHER party's messages, since your own sent messages
+    are never "unread" to you."""
+    if not application_ids:
+        return {}
+    from sqlalchemy import func as _func
+
+    other_role = "candidate" if viewer_role == "company" else "company"
+    unread = dict(
+        db.query(ApplicationMessage.application_id, _func.count(ApplicationMessage.id))
+        .filter(
+            ApplicationMessage.application_id.in_(application_ids),
+            ApplicationMessage.sender_role == other_role,
+            ApplicationMessage.read_at.is_(None),
+        )
+        .group_by(ApplicationMessage.application_id)
+        .all()
+    )
+    has_company = {
+        row[0]
+        for row in (
+            db.query(ApplicationMessage.application_id)
+            .filter(ApplicationMessage.application_id.in_(application_ids), ApplicationMessage.sender_role == "company")
+            .distinct()
+            .all()
+        )
+    }
+    return {
+        app_id: {"unreadCount": unread.get(app_id, 0), "hasCompanyMessage": app_id in has_company}
+        for app_id in application_ids
     }
 
 
@@ -497,10 +542,14 @@ async def list_candidate_applications(
         .all()
     )
     titles = _job_titles_for(db, [item.job_id for item in items])
+    message_meta = _message_meta_for(db, [item.id for item in items], viewer_role="candidate")
 
     pagination = _pagination(page, limit, total)
     return {
-        "applications": [_serialize_application(item, job_title=titles.get(item.job_id)) for item in items],
+        "applications": [
+            _serialize_application(item, job_title=titles.get(item.job_id), message_meta=message_meta.get(item.id))
+            for item in items
+        ],
         **pagination,
         "pagination": pagination,
     }
@@ -541,11 +590,15 @@ async def list_company_applications(
     )
     titles = _job_titles_for(db, [item.job_id for item in items])
     skills = _skills_for_candidates(db, [item.candidate_user_id for item in items if item.candidate_user_id])
+    message_meta = _message_meta_for(db, [item.id for item in items], viewer_role="company")
 
     pagination = _pagination(page, limit, total)
     return {
         "applications": [
-            _serialize_application(item, job_title=titles.get(item.job_id), skills=skills.get(item.candidate_user_id))
+            _serialize_application(
+                item, job_title=titles.get(item.job_id), skills=skills.get(item.candidate_user_id),
+                message_meta=message_meta.get(item.id),
+            )
             for item in items
         ],
         **pagination,
@@ -838,9 +891,14 @@ async def application_resume_cv(
 # ── Application notes / ratings (mini-ATS) ──────────────────────────────────
 
 def _company_owns_application(db: Session, user: User, application: JobApplication) -> bool:
+    """Whether `user` may act on `application` as its owning company — any
+    team seat (owner/recruiter/viewer), not just the owner. Previously
+    owner-only here (same bug class W0.1 fixed everywhere else this
+    session): an invited team member got 403'd trying to view or add ATS
+    notes."""
     if user.role == UserRole.admin:
         return True
-    co = db.query(Company).filter(Company.owner_user_id == user.id).first()
+    co = resolve_company_for_user_or_none(db, user)
     return bool(co and application.company_id == co.id)
 
 

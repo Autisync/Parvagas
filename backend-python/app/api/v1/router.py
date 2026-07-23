@@ -1,6 +1,6 @@
 """API v1 routes."""
 from fastapi import APIRouter
-from app.api.v1 import account, admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, legal, newsletter, notifications, payments, resumes
+from app.api.v1 import account, admin, ads, applications, auth, ats, candidates, companies, cv, events, health, jobs, legal, messages, newsletter, notifications, payments, resumes
 
 router = APIRouter(prefix="/api/v1")
 
@@ -22,6 +22,7 @@ router.include_router(resumes.public_router)
 
 # Application routes
 router.include_router(applications.router)
+router.include_router(messages.router)
 
 # ATS routes
 router.include_router(ats.router)
