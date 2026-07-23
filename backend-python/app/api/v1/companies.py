@@ -20,7 +20,7 @@ from app.services.company_billing_service import assert_job_quota
 from app.services.company_access_service import resolve_company_for_user, resolve_company_for_user_or_none, require_role
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
-from app.api.v1.jobs import serialize_job, _json_list
+from app.api.v1.jobs import serialize_job, _json_list, PUBLIC_JOB_STATUSES
 from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
 from app.core.config import get_settings
@@ -164,6 +164,7 @@ def _serialize_company_profile(company: Company) -> dict[str, Any]:
     successful save looked like it hadn't persisted on the next load."""
     return {
         "_id": company.id,
+        "slug": company.slug,
         "ownerUserId": company.owner_user_id,
         "name": company.name,
         "legalName": company.legal_name,
@@ -1129,3 +1130,64 @@ async def company_presence_heartbeat(current_user: User = Depends(get_current_us
 @router.get("/presence/status")
 async def company_presence_status(current_user: User = Depends(get_current_user)):
     return {"onlineUsersCount": 1, "isDoubleLogged": False}
+
+
+# Public shareable employer page (W5.3) — its own router so the URL is
+# /public/companies/{slug}, outside this file's authenticated /companies
+# prefix, matching the existing /public/resumes/{share_slug} convention
+# (resumes.py's public_router).
+public_router = APIRouter(prefix="/public/companies", tags=["companies"])
+
+_PUBLIC_COMPANY_JOBS_LIMIT = 20
+
+
+def _serialize_public_company(company: Company) -> dict[str, Any]:
+    """Trimmed variant of _serialize_company_profile() for unauthenticated
+    consumption — omits ownerUserId/contactEmail/contactPhone/phone/email.
+    Candidates already reach a company by applying through the platform,
+    not by cold-emailing/calling; every other public-facing company
+    surface (jobs.py's _company_payload) withholds direct contact info the
+    same way."""
+    return {
+        "_id": company.id,
+        "slug": company.slug,
+        "name": company.name,
+        "website": company.website,
+        "status": company.status,
+        "description": company.description,
+        "logo": StorageService.resolve_public_url(company.logo_url),
+        "angolanizacao": bool(company.angolanizacao),
+        "industry": company.industry,
+        "size": company.size,
+        "location": company.location,
+        "benefits": _json_list(company.benefits),
+        "socialLinks": json.loads(company.social_links) if company.social_links else {},
+        "galleryPhotos": [StorageService.resolve_public_url(p) for p in _json_list(company.gallery_photos)],
+    }
+
+
+@public_router.get("/{slug}")
+async def get_public_company(slug: str, db: Session = Depends(get_db)):
+    """Unauthenticated read of a company's public branding page. Only
+    status == "active" companies resolve — an unknown or not-yet-verified
+    slug is indistinguishable from a missing one, same convention as the
+    W5.2 candidate full-profile endpoint."""
+    company = db.query(Company).filter(Company.slug == slug, Company.status == "active").first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada")
+
+    jobs_query = (
+        db.query(Job)
+        .options(joinedload(Job.company))
+        .filter(Job.company_id == company.id)
+        .filter(Job.status.in_(PUBLIC_JOB_STATUSES))
+        .filter(Job.visibility == "public")
+    )
+    total_jobs = jobs_query.count()
+    jobs = jobs_query.order_by(Job.created_at.desc()).limit(_PUBLIC_COMPANY_JOBS_LIMIT).all()
+
+    return {
+        "company": _serialize_public_company(company),
+        "jobs": [serialize_job(j) for j in jobs],
+        "totalJobs": total_jobs,
+    }

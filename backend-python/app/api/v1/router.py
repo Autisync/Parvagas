@@ -30,6 +30,7 @@ router.include_router(ats.router)
 
 # Company routes
 router.include_router(companies.router)
+router.include_router(companies.public_router)
 
 # CV routes
 router.include_router(cv.router)

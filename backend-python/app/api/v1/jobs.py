@@ -129,6 +129,7 @@ async def list_public_jobs(
     seniority: Optional[str] = None,
     salaryMin: Optional[int] = None,
     datePostedDays: Optional[int] = None,
+    companyId: Optional[str] = None,
     sort: str = "recent",
     db: Session = Depends(get_db),
 ):
@@ -174,6 +175,8 @@ async def list_public_jobs(
     if datePostedDays:
         cutoff = datetime.utcnow() - timedelta(days=int(datePostedDays))
         query = query.filter(Job.created_at >= cutoff)
+    if companyId and companyId.strip():
+        query = query.filter(Job.company_id == companyId.strip())
 
     total = query.count()
     if sort == "salary":
