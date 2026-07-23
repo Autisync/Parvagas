@@ -179,20 +179,17 @@ golden skips.
 
 ## Rex's manual checklist
 
-1. **Docker validation (Task 2)** — run the commands under Task 2 above
-   against both the prod and dev compose stacks before trusting the
-   root-drop in production. This is the one task that couldn't be
-   verified end-to-end in this sandbox (no Docker available).
+1. **Docker validation (Task 2)** — **CONFIRMED 2026-07-24**: Rex redeployed
+   the stack. (The specific smoke-test commands listed under Task 2 above —
+   `id -u` inside the container, the uploads write test, the `/health`
+   curl — weren't re-run by the assistant; worth a quick manual glance if
+   you haven't already eyeballed the container logs post-deploy.)
 2. **Lottie/CSP sanity check (Task 3)** — log into the candidate portal,
    open DevTools console, visit any page with an empty-state/success/
-   milestone animation, confirm zero CSP violations.
-3. **reCAPTCHA env var (Task 4)** — confirm
-   `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is actually set in the Vercel
-   dashboard for both the production and dev-preview environments. If
-   it's genuinely never been set outside the old hardcoded fallback,
-   production has been running on a key that was only ever meant as a
-   source-code fallback — get the real value from the reCAPTCHA admin
-   console and set it in both dashboard environments.
+   milestone animation, confirm zero CSP violations. Still open.
+3. **reCAPTCHA env var (Task 4)** — **CONFIRMED 2026-07-24**:
+   `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` is set in the Vercel dashboard; stack
+   redeployed.
 4. Not done here, per the plan (your items):
    - **MEDIUM #4** — actually moving the project out of `~/Downloads`
      (README warning added, but the move itself is on you).
