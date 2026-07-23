@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanyJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
+import { authFetch, getErrorMessage } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import Link from "next/link";
 import StatSummary from "@/app/Portal/components/DecisionDashboard";
@@ -72,7 +73,27 @@ export default function MinhasVagasPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activePreset, setActivePreset] = useState("overview");
+  const [closingJobId, setClosingJobId] = useState<string | null>(null);
   const { pushToast } = useToasts();
+
+  const _ACTIVE_STATUSES = ["approved", "published", "active"];
+
+  const closeJob = async (job: Job) => {
+    if (!token) return;
+    if (!window.confirm(`Fechar "${job.title}"? A vaga deixa de aceitar candidaturas e de contar para o limite do seu plano. Pode publicar uma nova vaga no lugar.`)) {
+      return;
+    }
+    setClosingJobId(job._id);
+    try {
+      await authFetch(`/companies/jobs/${job._id}`, token, { method: "DELETE" });
+      pushToast("success", "Vaga fechada. O lugar no seu plano já está livre.");
+      refetch();
+    } catch (err: unknown) {
+      pushToast("error", getErrorMessage(err, "Erro ao fechar a vaga."));
+    } finally {
+      setClosingJobId(null);
+    }
+  };
 
   // Debounce search query
   const debouncedQuery = useDebounce(query, 400);
@@ -243,6 +264,15 @@ export default function MinhasVagasPage() {
                     Editar
                   </button>
                   <Link href={`/Vagas-Disponiveis/${job._id}`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver</Link>
+                  {_ACTIVE_STATUSES.includes(job.status ?? "") && (
+                    <button
+                      onClick={() => closeJob(job as Job)}
+                      disabled={closingJobId === job._id}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {closingJobId === job._id ? "A fechar..." : "Fechar vaga"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
