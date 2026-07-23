@@ -9,6 +9,7 @@ import { authFetch } from "@/lib/api";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import LottieBlock from "@/app/components/LottieBlock";
+import MessageThreadModal from "@/app/components/MessageThreadModal";
 
 const StickyPortalHeading = dynamic(() => import("@/app/Portal/components/StickyPortalHeading"), {
   ssr: false,
@@ -68,13 +69,14 @@ export default function CandidaturasPage() {
   const [activePreset, setActivePreset] = useState("overview");
   const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [messagesApplicationId, setMessagesApplicationId] = useState<string | null>(null);
   const { notify } = useAppNotifier();
 
   // Debounce search query to avoid API calls on every keystroke
   const debouncedQuery = useDebounce(query, 400);
 
   // Fetch applications with TanStack Query
-  const { data: applicationsData, isLoading, error } = useApplications(token, page, 20);
+  const { data: applicationsData, isLoading, error, refetch } = useApplications(token, page, 20);
   
   const applications = useMemo(() => applicationsData?.applications || [], [applicationsData]);
   const totalRecords = applicationsData?.total || 0;
@@ -261,19 +263,45 @@ export default function CandidaturasPage() {
                   </div>
                 )}
 
-                {a.status !== "withdrawn" && a.status !== "hired" && a.status !== "rejected" && (
-                  <button
-                    onClick={() => withdraw(a._id)}
-                    disabled={withdrawing === a._id}
-                    className="mt-4 text-xs text-red-600 hover:underline disabled:opacity-60"
-                  >
-                    {withdrawing === a._id ? "A retirar…" : "Retirar candidatura"}
-                  </button>
-                )}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {a.status !== "withdrawn" && a.status !== "hired" && a.status !== "rejected" && (
+                    <button
+                      onClick={() => withdraw(a._id)}
+                      disabled={withdrawing === a._id}
+                      className="text-xs text-red-600 hover:underline disabled:opacity-60"
+                    >
+                      {withdrawing === a._id ? "A retirar…" : "Retirar candidatura"}
+                    </button>
+                  )}
+                  {a.hasCompanyMessage && (
+                    <button
+                      type="button"
+                      onClick={() => setMessagesApplicationId(a._id)}
+                      className="relative rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Mensagens
+                      {(a.unreadMessageCount ?? 0) > 0 && (
+                        <span className="absolute -right-1.5 -top-1.5 min-w-[1.1rem] rounded-full bg-red-600 px-1 py-0.5 text-center text-[10px] font-bold text-white">
+                          {a.unreadMessageCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
+        {messagesApplicationId && (
+          <MessageThreadModal
+            token={token!}
+            applicationId={messagesApplicationId}
+            viewerRole="candidate"
+            open
+            onClose={() => setMessagesApplicationId(null)}
+            onRead={() => refetch()}
+          />
+        )}
         {totalPages > 1 && (
           <div className="mt-6 flex items-center justify-center gap-3">
             <button

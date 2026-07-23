@@ -11,6 +11,11 @@ export type Application = {
   createdAt?: string;
   statusHistory?: { status: string; changedAt: string; note?: string }[];
   interview?: { scheduledAt?: string; location?: string; meetingLink?: string } | null;
+  unreadMessageCount?: number;
+  /** Whether the company has sent at least one message on this thread yet
+   * — the company always initiates, so a candidate has nothing to open
+   * until this is true. */
+  hasCompanyMessage?: boolean;
 };
 
 export type PaginatedResponse<T> = {

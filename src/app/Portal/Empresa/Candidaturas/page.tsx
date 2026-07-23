@@ -7,6 +7,7 @@ import { useApplications, useCompanyJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
 import { authFetch, authFetchRaw } from "@/lib/api";
 import Footer from "@/app/components/Footer";
+import MessageThreadModal from "@/app/components/MessageThreadModal";
 import StatSummary from "@/app/Portal/components/DecisionDashboard";
 import InsightsToolbar from "@/app/Portal/components/InsightsToolbar";
 import StickyPortalHeading from "@/app/Portal/components/StickyPortalHeading";
@@ -68,6 +69,7 @@ export default function EmpresaCandidaturasPage() {
   const [cvLoadingFor, setCvLoadingFor] = useState<string | null>(null);
   const [selectedCv, setSelectedCv] = useState<CandidateCvPayload | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
+  const [messagesApplicationId, setMessagesApplicationId] = useState<string | null>(null);
   const [resumeDownloading, setResumeDownloading] = useState(false);
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [notes, setNotes] = useState<Array<{ _id: string; body?: string; rating?: number | null; createdAt?: string }>>([]);
@@ -464,6 +466,20 @@ export default function EmpresaCandidaturasPage() {
                         >
                           {notesFor === a._id ? "Ocultar notas" : "Notas & avaliação"}
                         </button>
+                        {a.candidateUserId && (
+                          <button
+                            type="button"
+                            onClick={() => setMessagesApplicationId(a._id)}
+                            className="app-action app-action-neutral relative"
+                          >
+                            Mensagens
+                            {(a.unreadMessageCount ?? 0) > 0 && (
+                              <span className="absolute -right-1.5 -top-1.5 min-w-[1.1rem] rounded-full bg-red-600 px-1 py-0.5 text-center text-[10px] font-bold text-white">
+                                {a.unreadMessageCount}
+                              </span>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="sm:text-right sm:shrink-0">
@@ -627,6 +643,16 @@ export default function EmpresaCandidaturasPage() {
           ) : null}
         </section>
       </main>
+      {messagesApplicationId && (
+        <MessageThreadModal
+          token={token!}
+          applicationId={messagesApplicationId}
+          viewerRole="company"
+          open
+          onClose={() => setMessagesApplicationId(null)}
+          onRead={() => refetch()}
+        />
+      )}
       <Footer />
     </div>
   );
