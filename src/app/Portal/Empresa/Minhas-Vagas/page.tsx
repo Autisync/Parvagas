@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanyJobs } from "@/hooks/useQueries";
 import { useDebounce } from "@/hooks/useDebounce";
-import { authFetch, getErrorMessage } from "@/lib/api";
+import { authFetch, authFetchRaw, getErrorMessage } from "@/lib/api";
 import Footer from "@/app/components/Footer";
 import Link from "next/link";
 import StatSummary from "@/app/Portal/components/DecisionDashboard";
@@ -76,6 +76,7 @@ export default function MinhasVagasPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [activePreset, setActivePreset] = useState("overview");
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
+  const [exportingJobId, setExportingJobId] = useState<string | null>(null);
   const [duplicatingJobId, setDuplicatingJobId] = useState<string | null>(null);
   const { pushToast } = useToasts();
 
@@ -109,6 +110,31 @@ export default function MinhasVagasPage() {
       pushToast("error", getErrorMessage(err, "Erro ao fechar a vaga."));
     } finally {
       setClosingJobId(null);
+    }
+  };
+
+  const exportApplicants = async (job: Job) => {
+    if (!token) return;
+    setExportingJobId(job._id);
+    try {
+      const res = await authFetchRaw(`/companies/jobs/${job._id}/applicants.csv`, token);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `candidaturas-${job.title || "vaga"}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+    } catch (err: unknown) {
+      pushToast("error", getErrorMessage(err, "Erro ao exportar candidaturas."));
+    } finally {
+      setExportingJobId(null);
     }
   };
 
@@ -310,6 +336,15 @@ export default function MinhasVagasPage() {
                       className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       {closingJobId === job._id ? "A fechar..." : "Fechar vaga"}
+                    </button>
+                  )}
+                  {(job.applicationCount ?? 0) > 0 && (
+                    <button
+                      onClick={() => exportApplicants(job as Job)}
+                      disabled={exportingJobId === job._id}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {exportingJobId === job._id ? "A exportar..." : "Exportar CSV"}
                     </button>
                   )}
                 </div>

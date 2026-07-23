@@ -6,6 +6,9 @@ import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
+import csv
+from io import StringIO
 from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.models import (
@@ -682,6 +685,57 @@ async def delete_company_job(
     job.status = "archived"
     db.commit()
     return {"deleted": True, "jobId": job_id}
+
+
+_JOB_CSV_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def _job_csv_safe_row(row: list[Any]) -> list[Any]:
+    """Neutralise CSV/formula injection (CWE-1236) — applicant name/email/phone
+    are attacker-controllable via the public, unauthenticated apply form, so a
+    cell starting with =, +, -, @ or a tab/CR/LF gets a literal-text prefix
+    before it can be evaluated as a live formula by the company's spreadsheet
+    app. See admin.py's identical guard on the admin-wide exports."""
+    return ["'" + v if isinstance(v, str) and v.startswith(_JOB_CSV_FORMULA_TRIGGERS) else v for v in row]
+
+
+@router.get("/jobs/{job_id}/applicants.csv")
+async def export_job_applicants_csv(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export a single job's applicant pool as CSV — owner/recruiter only."""
+    company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
+    job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    stream = StringIO()
+    writer = csv.writer(stream)
+    writer.writerow(["nome", "email", "telefone", "estado", "dataCandidatura"])
+    rows = (
+        db.query(JobApplication)
+        .filter(JobApplication.job_id == job_id, JobApplication.company_id == company.id)
+        .order_by(JobApplication.created_at.desc())
+        .all()
+    )
+    for row in rows:
+        writer.writerow(_job_csv_safe_row([
+            row.applicant_full_name or "",
+            row.applicant_email or "",
+            row.applicant_phone or "",
+            row.status or "",
+            row.created_at.isoformat() if row.created_at else "",
+        ]))
+
+    safe_title = re.sub(r"[^a-zA-Z0-9-]+", "-", (job.title or "vaga").strip()).strip("-").lower() or "vaga"
+    return Response(
+        content=stream.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="candidaturas-{safe_title}.csv"'},
+    )
 
 
 # ── Employer analytics ──────────────────────────────────────────────────────
