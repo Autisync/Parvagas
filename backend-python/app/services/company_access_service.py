@@ -45,6 +45,23 @@ def resolve_company_for_user(db: Session, user: User) -> Company:
     return company
 
 
+def require_role(db: Session, user: User, company: Company, allowed: set[str]) -> str:
+    """Raise 403 unless the caller's role on `company` is in `allowed`.
+
+    Role was previously validated only at invite-creation time and never
+    checked to permit or deny an actual action — once W0.1's 404 fix
+    landed, every invited member (recruiter or viewer) had identical, full
+    access to everything. `allowed` should typically include "owner"
+    explicitly, since owners aren't automatically exempt."""
+    role = member_role_for(db, user, company)
+    if role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A sua função na equipa não permite esta ação.",
+        )
+    return role
+
+
 def member_role_for(db: Session, user: User, company: Company) -> str:
     """The caller's role on `company`: 'owner', a CompanyMember.role value
     ('recruiter' | 'viewer'), or 'none' if they have no seat at all (a 404

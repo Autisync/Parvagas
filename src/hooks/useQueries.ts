@@ -6,7 +6,7 @@ export type Application = {
   status: string;
   candidateUserId?: string;
   profileSource?: string;
-  profileSnapshot?: { fullName?: string; email?: string; skills?: string[] };
+  profileSnapshot?: { fullName?: string; email?: string; phone?: string; skills?: string[] };
   jobId?: { title?: string; location?: string; companyId?: { name?: string } } | null;
   createdAt?: string;
   statusHistory?: { status: string; changedAt: string; note?: string }[];
@@ -44,10 +44,10 @@ export type ApplicationsResponse = {
  * useApplications: Fetch applications with pagination
  * Supports filtering for candidates (own apps) and companies (received apps)
  */
-export function useApplications(token: string | null, page: number = 1, limit: number = 20) {
+export function useApplications(token: string | null, page: number = 1, limit: number = 20, jobId?: string) {
   return useQuery<ApplicationsResponse>({
-    queryKey: ["applications", page, limit],
-    queryFn: () => authFetch<ApplicationsResponse>(`/applications?page=${page}&limit=${limit}`, token!),
+    queryKey: ["applications", page, limit, jobId ?? null],
+    queryFn: () => authFetch<ApplicationsResponse>(`/applications?page=${page}&limit=${limit}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`, token!),
     enabled: !!token,
     staleTime: 2 * 60 * 1000, // 2 minutes for applications
   });
@@ -125,6 +125,7 @@ export type CompanyJob = {
   status?: string;
   visibility?: string;
   createdAt?: string;
+  applicationCount?: number;
 };
 
 export type CompanyJobsResponse = {
@@ -139,6 +140,7 @@ export type CompanyJobsResponse = {
     total: number;
     totalPages: number;
   };
+  quota?: { activeJobs: number; maxActiveJobs: number };
 };
 
 /**

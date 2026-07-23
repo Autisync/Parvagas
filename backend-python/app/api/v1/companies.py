@@ -13,7 +13,7 @@ from app.models import (
 )
 from app.services.storage_service import StorageService
 from app.services.company_billing_service import assert_job_quota
-from app.services.company_access_service import resolve_company_for_user, resolve_company_for_user_or_none
+from app.services.company_access_service import resolve_company_for_user, resolve_company_for_user_or_none, require_role
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
 from app.api.v1.jobs import serialize_job
@@ -215,8 +215,10 @@ async def update_company_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update company profile."""
+    """Update company profile. Owner-only — company branding/legal/contact
+    info is treated at the same sensitivity level as billing."""
     company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner"})
     _apply_company_profile_payload(company, payload)
     db.commit()
     db.refresh(company)
@@ -508,7 +510,40 @@ async def list_company_jobs(
         "total": total,
         "totalPages": max(1, (total + limit - 1) // limit),
     }
-    return {"jobs": [serialize_job(j, detail=True) for j in rows], **pagination, "pagination": pagination}
+
+    # One grouped count query for the whole page rather than N+1 per job —
+    # Minhas-Vagas has always advertised "acompanhe desempenho de vagas"
+    # but had no applicant signal at all on the job list itself.
+    job_ids = [j.id for j in rows]
+    counts_by_job: dict[str, int] = {}
+    if job_ids:
+        from sqlalchemy import func as _func
+        for job_id, count in (
+            db.query(JobApplication.job_id, _func.count(JobApplication.id))
+            .filter(JobApplication.job_id.in_(job_ids))
+            .group_by(JobApplication.job_id)
+            .all()
+        ):
+            counts_by_job[job_id] = count
+
+    jobs_payload = []
+    for j in rows:
+        payload = serialize_job(j, detail=True)
+        payload["applicationCount"] = counts_by_job.get(j.id, 0)
+        jobs_payload.append(payload)
+
+    # Quota was previously only revealed as a 402 at job-creation time —
+    # surfaced here too so Minhas-Vagas can show "X of Y slots used" before
+    # a company ever hits the wall. _ACTIVE_JOB_STATUSES mirrors
+    # assert_job_quota's own definition of "counts toward the cap".
+    from app.services.company_billing_service import get_company_plan_code, get_job_plan_limit, _ACTIVE_JOB_STATUSES
+    active_jobs = db.query(Job).filter(Job.company_id == company.id, Job.status.in_(_ACTIVE_JOB_STATUSES)).count()
+    max_active_jobs = get_job_plan_limit(db, get_company_plan_code(db, company.id))
+
+    return {
+        "jobs": jobs_payload, **pagination, "pagination": pagination,
+        "quota": {"activeJobs": active_jobs, "maxActiveJobs": max_active_jobs},
+    }
 
 
 @router.post("/jobs")
@@ -517,8 +552,10 @@ async def create_company_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a job posting (enters the moderation queue)."""
+    """Create a job posting (enters the moderation queue). Owner/recruiter
+    only — a viewer seat is read-only."""
     company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
     assert_job_quota(db, company)
     if not str(payload.get("title", "")).strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Job title is required")
@@ -554,6 +591,42 @@ async def create_company_job(
     return {"job": serialize_job(job, detail=True), "spamScore": score, "spamFlags": flags}
 
 
+@router.post("/jobs/{job_id}/duplicate")
+async def duplicate_company_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pre-fill a new job posting from an existing one — for recruiters
+    posting several similar roles a month who'd otherwise retype the whole
+    form (title, description, responsibilities, requirements, skills) from
+    scratch every time. Copies every editable field serialize_job exposes;
+    enters moderation like any other new posting, same job-quota check.
+    Owner/recruiter only."""
+    company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
+    source = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
+    if not source:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    assert_job_quota(db, company)
+
+    payload = serialize_job(source, detail=True)
+    payload["title"] = f"{(source.title or 'Vaga').strip()} (cópia)"
+
+    job = Job(company_id=company.id, status="pending_platform_review", visibility="public")
+    _apply_job_payload(job, payload)
+    score, flags = _spam_assessment(
+        " ".join(str(payload.get(k, "")) for k in ("title", "description", "responsibilities", "requirements"))
+    )
+    job.spam_score = score
+    job.spam_flags = json.dumps(flags, ensure_ascii=True) if flags else None
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return {"job": serialize_job(job, detail=True), "spamScore": score, "spamFlags": flags}
+
+
 @router.patch("/jobs/{job_id}")
 async def update_company_job(
     job_id: str,
@@ -561,8 +634,10 @@ async def update_company_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a job owned by the current user's company."""
+    """Update a job owned by the current user's company. Owner/recruiter
+    only."""
     company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
     job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
@@ -579,8 +654,10 @@ async def delete_company_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Archive (soft delete) a job owned by the current user's company."""
+    """Archive (soft delete) a job owned by the current user's company.
+    Owner/recruiter only."""
     company = _require_company(db, current_user)
+    require_role(db, current_user, company, {"owner", "recruiter"})
     job = db.query(Job).filter(Job.id == job_id, Job.company_id == company.id).first()
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")

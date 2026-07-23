@@ -34,6 +34,7 @@ type Job = {
   requiredSkills?: string[];
   createdAt?: string;
   expiresAt?: string;
+  applicationCount?: number;
 };
 
 const statusLabel: Record<string, string> = {
@@ -74,9 +75,24 @@ export default function MinhasVagasPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [activePreset, setActivePreset] = useState("overview");
   const [closingJobId, setClosingJobId] = useState<string | null>(null);
+  const [duplicatingJobId, setDuplicatingJobId] = useState<string | null>(null);
   const { pushToast } = useToasts();
 
   const _ACTIVE_STATUSES = ["approved", "published", "active"];
+
+  const duplicateJob = async (job: Job) => {
+    if (!token) return;
+    setDuplicatingJobId(job._id);
+    try {
+      await authFetch(`/companies/jobs/${job._id}/duplicate`, token, { method: "POST" });
+      pushToast("success", "Vaga duplicada — reveja e submeta para revisão.");
+      refetch();
+    } catch (err: unknown) {
+      pushToast("error", getErrorMessage(err, "Erro ao duplicar a vaga."));
+    } finally {
+      setDuplicatingJobId(null);
+    }
+  };
 
   const closeJob = async (job: Job) => {
     if (!token) return;
@@ -208,6 +224,13 @@ export default function MinhasVagasPage() {
               `Aprovadas: ${dashboard.approved}`,
               `Rejeitadas: ${dashboard.rejected}`,
               `Arquivadas: ${dashboard.archived}`,
+              ...(jobsData?.quota
+                ? [
+                    jobsData.quota.maxActiveJobs < 0
+                      ? `Vagas ativas: ${jobsData.quota.activeJobs} (plano ilimitado)`
+                      : `Vagas ativas: ${jobsData.quota.activeJobs} de ${jobsData.quota.maxActiveJobs} do seu plano`,
+                  ]
+                : []),
             ]}
           />
 
@@ -249,6 +272,9 @@ export default function MinhasVagasPage() {
                   <div className="flex items-center gap-2">
                     <h2 className="font-bold text-lg">{job.title}</h2>
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${statusColor[job.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{statusLabel[job.status ?? ""] ?? job.status}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
+                      {job.applicationCount ?? 0} candidatura{(job.applicationCount ?? 0) === 1 ? "" : "s"}
+                    </span>
                   </div>
                   <p className="text-sm text-gray-500 mt-1">{[job.location, job.workMode, job.category].filter(Boolean).join(" · ")}</p>
                   {job.createdAt && <p className="text-xs text-gray-500 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}
@@ -264,6 +290,13 @@ export default function MinhasVagasPage() {
                     Editar
                   </button>
                   <Link href={`/Vagas-Disponiveis/${job._id}`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver</Link>
+                  <button
+                    onClick={() => duplicateJob(job as Job)}
+                    disabled={duplicatingJobId === job._id}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {duplicatingJobId === job._id ? "A duplicar..." : "Duplicar"}
+                  </button>
                   {_ACTIVE_STATUSES.includes(job.status ?? "") && (
                     <button
                       onClick={() => closeJob(job as Job)}
