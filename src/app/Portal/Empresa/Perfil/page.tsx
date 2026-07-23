@@ -23,6 +23,7 @@ type SocialLinks = { linkedin?: string; facebook?: string; instagram?: string; t
 
 type CompanyProfile = {
   name?: string;
+  slug?: string;
   status?: "inactive" | "pending_verification" | "active" | "rejected" | "suspended";
   industry?: string;
   size?: string;
@@ -325,6 +326,41 @@ function EmpresaPerfilContent() {
               </section>
             );
           })()}
+
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">A sua página pública</h2>
+                {profile.status === "active" && profile.slug ? (
+                  <p className="mt-1 break-all text-sm text-slate-600">parvagas.pt/Empresas/{profile.slug}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">Disponível após verificação da empresa.</p>
+                )}
+              </div>
+              {profile.status === "active" && profile.slug ? (
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://parvagas.pt/Empresas/${profile.slug}`);
+                      pushToast("success", "Ligação copiada.");
+                    }}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Copiar ligação
+                  </button>
+                  <Link
+                    href={`/Empresas/${profile.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                  >
+                    Ver página
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
