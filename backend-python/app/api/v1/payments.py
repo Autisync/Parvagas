@@ -36,13 +36,13 @@ router = APIRouter(tags=["payments"])
 # backfill — keep the two in sync (-1 = unlimited).
 _DEFAULT_PLANS = [
     {"code": "free", "name": "Grátis", "price": 0, "interval": "month",
-     "features": ["1 vaga ativa", "Candidaturas ilimitadas"], "max_active_jobs": 1},
+     "features": ["1 vaga ativa", "Candidaturas ilimitadas"], "max_active_jobs": 1, "candidate_search_included": False},
     {"code": "starter", "name": "Starter", "price": 25000, "interval": "month",
-     "features": ["5 vagas ativas", "Destaque básico", "Suporte por email"], "max_active_jobs": 5},
+     "features": ["5 vagas ativas", "Destaque básico", "Suporte por email"], "max_active_jobs": 5, "candidate_search_included": False},
     {"code": "business", "name": "Business", "price": 75000, "interval": "month",
-     "features": ["Vagas ilimitadas", "Vagas em destaque", "Acesso à base de CVs", "Analytics"], "max_active_jobs": -1},
+     "features": ["Vagas ilimitadas", "Vagas em destaque", "Acesso à base de CVs", "Analytics"], "max_active_jobs": -1, "candidate_search_included": True},
     {"code": "featured_post", "name": "Vaga em Destaque", "price": 15000, "interval": "one_time",
-     "features": ["1 vaga destacada por 30 dias"], "max_active_jobs": -1},
+     "features": ["1 vaga destacada por 30 dias"], "max_active_jobs": -1, "candidate_search_included": False},
 ]
 
 
@@ -51,6 +51,7 @@ def _serialize_plan(p: Plan) -> dict[str, Any]:
         "_id": p.id, "code": p.code, "name": p.name, "price": p.price,
         "currency": p.currency, "interval": p.interval,
         "features": json.loads(p.features) if p.features else [],
+        "candidateSearchIncluded": bool(p.candidate_search_included),
     }
 
 
@@ -61,7 +62,8 @@ def _ensure_seed_plans(db: Session) -> list[Plan]:
     for d in _DEFAULT_PLANS:
         db.add(Plan(code=d["code"], name=d["name"], price=d["price"], currency="AOA",
                     interval=d["interval"], features=json.dumps(d["features"], ensure_ascii=True), active=True,
-                    max_active_jobs=d["max_active_jobs"]))
+                    max_active_jobs=d["max_active_jobs"],
+                    candidate_search_included=d.get("candidate_search_included", False)))
     db.commit()
     return db.query(Plan).filter(Plan.active.is_(True)).all()
 

@@ -125,6 +125,16 @@ class CandidateProfile(Base, TimestampMixin):
     preferred_job_categories = Column(Text, nullable=True)   # JSON array of category strings
     auto_apply_opt_in = Column(Boolean, nullable=False, default=False)
 
+    # Candidate directory (W5.2) — opt-in, default off. Every other
+    # company-facing view of a candidate's data today is scoped to an
+    # application the candidate already submitted; this is the first
+    # channel that surfaces a profile to a company with no prior
+    # relationship, so turning it on requires accepting a dedicated
+    # consent document first (see app.services.legal_service and the
+    # "consentimento-diretorio-candidatos" LegalDocument) — enforced in
+    # app.api.v1.candidates, not here.
+    discoverable_opt_in = Column(Boolean, nullable=False, default=False)
+
     # Onboarding
     has_completed_onboarding = Column(Boolean, nullable=False, default=False)
     has_seen_tutorial = Column(Boolean, nullable=False, default=False)
@@ -930,6 +940,10 @@ class Plan(Base, TimestampMixin):
     features = Column(Text, nullable=True)  # JSON array
     active = Column(Boolean, nullable=False, default=True)
     max_active_jobs = Column(Integer, nullable=False, default=1)  # -1 = unlimited
+    # W5.2 — the Business plan's own `features` marketing copy already
+    # advertised "Acesso à base de CVs" before this column existed, with no
+    # backend enforcement behind it.
+    candidate_search_included = Column(Boolean, nullable=False, default=False)
 
 
 class Subscription(Base, TimestampMixin):

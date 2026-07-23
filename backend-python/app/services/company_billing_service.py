@@ -111,3 +111,27 @@ def assert_job_quota(db: Session, company: Company) -> None:
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=f"O seu plano permite até {max_active_jobs} vaga(s) ativa(s). Faça upgrade para publicar mais.",
         )
+
+
+def get_candidate_search_included(db: Session, plan_code: str) -> bool:
+    """Whether `plan_code` includes candidate-directory search (W5.2) —
+    same missing-row self-seed fallback as get_job_plan_limit."""
+    plan = db.query(Plan).filter(Plan.code == plan_code).first()
+    if plan:
+        return bool(plan.candidate_search_included)
+    from app.api.v1.payments import _ensure_seed_plans
+    _ensure_seed_plans(db)
+    plan = db.query(Plan).filter(Plan.code == plan_code).first()
+    return bool(plan.candidate_search_included) if plan else False
+
+
+def assert_candidate_search_access(db: Session, company: Company) -> None:
+    """Gate the candidate-directory search/view endpoints behind a plan
+    that includes it (currently Business). Read-only feature — no
+    countable resource to race on, so unlike assert_job_quota this doesn't
+    need a row lock."""
+    if not get_candidate_search_included(db, get_company_plan_code(db, company.id)):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="O acesso ao diretório de candidatos exige o plano Business. Faça upgrade para pesquisar candidatos.",
+        )

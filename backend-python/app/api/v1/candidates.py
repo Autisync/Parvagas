@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.db.session import get_db
 from app.models import CVUpload, CandidateProfile, Company, CoverLetter, Job, JobAlert, JobApplication, JobMatchProposal, Resume, SavedJob, User, UserRole
 from app.services.candidate_billing_service import assert_auto_apply_allowed, candidate_has_premium_access
+from app.services import legal_service
 from app.services.cv_export_service import inject_job_keywords, to_docx, to_pdf, to_json_resume
 from app.services.storage_service import StorageService
 from app.services import llm_service
@@ -199,6 +200,7 @@ def _profile_to_payload(db: Session, current_user: User, profile: CandidateProfi
         "availability": getattr(profile, "availability", None) or "",
         "preferredJobCategories": _coerce_list(_json_load(getattr(profile, "preferred_job_categories", None), [])),
         "autoApplyOptIn": bool(getattr(profile, "auto_apply_opt_in", False)),
+        "discoverableOptIn": bool(getattr(profile, "discoverable_opt_in", False)),
         "hasCompletedOnboarding": bool(profile.has_completed_onboarding),
         "hasSeenTutorial": bool(profile.has_seen_tutorial),
         "updatedAt": profile.updated_at.isoformat() if profile.updated_at else None,
@@ -284,6 +286,13 @@ def _apply_profile_payload(profile: CandidateProfile, current_user: User, payloa
         opt_in = payload.get("autoApplyOptIn") if "autoApplyOptIn" in payload else payload.get("auto_apply_opt_in")
         profile.auto_apply_opt_in = bool(opt_in)
 
+    # Candidate directory (W5.2) — the consent-acceptance gate on the
+    # ON-transition runs in patch_candidate_profile before this function is
+    # called, same shape as assert_auto_apply_allowed above.
+    if "discoverableOptIn" in payload or "discoverable_opt_in" in payload:
+        opt_in = payload.get("discoverableOptIn") if "discoverableOptIn" in payload else payload.get("discoverable_opt_in")
+        profile.discoverable_opt_in = bool(opt_in)
+
 
 @router.get("/profile")
 async def get_candidate_profile(
@@ -316,6 +325,20 @@ async def patch_candidate_profile(
     payload = payload or {}
     if payload.get("autoApplyOptIn") or payload.get("auto_apply_opt_in"):
         assert_auto_apply_allowed(db, profile.id)
+
+    # Candidate directory (W5.2) — this is the first channel that exposes a
+    # candidate's profile to a company with no prior application between
+    # them, so turning it on requires having accepted the dedicated consent
+    # document first (POST /legal/acceptances, same two-step shape signup
+    # consent already uses). Turning it back off never requires consent.
+    if payload.get("discoverableOptIn") or payload.get("discoverable_opt_in"):
+        if not legal_service.has_accepted_current_version(
+            db, user_id=current_user.id, slug="consentimento-diretorio-candidatos"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="É necessário aceitar o consentimento do diretório de candidatos antes de ativar esta opção.",
+            )
 
     _apply_profile_payload(profile, current_user, payload)
     db.commit()
