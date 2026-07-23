@@ -48,12 +48,13 @@ type AdFormErrors = Partial<Record<keyof AdFormState, string>>;
 function validateAdForm(values: AdFormState): AdFormErrors {
   const errors: AdFormErrors = {};
 
+  // Only title + placement are required — matches the backend's
+  // admin_create_ad, which accepts link/dates as optional. Link and dates
+  // are validated for shape only when the admin actually provides them.
   if (!values.title.trim()) errors.title = "Indique o título do anúncio.";
   if (!values.placement.trim()) errors.placement = "Selecione o placement do anúncio.";
 
-  if (!values.link.trim()) {
-    errors.link = "Indique o link de destino.";
-  } else {
+  if (values.link.trim()) {
     try {
       const url = new URL(values.link);
       if (!["http:", "https:"].includes(url.protocol)) {
@@ -64,11 +65,10 @@ function validateAdForm(values: AdFormState): AdFormErrors {
     }
   }
 
-  if (!values.startDate) errors.startDate = "Selecione a data de início.";
-  if (!values.endDate) errors.endDate = "Selecione a data de fim.";
-
-  if (values.startDate && values.endDate && values.startDate > values.endDate) {
-    errors.endDate = "A data de fim deve ser igual ou posterior à data de início.";
+  // Uses >=, not >, to mirror the backend's _validate_ad_fields, which
+  // rejects end_date <= start_date (equal dates aren't a valid window).
+  if (values.startDate && values.endDate && values.startDate >= values.endDate) {
+    errors.endDate = "A data de fim deve ser posterior à data de início.";
   }
 
   return errors;
@@ -185,7 +185,7 @@ function AdFormFields({
           <option value="sidebar">Barra lateral (detalhe da vaga)</option>
         </select>
       </Field>
-      <Field label="Link de destino" hint="Para onde o visitante vai ao clicar. URL completo, começando por https://" error={formErrors.link}>
+      <Field label="Link de destino (opcional)" hint="Para onde o visitante vai ao clicar. URL completo, começando por https://" error={formErrors.link}>
         <input
           value={form.link}
           onChange={(e) => { setField("link", e.target.value); clearError("link"); }}
@@ -205,7 +205,7 @@ function AdFormFields({
           {uploadingImage ? <p className="text-xs text-slate-500">A enviar imagem...</p> : null}
         </div>
       </Field>
-      <Field label="Data de início" hint="Primeiro dia em que o anúncio é exibido." error={formErrors.startDate}>
+      <Field label="Data de início (opcional)" hint="Primeiro dia em que o anúncio é exibido. Vazio = exibe já." error={formErrors.startDate}>
         <input
           type="date"
           value={form.startDate}
@@ -213,7 +213,7 @@ function AdFormFields({
           className={adminFieldClass}
         />
       </Field>
-      <Field label="Data de fim" hint="Último dia de exibição — o anúncio pára automaticamente depois desta data." error={formErrors.endDate}>
+      <Field label="Data de fim (opcional)" hint="Último dia de exibição — o anúncio pára automaticamente depois desta data. Vazio = sem data de fim." error={formErrors.endDate}>
         <input
           type="date"
           value={form.endDate}
@@ -330,7 +330,10 @@ export default function AdminAdsPage() {
     if (!token || !canCreate) return;
     const nextErrors = validateAdForm(form);
     setFormErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      notify(Object.values(nextErrors)[0] || "Corrija os erros no formulário antes de guardar.", "error");
+      return;
+    }
     setBusy(true);
     try {
       await createAdminAd(token, form);
@@ -468,7 +471,10 @@ export default function AdminAdsPage() {
     if (!token || !selectedAd || !canCreate) return;
     const nextErrors = validateAdForm(form);
     setFormErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      notify(Object.values(nextErrors)[0] || "Corrija os erros no formulário antes de guardar.", "error");
+      return;
+    }
     setSavingEdit(true);
     try {
       await replaceAdminAd(token, selectedAd._id, form);
