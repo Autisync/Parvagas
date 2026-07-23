@@ -353,8 +353,16 @@ class EmailService:
     }
 
     @staticmethod
-    def send_application_status_email(email: str, full_name: str, job_title: str, new_status: str) -> bool:
-        """Notify a candidate when the status of their application changes."""
+    def send_application_status_email(
+        email: str, full_name: str, job_title: str, new_status: str, custom_message: str | None = None,
+    ) -> bool:
+        """Notify a candidate when the status of their application changes.
+
+        ``custom_message`` is an optional personal note the recruiter typed
+        when changing the status — appended as an addendum rather than
+        replacing the standard copy, so the candidate still gets a clear,
+        consistent explanation of what the status itself means.
+        """
         try:
             if not EmailService._email_enabled():
                 logger.warning(f"Email not configured, skipping email to {email}")
@@ -368,12 +376,22 @@ class EmailService:
             job_label = (job_title or "").strip() or "a vaga a que se candidatou"
             portal_url = f"{(settings.FRONTEND_URL or '').rstrip('/')}/Portal/Candidato"
 
+            note = (custom_message or "").strip()
+            note_html = (
+                f"""
+            <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Mensagem da empresa</p>
+            <p style="margin:0 0 14px; white-space:pre-wrap;">{escape(note)}</p>
+            """
+                if note else ""
+            )
+
             subject = f"{settings.BRAND_NAME} — {title}: {job_label}"
             body_html = f"""
             <p style="margin:0 0 14px;">Olá {escape(role)},</p>
             <p style="margin:0 0 14px;">{message}</p>
             <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
             <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{escape(job_label)}</p>
+            {note_html}
             <p style="margin:0 0 14px;">Pode ver os detalhes no seu portal de candidato.</p>
             """
 

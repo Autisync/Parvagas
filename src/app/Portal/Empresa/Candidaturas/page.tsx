@@ -159,10 +159,10 @@ export default function EmpresaCandidaturasPage() {
 
   if (loading || isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" /></div>;
 
-  const updateStatus = async (id: string, status: string) => {
+  const updateStatus = async (id: string, status: string, message?: string) => {
     setUpdating(id);
     try {
-      await authFetch(`/applications/${id}/status`, token!, { method: "PATCH", body: JSON.stringify({ status }) });
+      await authFetch(`/applications/${id}/status`, token!, { method: "PATCH", body: JSON.stringify({ status, message }) });
       pushToast("success", "Estado da candidatura atualizado.");
       refetch();
     } catch (err: unknown) {
@@ -170,6 +170,14 @@ export default function EmpresaCandidaturasPage() {
     } finally {
       setUpdating(null);
     }
+  };
+
+  // Optional personal note appended to the candidate's status-change email —
+  // the alternative was always the same fixed template regardless of context.
+  // A blank/cancelled prompt still proceeds with the status change.
+  const updateStatusWithOptionalNote = (id: string, status: string) => {
+    const message = window.prompt("Mensagem opcional para o candidato (aparece no email de atualização):", "") || undefined;
+    updateStatus(id, status, message);
   };
 
   const viewCandidateCv = async (applicationId: string) => {
@@ -368,7 +376,7 @@ export default function EmpresaCandidaturasPage() {
                         className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
                         value={a.status}
                         disabled={updating === a._id || a.status === "withdrawn"}
-                        onChange={e => updateStatus(a._id, e.target.value)}
+                        onChange={e => updateStatusWithOptionalNote(a._id, e.target.value)}
                       >
                         {hiringStatuses.map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
                         {a.status === "submitted" && <option value="submitted">Submetida</option>}

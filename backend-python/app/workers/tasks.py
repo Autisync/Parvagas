@@ -338,7 +338,9 @@ def send_templated_email(self, method: str, payload: dict) -> bool:
     retry_jitter=True,
     retry_kwargs={"max_retries": 5},
 )
-def send_application_status_email(self, email: str, full_name: str, job_title: str, new_status: str) -> bool:
+def send_application_status_email(
+    self, email: str, full_name: str, job_title: str, new_status: str, custom_message: str | None = None,
+) -> bool:
     """Notify a candidate when their application status changes."""
     try:
         success = EmailService.send_application_status_email(
@@ -346,6 +348,7 @@ def send_application_status_email(self, email: str, full_name: str, job_title: s
             full_name=full_name,
             job_title=job_title,
             new_status=new_status,
+            custom_message=custom_message,
         )
         if not success:
             raise RuntimeError(f"Application status email send failed for {email}")

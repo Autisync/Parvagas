@@ -594,6 +594,7 @@ async def update_application_status(
     new_status = str(payload.get("status", "")).strip().lower()
     if new_status not in _HIRING_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
+    custom_message = str(payload.get("message", "")).strip()[:1000] or None
     previous_status = app_row.status
     app_row.status = new_status
     db.commit()
@@ -608,7 +609,7 @@ async def update_application_status(
         if recipient:
             try:
                 send_application_status_email.delay(
-                    recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status,
+                    recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status, custom_message,
                 )
             except Exception as e:  # never block the status update on the mail queue
                 logger.warning(f"Could not enqueue status email: {e}")
