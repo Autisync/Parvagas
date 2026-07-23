@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { CheckBadgeIcon, ClockIcon, ExclamationTriangleIcon, NoSymbolIcon } from "@heroicons/react/24/solid";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/lib/api";
 import Footer from "@/app/components/Footer";
@@ -20,7 +21,7 @@ const LogoUploadModal = dynamic(() => import("../components/LogoUploadModal"), {
 
 type CompanyProfile = {
   name?: string;
-  status?: "inactive" | "pending_verification" | "active" | "rejected";
+  status?: "inactive" | "pending_verification" | "active" | "rejected" | "suspended";
   industry?: string;
   size?: string;
   website?: string;
@@ -223,20 +224,52 @@ function EmpresaPerfilContent() {
             </div>
           </div>
 
-          {(profile.status === "pending_verification" || profile.status === "rejected") && (
-            <section className={`mb-6 rounded-2xl border p-4 ${profile.status === "pending_verification" ? "border-amber-200 bg-amber-50" : "border-red-200 bg-red-50"}`}>
-              <p className={`text-sm font-semibold ${profile.status === "pending_verification" ? "text-amber-900" : "text-red-900"}`}>
-                {profile.status === "pending_verification"
-                  ? "Conta em verificação: ainda não pode publicar vagas"
-                  : "Conta rejeitada: contacte o suporte para nova análise"}
-              </p>
-              <p className={`mt-1 text-sm ${profile.status === "pending_verification" ? "text-amber-800" : "text-red-800"}`}>
-                {profile.status === "pending_verification"
-                  ? "Complete os dados do perfil e aguarde aprovação da equipa Parvagas."
-                  : "Revise os dados da empresa e peça reavaliação no suporte."}
-              </p>
-            </section>
-          )}
+          {(() => {
+            const verificationCopy: Record<string, { tone: string; icon: ReactNode; title: string; body: string }> = {
+              active: {
+                tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+                icon: <CheckBadgeIcon className="h-5 w-5 text-emerald-600" />,
+                title: "Empresa verificada",
+                body: "A sua conta foi confirmada pela equipa Parvagas — o selo \"Verificada\" abaixo já aparece em todas as vagas publicadas, aumentando a confiança dos candidatos.",
+              },
+              pending_verification: {
+                tone: "border-amber-200 bg-amber-50 text-amber-900",
+                icon: <ClockIcon className="h-5 w-5 text-amber-600" />,
+                title: "Conta em verificação: ainda não pode publicar vagas",
+                body: "A equipa Parvagas confirma manualmente o NIF, o contacto e os dados do perfil de cada empresa antes da primeira publicação — normalmente em 1 a 2 dias úteis. Complete os campos abaixo (nome legal, contacto, website) para acelerar a análise.",
+              },
+              rejected: {
+                tone: "border-red-200 bg-red-50 text-red-900",
+                icon: <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />,
+                title: "Conta rejeitada: contacte o suporte para nova análise",
+                body: "A verificação não foi aprovada — reveja os dados da empresa (nome legal e NIF são os motivos mais comuns) e peça reavaliação junto do suporte.",
+              },
+              suspended: {
+                tone: "border-red-200 bg-red-50 text-red-900",
+                icon: <NoSymbolIcon className="h-5 w-5 text-red-600" />,
+                title: "Conta suspensa",
+                body: "O acesso a novas publicações está temporariamente bloqueado. Contacte o suporte Parvagas para entender o motivo e os próximos passos.",
+              },
+            };
+            const copy = profile.status ? verificationCopy[profile.status] : undefined;
+            if (!copy) return null;
+            return (
+              <section className={`mb-6 rounded-2xl border p-4 ${copy.tone}`}>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 shrink-0">{copy.icon}</span>
+                  <div>
+                    <p className="text-sm font-semibold">{copy.title}</p>
+                    <p className="mt-1 text-sm opacity-90">{copy.body}</p>
+                    {profile.status === "active" && (
+                      <span className="app-badge app-badge-success mt-3 inline-flex w-fit items-center gap-1" title="Como aparece nas vagas publicadas">
+                        <CheckBadgeIcon className="h-3.5 w-3.5" /> Verificada
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">

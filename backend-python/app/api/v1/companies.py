@@ -163,6 +163,7 @@ def _serialize_company_profile(company: Company) -> dict[str, Any]:
         "contactPhone": company.phone,
         "website": company.website,
         "status": company.status,
+        "verificationStatus": "verified" if company.status == "active" else company.status,
         "description": company.description,
         "logo": StorageService.resolve_public_url(company.logo_url),
         "angolanizacao": bool(company.angolanizacao),

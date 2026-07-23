@@ -97,3 +97,25 @@ def test_update_profile_round_trips_through_get(db):
     reloaded = asyncio.run(get_company_profile(db=db, current_user=owner))
     assert reloaded["company"]["name"] == "Acme Angola Lda"
     assert reloaded["company"]["description"] == "Somos uma empresa de tecnologia."
+
+
+def test_verification_status_maps_active_to_verified(db):
+    """W4.2: the Perfil page's verification explainer reads verificationStatus
+    directly rather than re-deriving "verified" from the raw status string
+    (the badge on public job listings already does that mapping — this
+    keeps the company-facing explainer consistent with it)."""
+    owner, company = _make_owner_and_company(db)  # status="active"
+    result = asyncio.run(get_company_profile(db=db, current_user=owner))
+    assert result["company"]["verificationStatus"] == "verified"
+
+
+def test_verification_status_passes_through_non_active_status(db):
+    owner = User(id=str(uuid.uuid4()), email=f"owner-{uuid.uuid4()}@x.com", full_name="Owner", password_hash="x", role=UserRole.company)
+    db.add(owner)
+    db.flush()
+    company = Company(owner_user_id=owner.id, name="Nova Lda", status="pending_verification")
+    db.add(company)
+    db.commit()
+
+    result = asyncio.run(get_company_profile(db=db, current_user=owner))
+    assert result["company"]["verificationStatus"] == "pending_verification"
