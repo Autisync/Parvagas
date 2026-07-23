@@ -355,6 +355,7 @@ class EmailService:
     @staticmethod
     def send_application_status_email(
         email: str, full_name: str, job_title: str, new_status: str, custom_message: str | None = None,
+        interview_details: dict | None = None,
     ) -> bool:
         """Notify a candidate when the status of their application changes.
 
@@ -362,6 +363,12 @@ class EmailService:
         when changing the status — appended as an addendum rather than
         replacing the standard copy, so the candidate still gets a clear,
         consistent explanation of what the status itself means.
+
+        ``interview_details`` (only meaningful when ``new_status`` is
+        "interview") is an optional {when, location, meetingLink} dict —
+        previously moving a candidate to "interview" literally told them the
+        company would contact them separately with no home anywhere in the
+        product for the actual scheduling details.
         """
         try:
             if not EmailService._email_enabled():
@@ -385,12 +392,31 @@ class EmailService:
                 if note else ""
             )
 
+            interview_rows = []
+            details = interview_details or {}
+            if details.get("when"):
+                interview_rows.append(f'<p style="margin:0 0 4px;"><b>Data/hora:</b> {escape(str(details["when"]))}</p>')
+            if details.get("location"):
+                interview_rows.append(f'<p style="margin:0 0 4px;"><b>Local:</b> {escape(str(details["location"]))}</p>')
+            if details.get("meetingLink"):
+                interview_rows.append(f'<p style="margin:0 0 4px;"><b>Link da reunião:</b> {escape(str(details["meetingLink"]))}</p>')
+            interview_html = (
+                f"""
+            <div style="margin:0 0 14px; padding:12px 14px; background:#f4f4f5; border-radius:8px;">
+              <p style="margin:0 0 8px; color:#71717a; font-size:13px;">Detalhes da entrevista</p>
+              {''.join(interview_rows)}
+            </div>
+            """
+                if interview_rows else ""
+            )
+
             subject = f"{settings.BRAND_NAME} — {title}: {job_label}"
             body_html = f"""
             <p style="margin:0 0 14px;">Olá {escape(role)},</p>
             <p style="margin:0 0 14px;">{message}</p>
             <p style="margin:0 0 4px; color:#71717a; font-size:13px;">Vaga</p>
             <p style="margin:0 0 14px; font-weight:600; color:#18181b;">{escape(job_label)}</p>
+            {interview_html}
             {note_html}
             <p style="margin:0 0 14px;">Pode ver os detalhes no seu portal de candidato.</p>
             """

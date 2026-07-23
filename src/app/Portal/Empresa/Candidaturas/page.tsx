@@ -20,6 +20,7 @@ type Application = {
   profileSnapshot?: { fullName?: string; email?: string; phone?: string; skills?: string[] };
   jobId?: { title?: string } | null;
   createdAt?: string;
+  interview?: { scheduledAt?: string; location?: string; meetingLink?: string } | null;
 };
 
 type CandidateCvPayload = {
@@ -162,10 +163,13 @@ export default function EmpresaCandidaturasPage() {
 
   if (loading || isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-red-600 border-t-transparent animate-spin" /></div>;
 
-  const updateStatus = async (id: string, status: string, message?: string) => {
+  const updateStatus = async (
+    id: string, status: string, message?: string,
+    interview?: { interviewDate?: string; interviewLocation?: string; interviewMeetingLink?: string },
+  ) => {
     setUpdating(id);
     try {
-      await authFetch(`/applications/${id}/status`, token!, { method: "PATCH", body: JSON.stringify({ status, message }) });
+      await authFetch(`/applications/${id}/status`, token!, { method: "PATCH", body: JSON.stringify({ status, message, ...interview }) });
       pushToast("success", "Estado da candidatura atualizado.");
       refetch();
     } catch (err: unknown) {
@@ -177,9 +181,20 @@ export default function EmpresaCandidaturasPage() {
 
   // Optional personal note appended to the candidate's status-change email —
   // the alternative was always the same fixed template regardless of context.
-  // A blank/cancelled prompt still proceeds with the status change.
+  // A blank/cancelled prompt still proceeds with the status change. Moving
+  // to "interview" additionally offers to capture date/location/meeting
+  // link — previously that status only flipped a label and the email told
+  // the candidate the company would contact them separately, with no home
+  // anywhere in the product for the actual scheduling details.
   const updateStatusWithOptionalNote = (id: string, status: string) => {
     const message = window.prompt("Mensagem opcional para o candidato (aparece no email de atualização):", "") || undefined;
+    if (status === "interview") {
+      const interviewDate = window.prompt("Data/hora da entrevista (opcional, ex: 2026-08-01T14:00):", "") || undefined;
+      const interviewLocation = window.prompt("Local da entrevista (opcional):", "") || undefined;
+      const interviewMeetingLink = window.prompt("Link da reunião online (opcional):", "") || undefined;
+      updateStatus(id, status, message, { interviewDate, interviewLocation, interviewMeetingLink });
+      return;
+    }
     updateStatus(id, status, message);
   };
 
@@ -419,6 +434,15 @@ export default function EmpresaCandidaturasPage() {
                         </div>
                       </div>
                       {jobTitle && <p className="text-sm text-gray-500 mt-2">Para: <strong>{jobTitle}</strong></p>}
+                      {a.interview && (a.interview.scheduledAt || a.interview.location || a.interview.meetingLink) && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Entrevista: {[
+                            a.interview.scheduledAt ? new Date(a.interview.scheduledAt).toLocaleString("pt-AO") : null,
+                            a.interview.location,
+                            a.interview.meetingLink,
+                          ].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
                       {a.profileSnapshot?.skills && a.profileSnapshot.skills.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {a.profileSnapshot.skills.slice(0, 4).map(s => <span key={s} className="text-xs border rounded px-2 py-0.5 text-gray-600">{s}</span>)}

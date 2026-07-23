@@ -340,6 +340,7 @@ def send_templated_email(self, method: str, payload: dict) -> bool:
 )
 def send_application_status_email(
     self, email: str, full_name: str, job_title: str, new_status: str, custom_message: str | None = None,
+    interview_details: dict | None = None,
 ) -> bool:
     """Notify a candidate when their application status changes."""
     try:
@@ -349,6 +350,7 @@ def send_application_status_email(
             job_title=job_title,
             new_status=new_status,
             custom_message=custom_message,
+            interview_details=interview_details,
         )
         if not success:
             raise RuntimeError(f"Application status email send failed for {email}")

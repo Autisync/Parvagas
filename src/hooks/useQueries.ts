@@ -10,6 +10,7 @@ export type Application = {
   jobId?: { title?: string; location?: string; companyId?: { name?: string } } | null;
   createdAt?: string;
   statusHistory?: { status: string; changedAt: string; note?: string }[];
+  interview?: { scheduledAt?: string; location?: string; meetingLink?: string } | null;
 };
 
 export type PaginatedResponse<T> = {

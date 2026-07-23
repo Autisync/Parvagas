@@ -1,6 +1,7 @@
 """Application submission and listing endpoints."""
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import secrets
 import uuid
@@ -193,6 +194,11 @@ def _serialize_application(item: JobApplication, job_title: str | None = None, s
             "title": job_title or f"Vaga {item.job_id}",
         },
         "createdAt": item.created_at.isoformat() if item.created_at else None,
+        "interview": {
+            "scheduledAt": item.interview_scheduled_at.isoformat() if item.interview_scheduled_at else None,
+            "location": item.interview_location,
+            "meetingLink": item.interview_meeting_link,
+        } if item.interview_scheduled_at or item.interview_location or item.interview_meeting_link else None,
     }
 
 
@@ -575,13 +581,29 @@ async def list_applications(
 _HIRING_STATUSES = {"submitted", "under_review", "viewed", "shortlisted", "interview", "offer", "rejected", "hired", "withdrawn"}
 
 
-def _apply_status_change(db: Session, app_row: JobApplication, new_status: str, custom_message: str | None) -> None:
+def _apply_status_change(
+    db: Session, app_row: JobApplication, new_status: str, custom_message: str | None,
+    interview_details: dict | None = None,
+) -> None:
     """Shared by the single and bulk status-update endpoints: flips the
-    status, then notifies the candidate (email + in-app) exactly like the
+    status, persists interview details when moving to "interview", then
+    notifies the candidate (email + in-app) exactly like the
     single-application path always has. Caller is responsible for the
     db.commit() — bulk callers batch many of these into one transaction."""
     previous_status = app_row.status
     app_row.status = new_status
+
+    if new_status == "interview" and interview_details:
+        when = interview_details.get("when")
+        if when:
+            try:
+                app_row.interview_scheduled_at = datetime.fromisoformat(when)
+            except ValueError:
+                pass
+        if interview_details.get("location"):
+            app_row.interview_location = str(interview_details["location"])[:500]
+        if interview_details.get("meetingLink"):
+            app_row.interview_meeting_link = str(interview_details["meetingLink"])[:500]
 
     if new_status == previous_status or new_status in {"submitted", "withdrawn"}:
         return
@@ -592,6 +614,7 @@ def _apply_status_change(db: Session, app_row: JobApplication, new_status: str, 
         try:
             send_application_status_email.delay(
                 recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status, custom_message,
+                interview_details if new_status == "interview" else None,
             )
         except Exception as e:  # never block the status update on the mail queue
             logger.warning(f"Could not enqueue status email: {e}")
@@ -606,6 +629,15 @@ def _apply_status_change(db: Session, app_row: JobApplication, new_status: str, 
             body=f"{job_title}".strip() or "A sua candidatura foi atualizada.",
             link="/Portal/Candidato",
         )
+
+
+def _extract_interview_details(payload: dict) -> dict | None:
+    details = {
+        "when": str(payload.get("interviewDate", "")).strip() or None,
+        "location": str(payload.get("interviewLocation", "")).strip() or None,
+        "meetingLink": str(payload.get("interviewMeetingLink", "")).strip() or None,
+    }
+    return details if any(details.values()) else None
 
 
 @router.patch("/applications/{application_id}/status")
@@ -629,7 +661,7 @@ async def update_application_status(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
     custom_message = str(payload.get("message", "")).strip()[:1000] or None
 
-    _apply_status_change(db, app_row, new_status, custom_message)
+    _apply_status_change(db, app_row, new_status, custom_message, _extract_interview_details(payload))
     db.commit()
     db.refresh(app_row)
 
@@ -671,9 +703,10 @@ async def bulk_update_application_status(
         query = query.filter(JobApplication.company_id == co.id)
     rows = query.all()
 
+    interview_details = _extract_interview_details(payload)
     updated_ids = []
     for app_row in rows:
-        _apply_status_change(db, app_row, new_status, custom_message)
+        _apply_status_change(db, app_row, new_status, custom_message, interview_details)
         updated_ids.append(app_row.id)
     db.commit()
 

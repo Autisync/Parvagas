@@ -383,6 +383,16 @@ class JobApplication(Base, TimestampMixin):
     # instead, so this stays null for those applications.
     tracking_token = Column(String(64), nullable=True, unique=True, index=True)
 
+    # Set when a recruiter moves the application to "interview" — previously
+    # that status change only flipped a label and sent a generic email that
+    # literally told the candidate the company would contact them
+    # separately, with no home anywhere in the product for the actual
+    # scheduling details. All optional: a recruiter may still coordinate the
+    # interview outside the platform.
+    interview_scheduled_at = Column(DateTime, nullable=True)
+    interview_location = Column(String(500), nullable=True)
+    interview_meeting_link = Column(String(500), nullable=True)
+
 
 class JobMatchProposal(Base, TimestampMixin):
     """A candidate-reviewable auto-apply match, produced by the periodic
