@@ -294,9 +294,9 @@ export default function MinhasVagasPage() {
           {filteredJobs.length === 0 && !isLoading && <p className="text-gray-500 text-center py-12">Nenhuma vaga encontrada para os filtros atuais.</p>}
           <div className="space-y-3">
             {filteredJobs.map(job => (
-              <div key={job._id} className="border border-gray-100 rounded-2xl p-5 flex items-start justify-between gap-4">
+              <div key={job._id} className="border border-gray-100 rounded-2xl p-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-bold text-lg">{job.title}</h2>
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${statusColor[job.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>{statusLabel[job.status ?? ""] ?? job.status}</span>
                     <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700">
@@ -311,7 +311,7 @@ export default function MinhasVagasPage() {
                   <p className="text-sm text-gray-500 mt-1">{[job.location, job.workMode, job.category].filter(Boolean).join(" · ")}</p>
                   {job.createdAt && <p className="text-xs text-gray-500 mt-1">Publicada em {new Date(job.createdAt).toLocaleDateString("pt-AO")}</p>}
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 sm:shrink-0">
                   <button
                     onClick={() => {
                       setEditingJob(job as Job);

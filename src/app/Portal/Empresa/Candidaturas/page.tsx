@@ -338,7 +338,7 @@ export default function EmpresaCandidaturasPage() {
               const jobTitle = a.jobId && typeof a.jobId === "object" ? a.jobId.title : "";
               return (
                 <div key={a._id} className="border border-gray-100 rounded-2xl p-5">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-sm shrink-0">{name.slice(0, 2).toUpperCase()}</div>
@@ -371,7 +371,7 @@ export default function EmpresaCandidaturasPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="sm:text-right sm:shrink-0">
                       <select
                         className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
                         value={a.status}
