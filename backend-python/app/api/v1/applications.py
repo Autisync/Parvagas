@@ -649,7 +649,8 @@ async def application_candidate_cv(
         "phone": app_row.applicant_phone,
         "location": app_row.applicant_location,
         "professionalTitle": None,
-        "summary": app_row.cover_letter,
+        "coverLetter": app_row.cover_letter,
+        "summary": None,
         "skills": [],
     }
     documents = []
@@ -674,7 +675,11 @@ async def application_candidate_cv(
         profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == app_row.candidate_user_id).first()
         if profile:
             candidate["professionalTitle"] = profile.job_title
-            candidate["summary"] = profile.professional_summary or candidate["summary"]
+            # Kept distinct from coverLetter — the application-specific letter
+            # this candidate wrote used to be silently overwritten by their
+            # generic profile summary the moment they had one, with the UI
+            # showing a single undifferentiated field either way.
+            candidate["summary"] = profile.professional_summary
             candidate["skills"] = _json_list_safe(profile.skills)
             cvs = db.query(CVUpload).filter(CVUpload.candidate_id == profile.id).order_by(CVUpload.created_at.desc()).all()
             documents = [

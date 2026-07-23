@@ -29,6 +29,7 @@ type CandidateCvPayload = {
     phone?: string;
     location?: string;
     professionalTitle?: string;
+    coverLetter?: string;
     summary?: string;
     skills?: string[];
   };
@@ -465,9 +466,16 @@ export default function EmpresaCandidaturasPage() {
                   </div>
                 </div>
 
+                {selectedCv.candidate?.coverLetter ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 p-3">
+                    <p className="text-xs uppercase text-slate-500">Carta de apresentação (para esta vaga)</p>
+                    <p className="mt-1 text-sm text-slate-700">{selectedCv.candidate.coverLetter}</p>
+                  </div>
+                ) : null}
+
                 {selectedCv.candidate?.summary ? (
                   <div className="mt-4 rounded-xl border border-slate-200 p-3">
-                    <p className="text-xs uppercase text-slate-500">Resumo</p>
+                    <p className="text-xs uppercase text-slate-500">Resumo do perfil</p>
                     <p className="mt-1 text-sm text-slate-700">{selectedCv.candidate.summary}</p>
                   </div>
                 ) : null}
