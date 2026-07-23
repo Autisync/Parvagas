@@ -7,10 +7,12 @@ import { AcademicCapIcon, BellIcon } from "@heroicons/react/24/outline";
 import PrivacyDataCard from "@/app/Portal/components/PrivacyDataCard";
 import LegalAcceptanceHistory from "@/app/Portal/components/LegalAcceptanceHistory";
 import CookiePreferencesCard from "@/app/Portal/components/CookiePreferencesCard";
+import CompanyApiKeysCard from "../components/CompanyApiKeysCard";
 
 export default function EmpresaDefinicoesPage() {
-  const { loading } = useAuth("company");
+  const { loading, token, user } = useAuth("company");
   const [message, setMessage] = useState("");
+  const isOwner = String(user?.companyTeamRole || "").toLowerCase() === "owner";
 
   const openTutorial = () => {
     localStorage.setItem("parvagas_company_tutorial_replay", "1");
@@ -75,6 +77,8 @@ export default function EmpresaDefinicoesPage() {
               </div>
             </div>
           </section>
+
+          {isOwner && token ? <CompanyApiKeysCard token={token} /> : null}
 
           <LegalAcceptanceHistory />
           <CookiePreferencesCard />
