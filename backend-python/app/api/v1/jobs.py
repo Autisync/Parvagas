@@ -107,7 +107,9 @@ def serialize_job(job: Job, *, detail: bool = False) -> dict[str, Any]:
 
 
 @router.get("/jobs")
+@limiter.limit("60/minute")
 async def list_public_jobs(
+    request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=12, ge=1, le=100),
     keyword: Optional[str] = None,
@@ -190,7 +192,8 @@ async def list_public_jobs(
 
 
 @router.get("/jobs/{job_id}")
-async def get_public_job(job_id: str, db: Session = Depends(get_db)):
+@limiter.limit("100/minute")
+async def get_public_job(request: Request, job_id: str, db: Session = Depends(get_db)):
     """Public detail for a single live job."""
     job = (
         db.query(Job).options(joinedload(Job.company)).filter(Job.id == job_id).first()
@@ -300,7 +303,9 @@ def _featured_career_cards(db: Session, limit: int = 3) -> list[dict[str, Any]]:
 
 
 @router.get("/public/homepage")
+@limiter.limit("60/minute")
 async def public_homepage(
+    request: Request,
     jobsLimit: int = Query(default=6, ge=1, le=24),
     postsLimit: int = Query(default=3, ge=1, le=12),
     db: Session = Depends(get_db),
@@ -321,7 +326,8 @@ async def public_homepage(
 
 
 @router.get("/public/stats")
-async def public_stats(db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def public_stats(request: Request, db: Session = Depends(get_db)):
     """Real, anonymous platform counters for public marketing surfaces (e.g. the
     Empresa page). Never 500s: every counter is read independently and falls back
     to null, so a transient DB blip degrades one number rather than the section.
@@ -348,7 +354,9 @@ async def public_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/public/career/posts")
+@limiter.limit("60/minute")
 async def public_career_posts(
+    request: Request,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=12, ge=1, le=50),
     db: Session = Depends(get_db),
@@ -370,7 +378,8 @@ async def public_career_posts(
 
 
 @router.get("/public/career/posts/{slug}")
-async def public_career_post_detail(slug: str, db: Session = Depends(get_db)):
+@limiter.limit("100/minute")
+async def public_career_post_detail(request: Request, slug: str, db: Session = Depends(get_db)):
     """Single published career article by slug (DB-managed, static fallback)."""
     row = (
         db.query(CareerPost)
