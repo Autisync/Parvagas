@@ -68,7 +68,7 @@ export default function EmpresaDashboard() {
   const { token, loading, user } = useAuth("company");
   const { dict } = useClientLocale();
   const [stats, setStats] = useState<CompanyStats>({});
-  const [reach, setReach] = useState<{ views: number; applyRatePct: number; topJobs: Array<{ _id: string; title: string; views: number }> }>({ views: 0, applyRatePct: 0, topJobs: [] });
+  const [reach, setReach] = useState<{ views: number; applyRatePct: number; topJobs: Array<{ _id: string; title: string; views: number; applications: number; conversionPct: number }> }>({ views: 0, applyRatePct: 0, topJobs: [] });
   const [profile, setProfile] = useState<CompanyProfile>({});
   const [fetching, setFetching] = useState(true);
   const [pageError, setPageError] = useState(false);
@@ -259,7 +259,10 @@ export default function EmpresaDashboard() {
                 ) : reach.topJobs.map((j) => (
                   <li key={j._id} className="flex items-center justify-between gap-3 text-sm">
                     <span className="truncate text-[var(--text-muted)]">{j.title}</span>
-                    <span className="shrink-0 font-semibold text-[var(--text-strong)]">{j.views} visualizações</span>
+                    <span className="shrink-0 text-right">
+                      <span className="block font-semibold text-[var(--text-strong)]">{j.views} visualizações</span>
+                      <span className="block text-xs text-[var(--text-subtle)]">{j.applications} candidaturas · {j.conversionPct}% conversão</span>
+                    </span>
                   </li>
                 ))}
               </ul>
