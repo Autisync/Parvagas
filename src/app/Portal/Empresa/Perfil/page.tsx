@@ -192,7 +192,7 @@ function EmpresaPerfilContent() {
     setSaving(true);
     setMsg("");
     try {
-      await authFetch("/companies/profile", token!, { method: "PATCH", body: JSON.stringify(profile) });
+      await authFetch("/companies/profile", token!, { method: "PUT", body: JSON.stringify(profile) });
       setMsg("Perfil actualizado com sucesso.");
       pushToast("success", "Perfil actualizado com sucesso.");
     } catch (err: unknown) {

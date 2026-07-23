@@ -17,7 +17,6 @@ from app.services.company_access_service import resolve_company_for_user, resolv
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
 from app.api.v1.jobs import serialize_job
-from app.schemas import CompanyProfileResponse, CompanyProfileUpdateRequest
 from app.core.logging import get_logger
 from app.core.security import create_verification_token, hash_token
 from app.core.config import get_settings
@@ -146,33 +145,82 @@ def _apply_job_payload(job: Job, payload: dict[str, Any]) -> None:
             setattr(job, attr, _to_text_list(payload[key]))
 
 
-@router.get("/profile", response_model=CompanyProfileResponse)
+def _serialize_company_profile(company: Company) -> dict[str, Any]:
+    """camelCase shape the Perfil page actually reads — the previous
+    response_model=CompanyProfileResponse returned raw snake_case ORM
+    attribute names (logo_url, owner_user_id, ...), which the frontend's
+    `profile.logo` / `profile.ownerUserId` reads never matched, so even a
+    successful save looked like it hadn't persisted on the next load."""
+    return {
+        "_id": company.id,
+        "ownerUserId": company.owner_user_id,
+        "name": company.name,
+        "legalName": company.legal_name,
+        "nif": company.nif,
+        "phone": company.phone,
+        "email": company.email,
+        "contactEmail": company.email,
+        "contactPhone": company.phone,
+        "website": company.website,
+        "status": company.status,
+        "description": company.description,
+        "logo": StorageService.resolve_public_url(company.logo_url),
+        "angolanizacao": bool(company.angolanizacao),
+        "industry": company.industry,
+        "size": company.size,
+        "location": company.location,
+    }
+
+
+# frontend camelCase key -> Company ORM attribute. contactEmail/contactPhone
+# are aliases onto the same email/phone columns (no separate "hiring
+# contact" concept exists yet) — see companion migration 20260723_0065 for
+# industry/size/location, which previously had no backing column at all.
+_COMPANY_PROFILE_FIELD_MAP = {
+    "name": "name",
+    "legalName": "legal_name",
+    "nif": "nif",
+    "phone": "phone",
+    "email": "email",
+    "contactEmail": "email",
+    "contactPhone": "phone",
+    "website": "website",
+    "description": "description",
+    "angolanizacao": "angolanizacao",
+    "industry": "industry",
+    "size": "size",
+    "location": "location",
+}
+
+
+def _apply_company_profile_payload(company: Company, payload: dict[str, Any]) -> None:
+    for key, attr in _COMPANY_PROFILE_FIELD_MAP.items():
+        if key in payload and payload[key] is not None:
+            setattr(company, attr, payload[key])
+
+
+@router.get("/profile")
 async def get_company_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get current company profile."""
-    return _require_company(db, current_user)
+    company = _require_company(db, current_user)
+    return {"company": _serialize_company_profile(company)}
 
 
-@router.put("/profile", response_model=CompanyProfileResponse)
+@router.put("/profile")
 async def update_company_profile(
-    request: CompanyProfileUpdateRequest,
+    payload: dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Update company profile."""
     company = _require_company(db, current_user)
-
-    # Update fields
-    update_data = request.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(company, key, value)
-    
+    _apply_company_profile_payload(company, payload)
     db.commit()
     db.refresh(company)
-    
-    return company
+    return {"company": _serialize_company_profile(company)}
 
 
 @router.patch("/tutorial/seen")

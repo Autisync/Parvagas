@@ -126,37 +126,6 @@ class CandidateProfileUpdateRequest(BaseModel):
     skills: Optional[str] = None
 
 
-# Company Schemas
-class CompanyProfileResponse(BaseModel):
-    """Company profile response."""
-    id: str
-    owner_user_id: str
-    name: str
-    legal_name: Optional[str]
-    nif: Optional[str]
-    phone: Optional[str]
-    email: Optional[str]
-    website: Optional[str]
-    status: str
-    description: Optional[str]
-    logo_url: Optional[str]
-    angolanizacao: Optional[bool] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CompanyProfileUpdateRequest(BaseModel):
-    """Update company profile request."""
-    name: Optional[str] = None
-    legal_name: Optional[str] = None
-    nif: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    description: Optional[str] = None
-    angolanizacao: Optional[bool] = None
-
-
 # CV Schemas
 class ParsedCVProfile(BaseModel):
     """Parsed CV profile data."""

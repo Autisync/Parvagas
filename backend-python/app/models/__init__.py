@@ -157,7 +157,13 @@ class Company(Base, TimestampMixin):
     phone = Column(String(20), nullable=True)
     email = Column(String(255), nullable=True)
     website = Column(String(500), nullable=True)
-    
+
+    # Profile — collected on the Perfil page; no candidate-facing use yet
+    # beyond display, so free-text rather than a controlled taxonomy.
+    industry = Column(String(100), nullable=True)
+    size = Column(String(100), nullable=True)
+    location = Column(String(255), nullable=True)
+
     # Status
     status = Column(String(50), nullable=False, default="pending_verification")
     

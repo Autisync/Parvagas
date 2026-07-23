@@ -106,7 +106,7 @@ def test_invited_member_can_get_company_profile(db):
     member = _make_member(db, company)
 
     result = asyncio.run(get_company_profile(db=db, current_user=member))
-    assert result.id == company.id
+    assert result["company"]["_id"] == company.id
 
 
 def test_invited_member_can_list_applications(db):
