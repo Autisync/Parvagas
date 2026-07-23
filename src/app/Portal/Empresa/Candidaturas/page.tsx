@@ -73,6 +73,9 @@ export default function EmpresaCandidaturasPage() {
   const [noteBody, setNoteBody] = useState("");
   const [noteRating, setNoteRating] = useState(0);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("shortlisted");
+  const [bulkApplying, setBulkApplying] = useState(false);
 
   const toggleNotes = async (id: string) => {
     if (notesFor === id) { setNotesFor(null); return; }
@@ -178,6 +181,35 @@ export default function EmpresaCandidaturasPage() {
   const updateStatusWithOptionalNote = (id: string, status: string) => {
     const message = window.prompt("Mensagem opcional para o candidato (aparece no email de atualização):", "") || undefined;
     updateStatus(id, status, message);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = filteredApplications.map((a) => a._id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+    setSelectedIds(allSelected ? [] : visibleIds);
+  };
+
+  const applyBulkStatus = async () => {
+    if (selectedIds.length === 0) return;
+    const message = window.prompt("Mensagem opcional para os candidatos (aparece no email de atualização):", "") || undefined;
+    setBulkApplying(true);
+    try {
+      const result = await authFetch<{ updated: number }>("/applications/bulk-status", token!, {
+        method: "PATCH",
+        body: JSON.stringify({ applicationIds: selectedIds, status: bulkStatus, message }),
+      });
+      pushToast("success", `${result.updated} candidatura${result.updated === 1 ? "" : "s"} atualizada${result.updated === 1 ? "" : "s"}.`);
+      setSelectedIds([]);
+      refetch();
+    } catch (err: unknown) {
+      pushToast("error", (err as Error).message || "Erro ao atualizar candidaturas.");
+    } finally {
+      setBulkApplying(false);
+    }
   };
 
   const viewCandidateCv = async (applicationId: string) => {
@@ -330,6 +362,38 @@ export default function EmpresaCandidaturasPage() {
           ) : (
           <>
           {filteredApplications.length === 0 && !isLoading && <p className="text-gray-500 text-center py-12">Nenhuma candidatura encontrada para os filtros atuais.</p>}
+          {filteredApplications.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={filteredApplications.length > 0 && filteredApplications.every((a) => selectedIds.includes(a._id))}
+                  onChange={toggleSelectAllVisible}
+                />
+                Selecionar tudo
+              </label>
+              {selectedIds.length > 0 && (
+                <>
+                  <span className="text-xs text-gray-500">{selectedIds.length} selecionada{selectedIds.length === 1 ? "" : "s"}</span>
+                  <select
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white"
+                  >
+                    {hiringStatuses.map(s => <option key={s} value={s}>{statusLabel[s]}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={applyBulkStatus}
+                    disabled={bulkApplying}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {bulkApplying ? "A aplicar..." : "Aplicar a selecionados"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           <div className="space-y-4">
             {filteredApplications.map(a => {
               const name = a.profileSnapshot?.fullName ?? "Candidato";
@@ -341,6 +405,13 @@ export default function EmpresaCandidaturasPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(a._id)}
+                          onChange={() => toggleSelected(a._id)}
+                          className="shrink-0"
+                          aria-label={`Selecionar ${name}`}
+                        />
                         <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-sm shrink-0">{name.slice(0, 2).toUpperCase()}</div>
                         <div>
                           <p className="font-bold">{name}</p>

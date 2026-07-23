@@ -575,6 +575,39 @@ async def list_applications(
 _HIRING_STATUSES = {"submitted", "under_review", "viewed", "shortlisted", "interview", "offer", "rejected", "hired", "withdrawn"}
 
 
+def _apply_status_change(db: Session, app_row: JobApplication, new_status: str, custom_message: str | None) -> None:
+    """Shared by the single and bulk status-update endpoints: flips the
+    status, then notifies the candidate (email + in-app) exactly like the
+    single-application path always has. Caller is responsible for the
+    db.commit() — bulk callers batch many of these into one transaction."""
+    previous_status = app_row.status
+    app_row.status = new_status
+
+    if new_status == previous_status or new_status in {"submitted", "withdrawn"}:
+        return
+    recipient = app_row.applicant_email
+    job = db.query(Job).filter(Job.id == app_row.job_id).first()
+    job_title = job.title if job else ""
+    if recipient:
+        try:
+            send_application_status_email.delay(
+                recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status, custom_message,
+            )
+        except Exception as e:  # never block the status update on the mail queue
+            logger.warning(f"Could not enqueue status email: {e}")
+    if app_row.candidate_user_id:
+        label, _msg = EmailService._STATUS_COPY.get(
+            new_status, ("Atualização da candidatura", "")
+        )
+        create_notification(
+            db, app_row.candidate_user_id,
+            type="application_status",
+            title=label,
+            body=f"{job_title}".strip() or "A sua candidatura foi atualizada.",
+            link="/Portal/Candidato",
+        )
+
+
 @router.patch("/applications/{application_id}/status")
 async def update_application_status(
     application_id: str,
@@ -595,38 +628,56 @@ async def update_application_status(
     if new_status not in _HIRING_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
     custom_message = str(payload.get("message", "")).strip()[:1000] or None
-    previous_status = app_row.status
-    app_row.status = new_status
+
+    _apply_status_change(db, app_row, new_status, custom_message)
     db.commit()
     db.refresh(app_row)
 
-    # Notify the candidate when the status meaningfully changes (skip self-service
-    # states and no-op updates). Sent async so the API stays fast.
-    if new_status != previous_status and new_status not in {"submitted", "withdrawn"}:
-        recipient = app_row.applicant_email
-        job = db.query(Job).filter(Job.id == app_row.job_id).first()
-        job_title = job.title if job else ""
-        if recipient:
-            try:
-                send_application_status_email.delay(
-                    recipient, app_row.applicant_full_name or "Candidato/a", job_title, new_status, custom_message,
-                )
-            except Exception as e:  # never block the status update on the mail queue
-                logger.warning(f"Could not enqueue status email: {e}")
-        # In-app notification for the candidate (if they have an account).
-        if app_row.candidate_user_id:
-            label, _msg = EmailService._STATUS_COPY.get(
-                new_status, ("Atualização da candidatura", "")
-            )
-            create_notification(
-                db, app_row.candidate_user_id,
-                type="application_status",
-                title=label,
-                body=f"{job_title}".strip() or "A sua candidatura foi atualizada.",
-                link="/Portal/Candidato",
-            )
-
     return {"application": {"_id": app_row.id, "status": app_row.status}}
+
+
+@router.patch("/applications/bulk-status")
+async def bulk_update_application_status(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Move several applications along the pipeline in one call — triaging a
+    stack of candidates previously meant clicking through each one
+    individually. Same permission/status rules as the single-application
+    endpoint, applied per row; silently skips ids outside the caller's
+    company rather than 403ing the whole batch, since a stale selection
+    (e.g. one application reassigned mid-session) shouldn't block the rest."""
+    application_ids = payload.get("applicationIds")
+    if not isinstance(application_ids, list) or not application_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="applicationIds é obrigatório")
+    if len(application_ids) > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Máximo de 100 candidaturas por lote")
+
+    new_status = str(payload.get("status", "")).strip().lower()
+    if new_status not in _HIRING_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Estado inválido")
+    custom_message = str(payload.get("message", "")).strip()[:1000] or None
+
+    co = None
+    if current_user.role != UserRole.admin:
+        co = resolve_company_for_user_or_none(db, current_user)
+        if not co:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
+        require_role(db, current_user, co, {"owner", "recruiter"})
+
+    query = db.query(JobApplication).filter(JobApplication.id.in_(application_ids))
+    if co is not None:
+        query = query.filter(JobApplication.company_id == co.id)
+    rows = query.all()
+
+    updated_ids = []
+    for app_row in rows:
+        _apply_status_change(db, app_row, new_status, custom_message)
+        updated_ids.append(app_row.id)
+    db.commit()
+
+    return {"updated": len(updated_ids), "applicationIds": updated_ids}
 
 
 @router.get("/applications/{application_id}/candidate-cv")
