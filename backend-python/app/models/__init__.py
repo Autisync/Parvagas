@@ -951,6 +951,26 @@ class Plan(Base, TimestampMixin):
     # advertised "Acesso à base de CVs" before this column existed, with no
     # backend enforcement behind it.
     candidate_search_included = Column(Boolean, nullable=False, default=False)
+    # W5.4 — gates ApiKey creation and every API-key-authenticated request.
+    api_access_included = Column(Boolean, nullable=False, default=False)
+
+
+class ApiKey(Base, TimestampMixin):
+    """A company's scoped credential for the read-only applications feed
+    (W5.4) — external ATS/HRIS integrations, not portal sessions.
+    key_hash is unsalted SHA-256 (app.core.security.hash_token), same
+    convention as RefreshToken/CompanyInvite; the raw value is shown to
+    the owner exactly once, at creation."""
+    __tablename__ = "api_keys"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    label = Column(String(255), nullable=True)
+    key_prefix = Column(String(12), nullable=False)
+    key_hash = Column(String(255), nullable=False, unique=True, index=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
 
 
 class Subscription(Base, TimestampMixin):

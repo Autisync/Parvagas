@@ -135,3 +135,27 @@ def assert_candidate_search_access(db: Session, company: Company) -> None:
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="O acesso ao diretório de candidatos exige o plano Business. Faça upgrade para pesquisar candidatos.",
         )
+
+
+def get_api_access_included(db: Session, plan_code: str) -> bool:
+    """Whether `plan_code` includes the company API/applications feed
+    (W5.4) — same missing-row self-seed fallback as get_job_plan_limit."""
+    plan = db.query(Plan).filter(Plan.code == plan_code).first()
+    if plan:
+        return bool(plan.api_access_included)
+    from app.api.v1.payments import _ensure_seed_plans
+    _ensure_seed_plans(db)
+    plan = db.query(Plan).filter(Plan.code == plan_code).first()
+    return bool(plan.api_access_included) if plan else False
+
+
+def assert_api_access(db: Session, company: Company) -> None:
+    """Gate API-key creation AND every API-key-authenticated request
+    behind a plan that includes it (currently Business) — checked on
+    every call, not just at key-creation time, so a plan downgrade blocks
+    existing keys immediately rather than leaving them valid."""
+    if not get_api_access_included(db, get_company_plan_code(db, company.id)):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="O acesso à API da empresa exige o plano Business. Faça upgrade para gerar chaves API.",
+        )
