@@ -25,6 +25,7 @@ from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
 from app.services.candidate_billing_service import get_cv_builder_plans
 from app.services import receipt_service
+from app.services.company_access_service import resolve_company_for_user
 
 logger = get_logger(__name__)
 
@@ -72,10 +73,11 @@ async def list_plans(db: Session = Depends(get_db)):
 
 
 def _company_for(db: Session, user: User) -> Company:
-    co = db.query(Company).filter(Company.owner_user_id == user.id).first()
-    if not co:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    return co
+    """Owner or invited team member — see company_access_service for why
+    owner-only used to 404 every team member. Billing-mutation endpoints
+    (subscribe/cancel/confirm) may eventually want owner-only enforcement
+    on top of this; tracked separately."""
+    return resolve_company_for_user(db, user)
 
 
 @router.get("/companies/subscription")

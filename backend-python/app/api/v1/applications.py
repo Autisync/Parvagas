@@ -76,6 +76,7 @@ from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.services.email_service import EmailService
 from app.services.notification_service import create_notification
+from app.services.company_access_service import resolve_company_for_user_or_none
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -481,7 +482,7 @@ async def list_company_applications(
     if current_user.role != UserRole.company:
         return {"applications": [], **_pagination(page, limit, 0)}
 
-    company = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+    company = resolve_company_for_user_or_none(db, current_user)
     if not company:
         return {"applications": [], **_pagination(page, limit, 0)}
 
@@ -544,7 +545,7 @@ async def update_application_status(
     if not app_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     if current_user.role != UserRole.admin:
-        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        co = resolve_company_for_user_or_none(db, current_user)
         if not co or app_row.company_id != co.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
     new_status = str(payload.get("status", "")).strip().lower()
@@ -595,7 +596,7 @@ async def application_candidate_cv(
     if not app_row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     if current_user.role != UserRole.admin:
-        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        co = resolve_company_for_user_or_none(db, current_user)
         if not co or app_row.company_id != co.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
 
@@ -655,7 +656,7 @@ async def application_resume_cv(
     if not app_row or not app_row.resume_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application or resume not found")
     if current_user.role != UserRole.admin:
-        co = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+        co = resolve_company_for_user_or_none(db, current_user)
         if not co or app_row.company_id != co.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão")
 

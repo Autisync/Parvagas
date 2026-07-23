@@ -13,6 +13,7 @@ from app.models import (
 )
 from app.services.storage_service import StorageService
 from app.services.company_billing_service import assert_job_quota
+from app.services.company_access_service import resolve_company_for_user, resolve_company_for_user_or_none
 from pathlib import Path as _Path
 from app.api.v1.applications import list_company_applications
 from app.api.v1.jobs import serialize_job
@@ -98,11 +99,10 @@ def _ensure_admin(current_user: User) -> User:
 
 
 def _require_company(db: Session, current_user: User) -> Company:
-    """Resolve the company owned by the current user, or 404."""
-    company = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
-    if not company:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    return company
+    """Resolve the company the current user has a seat on (owner or invited
+    team member), or 404. See app.services.company_access_service for why
+    the owner-only check this used to be was a real bug."""
+    return resolve_company_for_user(db, current_user)
 
 
 def _to_text_list(value: Any) -> Optional[str]:
@@ -152,14 +152,7 @@ async def get_company_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Get current company profile."""
-    company = db.query(Company).filter(
-        Company.owner_user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    
-    return company
+    return _require_company(db, current_user)
 
 
 @router.put("/profile", response_model=CompanyProfileResponse)
@@ -169,13 +162,8 @@ async def update_company_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Update company profile."""
-    company = db.query(Company).filter(
-        Company.owner_user_id == current_user.id
-    ).first()
-    
-    if not company:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    
+    company = _require_company(db, current_user)
+
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -193,7 +181,7 @@ async def mark_company_tutorial_seen(
     current_user: User = Depends(get_current_user),
 ):
     """Mark the company onboarding guide as seen for the current user's company."""
-    company = db.query(Company).filter(Company.owner_user_id == current_user.id).first()
+    company = resolve_company_for_user_or_none(db, current_user)
     if company:
         company.has_seen_tutorial = True
         db.commit()
