@@ -32,16 +32,21 @@ export default function AnimatedCounter({
 }: Props) {
   const [display, setDisplay] = useState(0);
   const ref = useRef<HTMLSpanElement | null>(null);
-  const started = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Scoped to this effect run (not a ref) so a later `value` update — e.g.
+    // a placeholder stat replaced by the real fetched number — gets its own
+    // fresh animate-or-jump decision instead of being silently dropped by a
+    // "already started" guard left over from the previous value.
+    let started = false;
+    let rafId: number | null = null;
 
     const run = () => {
-      if (started.current) return;
-      started.current = true;
+      if (started) return;
+      started = true;
       if (reduced) {
         setDisplay(value);
         return;
@@ -50,10 +55,10 @@ export default function AnimatedCounter({
       const step = (now: number) => {
         const t = Math.min(1, (now - start) / duration);
         setDisplay(value * easeOutExpo(t));
-        if (t < 1) requestAnimationFrame(step);
+        if (t < 1) rafId = requestAnimationFrame(step);
         else setDisplay(value);
       };
-      requestAnimationFrame(step);
+      rafId = requestAnimationFrame(step);
     };
 
     const io = new IntersectionObserver(
@@ -66,7 +71,10 @@ export default function AnimatedCounter({
       { threshold: 0.3 }
     );
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [value, duration]);
 
   const formatted = display.toLocaleString(locale, {
