@@ -31,10 +31,12 @@ from app.api.v1.admin import (
     admin_expiring_subscriptions,
     admin_get_user_subscription,
     admin_list_candidate_cv_plans,
+    admin_list_plan_versions,
     admin_list_plans,
     admin_list_transactions,
+    admin_publish_plan_version,
+    admin_save_plan_draft_version,
     admin_update_candidate_cv_plan,
-    admin_update_plan,
     admin_update_transaction_status,
     admin_update_user_subscription,
 )
@@ -52,6 +54,13 @@ def db():
 
 def _make_admin(db):
     user = User(id=str(uuid.uuid4()), email=f"admin-{uuid.uuid4()}@parvagas.pt", full_name="Admin", password_hash="x", role=UserRole.admin)
+    db.add(user)
+    db.commit()
+    return user
+
+
+def _make_super_admin(db):
+    user = User(id=str(uuid.uuid4()), email=f"superadmin-{uuid.uuid4()}@parvagas.pt", full_name="Super Admin", password_hash="x", role=UserRole.admin, admin_level="super-admin")
     db.add(user)
     db.commit()
     return user
@@ -119,11 +128,45 @@ def test_create_plan_rejects_bad_interval(db):
         asyncio.run(admin_create_plan({"code": "y", "name": "Y", "interval": "yearly"}, db=db, current_user=admin))
 
 
-def test_update_plan_price(db):
+def test_save_draft_version_does_not_change_live_plan(db):
     admin = _make_admin(db)
     created = asyncio.run(admin_create_plan({"code": "z", "name": "Z", "price": 100}, db=db, current_user=admin))
-    updated = asyncio.run(admin_update_plan(created["_id"], {"price": 200}, db=db, current_user=admin))
-    assert updated["price"] == 200
+    result = asyncio.run(admin_save_plan_draft_version(created["_id"], {"price": 200}, db=db, current_user=admin))
+    assert result["version"]["price"] == 200
+    assert result["version"]["status"] == "draft"
+
+    # Live Plan (what companies see/are gated by) is untouched until publish.
+    still_live = asyncio.run(admin_list_plans(db=db, current_user=admin))
+    row = next(p for p in still_live["plans"] if p["_id"] == created["_id"])
+    assert row["price"] == 100
+
+
+def test_publish_requires_super_admin(db):
+    admin = _make_admin(db)
+    created = asyncio.run(admin_create_plan({"code": "z2", "name": "Z2", "price": 100}, db=db, current_user=admin))
+    draft = asyncio.run(admin_save_plan_draft_version(created["_id"], {"price": 200}, db=db, current_user=admin))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(admin_publish_plan_version(created["_id"], draft["version"]["_id"], db=db, current_user=admin))
+    assert exc.value.status_code == 403
+
+
+def test_publish_syncs_live_plan_and_archives_prior_version(db):
+    super_admin = _make_super_admin(db)
+    created = asyncio.run(admin_create_plan({"code": "z3", "name": "Z3", "price": 100}, db=db, current_user=super_admin))
+    v1_id = asyncio.run(admin_list_plan_versions(created["_id"], db=db, current_user=super_admin))["versions"][0]["_id"]
+
+    draft = asyncio.run(admin_save_plan_draft_version(created["_id"], {"price": 200}, db=db, current_user=super_admin))
+    published = asyncio.run(admin_publish_plan_version(created["_id"], draft["version"]["_id"], db=db, current_user=super_admin))
+    assert published["version"]["status"] == "published"
+
+    live = asyncio.run(admin_list_plans(db=db, current_user=super_admin))
+    row = next(p for p in live["plans"] if p["_id"] == created["_id"])
+    assert row["price"] == 200
+
+    versions = asyncio.run(admin_list_plan_versions(created["_id"], db=db, current_user=super_admin))["versions"]
+    v1 = next(v for v in versions if v["_id"] == v1_id)
+    assert v1["status"] == "archived"
 
 
 def test_delete_plan_blocked_when_referenced_by_subscription(db):

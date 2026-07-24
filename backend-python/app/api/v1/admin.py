@@ -28,7 +28,7 @@ from app.db.session import get_db, SessionLocal
 from app.models import (
     AdCampaign, ATSPipelineItem, ATSStage, AuditLog, CandidateCVSubscription, CandidateCvPlan, CandidateProfile,
     CareerPost, ClientErrorLog, ComplianceCheck, Company, CompanyInvite, CompanyMember, CVUpload, DataSubjectRequest, EmailLog, FeatureFlag, Job, JobAlert, JobApplication, JobMatchProposal,
-    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterIssue, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, ResumeTemplate, SavedJob, ScrapedJob,
+    LegalAcceptance, LegalDocument, LegalDocumentVersion, LlmCallLog, NewsletterIssue, NewsletterSubscriber, PaymentDispute, PaymentDisputeMessage, Plan, PlanVersion, ResumeTemplate, SavedJob, ScrapedJob,
     ScraperSettings, ScraperSource, SecurityEvent, SecurityIncident, SecurityIncidentLogEntry, Subscription, SupportMessage, TaskRun, Transaction,
     User, UserRole,
 )
@@ -36,7 +36,7 @@ from app.workers.tasks import send_newsletter_issue, send_templated_email
 from app.services.notification_service import create_notification
 from app.services.scraper_service import content_hash as scraped_content_hash, classify_audience_lane, assess_scraped_job_quality, safe_http_url, is_public_scraper_url
 from app.services.storage_service import StorageService
-from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service, incident_service
+from app.services import legal_service, compliance_analyzer_service, dsar_service, receipt_service, dispute_service, incident_service, plan_service
 from app.services.slug_service import slugify as _slugify, generate_unique_slug
 from app.core.logging import get_logger
 
@@ -2423,6 +2423,30 @@ def _to_plan_record(p: Plan) -> dict[str, Any]:
         "currency": p.currency, "interval": p.interval,
         "features": json.loads(p.features) if p.features else [],
         "active": bool(p.active),
+        "maxActiveJobs": p.max_active_jobs,
+        "candidateSearchIncluded": bool(p.candidate_search_included),
+        "apiAccessIncluded": bool(p.api_access_included),
+        "promoPrice": p.promo_price,
+        "promoLabel": p.promo_label,
+        "promoExpiresAt": p.promo_expires_at.isoformat() if p.promo_expires_at else None,
+    }
+
+
+def _to_plan_version_record(v: PlanVersion) -> dict[str, Any]:
+    return {
+        "_id": v.id, "planId": v.plan_id, "versionLabel": v.version_label,
+        "name": v.name, "price": v.price, "currency": v.currency, "interval": v.interval,
+        "features": json.loads(v.features) if v.features else [],
+        "maxActiveJobs": v.max_active_jobs,
+        "candidateSearchIncluded": bool(v.candidate_search_included),
+        "apiAccessIncluded": bool(v.api_access_included),
+        "promoPrice": v.promo_price,
+        "promoLabel": v.promo_label,
+        "promoExpiresAt": v.promo_expires_at.isoformat() if v.promo_expires_at else None,
+        "status": v.status,
+        "effectiveDate": v.effective_date.isoformat() if v.effective_date else None,
+        "publishedAt": v.published_at.isoformat() if v.published_at else None,
+        "createdAt": v.created_at.isoformat() if v.created_at else None,
     }
 
 
@@ -2485,46 +2509,142 @@ async def admin_create_plan(
         interval=_validate_plan_interval(payload.get("interval", "month")),
         features=json.dumps(payload.get("features") or [], ensure_ascii=True),
         active=bool(payload.get("active", True)),
+        max_active_jobs=int(payload.get("maxActiveJobs", 1) or 1),
+        candidate_search_included=bool(payload.get("candidateSearchIncluded", False)),
+        api_access_included=bool(payload.get("apiAccessIncluded", False)),
     )
     db.add(created)
     db.commit()
     db.refresh(created)
+
+    v1 = plan_service.create_draft_version(
+        db, plan_id=created.id, name=created.name, price=created.price, currency=created.currency,
+        interval=created.interval, features=created.features, max_active_jobs=created.max_active_jobs,
+        candidate_search_included=created.candidate_search_included,
+        api_access_included=created.api_access_included,
+    )
+    plan_service.publish_plan_version(db, v1, published_by_user_id=admin.id)
+    db.refresh(created)
+
     _record_admin_event(actor=admin, action="plan.create", resource_type="plan", resource_id=created.id, details={"code": created.code})
     return _to_plan_record(created)
 
 
-@router.put("/plans/{plan_id}")
-async def admin_update_plan(
+@router.get("/plans/{plan_id}/versions")
+async def admin_list_plan_versions(
+    plan_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_admin(current_user)
+    if not db.query(Plan).filter(Plan.id == plan_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+    versions = plan_service.list_versions(db, plan_id)
+    return {"versions": [_to_plan_version_record(v) for v in versions]}
+
+
+@router.post("/plans/{plan_id}/versions")
+async def admin_save_plan_draft_version(
     plan_id: str,
     payload: dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Upsert the plan's draft version — pricing/entitlement changes are
+    revenue-affecting, so they land here as a draft first and only take
+    effect for anyone once explicitly published (see the endpoint below,
+    super-admin only)."""
     admin = _ensure_admin(current_user)
-    row = db.query(Plan).filter(Plan.id == plan_id).first()
-    if not row:
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
 
+    fields: dict[str, Any] = {}
     if "name" in payload:
         name = str(payload.get("name", "")).strip()
         if not name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="name não pode ficar vazio")
-        row.name = name
+        fields["name"] = name
     if "price" in payload:
-        row.price = float(payload.get("price") or 0)
+        fields["price"] = float(payload.get("price") or 0)
     if "currency" in payload:
-        row.currency = str(payload.get("currency", "AOA")).strip() or "AOA"
+        fields["currency"] = str(payload.get("currency", "AOA")).strip() or "AOA"
     if "interval" in payload:
-        row.interval = _validate_plan_interval(payload.get("interval"))
+        fields["interval"] = _validate_plan_interval(payload.get("interval"))
     if "features" in payload:
-        row.features = json.dumps(payload.get("features") or [], ensure_ascii=True)
-    if "active" in payload:
-        row.active = bool(payload.get("active"))
+        fields["features"] = json.dumps(payload.get("features") or [], ensure_ascii=True)
+    if "maxActiveJobs" in payload:
+        fields["max_active_jobs"] = int(payload.get("maxActiveJobs") or 0)
+    if "candidateSearchIncluded" in payload:
+        fields["candidate_search_included"] = bool(payload.get("candidateSearchIncluded"))
+    if "apiAccessIncluded" in payload:
+        fields["api_access_included"] = bool(payload.get("apiAccessIncluded"))
+    if "promoPrice" in payload:
+        fields["promo_price"] = float(payload["promoPrice"]) if payload.get("promoPrice") not in (None, "") else None
+    if "promoLabel" in payload:
+        fields["promo_label"] = str(payload.get("promoLabel") or "").strip() or None
+    if "promoExpiresAt" in payload:
+        fields["promo_expires_at"] = _parse_dt(payload.get("promoExpiresAt"))
 
+    version = plan_service.create_draft_version(db, plan_id=plan.id, **fields)
+    _record_admin_event(
+        actor=admin, action="plan_version.save_draft", resource_type="plan_version",
+        resource_id=version.id, details={"planCode": plan.code, "changes": list(fields.keys())},
+    )
+    return {"version": _to_plan_version_record(version)}
+
+
+@router.post("/plans/{plan_id}/versions/{version_id}/publish")
+async def admin_publish_plan_version(
+    plan_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Publishing changes what every company on this plan is sold and,
+    for new subscriptions/renewals, entitled to — high enough blast
+    radius to require super-admin, matching this file's existing bar for
+    comparably consequential actions (newsletter sends, dispute config)."""
+    admin = _ensure_admin(current_user)
+    _ensure_super_admin(admin)
+    version = plan_service.get_version(db, version_id)
+    if not version or version.plan_id != plan_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Versão não encontrada")
+    if version.status != "draft":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Apenas rascunhos podem ser publicados")
+
+    previous = plan_service.get_current_version(db, plan_id)
+    published = plan_service.publish_plan_version(db, version, published_by_user_id=admin.id)
+    _record_admin_event(
+        actor=admin, action="plan_version.publish", resource_type="plan_version", resource_id=published.id,
+        details={
+            "planId": plan_id, "versionLabel": published.version_label,
+            "priceChange": {"from": previous.price if previous else None, "to": published.price},
+        },
+    )
+    return {"version": _to_plan_version_record(published)}
+
+
+@router.patch("/plans/{plan_id}/active")
+async def admin_toggle_plan_active(
+    plan_id: str,
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Whether this plan is offered to new signups at all — catalog
+    visibility, not a pricing/entitlement term, so it doesn't go through
+    the draft/publish review flow and doesn't affect any existing
+    subscriber's entitlements."""
+    admin = _ensure_admin(current_user)
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+    plan.active = bool(payload.get("active"))
     db.commit()
-    db.refresh(row)
-    _record_admin_event(actor=admin, action="plan.update", resource_type="plan", resource_id=row.id, details={"changes": list(payload.keys())})
-    return _to_plan_record(row)
+    db.refresh(plan)
+    _record_admin_event(actor=admin, action="plan.toggle_active", resource_type="plan", resource_id=plan.id, details={"active": plan.active})
+    return _to_plan_record(plan)
 
 
 @router.delete("/plans/{plan_id}")
