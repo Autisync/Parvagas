@@ -587,9 +587,9 @@ async def list_company_jobs(
     # surfaced here too so Minhas-Vagas can show "X of Y slots used" before
     # a company ever hits the wall. _ACTIVE_JOB_STATUSES mirrors
     # assert_job_quota's own definition of "counts toward the cap".
-    from app.services.company_billing_service import get_company_plan_code, get_job_plan_limit, _ACTIVE_JOB_STATUSES
+    from app.services.company_billing_service import get_active_plan_version, _ACTIVE_JOB_STATUSES
     active_jobs = db.query(Job).filter(Job.company_id == company.id, Job.status.in_(_ACTIVE_JOB_STATUSES)).count()
-    max_active_jobs = get_job_plan_limit(db, get_company_plan_code(db, company.id))
+    max_active_jobs = get_active_plan_version(db, company.id).max_active_jobs
 
     return {
         "jobs": jobs_payload, **pagination, "pagination": pagination,

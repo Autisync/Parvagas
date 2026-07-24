@@ -24,7 +24,7 @@ from app.models import (
 from app.workers.tasks import send_templated_email
 from app.core.logging import get_logger
 from app.services.candidate_billing_service import get_cv_builder_plans
-from app.services import receipt_service
+from app.services import receipt_service, plan_service
 from app.services.company_access_service import resolve_company_for_user, require_role
 
 logger = get_logger(__name__)
@@ -47,12 +47,15 @@ _DEFAULT_PLANS = [
 
 
 def _serialize_plan(p: Plan) -> dict[str, Any]:
+    promo_active = bool(p.promo_price is not None and (not p.promo_expires_at or p.promo_expires_at > datetime.utcnow()))
     return {
         "_id": p.id, "code": p.code, "name": p.name, "price": p.price,
         "currency": p.currency, "interval": p.interval,
         "features": json.loads(p.features) if p.features else [],
         "candidateSearchIncluded": bool(p.candidate_search_included),
         "apiAccessIncluded": bool(p.api_access_included),
+        "promoPrice": p.promo_price if promo_active else None,
+        "promoLabel": p.promo_label if promo_active else None,
     }
 
 
@@ -60,13 +63,26 @@ def _ensure_seed_plans(db: Session) -> list[Plan]:
     plans = db.query(Plan).filter(Plan.active.is_(True)).all()
     if plans:
         return plans
+
+    created: list[Plan] = []
     for d in _DEFAULT_PLANS:
-        db.add(Plan(code=d["code"], name=d["name"], price=d["price"], currency="AOA",
+        plan = Plan(code=d["code"], name=d["name"], price=d["price"], currency="AOA",
                     interval=d["interval"], features=json.dumps(d["features"], ensure_ascii=True), active=True,
                     max_active_jobs=d["max_active_jobs"],
                     candidate_search_included=d.get("candidate_search_included", False),
-                    api_access_included=d.get("api_access_included", False)))
+                    api_access_included=d.get("api_access_included", False))
+        db.add(plan)
+        created.append(plan)
     db.commit()
+    for plan in created:
+        db.refresh(plan)
+        version = plan_service.create_draft_version(
+            db, plan_id=plan.id, name=plan.name, price=plan.price, currency=plan.currency,
+            interval=plan.interval, features=plan.features, max_active_jobs=plan.max_active_jobs,
+            candidate_search_included=plan.candidate_search_included,
+            api_access_included=plan.api_access_included,
+        )
+        plan_service.publish_plan_version(db, version)
     return db.query(Plan).filter(Plan.active.is_(True)).all()
 
 
@@ -222,6 +238,14 @@ def _activate(db: Session, tx: Transaction) -> dict[str, Any]:
     if sub:
         sub.status = "active"
         sub.current_period_end = datetime.utcnow() + timedelta(days=30)
+        # Grandfathering pin (overwritten every time a subscription is
+        # (re)activated — the only "renewal" event this platform has, since
+        # there's no auto-billing): lock in whatever PlanVersion is
+        # published right now. The company keeps these exact terms until
+        # it pays again.
+        current_version = plan_service.get_current_version(db, tx.plan_id)
+        if current_version:
+            sub.plan_version_id = current_version.id
     db.commit()
 
     # Receipt / activation email to the company owner.
