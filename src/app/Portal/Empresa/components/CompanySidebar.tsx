@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch, logoutCurrentSession } from "@/lib/api";
 import { useClientLocale } from "@/lib/i18n/client";
 import LocaleCompactControl from "@/app/components/ui/LocaleCompactControl";
-import NotificationBell from "@/app/Portal/components/NotificationBell";
 import CompanyTutorialModal from "./CompanyTutorialModal";
 import PortalMobileNav, { type MobileNavItem } from "@/app/Portal/components/PortalMobileNav";
 import {
@@ -168,8 +167,7 @@ export default function CompanyPortalShell({ children }: { children: ReactNode }
           width: showExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH,
         }}
       >
-        <div className="mb-2 flex items-center justify-between">
-          {token && <NotificationBell token={token} role="company" teamRole={role} align="left" />}
+        <div className="mb-2 flex items-center justify-end">
           <button
             type="button"
             onClick={toggleManualCollapsed}
@@ -259,7 +257,6 @@ export default function CompanyPortalShell({ children }: { children: ReactNode }
         onDrawerOpen={() => setDrawerOpen(true)}
         onDrawerClose={() => setDrawerOpen(false)}
         extra={<LocaleCompactControl />}
-        headerAction={token ? <NotificationBell token={token} role="company" teamRole={role} align="left" /> : undefined}
       />
     </>
   );

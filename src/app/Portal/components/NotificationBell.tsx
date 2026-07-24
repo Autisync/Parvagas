@@ -23,6 +23,19 @@ type NotificationsResponse = {
   total: number;
 };
 
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const diffMs = Date.now() - date.getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `há ${days} d`;
+  return date.toLocaleDateString("pt-AO", { day: "numeric", month: "short" });
+}
+
 type Props = {
   token: string;
   role: "company" | "candidate" | "admin";
@@ -167,7 +180,14 @@ export default function NotificationBell({ token, role, teamRole, align = "right
             ) : (
               unresolved.map((item) => (
                 <div key={item._id} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
-                  <p className="text-sm font-semibold text-slate-900">{item.title || "Notificação"}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{item.title || "Notificação"}</p>
+                    {item.createdAt && (
+                      <span className="shrink-0 whitespace-nowrap text-[11px] text-slate-400" title={new Date(item.createdAt).toLocaleString("pt-AO")}>
+                        {formatRelativeTime(item.createdAt)}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-slate-600">{item.body || item.description || ""}</p>
                   <div className="mt-2 flex gap-2">
                     <button
