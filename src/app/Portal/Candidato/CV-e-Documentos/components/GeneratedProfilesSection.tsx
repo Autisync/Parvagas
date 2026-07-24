@@ -20,8 +20,11 @@ type GeneratedProfilesSectionProps = {
   onEditDraftChange: (next: GeneratedCvProfile) => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
+  savingEdit: boolean;
   onDuplicate: (id: string) => void;
+  duplicatingId: string | null;
   onDelete: (id: string) => void;
+  deletingId: string | null;
 };
 
 export default function GeneratedProfilesSection({
@@ -39,8 +42,11 @@ export default function GeneratedProfilesSection({
   onEditDraftChange,
   onCancelEdit,
   onSaveEdit,
+  savingEdit,
   onDuplicate,
+  duplicatingId,
   onDelete,
+  deletingId,
 }: GeneratedProfilesSectionProps) {
   return (
     <>
@@ -85,9 +91,13 @@ export default function GeneratedProfilesSection({
                         <p className="text-xs text-gray-500">Área: {item.targetField}</p>
                       </div>
                       <div className="flex gap-2 text-xs">
-                        <button className="rounded border px-2 py-1" onClick={() => onStartEdit(item)}>Editar</button>
-                        <button className="rounded border px-2 py-1" onClick={() => onDuplicate(item._id)}>Duplicar</button>
-                        <button className="rounded border px-2 py-1 text-red-600" onClick={() => onDelete(item._id)}>Eliminar</button>
+                        <button className="rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-60" disabled={duplicatingId === item._id || deletingId === item._id} onClick={() => onStartEdit(item)}>Editar</button>
+                        <button className="rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-60" disabled={duplicatingId === item._id || deletingId === item._id} onClick={() => onDuplicate(item._id)}>
+                          {duplicatingId === item._id ? "A duplicar..." : "Duplicar"}
+                        </button>
+                        <button className="rounded border px-2 py-1 text-red-600 disabled:cursor-not-allowed disabled:opacity-60" disabled={duplicatingId === item._id || deletingId === item._id} onClick={() => onDelete(item._id)}>
+                          {deletingId === item._id ? "A eliminar..." : "Eliminar"}
+                        </button>
                       </div>
                     </div>
                     <p className="mt-3 text-sm text-gray-700">{item.professionalSummary || "Sem resumo."}</p>
@@ -112,8 +122,10 @@ export default function GeneratedProfilesSection({
                       <textarea rows={4} className="w-full rounded-xl border border-gray-200 px-3 py-2" value={editingDraft.coverLetterDraft || ""} onChange={(e) => onEditDraftChange({ ...editingDraft, coverLetterDraft: e.target.value })} />
                     </label>
                     <div className="mt-3 flex gap-2">
-                      <button className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white" onClick={onSaveEdit}>Guardar</button>
-                      <button className="rounded border px-3 py-1.5 text-xs" onClick={onCancelEdit}>Cancelar</button>
+                      <button className="rounded bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={savingEdit} onClick={onSaveEdit}>
+                        {savingEdit ? "A guardar..." : "Guardar"}
+                      </button>
+                      <button className="rounded border px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60" disabled={savingEdit} onClick={onCancelEdit}>Cancelar</button>
                     </div>
                   </>
                 )}

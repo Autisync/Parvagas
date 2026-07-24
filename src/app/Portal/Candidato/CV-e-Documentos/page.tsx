@@ -68,6 +68,9 @@ export default function CvDocumentosPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<GeneratedCvProfile | null>(null);
+  const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null);
+  const [duplicatingProfileId, setDuplicatingProfileId] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[] | null>(null);
   const [deletingBatch, setDeletingBatch] = useState(false);
@@ -369,16 +372,21 @@ export default function CvDocumentosPage() {
   };
 
   const handleDeleteProfile = async (id: string) => {
+    if (!window.confirm("Eliminar este perfil CV gerado? Esta ação não pode ser desfeita.")) return;
+    setDeletingProfileId(id);
     try {
       await authFetch(`/candidates/cv-profiles/${id}`, token!, { method: "DELETE" });
       setProfiles((prev) => prev.filter((item) => item._id !== id));
       notify("Perfil CV removido.", "success");
     } catch (err: unknown) {
       notify((err as Error).message || "Não foi possível remover o perfil gerado.", "error");
+    } finally {
+      setDeletingProfileId(null);
     }
   };
 
   const handleDuplicateProfile = async (id: string) => {
+    setDuplicatingProfileId(id);
     try {
       const data = await authFetch<{ cvProfile: GeneratedCvProfile }>(`/candidates/cv-profiles/${id}/duplicate`, token!, {
         method: "POST",
@@ -387,6 +395,8 @@ export default function CvDocumentosPage() {
       notify("Perfil CV duplicado.", "success");
     } catch (err: unknown) {
       notify((err as Error).message || "Não foi possível duplicar o perfil CV.", "error");
+    } finally {
+      setDuplicatingProfileId(null);
     }
   };
 
@@ -397,6 +407,7 @@ export default function CvDocumentosPage() {
 
   const saveEdit = async () => {
     if (!editingId || !editingDraft) return;
+    setSavingEdit(true);
     try {
       const data = await authFetch<{ cvProfile: GeneratedCvProfile }>(`/candidates/cv-profiles/${editingId}`, token!, {
         method: "PATCH",
@@ -408,6 +419,8 @@ export default function CvDocumentosPage() {
       notify("Perfil CV gerado atualizado.", "success");
     } catch (err: unknown) {
       notify((err as Error).message || "Não foi possível atualizar o perfil gerado.", "error");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -571,8 +584,11 @@ export default function CvDocumentosPage() {
         onEditDraftChange={setEditingDraft}
         onCancelEdit={() => { setEditingId(null); setEditingDraft(null); }}
         onSaveEdit={saveEdit}
+        savingEdit={savingEdit}
         onDuplicate={handleDuplicateProfile}
+        duplicatingId={duplicatingProfileId}
         onDelete={handleDeleteProfile}
+        deletingId={deletingProfileId}
       />
 
       <DocumentsList

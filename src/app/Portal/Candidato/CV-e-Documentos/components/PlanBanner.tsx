@@ -18,6 +18,7 @@ export default function PlanBanner({ token }: { token: string | null }) {
   const [instructions, setInstructions] = useState<{ message: string; reference: string } | null>(null);
   const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
 
   useEffect(() => {
     authFetch<CVPlansResponse>("/cv-builder/plans", "").catch(() => null).then((r) => setPlans(r?.plans || []));
@@ -55,6 +56,7 @@ export default function PlanBanner({ token }: { token: string | null }) {
 
   const handleDownloadReceipt = async () => {
     if (!token) return;
+    setDownloadingReceipt(true);
     try {
       const res = await authFetchRaw("/cv-builder/subscription/receipt", token, { suppressGlobalErrors: true });
       if (!res.ok) throw new Error("Nenhum recibo disponível.");
@@ -69,6 +71,8 @@ export default function PlanBanner({ token }: { token: string | null }) {
       URL.revokeObjectURL(href);
     } catch {
       /* handled by global notifier */
+    } finally {
+      setDownloadingReceipt(false);
     }
   };
 
@@ -116,16 +120,16 @@ export default function PlanBanner({ token }: { token: string | null }) {
             </p>
           )}
         </div>
-        <button type="button" onClick={handleDownloadReceipt} className="text-xs font-semibold text-slate-600 underline">
-          Recibo
+        <button type="button" onClick={handleDownloadReceipt} disabled={downloadingReceipt} className="text-xs font-semibold text-slate-600 underline disabled:cursor-not-allowed disabled:opacity-60">
+          {downloadingReceipt ? "A obter..." : "Recibo"}
         </button>
         {sub.cancelRequestedAt ? (
-          <button type="button" onClick={handleResume} disabled={cancelling} className="text-xs font-semibold text-green-700 underline disabled:opacity-60">
-            Reativar plano
+          <button type="button" onClick={handleResume} disabled={cancelling} className="text-xs font-semibold text-green-700 underline disabled:cursor-not-allowed disabled:opacity-60">
+            {cancelling ? "A processar..." : "Reativar plano"}
           </button>
         ) : (
-          <button type="button" onClick={handleCancel} disabled={cancelling} className="text-xs font-semibold text-rose-700 underline disabled:opacity-60">
-            Cancelar plano
+          <button type="button" onClick={handleCancel} disabled={cancelling} className="text-xs font-semibold text-rose-700 underline disabled:cursor-not-allowed disabled:opacity-60">
+            {cancelling ? "A processar..." : "Cancelar plano"}
           </button>
         )}
         <button type="button" onClick={() => setOpen(true)} className="text-xs text-green-700 underline">
