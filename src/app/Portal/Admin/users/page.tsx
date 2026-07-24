@@ -359,8 +359,8 @@ export default function AdminUsersPage() {
                 <textarea value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Obrigatório para suspender ou reativar" />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => applySuspension(selectedIds, true, bulkReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Suspender</button>
-                <button type="button" onClick={() => applySuspension(selectedIds, false, bulkReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Reativar</button>
+                <button type="button" onClick={() => applySuspension(selectedIds, true, bulkReason)} disabled={Boolean(busy)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Suspender"}</button>
+                <button type="button" onClick={() => applySuspension(selectedIds, false, bulkReason)} disabled={Boolean(busy)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Reativar"}</button>
               </div>
             </div>
           ) : null}

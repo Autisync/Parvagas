@@ -51,6 +51,7 @@ export default function AdminAuditPage() {
   const [pagination, setPagination] = useState<Pagination | undefined>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [exportBusy, setExportBusy] = useState<"copy" | "json" | "csv" | null>(null);
   const { notify } = useAppNotifier();
 
   const load = useCallback(async () => {
@@ -164,17 +165,21 @@ export default function AdminAuditPage() {
 
   const copySelectedIds = async () => {
     if (selectedIds.length === 0) return;
+    setExportBusy("copy");
     try {
       await navigator.clipboard.writeText(selectedIds.join("\n"));
       setNotice(`${selectedIds.length} IDs copiados.`);
     } catch {
       setError("Não foi possível copiar os IDs selecionados.");
+    } finally {
+      setExportBusy(null);
     }
   };
 
   const exportSelected = async () => {
     if (selectedIds.length === 0) return;
     setError("");
+    setExportBusy("json");
     try {
       const rows = await fetchSelectedEntries();
       const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
@@ -189,16 +194,21 @@ export default function AdminAuditPage() {
       setNotice(`${rows.length} registos exportados.`);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar os registos selecionados."));
+    } finally {
+      setExportBusy(null);
     }
   };
 
   const exportFilteredCsv = async () => {
     if (!token || tab !== "audit") return;
+    setExportBusy("csv");
     try {
       await downloadAuditLogsCsv(token, { keyword, action, resourceType, actorUserId, from, to });
       setNotice("CSV de auditoria exportado com sucesso.");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível exportar CSV de auditoria."));
+    } finally {
+      setExportBusy(null);
     }
   };
 
@@ -281,9 +291,17 @@ export default function AdminAuditPage() {
 
           {selectedIds.length > 0 ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" onClick={copySelectedIds} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Copiar IDs</button>
-              <button type="button" onClick={exportSelected} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">Exportar JSON</button>
-              {tab === "audit" ? <button type="button" onClick={exportFilteredCsv} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Exportar CSV filtrado</button> : null}
+              <button type="button" onClick={copySelectedIds} disabled={Boolean(exportBusy)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">
+                {exportBusy === "copy" ? "A copiar..." : "Copiar IDs"}
+              </button>
+              <button type="button" onClick={exportSelected} disabled={Boolean(exportBusy)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-60">
+                {exportBusy === "json" ? "A exportar..." : "Exportar JSON"}
+              </button>
+              {tab === "audit" ? (
+                <button type="button" onClick={exportFilteredCsv} disabled={Boolean(exportBusy)} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {exportBusy === "csv" ? "A exportar..." : "Exportar CSV filtrado"}
+                </button>
+              ) : null}
             </div>
           ) : null}
 

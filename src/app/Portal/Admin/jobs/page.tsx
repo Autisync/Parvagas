@@ -400,10 +400,10 @@ export default function AdminJobsPage() {
                 <textarea value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Adicionar contexto para a ação selecionada" />
               </label>
               <div className="flex flex-wrap gap-2">
-                {canPublishJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "published", "public", bulkReason)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Publicar</button> : null}
-                {canApproveJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "approved", undefined, bulkReason)} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Aprovar</button> : null}
-                {canRejectJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "platform_rejected", undefined, bulkReason)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Rejeitar</button> : null}
-                {canReviewJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "archived", "archived", bulkReason)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Arquivar</button> : null}
+                {canPublishJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "published", "public", bulkReason)} disabled={busy === "bulk-jobs"} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy === "bulk-jobs" ? "A processar..." : "Publicar"}</button> : null}
+                {canApproveJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "approved", undefined, bulkReason)} disabled={busy === "bulk-jobs"} className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">{busy === "bulk-jobs" ? "A processar..." : "Aprovar"}</button> : null}
+                {canRejectJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "platform_rejected", undefined, bulkReason)} disabled={busy === "bulk-jobs"} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy === "bulk-jobs" ? "A processar..." : "Rejeitar"}</button> : null}
+                {canReviewJobs ? <button type="button" onClick={() => applyDecision(selectedIds, "archived", "archived", bulkReason)} disabled={busy === "bulk-jobs"} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{busy === "bulk-jobs" ? "A processar..." : "Arquivar"}</button> : null}
               </div>
             </div>
           ) : null}

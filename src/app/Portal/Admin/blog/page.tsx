@@ -166,6 +166,7 @@ export default function AdminBlogPage() {
   const [formErrors, setFormErrors] = useState<BlogErrors>({});
   const [saving, setSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [modalTab, setModalTab] = useState<"edit" | "preview">("edit");
   const [previewPost, setPreviewPost] = useState<CareerPostRecord | null>(null);
 
@@ -241,6 +242,7 @@ export default function AdminBlogPage() {
 
   const handleDelete = async (id: string) => {
     if (!token) return;
+    setDeleting(true);
     try {
       await deleteAdminCareerPost(token, id);
       notify("Artigo eliminado.", "success");
@@ -248,6 +250,8 @@ export default function AdminBlogPage() {
       await load();
     } catch (err) {
       notify(getErrorMessage(err, "Não foi possível eliminar o artigo."), "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -543,15 +547,16 @@ export default function AdminBlogPage() {
         onClose={() => setConfirmDeleteId(null)}
         footer={
           <div className="flex justify-end gap-3">
-            <button type="button" onClick={() => setConfirmDeleteId(null)} className={adminSecondaryButtonClass}>
+            <button type="button" onClick={() => setConfirmDeleteId(null)} disabled={deleting} className={adminSecondaryButtonClass}>
               Cancelar
             </button>
             <button
               type="button"
               onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
-              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+              disabled={deleting}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Eliminar definitivamente
+              {deleting ? "A eliminar..." : "Eliminar definitivamente"}
             </button>
           </div>
         }

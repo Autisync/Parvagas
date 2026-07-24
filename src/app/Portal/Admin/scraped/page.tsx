@@ -355,10 +355,10 @@ export default function AdminScrapedPage() {
                 <textarea value={bulkNote} onChange={(e) => setBulkNote(e.target.value)} rows={3} className={`${adminFieldClass} resize-y`} placeholder="Adicionar contexto para a revisão selecionada" />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => applyReview(selectedIds, "approved", true, bulkNote)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Aprovar + publicar</button>
-                <button type="button" onClick={() => applyReview(selectedIds, "rejected", false, bulkNote)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white">Rejeitar</button>
-                <button type="button" onClick={() => applyReview(selectedIds, "duplicate", false, bulkNote)} className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Marcar duplicado</button>
-                <button type="button" onClick={() => applyReview(selectedIds, "archived", false, bulkNote)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">Arquivar</button>
+                <button type="button" onClick={() => applyReview(selectedIds, "approved", true, bulkNote)} disabled={Boolean(busy)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Aprovar + publicar"}</button>
+                <button type="button" onClick={() => applyReview(selectedIds, "rejected", false, bulkNote)} disabled={Boolean(busy)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Rejeitar"}</button>
+                <button type="button" onClick={() => applyReview(selectedIds, "duplicate", false, bulkNote)} disabled={Boolean(busy)} className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Marcar duplicado"}</button>
+                <button type="button" onClick={() => applyReview(selectedIds, "archived", false, bulkNote)} disabled={Boolean(busy)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">{busy ? "A processar..." : "Arquivar"}</button>
               </div>
             </div>
           ) : null}
@@ -423,9 +423,9 @@ export default function AdminScrapedPage() {
                   <td className="px-3 py-3 text-slate-500">{toDateLabel(job.createdAt)}</td>
                   <td className="px-3 py-3">
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => openEdit(job)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Rever</button>
-                      <button type="button" onClick={() => review(job._id, "approved", true)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">Aprovar</button>
-                      <button type="button" onClick={() => review(job._id, "rejected", false)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white">Rejeitar</button>
+                      <button type="button" disabled={busy === job._id} onClick={() => openEdit(job)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60">Rever</button>
+                      <button type="button" disabled={busy === job._id} onClick={() => review(job._id, "approved", true)} className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy === job._id ? "A processar..." : "Aprovar"}</button>
+                      <button type="button" disabled={busy === job._id} onClick={() => review(job._id, "rejected", false)} className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{busy === job._id ? "A processar..." : "Rejeitar"}</button>
                       {deleteConfirmId === job._id ? (
                         <span className="inline-flex items-center gap-1">
                           <button type="button" disabled={busy === job._id} onClick={() => removeScraped(job)} className="rounded-xl bg-rose-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">Confirmar</button>

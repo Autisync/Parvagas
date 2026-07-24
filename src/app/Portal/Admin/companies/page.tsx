@@ -716,7 +716,8 @@ export default function AdminCompaniesPage() {
             <button
               type="button"
               onClick={() => setConfirming(null)}
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              disabled={Boolean(busy) || emailSending}
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancelar
             </button>
@@ -730,9 +731,10 @@ export default function AdminCompaniesPage() {
                 await sendVerificationEmail();
                 setConfirming(null);
               }}
-              className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+              disabled={Boolean(busy) || emailSending}
+              className="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Confirmar
+              {busy || emailSending ? "A processar..." : "Confirmar"}
             </button>
           </div>
         )}
