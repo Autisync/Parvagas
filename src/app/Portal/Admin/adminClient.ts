@@ -973,6 +973,33 @@ export type PlanRecord = {
   interval: "month" | "one_time";
   features: string[];
   active: boolean;
+  maxActiveJobs: number;
+  candidateSearchIncluded: boolean;
+  apiAccessIncluded: boolean;
+  promoPrice: number | null;
+  promoLabel: string | null;
+  promoExpiresAt: string | null;
+};
+
+export type PlanVersionRecord = {
+  _id: string;
+  planId: string;
+  versionLabel: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: "month" | "one_time";
+  features: string[];
+  maxActiveJobs: number;
+  candidateSearchIncluded: boolean;
+  apiAccessIncluded: boolean;
+  promoPrice: number | null;
+  promoLabel: string | null;
+  promoExpiresAt: string | null;
+  status: "draft" | "published" | "archived";
+  effectiveDate: string | null;
+  publishedAt: string | null;
+  createdAt: string | null;
 };
 
 export type CandidateCvPlanRecord = {
@@ -1067,10 +1094,10 @@ export async function createAdminPlan(token: string, payload: Partial<PlanRecord
   });
 }
 
-export async function updateAdminPlan(token: string, id: string, payload: Partial<PlanRecord>) {
-  return authFetch<PlanRecord>(`/admin/plans/${id}`, token, {
-    method: "PUT",
-    body: JSON.stringify(payload),
+export async function toggleAdminPlanActive(token: string, id: string, active: boolean) {
+  return authFetch<PlanRecord>(`/admin/plans/${id}/active`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
     suppressGlobalErrors: true,
   });
 }
@@ -1078,6 +1105,25 @@ export async function updateAdminPlan(token: string, id: string, payload: Partia
 export async function deleteAdminPlan(token: string, id: string) {
   return authFetch<{ deleted: boolean; id: string }>(`/admin/plans/${id}`, token, {
     method: "DELETE",
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function fetchAdminPlanVersions(token: string, planId: string) {
+  return authFetch<{ versions: PlanVersionRecord[] }>(`/admin/plans/${planId}/versions`, token);
+}
+
+export async function saveAdminPlanDraftVersion(token: string, planId: string, payload: Partial<PlanVersionRecord>) {
+  return authFetch<{ version: PlanVersionRecord }>(`/admin/plans/${planId}/versions`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    suppressGlobalErrors: true,
+  });
+}
+
+export async function publishAdminPlanVersion(token: string, planId: string, versionId: string) {
+  return authFetch<{ version: PlanVersionRecord }>(`/admin/plans/${planId}/versions/${versionId}/publish`, token, {
+    method: "POST",
     suppressGlobalErrors: true,
   });
 }

@@ -12,28 +12,36 @@ import {
   downloadAdminTransactionReceipt,
   fetchAdminCandidateCvPlans,
   fetchAdminMe,
+  fetchAdminPlanVersions,
   fetchAdminPlans,
   fetchAdminTransactions,
   fetchAnalytics,
   fetchExpiringSubscriptions,
   hasPermission,
+  publishAdminPlanVersion,
   refundAdminTransaction,
   rejectAdminTransaction,
+  saveAdminPlanDraftVersion,
   toDateLabel,
+  toggleAdminPlanActive,
   updateAdminCandidateCvPlan,
-  updateAdminPlan,
   type AdminMe,
   type AnalyticsResponse,
   type CandidateCvPlanRecord,
   type ExpiringSubscription,
   type PlanRecord,
+  type PlanVersionRecord,
   type TransactionRecord,
 } from "../adminClient";
 import { AdminEmptyState, AdminModal, AdminPageHeader, AdminRestricted, adminButtonClass, adminFieldClass, adminSecondaryButtonClass } from "../components/AdminUI";
 import InlineErrorState from "@/app/components/errors/InlineErrorState";
 import { useAppNotifier } from "@/app/components/AppNotifier";
 
-const emptyPlanForm = { code: "", name: "", price: 0, currency: "AOA", interval: "month" as "month" | "one_time", features: "", active: true };
+const emptyPlanForm = {
+  code: "", name: "", price: 0, currency: "AOA", interval: "month" as "month" | "one_time", features: "",
+  active: true, maxActiveJobs: 1, candidateSearchIncluded: false, apiAccessIncluded: false,
+  promoPrice: "" as number | "", promoLabel: "",
+};
 type PlanFormState = typeof emptyPlanForm;
 
 function featuresToText(features: string[]) {
@@ -59,8 +67,12 @@ export default function AdminSubscriptionsPage() {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState<PlanFormState>(emptyPlanForm);
+  const [draftVersionId, setDraftVersionId] = useState<string | null>(null);
+  const [planVersions, setPlanVersions] = useState<PlanVersionRecord[]>([]);
+  const [publishing, setPublishing] = useState(false);
 
   const canManage = useMemo(() => hasPermission(me, AdminPermissions.SUBSCRIPTIONS_MANAGE), [me]);
+  const isSuperAdmin = me?.adminLevel === "super-admin";
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -91,14 +103,39 @@ export default function AdminSubscriptionsPage() {
 
   const openCreatePlan = () => {
     setEditingPlanId(null);
+    setDraftVersionId(null);
+    setPlanVersions([]);
     setPlanForm(emptyPlanForm);
     setPlanModalOpen(true);
   };
 
-  const openEditPlan = (plan: PlanRecord) => {
+  const openEditPlan = async (plan: PlanRecord) => {
     setEditingPlanId(plan._id);
-    setPlanForm({ code: plan.code, name: plan.name, price: plan.price, currency: plan.currency, interval: plan.interval, features: featuresToText(plan.features), active: plan.active });
+    setPlanForm({
+      code: plan.code, name: plan.name, price: plan.price, currency: plan.currency, interval: plan.interval,
+      features: featuresToText(plan.features), active: plan.active, maxActiveJobs: plan.maxActiveJobs,
+      candidateSearchIncluded: plan.candidateSearchIncluded, apiAccessIncluded: plan.apiAccessIncluded,
+      promoPrice: plan.promoPrice ?? "", promoLabel: plan.promoLabel ?? "",
+    });
+    setDraftVersionId(null);
     setPlanModalOpen(true);
+    if (!token) return;
+    try {
+      const res = await fetchAdminPlanVersions(token, plan._id);
+      setPlanVersions(res.versions || []);
+      const draft = (res.versions || []).find((v) => v.status === "draft");
+      if (draft) {
+        setDraftVersionId(draft._id);
+        setPlanForm((p) => ({
+          ...p, name: draft.name, price: draft.price, currency: draft.currency, interval: draft.interval,
+          features: featuresToText(draft.features), maxActiveJobs: draft.maxActiveJobs,
+          candidateSearchIncluded: draft.candidateSearchIncluded, apiAccessIncluded: draft.apiAccessIncluded,
+          promoPrice: draft.promoPrice ?? "", promoLabel: draft.promoLabel ?? "",
+        }));
+      }
+    } catch {
+      setPlanVersions([]);
+    }
   };
 
   const submitPlan = async (event: React.FormEvent) => {
@@ -106,15 +143,28 @@ export default function AdminSubscriptionsPage() {
     if (!token || !canManage) return;
     setBusy(true);
     try {
-      const payload = { ...planForm, features: textToFeatures(planForm.features) };
       if (editingPlanId) {
-        await updateAdminPlan(token, editingPlanId, payload);
-        notify("Plano atualizado.", "success");
+        const payload = {
+          name: planForm.name, price: planForm.price, currency: planForm.currency, interval: planForm.interval,
+          features: textToFeatures(planForm.features), maxActiveJobs: planForm.maxActiveJobs,
+          candidateSearchIncluded: planForm.candidateSearchIncluded, apiAccessIncluded: planForm.apiAccessIncluded,
+          promoPrice: planForm.promoPrice === "" ? null : Number(planForm.promoPrice),
+          promoLabel: planForm.promoLabel.trim() || null,
+        };
+        const res = await saveAdminPlanDraftVersion(token, editingPlanId, payload);
+        setDraftVersionId(res.version._id);
+        notify("Rascunho guardado — publique para tornar as alterações vivas.", "success");
       } else {
+        const payload = {
+          code: planForm.code, name: planForm.name, price: planForm.price, currency: planForm.currency,
+          interval: planForm.interval, features: textToFeatures(planForm.features), active: planForm.active,
+          maxActiveJobs: planForm.maxActiveJobs, candidateSearchIncluded: planForm.candidateSearchIncluded,
+          apiAccessIncluded: planForm.apiAccessIncluded,
+        };
         await createAdminPlan(token, payload);
-        notify("Plano criado.", "success");
+        notify("Plano criado e publicado.", "success");
+        setPlanModalOpen(false);
       }
-      setPlanModalOpen(false);
       await load();
     } catch (err: unknown) {
       notify(getErrorMessage(err, "Erro ao guardar o plano."), "error");
@@ -123,11 +173,27 @@ export default function AdminSubscriptionsPage() {
     }
   };
 
+  const publishDraft = async () => {
+    if (!token || !editingPlanId || !draftVersionId) return;
+    if (!window.confirm("Publicar estas alterações? Passam a valer para novas subscrições/renovações imediatamente. Subscrições já ativas mantêm os termos atuais até renovarem.")) return;
+    setPublishing(true);
+    try {
+      await publishAdminPlanVersion(token, editingPlanId, draftVersionId);
+      notify("Plano publicado.", "success");
+      setPlanModalOpen(false);
+      await load();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, "Erro ao publicar o plano."), "error");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const toggleActive = async (plan: PlanRecord) => {
     if (!token || !canManage) return;
     setBusy(true);
     try {
-      await updateAdminPlan(token, plan._id, { active: !plan.active });
+      await toggleAdminPlanActive(token, plan._id, !plan.active);
       await load();
       notify(plan.active ? "Plano desativado." : "Plano ativado.", "success");
     } catch (err: unknown) {
@@ -466,12 +532,26 @@ export default function AdminSubscriptionsPage() {
         title={editingPlanId ? "Editar plano" : "Adicionar plano"}
         onClose={() => setPlanModalOpen(false)}
         footer={
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button type="button" onClick={() => setPlanModalOpen(false)} className={adminSecondaryButtonClass}>Cancelar</button>
-            <button type="submit" form="plan-form" disabled={busy} className={adminButtonClass}>{busy ? "A guardar..." : "Guardar"}</button>
+            <button type="submit" form="plan-form" disabled={busy} className={adminButtonClass}>
+              {busy ? "A guardar..." : editingPlanId ? "Guardar rascunho" : "Criar e publicar"}
+            </button>
+            {editingPlanId && draftVersionId && isSuperAdmin && (
+              <button type="button" onClick={publishDraft} disabled={publishing || busy} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">
+                {publishing ? "A publicar..." : "Publicar"}
+              </button>
+            )}
           </div>
         }
       >
+        {editingPlanId && (
+          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            As alterações ficam como rascunho até serem publicadas
+            {isSuperAdmin ? "" : " — apenas super-admin pode publicar"}. Subscrições já ativas mantêm os termos
+            atuais até renovarem (nunca mudam retroativamente).
+          </p>
+        )}
         <form id="plan-form" onSubmit={submitPlan} className="space-y-4">
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-slate-700">Código (identificador único)</span>
@@ -498,11 +578,64 @@ export default function AdminSubscriptionsPage() {
             <span className="mb-1 block font-medium text-slate-700">Funcionalidades (uma por linha)</span>
             <textarea className={`${adminFieldClass} resize-y`} rows={4} value={planForm.features} onChange={(e) => setPlanForm((p) => ({ ...p, features: e.target.value }))} />
           </label>
-          <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input type="checkbox" checked={planForm.active} onChange={(e) => setPlanForm((p) => ({ ...p, active: e.target.checked }))} className="h-4 w-4 rounded border-slate-300" />
-            Ativo
-          </label>
+
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Limites &amp; funcionalidades</p>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-slate-700">Vagas ativas máximas (-1 = ilimitado)</span>
+              <input type="number" className={adminFieldClass} value={planForm.maxActiveJobs} onChange={(e) => setPlanForm((p) => ({ ...p, maxActiveJobs: Number(e.target.value) }))} />
+            </label>
+            <label className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={planForm.candidateSearchIncluded} onChange={(e) => setPlanForm((p) => ({ ...p, candidateSearchIncluded: e.target.checked }))} className="h-4 w-4 rounded border-slate-300" />
+              Inclui diretório de candidatos
+            </label>
+            <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={planForm.apiAccessIncluded} onChange={(e) => setPlanForm((p) => ({ ...p, apiAccessIncluded: e.target.checked }))} className="h-4 w-4 rounded border-slate-300" />
+              Inclui acesso à API
+            </label>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Promoção (opcional)</p>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Preço promocional</span>
+                <input type="number" min={0} className={adminFieldClass} value={planForm.promoPrice} onChange={(e) => setPlanForm((p) => ({ ...p, promoPrice: e.target.value === "" ? "" : Number(e.target.value) }))} />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-slate-700">Etiqueta</span>
+                <input type="text" className={adminFieldClass} placeholder="Ex.: 20% off — Lançamento" value={planForm.promoLabel} onChange={(e) => setPlanForm((p) => ({ ...p, promoLabel: e.target.value }))} />
+              </label>
+            </div>
+          </div>
+
+          {!editingPlanId && (
+            <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <input type="checkbox" checked={planForm.active} onChange={(e) => setPlanForm((p) => ({ ...p, active: e.target.checked }))} className="h-4 w-4 rounded border-slate-300" />
+              Ativo
+            </label>
+          )}
         </form>
+
+        {editingPlanId && planVersions.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Histórico de versões</p>
+            <ul className="space-y-1.5 text-xs text-slate-600">
+              {planVersions.map((v) => (
+                <li key={v._id} className="flex items-center justify-between gap-2">
+                  <span>{v.versionLabel} — {v.price.toLocaleString("pt-PT")} {v.currency}</span>
+                  <span className={`rounded-full px-2 py-0.5 font-semibold ${
+                    v.status === "published" ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : v.status === "draft" ? "border border-amber-200 bg-amber-50 text-amber-700"
+                    : "border border-slate-200 bg-slate-100 text-slate-500"
+                  }`}>
+                    {v.status === "published" ? "Publicada" : v.status === "draft" ? "Rascunho" : "Arquivada"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </AdminModal>
     </div>
   );

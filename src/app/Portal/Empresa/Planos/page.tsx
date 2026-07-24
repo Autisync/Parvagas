@@ -18,6 +18,8 @@ type Plan = {
   currency: string;
   interval: string;
   features: string[];
+  promoPrice?: number | null;
+  promoLabel?: string | null;
 };
 
 type Subscription = {
@@ -245,9 +247,25 @@ export default function EmpresaPlanosPage() {
                   <div key={plan._id} className={`app-card flex flex-col p-6 ${featured ? "ring-2 ring-[var(--brand-500)]" : ""}`}>
                     {featured && <span className="app-badge app-badge-danger mb-2 self-start">Mais popular</span>}
                     <h3 className="text-lg font-bold text-[var(--text-strong)]">{plan.name}</h3>
-                    <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--text-strong)]">
-                      {plan.price === 0 ? "Grátis" : fmt(plan.price, plan.currency)}
-                    </p>
+                    {plan.promoPrice != null ? (
+                      <div className="mt-2">
+                        {plan.promoLabel && (
+                          <span className="app-badge app-badge-success mb-1 inline-block">{plan.promoLabel}</span>
+                        )}
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-3xl font-bold tracking-tight text-[var(--text-strong)]">
+                            {fmt(plan.promoPrice, plan.currency)}
+                          </p>
+                          <p className="text-sm font-medium text-[var(--text-subtle)] line-through">
+                            {fmt(plan.price, plan.currency)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-3xl font-bold tracking-tight text-[var(--text-strong)]">
+                        {plan.price === 0 ? "Grátis" : fmt(plan.price, plan.currency)}
+                      </p>
+                    )}
                     <p className="text-xs text-[var(--text-subtle)]">{plan.interval === "month" ? "por mês" : "pagamento único"}</p>
                     <ul className="mt-4 flex-1 space-y-2">
                       {plan.features.map((f) => (
