@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.models import ApplicationMessage, Company, JobApplication, User, UserRole
 from app.services.company_access_service import resolve_company_for_user_or_none, require_role
 from app.services.notification_service import create_notification
+from app.services.live_update_service import publish_invalidate
 
 router = APIRouter(tags=["messages"])
 
@@ -144,6 +145,8 @@ async def send_application_message(
                 else f"/Portal/Empresa/Candidaturas?applicationId={application_id}"
             ),
         )
+
+    publish_invalidate("applications", entity="message", action="created")
 
     return {"message": _serialize_message(message)}
 

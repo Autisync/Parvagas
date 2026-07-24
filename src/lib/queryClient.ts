@@ -16,7 +16,13 @@ export const queryClient = new QueryClient({
         return failureCount < 2;
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: false,
+      // Was false — meant a portal tab left open in the background (the
+      // common case for "I'm waiting on an application update") never
+      // picked up new data until something else forced a remount. Data
+      // that changed while the tab was away (a new applicant, a status
+      // change, a message) now surfaces as soon as the user tabs back in,
+      // with no manual refresh needed.
+      refetchOnWindowFocus: true,
       refetchOnReconnect: true,
       refetchOnMount: true,
     },

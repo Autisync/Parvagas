@@ -71,6 +71,33 @@ export default function MessageThreadModal({
     bottomRef.current?.scrollIntoView({ block: "nearest" });
   }, [messages]);
 
+  // Poll for new messages while the thread is open — a modal has no page
+  // to "refresh"; without this the only way to see a reply that lands
+  // mid-conversation is to close and reopen it.
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => {
+      authFetch<{ messages: ThreadMessage[] }>(`/applications/${applicationId}/messages`, token)
+        .then((data) => {
+          setMessages((prev) => {
+            const next = data.messages || [];
+            if (next.length === prev.length && next.every((m, i) => m._id === prev[i]?._id && m.readAt === prev[i]?.readAt)) {
+              return prev;
+            }
+            return next;
+          });
+          if ((data.messages || []).some((m) => m.senderRole !== viewerRole && !m.readAt)) {
+            authFetch(`/applications/${applicationId}/messages/read`, token, { method: "PATCH" })
+              .then(() => onRead?.())
+              .catch(() => null);
+          }
+        })
+        .catch(() => null);
+    }, 8000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, applicationId, token, viewerRole]);
+
   if (!open) return null;
 
   const send = async () => {

@@ -56,6 +56,11 @@ export function useApplications(token: string | null, page: number = 1, limit: n
     queryFn: () => authFetch<ApplicationsResponse>(`/applications?page=${page}&limit=${limit}${jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""}`, token!),
     enabled: !!token,
     staleTime: 2 * 60 * 1000, // 2 minutes for applications
+    // Status changes, new applicants and unread-message counts are exactly
+    // the kind of update a user is actively waiting on while this list is
+    // open — poll in the background so it shows up without a manual
+    // refresh, same cadence as the notification bell.
+    refetchInterval: 30 * 1000,
   });
 }
 
@@ -160,5 +165,8 @@ export function useCompanyJobs(token: string | null, page: number = 1, limit: nu
     queryFn: () => authFetch<CompanyJobsResponse>(`/companies/jobs?page=${page}&limit=${limit}`, token!),
     enabled: !!token,
     staleTime: 3 * 60 * 1000, // 3 minutes for company jobs
+    // Per-job applicantCount is exactly the "did I get a new applicant"
+    // signal a company watches this page for — keep it live.
+    refetchInterval: 30 * 1000,
   });
 }

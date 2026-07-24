@@ -5,16 +5,23 @@ import json
 from datetime import datetime
 from typing import Any, Literal
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.core.observability import limiter
 from app.db.session import get_db
 from app.models import ClientErrorLog
+from app.services.live_update_service import LIVE_UPDATE_CHANNEL
 
 router = APIRouter(prefix="/events", tags=["events"])
+logger = get_logger(__name__)
+
+HEARTBEAT_SECONDS = 25
 
 
 def _sse(event: str, data: str) -> str:
@@ -23,23 +30,63 @@ def _sse(event: str, data: str) -> str:
 
 @router.get("/stream")
 async def stream_events(request: Request):
-    """Open an SSE stream used by the frontend live update bridge.
-
-    For now we only emit keep-alive and connected signals so clients stay healthy
-    without 404 noise while richer invalidation events are introduced.
-    """
+    """Open an SSE stream used by the frontend live update bridge
+    (LiveUpdateBridge.tsx) — subscribes to the same Redis channel
+    live_update_service.publish_invalidate() writes to and forwards each
+    message as an "invalidate" SSE event, so any tab whose current page
+    cares about that scope refetches without the user hitting reload.
+    Falls back to heartbeat-only (no invalidation, just keep-alive) if
+    Redis isn't reachable, rather than failing the connection."""
 
     async def event_generator():
         yield _sse("connected", '{"status":"ok"}')
 
-        while True:
-            if await request.is_disconnected():
-                break
+        client = None
+        pubsub = None
+        try:
+            settings = get_settings()
+            client = aioredis.from_url(settings.REDIS_URL, socket_timeout=5, socket_connect_timeout=2)
+            pubsub = client.pubsub()
+            await pubsub.subscribe(LIVE_UPDATE_CHANNEL)
+        except Exception as exc:
+            logger.warning("SSE stream: redis subscribe failed, falling back to heartbeat-only: %s", exc)
+            pubsub = None
 
-            # Keep the connection alive for proxies and browser EventSource.
-            heartbeat = '{"ts":"%s"}' % datetime.utcnow().isoformat()
-            yield _sse("heartbeat", heartbeat)
-            await asyncio.sleep(25)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                if pubsub is not None:
+                    try:
+                        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=HEARTBEAT_SECONDS)
+                    except Exception as exc:
+                        logger.warning("SSE stream: redis get_message failed: %s", exc)
+                        message = None
+                    if message and message.get("type") == "message":
+                        data = message["data"]
+                        if isinstance(data, bytes):
+                            data = data.decode("utf-8", errors="replace")
+                        yield _sse("invalidate", data)
+                        continue
+                else:
+                    await asyncio.sleep(HEARTBEAT_SECONDS)
+
+                # Keep the connection alive for proxies and browser EventSource.
+                heartbeat = '{"ts":"%s"}' % datetime.utcnow().isoformat()
+                yield _sse("heartbeat", heartbeat)
+        finally:
+            if pubsub is not None:
+                try:
+                    await pubsub.unsubscribe(LIVE_UPDATE_CHANNEL)
+                    await pubsub.aclose()
+                except Exception:
+                    pass
+            if client is not None:
+                try:
+                    await client.aclose()
+                except Exception:
+                    pass
 
     response = StreamingResponse(event_generator(), media_type="text/event-stream")
     response.headers["Cache-Control"] = "no-cache"

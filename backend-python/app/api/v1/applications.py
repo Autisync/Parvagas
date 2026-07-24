@@ -77,6 +77,7 @@ from app.services.storage_service import StorageService
 from app.workers.tasks import send_application_received_email, send_application_status_email, send_templated_email
 from app.services.email_service import EmailService
 from app.services.notification_service import create_notification
+from app.services.live_update_service import publish_invalidate
 from app.services.company_access_service import resolve_company_for_user_or_none, require_role
 from app.core.logging import get_logger
 
@@ -137,6 +138,8 @@ def _notify_company_new_applicant(db: Session, company_id: str, job_id: str, can
             })
     except Exception as e:
         logger.warning(f"Could not enqueue new-applicant email: {e}")
+
+    publish_invalidate("applications", entity="application", action="created", path="/Portal/Empresa/Candidaturas")
 
 
 def _json_list_safe(value):
@@ -717,6 +720,7 @@ async def update_application_status(
     _apply_status_change(db, app_row, new_status, custom_message, _extract_interview_details(payload))
     db.commit()
     db.refresh(app_row)
+    publish_invalidate("applications", entity="application", action="status_changed")
 
     return {"application": {"_id": app_row.id, "status": app_row.status}}
 
@@ -762,6 +766,8 @@ async def bulk_update_application_status(
         _apply_status_change(db, app_row, new_status, custom_message, interview_details)
         updated_ids.append(app_row.id)
     db.commit()
+    if updated_ids:
+        publish_invalidate("applications", entity="application", action="status_changed")
 
     return {"updated": len(updated_ids), "applicationIds": updated_ids}
 
