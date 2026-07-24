@@ -156,13 +156,33 @@ def _apply_job_payload(job: Job, payload: dict[str, Any]) -> None:
             setattr(job, attr, _to_text_list(payload[key]))
 
 
+def _company_profile_completion_score(payload: dict[str, Any]) -> int:
+    """Mirrors candidates.py's _profile_completion_score — checks only the
+    fields the Perfil page actually lets a company edit (name/legalName/nif
+    are set at signup and not shown there, so they're not completion
+    signals the user could act on)."""
+    social_links = payload.get("socialLinks") or {}
+    checks = [
+        bool(payload.get("industry")),
+        bool(payload.get("size")),
+        bool(payload.get("location")),
+        bool(payload.get("website")),
+        bool(payload.get("contactEmail") or payload.get("contactPhone")),
+        bool(payload.get("description")),
+        bool(payload.get("logo")),
+        bool(payload.get("benefits") or any(social_links.values()) or payload.get("galleryPhotos")),
+    ]
+    done = len([item for item in checks if item])
+    return int(round((done / len(checks)) * 100))
+
+
 def _serialize_company_profile(company: Company) -> dict[str, Any]:
     """camelCase shape the Perfil page actually reads — the previous
     response_model=CompanyProfileResponse returned raw snake_case ORM
     attribute names (logo_url, owner_user_id, ...), which the frontend's
     `profile.logo` / `profile.ownerUserId` reads never matched, so even a
     successful save looked like it hadn't persisted on the next load."""
-    return {
+    payload = {
         "_id": company.id,
         "slug": company.slug,
         "ownerUserId": company.owner_user_id,
@@ -186,6 +206,8 @@ def _serialize_company_profile(company: Company) -> dict[str, Any]:
         "socialLinks": json.loads(company.social_links) if company.social_links else {},
         "galleryPhotos": [StorageService.resolve_public_url(p) for p in _json_list(company.gallery_photos)],
     }
+    payload["completionScore"] = _company_profile_completion_score(payload)
+    return payload
 
 
 # frontend camelCase key -> Company ORM attribute. contactEmail/contactPhone
