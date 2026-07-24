@@ -76,6 +76,7 @@ export default function EmpresaCandidaturasPage() {
   const [noteBody, setNoteBody] = useState("");
   const [noteRating, setNoteRating] = useState(0);
   const [notesLoading, setNotesLoading] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState("shortlisted");
   const [bulkApplying, setBulkApplying] = useState(false);
@@ -95,6 +96,7 @@ export default function EmpresaCandidaturasPage() {
 
   const addNote = async (id: string) => {
     if (!noteBody.trim() && !noteRating) return;
+    setSavingNote(true);
     try {
       const data = await authFetch<{ note: { _id: string; body?: string; rating?: number | null; createdAt?: string } }>(
         `/applications/${id}/notes`, token!,
@@ -103,7 +105,11 @@ export default function EmpresaCandidaturasPage() {
       setNotes((prev) => [data.note, ...prev]);
       setNoteBody("");
       setNoteRating(0);
-    } catch { /* ignore */ }
+    } catch (err: unknown) {
+      pushToast("error", err instanceof Error ? err.message : "Erro ao guardar nota.");
+    } finally {
+      setSavingNote(false);
+    }
   };
   const { pushToast } = useToasts();
 
@@ -513,7 +519,14 @@ export default function EmpresaCandidaturasPage() {
                           onChange={(e) => setNoteBody(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") addNote(a._id); }}
                         />
-                        <button type="button" onClick={() => addNote(a._id)} className="app-btn-primary px-4 py-2 text-sm">Guardar</button>
+                        <button
+                          type="button"
+                          onClick={() => addNote(a._id)}
+                          disabled={savingNote}
+                          className="app-btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {savingNote ? "A guardar..." : "Guardar"}
+                        </button>
                       </div>
                       <div className="mt-3 space-y-2">
                         {notesLoading ? (

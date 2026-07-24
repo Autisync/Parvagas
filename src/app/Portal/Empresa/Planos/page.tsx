@@ -51,6 +51,7 @@ export default function EmpresaPlanosPage() {
   const [instructions, setInstructions] = useState<Instructions | null>(null);
   const [acceptedRefundPolicy, setAcceptedRefundPolicy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,6 +119,7 @@ export default function EmpresaPlanosPage() {
 
   const handleDownloadReceipt = async () => {
     if (!token) return;
+    setDownloadingReceipt(true);
     try {
       const res = await authFetchRaw("/companies/subscription/receipt", token, { suppressGlobalErrors: true });
       if (!res.ok) throw new Error("Nenhum recibo disponível.");
@@ -132,6 +134,8 @@ export default function EmpresaPlanosPage() {
       URL.revokeObjectURL(href);
     } catch (err) {
       notify(getErrorMessage(err, "Não foi possível obter o recibo."), "error");
+    } finally {
+      setDownloadingReceipt(false);
     }
   };
 
@@ -172,9 +176,10 @@ export default function EmpresaPlanosPage() {
                 <button
                   type="button"
                   onClick={handleDownloadReceipt}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                  disabled={downloadingReceipt}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Descarregar recibo
+                  {downloadingReceipt ? "A obter..." : "Descarregar recibo"}
                 </button>
               )}
               {subscription.plan?.code !== "free" && (

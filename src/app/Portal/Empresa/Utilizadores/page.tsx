@@ -451,10 +451,16 @@ export default function EmpresaUtilizadoresPage() {
                 <button
                   type="button"
                   onClick={confirmMemberAction}
-                  disabled={memberActionModal.type === "remove" && removeConfirmationText.trim() !== "REMOVER"}
-                  className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                  disabled={
+                    (memberActionModal.type === "remove" && removeConfirmationText.trim() !== "REMOVER") ||
+                    removingMemberId === memberActionModal.member._id ||
+                    updatingMemberId === memberActionModal.member._id
+                  }
+                  className="rounded-xl bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Confirmar
+                  {removingMemberId === memberActionModal.member._id || updatingMemberId === memberActionModal.member._id
+                    ? "A processar..."
+                    : "Confirmar"}
                 </button>
               </div>
             </div>

@@ -27,6 +27,7 @@ export default function CompanyApiKeysCard({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [rawKey, setRawKey] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const loadKeys = () => {
     setFetching(true);
@@ -63,11 +64,14 @@ export default function CompanyApiKeysCard({ token }: { token: string }) {
 
   const handleRevoke = async (id: string) => {
     if (!window.confirm("Revogar esta chave API? Qualquer integração que a use deixará de funcionar imediatamente.")) return;
+    setRevokingId(id);
     try {
       await authFetch(`/company-api/keys/${id}`, token, { method: "DELETE" });
       loadKeys();
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Não foi possível revogar a chave."));
+    } finally {
+      setRevokingId(null);
     }
   };
 
@@ -153,9 +157,10 @@ export default function CompanyApiKeysCard({ token }: { token: string }) {
                 <button
                   type="button"
                   onClick={() => handleRevoke(k._id)}
-                  className="shrink-0 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                  disabled={revokingId === k._id}
+                  className="shrink-0 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Revogar
+                  {revokingId === k._id ? "A revogar..." : "Revogar"}
                 </button>
               )}
             </li>
