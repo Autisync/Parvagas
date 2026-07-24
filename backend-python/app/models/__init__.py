@@ -953,6 +953,42 @@ class Plan(Base, TimestampMixin):
     candidate_search_included = Column(Boolean, nullable=False, default=False)
     # W5.4 — gates ApiKey creation and every API-key-authenticated request.
     api_access_included = Column(Boolean, nullable=False, default=False)
+    # Mirrored from the latest published PlanVersion by
+    # plan_service.publish_plan_version, same as every other column above.
+    promo_price = Column(Float, nullable=True)
+    promo_label = Column(String(255), nullable=True)
+    promo_expires_at = Column(DateTime, nullable=True)
+
+
+class PlanVersion(Base, TimestampMixin):
+    """Immutable snapshot of a Plan's terms at a point in time — mirrors
+    LegalDocument/LegalDocumentVersion. `Plan`'s own columns always mirror
+    the latest *published* version (kept in sync by
+    plan_service.publish_plan_version), so every existing reader of Plan
+    (display pages, admin list) stays correct with no changes. Only a
+    Subscription's pinned plan_version_id is used to resolve what a
+    specific paying company is actually entitled to (grandfathering) —
+    see company_billing_service.get_active_plan_version."""
+    __tablename__ = "plan_versions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False, index=True)
+    version_label = Column(String(50), nullable=False)
+    name = Column(String(120), nullable=False)
+    price = Column(Float, nullable=False, default=0)
+    currency = Column(String(8), nullable=False, default="AOA")
+    interval = Column(String(20), nullable=False, default="month")
+    features = Column(Text, nullable=True)  # JSON array
+    max_active_jobs = Column(Integer, nullable=False, default=1)
+    candidate_search_included = Column(Boolean, nullable=False, default=False)
+    api_access_included = Column(Boolean, nullable=False, default=False)
+    promo_price = Column(Float, nullable=True)
+    promo_label = Column(String(255), nullable=True)
+    promo_expires_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="draft")  # draft | published | archived
+    effective_date = Column(DateTime, nullable=True)
+    published_at = Column(DateTime, nullable=True)
+    published_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
 
 class ApiKey(Base, TimestampMixin):
@@ -980,6 +1016,11 @@ class Subscription(Base, TimestampMixin):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
     plan_id = Column(String(36), ForeignKey("plans.id"), nullable=False)
+    # Grandfathering pin — set/overwritten exactly once per paid period,
+    # inside payments.py's _activate(), to whatever PlanVersion is
+    # published at that moment. Never touched anywhere else, so a company
+    # keeps the terms it paid for until it pays again (next renewal).
+    plan_version_id = Column(String(36), ForeignKey("plan_versions.id"), nullable=True)
     status = Column(String(20), nullable=False, default="pending")  # pending|active|expired|cancelled
     current_period_end = Column(DateTime, nullable=True)
     # Set when the owner requests cancellation (Wave P2, EXECUTION_PLAN_LEGAL_
